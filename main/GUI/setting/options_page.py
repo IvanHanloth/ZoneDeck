@@ -20,33 +20,46 @@ class OptionsPage(scrolled.ScrolledPanel):
         general_box = wx.StaticBox(self, label="常规选项")
         general_box_sizer = wx.StaticBoxSizer(general_box, wx.VERTICAL)
         
-        grid_sizer = wx.GridSizer(rows=3, cols=2, gap=(10, 20))  # 减少行数为3，冻结选项将单独放置
+        grid_sizer = wx.GridSizer(rows=4, cols=2, gap=(10, 20))  # 增加行数为4
         
         # 添加复选框
-        # 1. 隐藏窗口后静音
+        # 1. 显示悬浮窗
+        float_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.float_checkbox = wx.CheckBox(self, label="显示悬浮窗")
+        float_tooltip = "在桌面上显示一个可拖动的悬浮窗，显示程序状态"
+        self.float_checkbox.SetToolTip(wx.ToolTip(float_tooltip))
+        float_info_icon = wx.ArtProvider.GetBitmap(wx.ART_INFORMATION, wx.ART_OTHER, self.FromDIP((14, 14)))
+        float_info_bitmap = wx.StaticBitmap(self, bitmap=float_info_icon)
+        float_info_bitmap.SetToolTip(wx.ToolTip(float_tooltip))
+        float_sizer.Add(self.float_checkbox)
+        float_sizer.AddSpacer(5)
+        float_sizer.Add(float_info_bitmap)
+        grid_sizer.Add(float_sizer, 0, wx.ALL, 10)
+        
+        # 2. 隐藏窗口后静音
         self.mute_checkbox = wx.CheckBox(self, label="隐藏窗口后静音")
         grid_sizer.Add(self.mute_checkbox, 0, wx.ALL, 10)
         
-        # 2. 隐藏前发送暂停键（Beta）
+        # 3. 隐藏前发送暂停键（Beta）
         pause_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.send_pause_checkbox = wx.CheckBox(self, label="隐藏前发送暂停键（Beta）")
         self.send_pause_checkbox.SetToolTip(wx.ToolTip("隐藏窗口前发送暂停键，用于关闭弹出的输入框等，隐藏窗口会存在一定的延迟"))
         pause_sizer.Add(self.send_pause_checkbox)
         grid_sizer.Add(pause_sizer, 0, wx.ALL, 10)
         
-        # 3. 同时隐藏当前活动窗口
+        # 4. 同时隐藏当前活动窗口
         self.hide_current_checkbox = wx.CheckBox(self, label="同时隐藏当前活动窗口")
         grid_sizer.Add(self.hide_current_checkbox, 0, wx.ALL, 10)
         
-        # 4. 点击托盘图标切换隐藏状态
+        # 5. 点击托盘图标切换隐藏状态
         self.click_hide_checkbox = wx.CheckBox(self, label="点击托盘图标切换隐藏状态")
         grid_sizer.Add(self.click_hide_checkbox, 0, wx.ALL, 10)
         
-        # 5. 隐藏窗口后隐藏托盘图标
+        # 6. 隐藏窗口后隐藏托盘图标
         self.hide_icon_checkbox = wx.CheckBox(self, label="隐藏窗口后隐藏托盘图标")
         grid_sizer.Add(self.hide_icon_checkbox, 0, wx.ALL, 10)
         
-        # 6. 文件路径匹配
+        # 7. 文件路径匹配
         path_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.path_match_checkbox = wx.CheckBox(self, label="文件路径匹配")
         path_tooltip = "启用此选项可以一键隐藏绑定程序的所有窗口\n关闭此选项后，将会智能精确隐藏指定窗口"
@@ -69,7 +82,7 @@ class OptionsPage(scrolled.ScrolledPanel):
         # 创建进程冻结选项
         freeze_grid = wx.GridSizer(rows=2, cols=1, gap=(5, 5))
         
-        # 7. 隐藏窗口时冻结进程
+        # 8. 隐藏窗口时冻结进程
         freeze_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.freeze_checkbox = wx.CheckBox(self, label="隐藏窗口时冻结进程(beta)")
         freeze_tooltip = "启用此选项将在隐藏窗口时同时冻结其进程，减少CPU占用\n注意：某些程序可能对冻结操作反应异常"
@@ -82,7 +95,7 @@ class OptionsPage(scrolled.ScrolledPanel):
         freeze_sizer.Add(freeze_info_bitmap)
         freeze_grid.Add(freeze_sizer, 0, wx.ALL, 5)
         
-        # 8. 增强冻结（使用pssuspend64）
+        # 9. 增强冻结（使用pssuspend64）
         enhanced_freeze_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.enhanced_freeze_checkbox = wx.CheckBox(self, label="使用增强冻结（需要pssuspend64.exe与管理员权限）")
         enhanced_freeze_tooltip = "使用Microsoft的pssuspend64工具执行进程冻结操作，提供更稳定的冻结效果\n需要在程序根目录放置pssuspend64.exe文件并使用管理员身份启动BossKey"
@@ -134,6 +147,7 @@ class OptionsPage(scrolled.ScrolledPanel):
             self.admin_btn.Bind(wx.EVT_BUTTON, self.OnRequestAdmin)
         
     def SetData(self):
+        self.float_checkbox.SetValue(Config.show_float_window)
         self.mute_checkbox.SetValue(Config.mute_after_hide)
         self.send_pause_checkbox.SetValue(Config.send_before_hide)
         self.hide_current_checkbox.SetValue(Config.hide_current)
@@ -164,6 +178,7 @@ class OptionsPage(scrolled.ScrolledPanel):
             self.enhanced_freeze_checkbox.Enable(True)
         
     def SaveData(self):
+        Config.show_float_window = self.float_checkbox.GetValue()
         Config.mute_after_hide = self.mute_checkbox.GetValue()
         Config.send_before_hide = self.send_pause_checkbox.GetValue()
         Config.hide_current = self.hide_current_checkbox.GetValue()
@@ -174,6 +189,7 @@ class OptionsPage(scrolled.ScrolledPanel):
         Config.enhanced_freeze = self.enhanced_freeze_checkbox.GetValue()
         
     def Reset(self):
+        self.float_checkbox.SetValue(False)
         self.mute_checkbox.SetValue(True)
         self.send_pause_checkbox.SetValue(False)
         self.hide_current_checkbox.SetValue(True)

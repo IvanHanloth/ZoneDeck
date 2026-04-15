@@ -49,6 +49,7 @@ SOFTWARE.
     hide_current = True
     freeze_after_hide = False  # 新增配置项：隐藏后冻结进程
     enhanced_freeze = False    # 新增配置项：使用增强冻结(pssuspend64)
+    show_float_window = False  # 新增配置项：显示悬浮窗
 
     click_to_hide = True
     hide_icon_after_hide = False
@@ -80,6 +81,7 @@ SOFTWARE.
     HotkeyListener= ""
     SettingWindowId = -1
     UpdateWindowId = -1
+    FloatWindow = None  # 新增：悬浮窗实例
     
     recording_hotkey = False
     recorded_hotkey = None
@@ -109,6 +111,7 @@ SOFTWARE.
         Config.path_match = config.get("setting", {}).get("path_match", False)
         Config.freeze_after_hide = config.get("setting", {}).get("freeze_after_hide", False)  # 加载新配置项
         Config.enhanced_freeze = config.get("setting", {}).get("enhanced_freeze", False)  # 加载新配置项
+        Config.show_float_window = config.get("setting", {}).get("show_float_window", False)  # 加载悬浮窗配置
         Config.middle_button_hide = config.get("setting", {}).get("middle_button_hide", False)  # 加载鼠标中键隐藏设置
         Config.side_button1_hide = config.get("setting", {}).get("side_button1_hide", False)  # 加载鼠标侧键1隐藏设置
         Config.side_button2_hide = config.get("setting", {}).get("side_button2_hide", False)  # 加载鼠标侧键2隐藏设置
@@ -153,6 +156,7 @@ SOFTWARE.
                 'path_match': Config.path_match,
                 'freeze_after_hide': Config.freeze_after_hide,  # 保存新配置项
                 'enhanced_freeze': Config.enhanced_freeze,  # 保存新配置项
+                'show_float_window': Config.show_float_window,  # 保存悬浮窗配置
                 'middle_button_hide': Config.middle_button_hide,  # 保存鼠标中键隐藏设置
                 'side_button1_hide': Config.side_button1_hide,  # 保存鼠标侧键1隐藏设置
                 'side_button2_hide': Config.side_button2_hide,  # 保存鼠标侧键2隐藏设置

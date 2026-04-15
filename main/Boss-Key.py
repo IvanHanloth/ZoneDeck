@@ -10,6 +10,7 @@
 # nuitka-project: --windows-console-mode=disable
 
 from GUI import setting, taskbar
+from float_window import FloatWindow
 from core import listener
 import sys
 import ctypes
@@ -101,6 +102,8 @@ if __name__ == '__main__':
     Config.TaskBarIcon=taskbar.TaskBarIcon()
     Config.HotkeyListener=listener.HotkeyListener()
     SettingWindow(Config.SettingWindowId)
+    if Config.show_float_window:  # 根据配置决定是否显示悬浮窗
+        Config.FloatWindow = FloatWindow()
     if Config.first_start:
         wx.FindWindowById(Config.SettingWindowId).Show()
     app.MainLoop()
