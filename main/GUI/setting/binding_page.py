@@ -8,6 +8,7 @@ from core.model import WindowInfo
 class BindingPage(wx.Panel):
     def __init__(self, parent):
         super().__init__(parent)
+        self.left_all_windows = []
         self.init_UI()
         self.Bind_EVT()
         
@@ -18,6 +19,10 @@ class BindingPage(wx.Panel):
         # 左边列表
         left_staticbox = wx.StaticBox(self, label="现有窗口进程")
         left_sizer = wx.StaticBoxSizer(left_staticbox, wx.VERTICAL)
+        self.left_search = wx.SearchCtrl(self, style=wx.TE_PROCESS_ENTER)
+        self.left_search.ShowSearchButton(True)
+        self.left_search.ShowCancelButton(True)
+        left_sizer.Add(self.left_search, 0, wx.EXPAND | wx.LEFT | wx.RIGHT | wx.TOP, 5)
         self.left_treelist = dataview.TreeListCtrl(self, style=dataview.TL_CHECKBOX)
         self.left_treelist.AppendColumn('窗口标题', width=300)
         self.left_treelist.AppendColumn('窗口句柄', width=100)
@@ -53,6 +58,7 @@ class BindingPage(wx.Panel):
         self.add_binding_btn.Bind(wx.EVT_BUTTON, self.OnAddBinding)
         self.remove_binding_btn.Bind(wx.EVT_BUTTON, self.OnRemoveBinding)
         self.refresh_btn.Bind(wx.EVT_BUTTON, self.RefreshLeftList)
+        self.left_search.Bind(wx.EVT_TEXT, self.OnSearchLeftProcess)
         self.left_treelist.Bind(dataview.EVT_TREELIST_ITEM_CHECKED, self.OnToggleCheck)
         self.right_treelist.Bind(dataview.EVT_TREELIST_ITEM_CHECKED, self.OnToggleCheck)
     
@@ -72,13 +78,15 @@ class BindingPage(wx.Panel):
         left_checked = self.ItemsData(self.left_treelist, only_checked=True)
         self.InsertTreeList(left_checked, self.right_treelist, False)
         for item in left_checked:
-            self.RemoveItem(self.left_treelist, item)
+            self.RemoveWindowFromLeftCache(item)
+        self.ApplyLeftFilter()
     
     def OnRemoveBinding(self, e):
         right_checked = self.ItemsData(self.right_treelist, only_checked=True)
-        self.InsertTreeList(right_checked, self.left_treelist, False)
         for item in right_checked:
+            self.AddWindowToLeftCache(item)
             self.RemoveItem(self.right_treelist, item)
+        self.ApplyLeftFilter()
     
     def RefreshLeftList(self, e=None):
         windows = tool.getAllWindows()
@@ -92,7 +100,36 @@ class BindingPage(wx.Panel):
                     break
             if not flag:
                 list.append(window)
-        self.InsertTreeList(list, self.left_treelist, True)
+        self.left_all_windows = list
+        self.ApplyLeftFilter()
+
+    def OnSearchLeftProcess(self, e):
+        self.ApplyLeftFilter()
+
+    def ApplyLeftFilter(self):
+        keyword = self.left_search.GetValue().strip().lower()
+        if not keyword:
+            filtered = self.left_all_windows
+        else:
+            filtered = []
+            for window in self.left_all_windows:
+                process = (window.process or "").lower()
+                title = (window.title or "").lower()
+                if keyword in process or keyword in title:
+                    filtered.append(window)
+        self.InsertTreeList(filtered, self.left_treelist, True)
+
+    def RemoveWindowFromLeftCache(self, data):
+        # 搜索基于完整数据，左侧变更时同步更新缓存
+        self.left_all_windows = [window for window in self.left_all_windows if window != data]
+
+    def AddWindowToLeftCache(self, data):
+        if isinstance(data, dict):
+            data = WindowInfo.from_dict(data)
+        for window in self.left_all_windows:
+            if window == data:
+                return
+        self.left_all_windows.append(data)
     
     def OnToggleCheck(self, e):
         treelist = e.GetEventObject()
