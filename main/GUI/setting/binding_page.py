@@ -117,7 +117,11 @@ class BindingPage(wx.Panel):
                 title = (window.title or "").lower()
                 if keyword in process or keyword in title:
                     filtered.append(window)
-        self.InsertTreeList(filtered, self.left_treelist, True)
+        self.left_treelist.Freeze()
+        try:
+            self.InsertTreeList(filtered, self.left_treelist, True)
+        finally:
+            self.left_treelist.Thaw()
 
     def RemoveWindowFromLeftCache(self, data):
         # 搜索基于完整数据，左侧变更时同步更新缓存
