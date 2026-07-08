@@ -23,6 +23,7 @@ name = "bosskey-core"
 version = "3.0.0"
 dependencies = [
  "bosskey-common",
+ "tempfile",
  "thiserror",
  "windows",
 ]

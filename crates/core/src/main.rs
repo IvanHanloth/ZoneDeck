@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use bosskey_common::Config;
-use bosskey_core::agent;
+use bosskey_core::agent::{self, AgentOptions};
 use bosskey_core::single_instance::SingleInstance;
 
 const MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
@@ -30,6 +30,14 @@ fn main() {
         return;
     }
 
-    let config = Config::load(&config_path()).unwrap_or_default();
-    agent::run(config);
+    let mut options = AgentOptions::standard(config_path());
+    if args.get(1).map(String::as_str) == Some("smoke") {
+        let ms = args
+            .get(2)
+            .and_then(|s| s.parse::<u32>().ok())
+            .unwrap_or(3000);
+        options.auto_quit_ms = Some(ms);
+        println!("冒烟模式: {ms} 毫秒后自动退出");
+    }
+    agent::run(options);
 }
