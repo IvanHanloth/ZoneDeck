@@ -9,3 +9,13 @@ test.py
 pssuspend64.exe
 .bosskey_state
 .idea
+node_modules/
+
+# Rust
+/target/
+**/target/
+!Cargo.lock
+
+# Tauri
+apps/config/dist/
+apps/config/src-tauri/gen/
