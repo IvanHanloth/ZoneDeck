@@ -19,11 +19,13 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, w};
 
+use crate::effects::WinEffects;
 use crate::hide::HideController;
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
-use crate::ipc_server;
+use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
+use crate::{idle, ipc_server};
 
 const HK_HIDE: i32 = 1;
 const HK_CLOSE: i32 = 2;
@@ -37,6 +39,8 @@ const MENU_QUIT: usize = 1003;
 const MENU_AUTOSTART: usize = 1004;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
+const AUTO_HIDE_TIMER_ID: usize = 11;
+const AUTO_HIDE_INTERVAL_MS: u32 = 5000;
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub struct AgentOptions {
@@ -60,9 +64,10 @@ impl AgentOptions {
 struct AgentState {
     config: Config,
     config_path: PathBuf,
-    controller: HideController<WindowsWindowManager>,
+    controller: HideController<WindowsWindowManager, WinEffects>,
     tray: Option<TrayIcon>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
+    mouse_hook: Option<MouseHook>,
 }
 
 impl AgentState {
@@ -89,6 +94,55 @@ impl AgentState {
         }
     }
 
+    fn refresh_runtime(&mut self, hwnd: HWND) {
+        if mouse_hook::wants_hook(&self.config.setting) {
+            mouse_hook::set_flags(&self.config.setting);
+            if self.mouse_hook.is_none() {
+                self.mouse_hook = MouseHook::install(hwnd, &self.config.setting);
+            }
+        } else {
+            self.mouse_hook = None;
+        }
+
+        unsafe {
+            let _ = KillTimer(Some(hwnd), AUTO_HIDE_TIMER_ID);
+            if self.config.setting.auto_hide_enabled {
+                SetTimer(Some(hwnd), AUTO_HIDE_TIMER_ID, AUTO_HIDE_INTERVAL_MS, None);
+            }
+        }
+    }
+
+    fn sync_tray(&mut self) {
+        if !self.config.setting.hide_icon_after_hide {
+            return;
+        }
+        let hidden = self.controller.is_hidden();
+        if let Some(tray) = &mut self.tray {
+            if hidden {
+                tray.hide();
+            } else {
+                tray.show();
+            }
+        }
+    }
+
+    fn apply_hide(&mut self) {
+        let config = self.config.clone();
+        self.controller.hide(&config);
+        self.sync_tray();
+    }
+
+    fn apply_show(&mut self) {
+        self.controller.show();
+        self.sync_tray();
+    }
+
+    fn apply_toggle(&mut self) {
+        let config = self.config.clone();
+        self.controller.toggle(&config);
+        self.sync_tray();
+    }
+
     fn execute(&mut self, hwnd: HWND, cmd: Command) -> (Response, bool) {
         match cmd {
             Command::ReloadConfig => match Config::load(&self.config_path) {
@@ -96,6 +150,7 @@ impl AgentState {
                     self.unregister_hotkeys(hwnd);
                     self.config = config;
                     self.register_hotkeys(hwnd);
+                    self.refresh_runtime(hwnd);
                     (Response::Ok, false)
                 }
                 Err(e) => (
@@ -112,17 +167,15 @@ impl AgentState {
                 false,
             ),
             Command::Hide => {
-                let config = self.config.clone();
-                self.controller.hide(&config);
+                self.apply_hide();
                 (Response::Ok, false)
             }
             Command::Show => {
-                self.controller.show();
+                self.apply_show();
                 (Response::Ok, false)
             }
             Command::Toggle => {
-                let config = self.config.clone();
-                self.controller.toggle(&config);
+                self.apply_toggle();
                 (Response::Ok, false)
             }
             Command::SetAutostart { enabled } => (set_autostart(enabled), false),
@@ -272,10 +325,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     match msg {
         WM_HOTKEY => {
             match wparam.0 as i32 {
-                HK_HIDE => {
-                    let config = state.config.clone();
-                    state.controller.toggle(&config);
-                }
+                HK_HIDE => state.apply_toggle(),
                 HK_CLOSE => quit(state, hwnd),
                 _ => {}
             }
@@ -297,8 +347,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             match lparam.0 as u32 {
                 WM_LBUTTONUP => {
                     if state.config.setting.click_to_hide {
-                        let config = state.config.clone();
-                        state.controller.toggle(&config);
+                        state.apply_toggle();
                     }
                 }
                 WM_RBUTTONUP => {
@@ -311,22 +360,48 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         WM_COMMAND => {
             match wparam.0 & 0xFFFF {
                 MENU_SETTINGS => launch_settings(state),
-                MENU_TOGGLE => {
-                    let config = state.config.clone();
-                    state.controller.toggle(&config);
-                }
+                MENU_TOGGLE => state.apply_toggle(),
                 MENU_AUTOSTART => toggle_autostart(state),
                 MENU_QUIT => quit(state, hwnd),
                 _ => {}
             }
             LRESULT(0)
         }
-        WM_TIMER => {
-            if wparam.0 == AUTO_QUIT_TIMER_ID {
-                unsafe {
-                    let _ = KillTimer(Some(hwnd), AUTO_QUIT_TIMER_ID);
+        WM_MOUSE_TRIGGER => {
+            if wparam.0 == TRIGGER_CORNER {
+                if state.controller.is_hidden() {
+                    if state.config.setting.allow_move_restore {
+                        state.apply_show();
+                    }
+                } else {
+                    state.apply_hide();
                 }
-                quit(state, hwnd);
+            } else {
+                state.apply_toggle();
+            }
+            LRESULT(0)
+        }
+        WM_TIMER => {
+            match wparam.0 {
+                AUTO_QUIT_TIMER_ID => {
+                    unsafe {
+                        let _ = KillTimer(Some(hwnd), AUTO_QUIT_TIMER_ID);
+                    }
+                    quit(state, hwnd);
+                }
+                AUTO_HIDE_TIMER_ID => {
+                    if state.config.setting.auto_hide_enabled {
+                        let idle_ms = idle::idle_millis().unwrap_or(0);
+                        if idle::should_auto_hide(
+                            idle_ms,
+                            state.config.setting.auto_hide_time,
+                            state.controller.is_hidden(),
+                        ) {
+                            state.apply_hide();
+                        }
+                    }
+                }
+                _ => {}
             }
             LRESULT(0)
         }
@@ -386,12 +461,18 @@ pub fn run(options: AgentOptions) {
 
     let (ipc_tx, ipc_rx) = channel::<(Command, Sender<Response>)>();
 
+    let exe_dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(PathBuf::from))
+        .unwrap_or_else(|| PathBuf::from("."));
+
     let mut state = Box::new(AgentState {
         config,
         config_path: options.config_path.clone(),
-        controller: HideController::new(WindowsWindowManager),
+        controller: HideController::new(WindowsWindowManager, WinEffects::new(exe_dir)),
         tray,
         ipc_rx,
+        mouse_hook: None,
     });
 
     state.register_hotkeys(hwnd);
@@ -399,6 +480,8 @@ pub fn run(options: AgentOptions) {
     unsafe {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, &mut *state as *mut AgentState as isize);
     }
+
+    state.refresh_runtime(hwnd);
 
     let hwnd_value = hwnd.0 as isize;
     ipc_server::spawn(options.pipe_name.clone(), move |cmd| {

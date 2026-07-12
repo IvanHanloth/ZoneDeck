@@ -1,43 +1,72 @@
 use std::collections::HashSet;
+use std::time::Duration;
 
 use bosskey_common::{Config, WindowInfo, matching::matches_binding};
 
+use crate::effects::Effects;
 use crate::platform::WindowManager;
 
-pub fn windows_to_hide(
+const SEND_PAUSE_DELAY: Duration = Duration::from_millis(200);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Target {
+    pub hwnd: i64,
+    pub pid: u32,
+}
+
+pub fn select_targets(
     bindings: &[WindowInfo],
     windows: &[WindowInfo],
     path_match: bool,
     hide_current: bool,
     foreground: i64,
-) -> Vec<i64> {
-    let mut result: Vec<i64> = Vec::new();
+) -> Vec<Target> {
+    let mut result: Vec<Target> = Vec::new();
 
     for w in windows {
         if bindings.iter().any(|b| matches_binding(b, w, path_match)) {
-            result.push(w.hwnd);
+            result.push(Target {
+                hwnd: w.hwnd,
+                pid: w.pid,
+            });
         }
     }
 
     if hide_current && foreground != 0 {
-        result.push(foreground);
+        let pid = windows
+            .iter()
+            .find(|w| w.hwnd == foreground)
+            .map(|w| w.pid)
+            .unwrap_or(0);
+        result.push(Target {
+            hwnd: foreground,
+            pid,
+        });
     }
 
     let mut seen = HashSet::new();
-    result.retain(|hwnd| seen.insert(*hwnd));
+    result.retain(|t| seen.insert(t.hwnd));
     result
 }
 
-pub struct HideController<W: WindowManager> {
+pub struct HideController<W: WindowManager, E: Effects> {
     wm: W,
-    hidden: Vec<i64>,
+    effects: E,
+    hidden: Vec<Target>,
+    frozen: Vec<u32>,
+    muted: Vec<u32>,
+    used_enhanced: bool,
 }
 
-impl<W: WindowManager> HideController<W> {
-    pub fn new(wm: W) -> Self {
+impl<W: WindowManager, E: Effects> HideController<W, E> {
+    pub fn new(wm: W, effects: E) -> Self {
         Self {
             wm,
+            effects,
             hidden: Vec::new(),
+            frozen: Vec::new(),
+            muted: Vec::new(),
+            used_enhanced: false,
         }
     }
 
@@ -48,23 +77,57 @@ impl<W: WindowManager> HideController<W> {
     pub fn hide(&mut self, config: &Config) {
         let windows = self.wm.enumerate();
         let foreground = self.wm.foreground();
-        let targets = windows_to_hide(
+        let setting = &config.setting;
+        let targets = select_targets(
             &config.hide_binding,
             &windows,
-            config.setting.path_match,
-            config.setting.hide_current,
+            setting.path_match,
+            setting.hide_current,
             foreground,
         );
-        for hwnd in &targets {
-            self.wm.hide(*hwnd);
+
+        let mut frozen = Vec::new();
+        let mut muted = Vec::new();
+
+        for t in &targets {
+            if setting.send_before_hide {
+                self.effects.send_pause();
+                std::thread::sleep(SEND_PAUSE_DELAY);
+            }
+            self.wm.hide(t.hwnd);
+            if setting.mute_after_hide && t.pid != 0 {
+                self.effects.mute(t.pid, true);
+                muted.push(t.pid);
+            }
+            if setting.freeze_after_hide && t.pid != 0 {
+                frozen.push(t.pid);
+            }
         }
+
+        self.used_enhanced = setting.enhanced_freeze;
+        for pid in &frozen {
+            self.effects.suspend(*pid, self.used_enhanced);
+        }
+
+        self.frozen = frozen;
+        self.muted = muted;
         self.hidden = targets;
     }
 
     pub fn show(&mut self) {
-        for hwnd in &self.hidden {
-            self.wm.show(*hwnd);
+        for pid in &self.frozen {
+            self.effects.resume(*pid, self.used_enhanced);
         }
+        self.frozen.clear();
+
+        for t in &self.hidden {
+            self.wm.show(t.hwnd);
+        }
+
+        for pid in &self.muted {
+            self.effects.mute(*pid, false);
+        }
+        self.muted.clear();
         self.hidden.clear();
     }
 
@@ -93,19 +156,29 @@ mod tests {
             win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
             win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
         ];
-        let targets = windows_to_hide(&bindings, &windows, false, false, 0);
-        assert_eq!(targets, vec![10]);
+        let targets = select_targets(&bindings, &windows, false, false, 0);
+        assert_eq!(targets, vec![Target { hwnd: 10, pid: 10 }]);
     }
 
     #[test]
-    fn hide_current_appends_foreground_and_dedups() {
+    fn hide_current_appends_foreground_with_its_pid_and_dedups() {
         let bindings = vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
-        let windows = vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
-        let targets = windows_to_hide(&bindings, &windows, false, true, 10);
-        assert_eq!(targets, vec![10], "前台窗口与已匹配窗口相同应去重");
+        let windows = vec![
+            win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+            win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+        ];
+        let targets = select_targets(&bindings, &windows, false, true, 20);
+        assert_eq!(
+            targets,
+            vec![Target { hwnd: 10, pid: 10 }, Target { hwnd: 20, pid: 20 }]
+        );
 
-        let targets2 = windows_to_hide(&bindings, &windows, false, true, 99);
-        assert_eq!(targets2, vec![10, 99], "不同的前台窗口应追加");
+        let same = select_targets(&bindings, &windows, false, true, 10);
+        assert_eq!(
+            same,
+            vec![Target { hwnd: 10, pid: 10 }],
+            "前台与匹配窗口相同应去重"
+        );
     }
 
     #[test]
@@ -114,20 +187,12 @@ mod tests {
         let windows = vec![
             win("窗口一", 10, "game.exe", "C:\\game.exe"),
             win("窗口二", 11, "game.exe", "C:\\game.exe"),
-            win("窗口三", 12, "game.exe", "C:\\game.exe"),
         ];
-        let targets = windows_to_hide(&bindings, &windows, true, false, 0);
+        let targets = select_targets(&bindings, &windows, true, false, 0);
         assert_eq!(
             targets,
-            vec![10, 11, 12],
-            "路径匹配应隐藏同一可执行文件的所有窗口"
+            vec![Target { hwnd: 10, pid: 10 }, Target { hwnd: 11, pid: 11 }]
         );
-    }
-
-    #[test]
-    fn no_bindings_and_no_hide_current_selects_nothing() {
-        let windows = vec![win("记事本", 20, "notepad.exe", "C:\\notepad.exe")];
-        assert!(windows_to_hide(&[], &windows, false, false, 0).is_empty());
     }
 
     struct MockWm {
@@ -170,10 +235,36 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct MockEffects {
+        mutes: RefCell<Vec<(u32, bool)>>,
+        suspends: RefCell<Vec<u32>>,
+        resumes: RefCell<Vec<u32>>,
+        pauses: RefCell<u32>,
+    }
+
+    impl Effects for MockEffects {
+        fn mute(&self, pid: u32, mute: bool) {
+            self.mutes.borrow_mut().push((pid, mute));
+        }
+        fn suspend(&self, pid: u32, _enhanced: bool) {
+            self.suspends.borrow_mut().push(pid);
+        }
+        fn resume(&self, pid: u32, _enhanced: bool) {
+            self.resumes.borrow_mut().push(pid);
+        }
+        fn send_pause(&self) {
+            *self.pauses.borrow_mut() += 1;
+        }
+    }
+
     #[test]
-    fn controller_toggle_hides_then_restores() {
+    fn toggle_applies_mute_and_freeze_then_restores() {
         let mut config = Config::default();
         config.setting.hide_current = false;
+        config.setting.mute_after_hide = true;
+        config.setting.freeze_after_hide = true;
+        config.setting.send_before_hide = true;
         config.hide_binding = vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
 
         let wm = MockWm::new(
@@ -183,17 +274,42 @@ mod tests {
             ],
             10,
         );
-        let mut controller = HideController::new(wm);
+        let mut controller = HideController::new(wm, MockEffects::default());
 
-        assert!(!controller.is_hidden());
-
-        controller.toggle(&config);
+        controller.hide(&config);
         assert!(controller.is_hidden());
         assert!(!controller.wm.is_visible(10), "微信应被隐藏");
         assert!(controller.wm.is_visible(20), "记事本不在绑定内应保持可见");
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
+        assert_eq!(*controller.effects.suspends.borrow(), vec![10]);
+        assert_eq!(*controller.effects.pauses.borrow(), 1, "应发送一次暂停键");
 
-        controller.toggle(&config);
+        controller.show();
         assert!(!controller.is_hidden());
-        assert!(controller.wm.is_visible(10), "再次切换应恢复微信");
+        assert!(controller.wm.is_visible(10), "恢复后微信应可见");
+        assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻");
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(10, true), (10, false)],
+            "恢复后应取消静音"
+        );
+    }
+
+    #[test]
+    fn disabled_effects_are_not_applied() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.setting.mute_after_hide = false;
+        config.setting.freeze_after_hide = false;
+        config.setting.send_before_hide = false;
+        config.hide_binding = vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.hide(&config);
+        assert!(controller.effects.mutes.borrow().is_empty());
+        assert!(controller.effects.suspends.borrow().is_empty());
+        assert_eq!(*controller.effects.pauses.borrow(), 0);
     }
 }

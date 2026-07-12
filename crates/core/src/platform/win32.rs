@@ -51,7 +51,7 @@ fn window_pid(hwnd: HWND) -> u32 {
     pid
 }
 
-fn process_path(pid: u32) -> String {
+pub(crate) fn process_path(pid: u32) -> String {
     if pid == 0 {
         return String::new();
     }
