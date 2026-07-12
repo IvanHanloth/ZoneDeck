@@ -1,6 +1,5 @@
 use std::path::PathBuf;
 
-use bosskey_common::Config;
 use bosskey_core::agent::{self, AgentOptions};
 use bosskey_core::single_instance::SingleInstance;
 
@@ -16,13 +15,6 @@ fn config_path() -> PathBuf {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-
-    if args.get(1).map(String::as_str) == Some("check") {
-        let config = Config::load(&config_path()).unwrap_or_default();
-        let ok = agent::check(&config);
-        println!("热键注册自检: {}", if ok { "成功" } else { "失败" });
-        return;
-    }
 
     let instance = SingleInstance::acquire(MUTEX_NAME);
     if instance.already_running() {

@@ -1,4 +1,5 @@
 pub mod agent;
+pub mod autostart;
 pub mod hide;
 pub mod hotkey;
 pub mod ipc_server;

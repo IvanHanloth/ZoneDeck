@@ -12,10 +12,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CW_USEDEFAULT, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
     DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW,
-    KillTimer, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage, RegisterClassW,
-    SetForegroundWindow, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_LEFTALIGN,
-    TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY,
-    WM_LBUTTONUP, WM_RBUTTONUP, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    KillTimer, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
+    RegisterClassW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN,
+    TPM_LEFTALIGN, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_COMMAND,
+    WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
 
@@ -34,6 +34,7 @@ const WM_APP_TRAY: u32 = WM_APP + 2;
 const MENU_SETTINGS: usize = 1001;
 const MENU_TOGGLE: usize = 1002;
 const MENU_QUIT: usize = 1003;
+const MENU_AUTOSTART: usize = 1004;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
@@ -124,12 +125,7 @@ impl AgentState {
                 self.controller.toggle(&config);
                 (Response::Ok, false)
             }
-            Command::SetAutostart { .. } => (
-                Response::Error {
-                    message: "开机自启功能尚未实现".to_string(),
-                },
-                false,
-            ),
+            Command::SetAutostart { enabled } => (set_autostart(enabled), false),
             Command::Quit => (Response::Ok, true),
         }
     }
@@ -147,35 +143,47 @@ unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> bool {
     }
 }
 
-pub fn check(config: &Config) -> bool {
-    let mut ok = true;
-    for (id, label, raw) in [
-        (HK_HIDE, "隐藏", &config.hotkey.hide_hotkey),
-        (HK_CLOSE, "关闭", &config.hotkey.close_hotkey),
-    ] {
-        match parse_hotkey(raw) {
-            Ok(hk) => unsafe {
-                if RegisterHotKey(
-                    None,
-                    id,
-                    HOT_KEY_MODIFIERS(hk.modifiers | MOD_NOREPEAT),
-                    hk.vk as u32,
-                )
-                .is_ok()
-                {
-                    let _ = UnregisterHotKey(None, id);
-                } else {
-                    eprintln!("{label}热键注册失败（可能已被占用）: {raw}");
-                    ok = false;
-                }
-            },
-            Err(e) => {
-                eprintln!("{label}热键解析失败: {e}");
-                ok = false;
-            }
+fn set_autostart(enabled: bool) -> Response {
+    let auto = match crate::autostart::Autostart::standard() {
+        Ok(a) => a,
+        Err(e) => {
+            return Response::Error {
+                message: e.to_string(),
+            };
         }
+    };
+    if enabled {
+        match auto.enable() {
+            Ok(_) => Response::Ok,
+            Err(e) => Response::Error {
+                message: e.to_string(),
+            },
+        }
+    } else {
+        auto.disable();
+        Response::Ok
     }
-    ok
+}
+
+fn toggle_autostart(state: &AgentState) {
+    let Ok(auto) = crate::autostart::Autostart::standard() else {
+        return;
+    };
+    let (title, message) = if auto.status().is_some() {
+        auto.disable();
+        ("开机自启已关闭", "Boss Key 将不再随系统启动")
+    } else {
+        match auto.enable() {
+            Ok(crate::autostart::Method::TaskScheduler) => {
+                ("开机自启已开启", "已注册计划任务（最高权限）")
+            }
+            Ok(crate::autostart::Method::Registry) => ("开机自启已开启", "已写入注册表启动项"),
+            Err(_) => ("开机自启设置失败", "计划任务与注册表方式均失败"),
+        }
+    };
+    if let Some(tray) = &state.tray {
+        tray.balloon(title, message);
+    }
 }
 
 fn state_mut<'a>(hwnd: HWND) -> Option<&'a mut AgentState> {
@@ -186,6 +194,9 @@ fn state_mut<'a>(hwnd: HWND) -> Option<&'a mut AgentState> {
 }
 
 fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
+    let autostart_on = crate::autostart::Autostart::standard()
+        .map(|a| a.status().is_some())
+        .unwrap_or(false);
     unsafe {
         let Ok(menu) = CreatePopupMenu() else {
             return false;
@@ -195,8 +206,14 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
         } else {
             w!("隐藏窗口")
         };
+        let autostart_flags = if autostart_on {
+            MF_STRING | MF_CHECKED
+        } else {
+            MF_STRING
+        };
         let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, w!("设置"));
         let _ = AppendMenuW(menu, MF_STRING, MENU_TOGGLE, toggle_label);
+        let _ = AppendMenuW(menu, autostart_flags, MENU_AUTOSTART, w!("开机自启"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, MENU_QUIT, w!("退出"));
 
@@ -298,6 +315,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     let config = state.config.clone();
                     state.controller.toggle(&config);
                 }
+                MENU_AUTOSTART => toggle_autostart(state),
                 MENU_QUIT => quit(state, hwnd),
                 _ => {}
             }
