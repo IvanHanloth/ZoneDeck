@@ -29,6 +29,20 @@ impl SingleInstance {
         }
     }
 
+    /// 在超时时间内反复尝试获取单实例，等待上一个实例退出后成功接管。
+    /// 用于“以管理员身份重启”时新旧进程之间的互斥交接。
+    pub fn acquire_waiting(name: &str, timeout: std::time::Duration) -> Self {
+        let deadline = std::time::Instant::now() + timeout;
+        loop {
+            let instance = Self::acquire(name);
+            if !instance.already_running() || std::time::Instant::now() >= deadline {
+                return instance;
+            }
+            drop(instance);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    }
+
     pub fn already_running(&self) -> bool {
         self.already_running
     }

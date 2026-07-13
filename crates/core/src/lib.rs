@@ -2,14 +2,18 @@ pub mod agent;
 pub mod audio;
 pub mod autostart;
 pub mod effects;
+pub mod elevation;
 pub mod freeze;
 pub mod hide;
 pub mod hotkey;
+pub mod icon;
 pub mod idle;
 pub mod input;
 pub mod ipc_server;
+pub mod logging;
 pub mod mouse_hook;
 pub mod platform;
+pub mod recovery;
 pub mod single_instance;
 pub mod tray;
 

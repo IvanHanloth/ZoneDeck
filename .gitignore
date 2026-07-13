@@ -16,6 +16,14 @@ node_modules/
 **/target/
 !Cargo.lock
 
+# 打包产物
+/package/
+
 # Tauri
-apps/config/dist/
+# 注意：apps/config/dist/ 是手写前端源码（无打包器），必须纳入版本控制
 apps/config/src-tauri/gen/
+
+# 运行时产物
+bosskey.log
+bosskey.log.old
+recovery.json

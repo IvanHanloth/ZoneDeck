@@ -7,6 +7,7 @@ pub const PIPE_NAME: &str = r"\\.\pipe\bosskey";
 pub enum Command {
     ReloadConfig,
     GetState,
+    GetElevation,
     Hide,
     Show,
     Toggle,
@@ -19,6 +20,7 @@ pub enum Command {
 pub enum Response {
     Ok,
     State { hidden: bool },
+    Elevated { elevated: bool },
     Error { message: String },
 }
 
@@ -112,6 +114,7 @@ mod tests {
         let cases = [
             Command::ReloadConfig,
             Command::GetState,
+            Command::GetElevation,
             Command::Hide,
             Command::Show,
             Command::Toggle,
@@ -142,6 +145,8 @@ mod tests {
             Response::Ok,
             Response::State { hidden: true },
             Response::State { hidden: false },
+            Response::Elevated { elevated: true },
+            Response::Elevated { elevated: false },
             Response::Error {
                 message: "出错了".to_string(),
             },

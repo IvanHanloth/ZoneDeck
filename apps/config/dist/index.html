@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Boss Key 设置</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <span class="logo">🛡️</span>
+        <span>Boss Key 设置</span>
+      </div>
+      <div id="core-status" class="core-status">核心状态检测中…</div>
+    </header>
+
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="binding" role="tab">窗口绑定</button>
+      <button class="tab" data-tab="hotkeys" role="tab">热键与鼠标</button>
+      <button class="tab" data-tab="options" role="tab">其他选项</button>
+      <button class="tab" data-tab="about" role="tab">关于</button>
+    </nav>
+
+    <main class="content">
+      <!-- 窗口绑定 -->
+      <section id="tab-binding" class="panel active">
+        <div class="binding-grid">
+          <div class="list-box">
+            <div class="list-title">现有窗口</div>
+            <div id="available-list" class="win-list"></div>
+          </div>
+          <div class="binding-actions">
+            <button id="btn-add" class="btn">添加绑定 →</button>
+            <button id="btn-remove" class="btn">← 删除绑定</button>
+            <button id="btn-refresh" class="btn ghost">刷新进程</button>
+          </div>
+          <div class="list-box">
+            <div class="list-title">已绑定窗口</div>
+            <div id="bound-list" class="win-list"></div>
+          </div>
+        </div>
+        <p class="hint">勾选左侧窗口后点击“添加绑定”。按下隐藏热键将一键隐藏所有已绑定窗口。</p>
+      </section>
+
+      <!-- 热键与鼠标 -->
+      <section id="tab-hotkeys" class="panel">
+        <fieldset>
+          <legend>键盘热键</legend>
+          <div class="row">
+            <label>隐藏/显示窗口</label>
+            <input type="text" id="hide-hotkey" class="hotkey-input" readonly />
+            <button class="btn ghost record-btn" data-target="hide-hotkey">录制</button>
+          </div>
+          <div class="row">
+            <label>一键关闭程序</label>
+            <input type="text" id="close-hotkey" class="hotkey-input" readonly />
+            <button class="btn ghost record-btn" data-target="close-hotkey">录制</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>鼠标按键隐藏</legend>
+          <label class="check"><input type="checkbox" id="middle_button_hide" /> 鼠标中键切换隐藏</label>
+          <label class="check"><input type="checkbox" id="side_button1_hide" /> 侧键1（前进键）切换隐藏</label>
+          <label class="check"><input type="checkbox" id="side_button2_hide" /> 侧键2（后退键）切换隐藏</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>移动到屏幕四角隐藏</legend>
+          <div class="corner-grid">
+            <label class="check"><input type="checkbox" id="top_left_hide" /> 左上角</label>
+            <label class="check"><input type="checkbox" id="top_right_hide" /> 右上角</label>
+            <label class="check"><input type="checkbox" id="bottom_left_hide" /> 左下角</label>
+            <label class="check"><input type="checkbox" id="bottom_right_hide" /> 右下角</label>
+          </div>
+          <label class="check"><input type="checkbox" id="allow_move_restore" /> 允许移动到同一角落恢复窗口</label>
+        </fieldset>
+
+        <fieldset>
+          <legend>空闲自动隐藏</legend>
+          <label class="check"><input type="checkbox" id="auto_hide_enabled" /> 启用自动隐藏</label>
+          <div class="row inline">
+            <span>无操作</span>
+            <input type="number" id="auto_hide_time" min="1" max="120" value="5" />
+            <span>分钟后自动隐藏</span>
+          </div>
+        </fieldset>
+      </section>
+
+      <!-- 其他选项 -->
+      <section id="tab-options" class="panel">
+        <fieldset>
+          <legend>常规</legend>
+          <div class="opt-grid">
+            <label class="check"><input type="checkbox" id="mute_after_hide" /> 隐藏窗口后静音</label>
+            <label class="check"><input type="checkbox" id="hide_current" /> 同时隐藏当前活动窗口</label>
+            <label class="check"><input type="checkbox" id="click_to_hide" /> 单击托盘图标切换隐藏</label>
+            <label class="check"><input type="checkbox" id="hide_icon_after_hide" /> 隐藏后同时隐藏托盘图标</label>
+            <label class="check" title="启用后隐藏由同一程序启动的所有窗口"><input type="checkbox" id="path_match" /> 文件路径匹配</label>
+            <label class="check" title="隐藏前发送暂停键，会带来延迟"><input type="checkbox" id="send_before_hide" /> 隐藏前发送暂停键（Beta）</label>
+            <label class="check"><input type="checkbox" id="show_float_window" /> 显示悬浮窗</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>进程冻结</legend>
+          <label class="check" title="隐藏窗口时冻结进程以降低 CPU/内存占用"><input type="checkbox" id="freeze_after_hide" /> 隐藏窗口时冻结进程（Beta）</label>
+          <label class="check" title="需要程序目录下放置 pssuspend64.exe 且以管理员运行"><input type="checkbox" id="enhanced_freeze" /> 使用增强冻结（pssuspend64 + 管理员）</label>
+          <p class="hint">
+            增强冻结需下载
+            <a href="https://download.sysinternals.com/files/PSTools.zip" target="_blank" rel="noreferrer">PSTools</a>
+            并将 pssuspend64.exe 放入程序目录。
+          </p>
+        </fieldset>
+
+        <fieldset>
+          <legend>管理员权限</legend>
+          <p class="hint">增强冻结与“计划任务开机自启（最高权限）”需要核心以管理员身份运行。</p>
+          <div class="row inline">
+            <span>核心权限：</span>
+            <strong id="core-elevation">检测中…</strong>
+            <button id="btn-elevate" class="btn">以管理员身份重启核心</button>
+          </div>
+        </fieldset>
+      </section>
+
+      <!-- 关于 -->
+      <section id="tab-about" class="panel">
+        <div class="about-card">
+          <h2 id="about-name">Boss Key</h2>
+          <p id="about-version" class="muted"></p>
+          <p>老板来了？一键隐藏窗口，上班摸鱼必备神器。</p>
+          <p><a id="about-website" href="#" target="_blank" rel="noreferrer">项目主页</a></p>
+        </div>
+
+        <fieldset>
+          <legend>检查更新</legend>
+          <div class="row inline">
+            <button id="btn-check-update" class="btn">检查更新</button>
+            <span id="update-result" class="muted"></span>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>窗口恢复工具</legend>
+          <p class="hint">若窗口被误隐藏无法找回，点击下方按钮显示全部已隐藏窗口。</p>
+          <button id="btn-restore" class="btn">显示所有隐藏窗口</button>
+        </fieldset>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <label class="check"><input type="checkbox" id="autostart-toggle" /> 开机自启</label>
+      <div class="footer-right">
+        <span id="toast" class="toast"></span>
+        <button id="btn-save" class="btn primary">保存设置</button>
+      </div>
+    </footer>
+
+    <script src="main.js"></script>
+  </body>
+</html>

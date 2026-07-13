@@ -1,9 +1,12 @@
 use std::path::PathBuf;
+use std::time::Duration;
 
 use bosskey_common::Config;
 use bosskey_common::ipc::{Command, PipeClient, Response};
 use bosskey_common::model::WindowInfo;
 use serde::Serialize;
+
+const CORE_EXE: &str = "bosskey-core.exe";
 
 fn config_path() -> PathBuf {
     std::env::current_exe()
@@ -25,7 +28,6 @@ struct AppInfo {
     version: &'static str,
     website: &'static str,
     update_feed: &'static str,
-    core_running: bool,
 }
 
 #[tauri::command]
@@ -47,22 +49,25 @@ fn list_windows() -> Vec<WindowInfo> {
     bosskey_core::platform::manager().enumerate()
 }
 
+/// 批量提取可执行文件图标，返回 `路径 → PNG data URI`。
+/// 没有图标或文件不存在的路径不出现在结果里。
 #[tauri::command]
-fn hidden_state() -> bool {
-    matches!(
-        notify_core(&Command::GetState),
-        Ok(Response::State { hidden: true })
-    )
+fn window_icons(paths: Vec<String>) -> std::collections::HashMap<String, String> {
+    let mut icons = std::collections::HashMap::new();
+    for path in paths {
+        if path.is_empty() || icons.contains_key(&path) {
+            continue;
+        }
+        if let Some(uri) = bosskey_core::icon::icon_data_uri(&path) {
+            icons.insert(path, uri);
+        }
+    }
+    icons
 }
 
 #[tauri::command]
 fn show_all_windows() -> Result<(), String> {
     notify_core(&Command::Show).map(|_| ())
-}
-
-#[tauri::command]
-fn hide_now() -> Result<(), String> {
-    notify_core(&Command::Hide).map(|_| ())
 }
 
 #[tauri::command]
@@ -81,6 +86,51 @@ fn autostart_status() -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Serialize)]
+struct CoreStatus {
+    running: bool,
+    hidden: bool,
+    elevated: bool,
+}
+
+#[tauri::command]
+fn core_status() -> CoreStatus {
+    let client = PipeClient::connect_default();
+    let running = client.send(&Command::GetState).is_ok();
+    let hidden = matches!(
+        client.send(&Command::GetState),
+        Ok(Response::State { hidden: true })
+    );
+    let elevated = matches!(
+        client.send(&Command::GetElevation),
+        Ok(Response::Elevated { elevated: true })
+    );
+    CoreStatus {
+        running,
+        hidden,
+        elevated,
+    }
+}
+
+/// 以管理员身份重启核心：先请求核心退出释放互斥，再用 UAC 提权重新启动。
+#[tauri::command]
+fn restart_core_elevated() -> Result<bool, String> {
+    let core_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join(CORE_EXE)))
+        .ok_or_else(|| "无法定位核心程序目录".to_string())?;
+    if !core_exe.exists() {
+        return Err(format!("未找到核心程序 {CORE_EXE}"));
+    }
+
+    let _ = notify_core(&Command::Quit);
+    std::thread::sleep(Duration::from_millis(400));
+
+    Ok(bosskey_core::elevation::relaunch_as_admin(
+        &core_exe, "elevated",
+    ))
+}
+
 #[tauri::command]
 fn app_info() -> AppInfo {
     AppInfo {
@@ -88,9 +138,6 @@ fn app_info() -> AppInfo {
         version: bosskey_common::APP_CONFIG_VERSION,
         website: "https://github.com/IvanHanloth/Boss-Key",
         update_feed: "https://ivanhanloth.github.io/Boss-Key/releases.json",
-        core_running: PipeClient::connect_default()
-            .send(&Command::GetState)
-            .is_ok(),
     }
 }
 
@@ -100,11 +147,12 @@ pub fn run() {
             load_config,
             save_config,
             list_windows,
-            hidden_state,
+            window_icons,
             show_all_windows,
-            hide_now,
             set_autostart,
             autostart_status,
+            core_status,
+            restart_core_elevated,
             app_info,
         ])
         .run(tauri::generate_context!())

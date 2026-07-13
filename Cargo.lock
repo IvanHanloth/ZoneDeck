@@ -169,6 +169,8 @@ name = "bosskey-core"
 version = "3.0.0"
 dependencies = [
  "bosskey-common",
+ "serde",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.18",
  "windows 0.62.2",

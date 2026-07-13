@@ -25,7 +25,7 @@ use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
-use crate::{idle, ipc_server};
+use crate::{idle, ipc_server, logging, recovery};
 
 const HK_HIDE: i32 = 1;
 const HK_CLOSE: i32 = 2;
@@ -64,6 +64,7 @@ impl AgentOptions {
 struct AgentState {
     config: Config,
     config_path: PathBuf,
+    recovery_path: PathBuf,
     controller: HideController<WindowsWindowManager, WinEffects>,
     tray: Option<TrayIcon>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
@@ -79,10 +80,10 @@ impl AgentState {
             match parse_hotkey(raw) {
                 Ok(hk) => unsafe {
                     if !register(hwnd, id, &hk) {
-                        eprintln!("{label}热键注册失败（可能已被占用）: {raw}");
+                        logging::warn(&format!("{label}热键注册失败（可能已被占用）: {raw}"));
                     }
                 },
-                Err(e) => eprintln!("{label}热键解析失败: {e}"),
+                Err(e) => logging::warn(&format!("{label}热键解析失败: {e}")),
             }
         }
     }
@@ -126,20 +127,30 @@ impl AgentState {
         }
     }
 
+    /// 隐藏状态落盘：崩溃后下次启动据此找回窗口。快照为空时清除文件。
+    fn persist_recovery(&self) {
+        if let Err(e) = recovery::save(&self.recovery_path, &self.controller.snapshot()) {
+            logging::warn(&format!("写入崩溃恢复文件失败: {e}"));
+        }
+    }
+
     fn apply_hide(&mut self) {
         let config = self.config.clone();
         self.controller.hide(&config);
+        self.persist_recovery();
         self.sync_tray();
     }
 
     fn apply_show(&mut self) {
         self.controller.show();
+        self.persist_recovery();
         self.sync_tray();
     }
 
     fn apply_toggle(&mut self) {
         let config = self.config.clone();
         self.controller.toggle(&config);
+        self.persist_recovery();
         self.sync_tray();
     }
 
@@ -163,6 +174,12 @@ impl AgentState {
             Command::GetState => (
                 Response::State {
                     hidden: self.controller.is_hidden(),
+                },
+                false,
+            ),
+            Command::GetElevation => (
+                Response::Elevated {
+                    elevated: crate::elevation::is_elevated(),
                 },
                 false,
             ),
@@ -307,7 +324,9 @@ fn launch_settings(state: &AgentState) {
 
 fn quit(state: &mut AgentState, hwnd: HWND) {
     state.controller.show();
+    state.persist_recovery(); // 已无隐藏内容，等价于清除恢复文件
     state.unregister_hotkeys(hwnd);
+    logging::info("核心正常退出");
     if let Some(tray) = &mut state.tray {
         tray.balloon("Boss Key已停止服务", "Boss Key已成功退出");
         tray.hide();
@@ -466,14 +485,29 @@ pub fn run(options: AgentOptions) {
         .and_then(|p| p.parent().map(PathBuf::from))
         .unwrap_or_else(|| PathBuf::from("."));
 
+    let recovery_path = options
+        .config_path
+        .with_file_name(recovery::RECOVERY_FILE_NAME);
+
     let mut state = Box::new(AgentState {
         config,
         config_path: options.config_path.clone(),
+        recovery_path,
         controller: HideController::new(WindowsWindowManager, WinEffects::new(exe_dir)),
         tray,
         ipc_rx,
         mouse_hook: None,
     });
+
+    // 恢复文件存在 = 上次异常退出时仍有窗口被隐藏，先把它们找回来。
+    if let Some(snapshot) = recovery::load(&state.recovery_path) {
+        logging::warn(&format!(
+            "检测到上次异常退出，正在恢复 {} 个被隐藏的窗口",
+            snapshot.hidden.len()
+        ));
+        state.controller.restore_from(snapshot);
+        recovery::clear(&state.recovery_path);
+    }
 
     state.register_hotkeys(hwnd);
 

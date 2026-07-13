@@ -2,13 +2,15 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use bosskey_common::{Config, WindowInfo, matching::matches_binding};
+use serde::{Deserialize, Serialize};
 
 use crate::effects::Effects;
 use crate::platform::WindowManager;
+use crate::recovery::Snapshot;
 
 const SEND_PAUSE_DELAY: Duration = Duration::from_millis(200);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Target {
     pub hwnd: i64,
     pub pid: u32,
@@ -137,6 +139,25 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         } else {
             self.hide(config);
         }
+    }
+
+    /// 当前隐藏状态的快照，用于崩溃恢复落盘。
+    pub fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            hidden: self.hidden.clone(),
+            frozen: self.frozen.clone(),
+            muted: self.muted.clone(),
+            enhanced: self.used_enhanced,
+        }
+    }
+
+    /// 从崩溃前的快照恢复：显示窗口、解冻进程、取消静音。
+    pub fn restore_from(&mut self, snapshot: Snapshot) {
+        self.hidden = snapshot.hidden;
+        self.frozen = snapshot.frozen;
+        self.muted = snapshot.muted;
+        self.used_enhanced = snapshot.enhanced;
+        self.show();
     }
 }
 
@@ -293,6 +314,54 @@ mod tests {
             vec![(10, true), (10, false)],
             "恢复后应取消静音"
         );
+    }
+
+    #[test]
+    fn snapshot_reflects_hidden_state_and_clears_after_show() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.setting.mute_after_hide = true;
+        config.setting.freeze_after_hide = true;
+        config.hide_binding = vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        assert!(controller.snapshot().is_empty(), "初始快照应为空");
+
+        controller.hide(&config);
+        let snapshot = controller.snapshot();
+        assert_eq!(snapshot.hidden, vec![Target { hwnd: 10, pid: 10 }]);
+        assert_eq!(snapshot.frozen, vec![10]);
+        assert_eq!(snapshot.muted, vec![10]);
+
+        controller.show();
+        assert!(controller.snapshot().is_empty(), "显示后快照应清空");
+    }
+
+    #[test]
+    fn restore_from_snapshot_shows_windows_and_reverts_effects() {
+        // 模拟：上次崩溃前隐藏了窗口 10（已冻结+静音），窗口当前仍不可见。
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        wm.hide(10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.restore_from(Snapshot {
+            hidden: vec![Target { hwnd: 10, pid: 10 }],
+            frozen: vec![10],
+            muted: vec![10],
+            enhanced: false,
+        });
+
+        assert!(!controller.is_hidden(), "恢复完成后应回到未隐藏状态");
+        assert!(controller.wm.is_visible(10), "崩溃前隐藏的窗口应被找回");
+        assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻进程");
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(10, false)],
+            "应取消静音"
+        );
+        assert!(controller.snapshot().is_empty());
     }
 
     #[test]
