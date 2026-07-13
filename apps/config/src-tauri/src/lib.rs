@@ -22,6 +22,15 @@ fn notify_core(command: &Command) -> Result<Response, String> {
         .map_err(|e| e.to_string())
 }
 
+/// 把阻塞工作丢到专用线程，避免占用 Tauri 主线程/异步运行时。
+/// 所有涉及命名管道、schtasks、图标提取的命令都必须经此包装，
+/// 否则会阻塞 WebView 渲染（曾导致"状态获取卡界面"）。
+async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    tauri::async_runtime::spawn_blocking(f)
+        .await
+        .expect("阻塞任务执行失败")
+}
+
 #[derive(Serialize)]
 struct AppInfo {
     name: &'static str,
@@ -36,85 +45,106 @@ fn load_config() -> Result<Config, String> {
 }
 
 #[tauri::command]
-fn save_config(config: Config) -> Result<(), String> {
-    config.save(&config_path()).map_err(|e| e.to_string())?;
-    // 通知核心热重载；核心未运行时忽略错误。
-    let _ = notify_core(&Command::ReloadConfig);
-    Ok(())
+async fn save_config(config: Config) -> Result<(), String> {
+    blocking(move || {
+        config.save(&config_path()).map_err(|e| e.to_string())?;
+        // 通知核心热重载；核心未运行时忽略错误。
+        let _ = notify_core(&Command::ReloadConfig);
+        Ok(())
+    })
+    .await
 }
 
 #[tauri::command]
-fn list_windows() -> Vec<WindowInfo> {
-    use bosskey_core::platform::WindowManager;
-    bosskey_core::platform::manager().enumerate()
+async fn list_windows() -> Vec<WindowInfo> {
+    blocking(|| {
+        use bosskey_core::platform::WindowManager;
+        bosskey_core::platform::manager().enumerate()
+    })
+    .await
 }
 
 /// 批量提取可执行文件图标，返回 `路径 → PNG data URI`。
 /// 没有图标或文件不存在的路径不出现在结果里。
 #[tauri::command]
-fn window_icons(paths: Vec<String>) -> std::collections::HashMap<String, String> {
-    let mut icons = std::collections::HashMap::new();
-    for path in paths {
-        if path.is_empty() || icons.contains_key(&path) {
-            continue;
+async fn window_icons(paths: Vec<String>) -> std::collections::HashMap<String, String> {
+    blocking(move || {
+        let mut icons = std::collections::HashMap::new();
+        for path in paths {
+            if path.is_empty() || icons.contains_key(&path) {
+                continue;
+            }
+            if let Some(uri) = bosskey_core::icon::icon_data_uri(&path) {
+                icons.insert(path, uri);
+            }
         }
-        if let Some(uri) = bosskey_core::icon::icon_data_uri(&path) {
-            icons.insert(path, uri);
-        }
-    }
-    icons
+        icons
+    })
+    .await
 }
 
 #[tauri::command]
-fn show_all_windows() -> Result<(), String> {
-    notify_core(&Command::Show).map(|_| ())
+async fn show_all_windows() -> Result<(), String> {
+    blocking(|| notify_core(&Command::Show).map(|_| ())).await
 }
 
 #[tauri::command]
-fn set_autostart(enabled: bool) -> Result<(), String> {
-    match notify_core(&Command::SetAutostart { enabled }) {
-        Ok(Response::Error { message }) => Err(message),
-        Ok(_) => Ok(()),
-        Err(e) => Err(e),
-    }
+async fn set_autostart(enabled: bool) -> Result<(), String> {
+    blocking(
+        move || match notify_core(&Command::SetAutostart { enabled }) {
+            Ok(Response::Error { message }) => Err(message),
+            Ok(_) => Ok(()),
+            Err(e) => Err(e),
+        },
+    )
+    .await
 }
 
 #[tauri::command]
-fn autostart_status() -> bool {
-    bosskey_core::autostart::Autostart::standard()
-        .map(|a| a.status().is_some())
-        .unwrap_or(false)
+async fn autostart_status() -> bool {
+    blocking(|| {
+        bosskey_core::autostart::Autostart::standard()
+            .map(|a| a.status().is_some())
+            .unwrap_or(false)
+    })
+    .await
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Clone, Copy)]
 struct CoreStatus {
     running: bool,
     hidden: bool,
     elevated: bool,
 }
 
+const CORE_OFFLINE: CoreStatus = CoreStatus {
+    running: false,
+    hidden: false,
+    elevated: false,
+};
+
+/// 核心状态：单次管道往返 + 快速失败（核心未运行时立即返回，不重试）。
 #[tauri::command]
-fn core_status() -> CoreStatus {
-    let client = PipeClient::connect_default();
-    let running = client.send(&Command::GetState).is_ok();
-    let hidden = matches!(
-        client.send(&Command::GetState),
-        Ok(Response::State { hidden: true })
-    );
-    let elevated = matches!(
-        client.send(&Command::GetElevation),
-        Ok(Response::Elevated { elevated: true })
-    );
-    CoreStatus {
-        running,
-        hidden,
-        elevated,
-    }
+async fn core_status() -> CoreStatus {
+    blocking(|| {
+        match PipeClient::connect_default()
+            .fast()
+            .send(&Command::GetStatus)
+        {
+            Ok(Response::Status { hidden, elevated }) => CoreStatus {
+                running: true,
+                hidden,
+                elevated,
+            },
+            _ => CORE_OFFLINE,
+        }
+    })
+    .await
 }
 
 /// 以管理员身份重启核心：先请求核心退出释放互斥，再用 UAC 提权重新启动。
 #[tauri::command]
-fn restart_core_elevated() -> Result<bool, String> {
+async fn restart_core_elevated() -> Result<bool, String> {
     let core_exe = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join(CORE_EXE)))
@@ -123,12 +153,14 @@ fn restart_core_elevated() -> Result<bool, String> {
         return Err(format!("未找到核心程序 {CORE_EXE}"));
     }
 
-    let _ = notify_core(&Command::Quit);
-    std::thread::sleep(Duration::from_millis(400));
-
-    Ok(bosskey_core::elevation::relaunch_as_admin(
-        &core_exe, "elevated",
-    ))
+    blocking(move || {
+        let _ = notify_core(&Command::Quit);
+        std::thread::sleep(Duration::from_millis(400));
+        Ok(bosskey_core::elevation::relaunch_as_admin(
+            &core_exe, "elevated",
+        ))
+    })
+    .await
 }
 
 #[tauri::command]

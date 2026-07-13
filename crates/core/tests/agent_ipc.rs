@@ -30,6 +30,12 @@ fn agent_answers_ipc_and_quits_cleanly() {
         "初始状态应为未隐藏"
     );
 
+    let status = client.send(&Command::GetStatus).unwrap();
+    assert!(
+        matches!(status, Response::Status { hidden: false, .. }),
+        "合并状态应一次往返返回隐藏态与权限: {status:?}"
+    );
+
     let reload = client.send(&Command::ReloadConfig).unwrap();
     assert_eq!(reload, Response::Ok, "重载配置应成功");
 

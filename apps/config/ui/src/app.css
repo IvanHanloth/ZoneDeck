@@ -1,0 +1,162 @@
+/* ---- 设计令牌：亮/暗双主题，由 <html data-theme> 切换 ---- */
+:root {
+  --bg: #f3f4f8;
+  --surface: #ffffff;
+  --surface-2: #f8f9fc;
+  --text: #1a1d27;
+  --muted: #6b7280;
+  --border: #e2e5ec;
+  --accent: #4f6ef7;
+  --accent-strong: #3d5bf5;
+  --on-accent: #ffffff;
+  --hover: rgba(17, 24, 39, 0.05);
+  --danger: #e5484d;
+  --ok: #2f9e63;
+  --warn: #d97706;
+  --shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
+  --radius: 10px;
+  --titlebar-h: 40px;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #16181f;
+  --surface: #1f222b;
+  --surface-2: #262a35;
+  --text: #e8eaf2;
+  --muted: #9aa1b2;
+  --border: #313644;
+  --accent: #6c85ff;
+  --accent-strong: #8199ff;
+  --on-accent: #10131c;
+  --hover: rgba(255, 255, 255, 0.065);
+  --danger: #ff6369;
+  --ok: #4cc38a;
+  --warn: #f5a623;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  color-scheme: dark;
+}
+
+/* ---- 基础 ---- */
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden; /* 无边框窗口：滚动只发生在内容区 */
+}
+
+body {
+  font-family:
+    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", system-ui,
+    sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+#app {
+  height: 100%;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+input[type="text"],
+input[type="number"] {
+  font: inherit;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  transition: border-color 0.15s;
+}
+input[type="text"]:focus,
+input[type="number"]:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* ---- 通用控件 ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    opacity 0.15s;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--hover);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+  font-weight: 600;
+}
+.btn.primary:hover {
+  background: var(--accent-strong);
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn.ghost:hover {
+  background: var(--hover);
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

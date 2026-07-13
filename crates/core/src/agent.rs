@@ -20,6 +20,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{PCWSTR, w};
 
 use crate::effects::WinEffects;
+use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
 use crate::hide::HideController;
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
@@ -69,6 +70,7 @@ struct AgentState {
     tray: Option<TrayIcon>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
     mouse_hook: Option<MouseHook>,
+    float_window: Option<FloatWindow>,
 }
 
 impl AgentState {
@@ -110,6 +112,15 @@ impl AgentState {
             if self.config.setting.auto_hide_enabled {
                 SetTimer(Some(hwnd), AUTO_HIDE_TIMER_ID, AUTO_HIDE_INTERVAL_MS, None);
             }
+        }
+
+        // 悬浮窗：按需创建/销毁（与鼠标钩子同一惯用法）。
+        if self.config.setting.show_float_window {
+            if self.float_window.is_none() {
+                self.float_window = FloatWindow::create(hwnd);
+            }
+        } else {
+            self.float_window = None;
         }
     }
 
@@ -179,6 +190,13 @@ impl AgentState {
             ),
             Command::GetElevation => (
                 Response::Elevated {
+                    elevated: crate::elevation::is_elevated(),
+                },
+                false,
+            ),
+            Command::GetStatus => (
+                Response::Status {
+                    hidden: self.controller.is_hidden(),
                     elevated: crate::elevation::is_elevated(),
                 },
                 false,
@@ -376,6 +394,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             }
             LRESULT(0)
         }
+        WM_APP_FLOAT => {
+            match wparam.0 {
+                // 双击悬浮窗 = 触发老板键（沿用旧版：受 click_to_hide 约束）。
+                FLOAT_TOGGLE => {
+                    if state.config.setting.click_to_hide {
+                        state.apply_toggle();
+                    }
+                }
+                // 右键菜单以代理窗口为宿主，选择项经 WM_COMMAND 复用既有处理。
+                FLOAT_MENU => {
+                    crate::float_window::show_float_menu(hwnd, MENU_SETTINGS, MENU_QUIT);
+                }
+                _ => {}
+            }
+            LRESULT(0)
+        }
         WM_COMMAND => {
             match wparam.0 & 0xFFFF {
                 MENU_SETTINGS => launch_settings(state),
@@ -497,6 +531,7 @@ pub fn run(options: AgentOptions) {
         tray,
         ipc_rx,
         mouse_hook: None,
+        float_window: None,
     });
 
     // 恢复文件存在 = 上次异常退出时仍有窗口被隐藏，先把它们找回来。

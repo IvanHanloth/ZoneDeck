@@ -19,8 +19,9 @@ node_modules/
 # 打包产物
 /package/
 
-# Tauri
-# 注意：apps/config/dist/ 是手写前端源码（无打包器），必须纳入版本控制
+# Tauri / 前端
+# apps/config/dist/ 自前端工程化（Vite + Svelte）后是构建产物；源码在 apps/config/ui/
+apps/config/dist/
 apps/config/src-tauri/gen/
 
 # 运行时产物

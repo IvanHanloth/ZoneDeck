@@ -4,10 +4,11 @@
   "version": "3.0.0",
   "identifier": "cn.hanloth.bosskey.config",
   "build": {
-    "frontendDist": "../dist"
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "npm --prefix ../ui run build"
   },
   "app": {
-    "withGlobalTauri": true,
+    "withGlobalTauri": false,
     "windows": [
       {
         "label": "main",
@@ -17,11 +18,12 @@
         "minWidth": 720,
         "minHeight": 520,
         "resizable": true,
-        "center": true
+        "center": true,
+        "decorations": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' https://ivanhanloth.github.io; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost https://ivanhanloth.github.io; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'"
     }
   },
   "bundle": {

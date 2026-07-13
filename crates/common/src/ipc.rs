@@ -8,10 +8,14 @@ pub enum Command {
     ReloadConfig,
     GetState,
     GetElevation,
+    /// 一次往返取回全部状态（隐藏态 + 权限），替代 GetState + GetElevation 两连发。
+    GetStatus,
     Hide,
     Show,
     Toggle,
-    SetAutostart { enabled: bool },
+    SetAutostart {
+        enabled: bool,
+    },
     Quit,
 }
 
@@ -21,6 +25,7 @@ pub enum Response {
     Ok,
     State { hidden: bool },
     Elevated { elevated: bool },
+    Status { hidden: bool, elevated: bool },
     Error { message: String },
 }
 
@@ -63,6 +68,13 @@ impl PipeClient {
 
     pub fn connect_default() -> Self {
         Self::new(PIPE_NAME)
+    }
+
+    /// 快速失败模式：只尝试连接一次，不重试。
+    /// 用于状态轮询——核心未运行时立即返回错误，而不是白等 1 秒。
+    pub fn fast(mut self) -> Self {
+        self.connect_attempts = 1;
+        self
     }
 
     pub fn send(&self, command: &Command) -> std::io::Result<Response> {
@@ -115,6 +127,7 @@ mod tests {
             Command::ReloadConfig,
             Command::GetState,
             Command::GetElevation,
+            Command::GetStatus,
             Command::Hide,
             Command::Show,
             Command::Toggle,
@@ -147,6 +160,14 @@ mod tests {
             Response::State { hidden: false },
             Response::Elevated { elevated: true },
             Response::Elevated { elevated: false },
+            Response::Status {
+                hidden: true,
+                elevated: false,
+            },
+            Response::Status {
+                hidden: false,
+                elevated: true,
+            },
             Response::Error {
                 message: "出错了".to_string(),
             },

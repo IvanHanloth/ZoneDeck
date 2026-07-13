@@ -74,17 +74,35 @@ Boss-Key/
 │           recovery.rs   崩溃恢复（隐藏状态落盘，异常退出后找回窗口）
 │           icon.rs       进程图标提取（HICON → 手写 PNG/base64 编码）
 │           single_instance.rs  命名互斥单实例
-└── apps/config/                    配置界面（Tauri 2）
+└── apps/config/                    配置界面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 后端命令 + tauri.conf.json + capabilities
-    └── dist/       前端（index.html / styles.css / main.js，无打包器）
+    │               （decorations:false 无边框窗口，命令全部异步化）
+    ├── ui/         前端源码（Vite + Svelte 5，双向绑定 / 自绘标题栏 / 亮暗主题）
+    │   └── src/    lib/（纯逻辑 + vitest 测试）+ components/（Svelte 组件）
+    └── dist/       前端构建产物（gitignore；由 ui/ 经 vite build 生成）
 ```
+
+### 前端技术选型（为什么是 Svelte）
+
+配置界面是**表单密集型小应用**，选型对比后采用 **Svelte 5 + Vite**：
+
+- **双向绑定**是核心诉求：Svelte `bind:` 原生支持（React 无双向绑定需手写受控组件；Vue 的 v-model 可用但运行时更大）；
+- 编译期反应式、无虚拟 DOM，构建产物仅 ~80KB（gzip ~28KB），契合本项目"体积极小"的目标；
+- Tauri 官方一等支持。
+
+**无边框自绘窗口**：`decorations: false` + 自绘标题栏（`data-tauri-drag-region` 拖动、双击最大化、自绘最小化/最大化/关闭按钮）、亮/暗/跟随系统三态主题（`localStorage` 持久化 + `prefers-color-scheme` 监听）、八向边缘 `startResizeDragging` 缩放热区（最大化时自动禁用）。
+
+**核心状态不卡界面**：状态获取合并为单条 `GetStatus` 管道命令 + 连接快速失败（不重试），Tauri 命令 `spawn_blocking` 异步化，前端 2 秒轮询（页面不可见时暂停）。
 
 ## 3. 环境准备
 
 - **Rust**：stable（建议 1.85+，本项目用 edition 2024）。安装：<https://rustup.rs>
+- **Node.js**：18+（建议 22），用于前端构建。
 - **配置界面运行时**：Microsoft Edge **WebView2**（Windows 10/11 通常已内置）。
-- **可选** `tauri-cli`（仅用于热重载开发与打生成安装包）：`cargo install tauri-cli`
+- **可选** Inno Setup 6（本机生成安装包）：`winget install JRSoftware.InnoSetup`
 - **可选** `pssuspend64.exe`（增强冻结，来自 [Microsoft PSTools](https://download.sysinternals.com/files/PSTools.zip)）。
+
+> 配置界面**不依赖任何 dev server**：前端在编译期内嵌进 `bosskey-config.exe`，静态运行。开发前端时用 `npm run dev` 在浏览器里预览（mock 数据、热重载），改完 `npm run build` 后用 `cargo run -p bosskey-config` 验证 Tauri 集成。
 
 ## 4. 常用命令
 
@@ -94,36 +112,45 @@ Boss-Key/
 |---|---|
 | **运行核心**（开发） | `cargo run -p bosskey-core` |
 | 核心冒烟自测（N 毫秒后自动退出） | `cargo run -p bosskey-core -- smoke 3000` |
-| **运行配置界面**（开发，用内嵌前端） | `cargo run -p bosskey-config` |
-| 配置界面热重载开发（需 tauri-cli） | `cd apps/config/src-tauri && cargo tauri dev` |
-| **开发编译**（不优化，快） | `cargo build` |
+| 前端依赖安装（首次） | `npm --prefix apps/config/ui install` |
+| **前端构建**（输出到 dist） | `npm --prefix apps/config/ui run build` |
+| 前端单元测试（vitest） | `npm --prefix apps/config/ui test` |
+| 前端浏览器预览（mock 数据，热重载） | `npm --prefix apps/config/ui run dev` |
+| **运行配置界面**（先构建前端） | `npm --prefix apps/config/ui run build && cargo run -p bosskey-config` |
 | **生产编译**（优化，体积最小） | `cargo build --release` |
-| **运行全部测试** | `cargo test --workspace` |
+| **运行全部 Rust 测试** | `cargo test --workspace` |
 | 静态检查 | `cargo clippy --workspace --all-targets -- -D warnings` |
 | 代码格式化 / 检查 | `cargo fmt --all` / `cargo fmt --all -- --check` |
-| **一键生产打包**（独立文件夹） | `powershell -File scripts/package.ps1` |
+| **一键生产打包**（前端 + Rust + 便携文件夹） | `powershell -File scripts/package.ps1` |
+| 一键打包 + 安装包（需 Inno Setup） | `powershell -File scripts/package.ps1 -Installer` |
 
 > 提示：若杀软拦截了新编译出的可执行文件（表现为 `os error 5 拒绝访问`），请将本项目 `target` 目录加入杀软信任区。
 
-## 5. 生产打包（独立、可直接使用的文件夹）
+## 5. 生产打包与发布
 
-运行：
+**本机一键打包**：
 
 ```powershell
-powershell -File scripts/package.ps1
+powershell -File scripts/package.ps1              # 前端构建 → cargo release → 便携文件夹
+powershell -File scripts/package.ps1 -Installer   # 追加生成 InnoSetup 安装包
 ```
 
-脚本会执行 `cargo build --release`，并把可直接分发的独立文件夹组装到 **`package/Boss-Key/`**：
+产物：
 
 ```
-package/Boss-Key/
-├── bosskey-core.exe     常驻核心（双击启动，后台 + 托盘）
-├── bosskey-config.exe   配置界面（前端已内嵌，自包含）
-├── icon.ico             托盘图标
-└── 使用说明.txt
+package/Boss-Key/                便携版（拷走即用）
+├── bosskey-core.exe               常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
+├── bosskey-config.exe             配置界面（前端已内嵌，自包含）
+└── icon.ico                       托盘图标
+package/installer/               安装包（-Installer 时生成）
+└── Boss-Key-<版本>-Setup.exe      InnoSetup（安装前自动结束运行中的核心）
 ```
 
-该文件夹**无需安装、无外部依赖**（除系统自带的 WebView2）：拷到任意目录，双击 `bosskey-core.exe` 即可使用；配置界面从托盘“设置”打开，或直接运行 `bosskey-config.exe`。两个程序通过同目录的 `config.json` 与命名管道协作，`bosskey-config.exe` 会在同目录定位 `bosskey-core.exe`（如“以管理员身份重启核心”）。
+便携版**无需安装、无外部依赖**（除系统自带的 WebView2）。两个程序通过同目录的 `config.json` 与命名管道协作。
+
+**CI 发布**（`.github/workflows/`）：
+- `build-test.yml`：PR / 推送到重构分支时跑 前端测试+构建 → fmt → clippy → cargo test → release 编译；
+- `tag-release.yml`：推送标签时全量构建，产出 **便携 zip + InnoSetup 安装包** 并创建 GitHub Release；代码签名步骤已留好占位（配置 `CODE_SIGN_PFX` / `CODE_SIGN_PASSWORD` secrets 后取消注释即可）。
 
 ## 6. 配置文件
 

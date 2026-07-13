@@ -18,7 +18,7 @@ fn fill_wide(dst: &mut [u16], src: &str) {
     dst[wide.len()..].fill(0);
 }
 
-fn load_app_icon() -> HICON {
+pub(crate) fn load_app_icon() -> HICON {
     let ico_path = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join("icon.ico")));

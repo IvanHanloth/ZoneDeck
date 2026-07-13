@@ -171,6 +171,7 @@ dependencies = [
  "bosskey-common",
  "serde",
  "serde_json",
+ "tauri-winres",
  "tempfile",
  "thiserror 2.0.18",
  "windows 0.62.2",

@@ -1,3 +1,8 @@
+// release 下以「窗口子系统」编译：核心是无界面的常驻 agent，不应弹出控制台窗口，
+// 也不应因启动它的进程（如配置程序）关闭控制台而被连带终止。
+// debug 保留控制台，便于开发时直接看 stdout/eprintln。
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -36,7 +41,7 @@ fn main() {
         SingleInstance::acquire(MUTEX_NAME)
     };
     if instance.already_running() {
-        eprintln!("Boss Key 已在运行");
+        logging::warn("已有核心实例在运行，本次启动退出");
         return;
     }
 

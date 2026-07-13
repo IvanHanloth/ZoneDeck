@@ -3,7 +3,11 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::windows::io::FromRawHandle;
 
 use bosskey_common::ipc::{Command, Response};
-use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
+use windows::Win32::Foundation::{HLOCAL, INVALID_HANDLE_VALUE, LocalFree};
+use windows::Win32::Security::Authorization::{
+    ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
+};
+use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
 use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT,
@@ -13,6 +17,61 @@ use windows::core::PCWSTR;
 use crate::util::to_wide_null;
 
 const PIPE_BUF_SIZE: u32 = 4096;
+
+/// 命名管道安全描述符（SDDL）：
+/// - `D:(A;;GRGW;;;WD)`：允许所有人（Everyone）读写管道；
+/// - `S:(ML;;NW;;;LW)`：把对象完整性标签设为 **Low**。
+///
+/// 关键作用：当核心以**管理员（高完整性）**运行时，它创建的管道对象默认会继承
+/// High 完整性标签，中完整性的**普通配置程序**受 NoWriteUp 规则挡住而无法连接
+/// （表现为「检测不到核心状态」）。把标签降到 Low 后，中/高完整性进程都在其上，
+/// 均可读写，从而让普通配置程序能与管理员核心通信。
+const PIPE_SDDL: &str = "D:(A;;GRGW;;;WD)S:(ML;;NW;;;LW)";
+
+/// 持有由 SDDL 解析出的安全描述符，并在析构时释放其内存（`LocalFree`）。
+struct PipeSecurity {
+    psd: PSECURITY_DESCRIPTOR,
+    sa: SECURITY_ATTRIBUTES,
+}
+
+impl PipeSecurity {
+    fn new() -> Option<Self> {
+        let sddl = to_wide_null(PIPE_SDDL);
+        let mut psd = PSECURITY_DESCRIPTOR::default();
+        unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                PCWSTR(sddl.as_ptr()),
+                SDDL_REVISION_1,
+                &mut psd,
+                None,
+            )
+            .ok()?;
+        }
+        if psd.0.is_null() {
+            return None;
+        }
+        let sa = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: psd.0,
+            bInheritHandle: false.into(),
+        };
+        Some(Self { psd, sa })
+    }
+
+    fn as_ptr(&self) -> *const SECURITY_ATTRIBUTES {
+        &self.sa
+    }
+}
+
+impl Drop for PipeSecurity {
+    fn drop(&mut self) {
+        if !self.psd.0.is_null() {
+            unsafe {
+                let _ = LocalFree(Some(HLOCAL(self.psd.0)));
+            }
+        }
+    }
+}
 
 pub fn spawn<F>(pipe_name: String, executor: F)
 where
@@ -29,6 +88,12 @@ where
     F: Fn(Command) -> Response,
 {
     let wide_name = to_wide_null(pipe_name);
+    // 安全描述符构造一次、供所有管道实例复用。失败时回退默认安全性（同完整性仍可用）。
+    let security = PipeSecurity::new();
+    if security.is_none() {
+        crate::logging::warn("命名管道安全描述符构造失败，管理员核心下普通配置程序可能无法连接");
+    }
+    let sa_ptr = security.as_ref().map(PipeSecurity::as_ptr);
     loop {
         let handle = unsafe {
             CreateNamedPipeW(
@@ -39,7 +104,7 @@ where
                 PIPE_BUF_SIZE,
                 PIPE_BUF_SIZE,
                 0,
-                None,
+                sa_ptr,
             )
         };
         if handle == INVALID_HANDLE_VALUE {
@@ -120,6 +185,21 @@ mod tests {
         let mut buf = String::new();
         reader.read_line(&mut buf).unwrap();
         buf.trim_end().to_string()
+    }
+
+    #[test]
+    fn pipe_security_descriptor_builds_from_sddl() {
+        let sec = PipeSecurity::new().expect("SDDL 应能解析出安全描述符");
+        assert!(!sec.psd.0.is_null(), "安全描述符指针不应为空");
+        assert_eq!(
+            sec.sa.lpSecurityDescriptor, sec.psd.0,
+            "SECURITY_ATTRIBUTES 应指向解析出的安全描述符"
+        );
+        assert_eq!(
+            sec.sa.nLength as usize,
+            std::mem::size_of::<SECURITY_ATTRIBUTES>()
+        );
+        // 析构时应 LocalFree，不 panic。
     }
 
     #[test]

@@ -3,6 +3,7 @@ pub mod audio;
 pub mod autostart;
 pub mod effects;
 pub mod elevation;
+pub mod float_window;
 pub mod freeze;
 pub mod hide;
 pub mod hotkey;
