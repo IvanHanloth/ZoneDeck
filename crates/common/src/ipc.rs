@@ -42,6 +42,67 @@ impl Response {
     }
 }
 
+/// 配置程序连接常驻核心命名管道服务端的客户端。
+/// Windows 命名管道的客户端等价于按路径打开文件，因此这里仅用标准库实现，保持跨平台可编译。
+pub struct PipeClient {
+    pipe_name: String,
+    connect_attempts: u32,
+    connect_interval: std::time::Duration,
+}
+
+impl PipeClient {
+    pub fn new(pipe_name: impl Into<String>) -> Self {
+        Self {
+            pipe_name: pipe_name.into(),
+            connect_attempts: 25,
+            connect_interval: std::time::Duration::from_millis(40),
+        }
+    }
+
+    pub fn connect_default() -> Self {
+        Self::new(PIPE_NAME)
+    }
+
+    pub fn send(&self, command: &Command) -> std::io::Result<Response> {
+        use std::io::{BufRead, BufReader, Write};
+
+        let file = self.open_with_retry()?;
+        let mut writer = file.try_clone()?;
+        let mut line = command.to_line().map_err(json_to_io)?;
+        line.push('\n');
+        writer.write_all(line.as_bytes())?;
+        writer.flush()?;
+
+        let mut reader = BufReader::new(file);
+        let mut response = String::new();
+        reader.read_line(&mut response)?;
+        Response::from_line(response.trim_end()).map_err(json_to_io)
+    }
+
+    fn open_with_retry(&self) -> std::io::Result<std::fs::File> {
+        let mut last_err = None;
+        for _ in 0..self.connect_attempts.max(1) {
+            match std::fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&self.pipe_name)
+            {
+                Ok(file) => return Ok(file),
+                Err(e) => {
+                    last_err = Some(e);
+                    std::thread::sleep(self.connect_interval);
+                }
+            }
+        }
+        Err(last_err
+            .unwrap_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "命名管道不可用")))
+    }
+}
+
+fn json_to_io(e: serde_json::Error) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::InvalidData, e)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
