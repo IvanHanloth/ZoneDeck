@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from "svelte";
   import IconShield from "~icons/lucide/shield";
   import IconCheck from "~icons/lucide/check";
   import IconScrollText from "~icons/lucide/scroll-text";
@@ -9,20 +8,24 @@
   import IconChevronDown from "~icons/lucide/chevron-down";
   import { invoke } from "../lib/ipc.js";
   import { app, startCore, restartCore, quitCore, toast } from "../lib/state.svelte.js";
+  import {
+    applyTheme,
+    loadPreference,
+    nextTheme,
+    savePreference,
+    themeIcon,
+    themeLabel,
+  } from "../lib/theme.js";
 
   const running = $derived(app.status.running);
-  let menuOpen = $state(false);
-  let menuContainer;
+  let themePref = $state(loadPreference());
 
-  onMount(() => {
-    function handleClickOutside(e) {
-      if (menuOpen && menuContainer && !menuContainer.contains(e.target)) {
-        menuOpen = false;
-      }
-    }
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  });
+  function cycleTheme() {
+    themePref = nextTheme(themePref);
+    savePreference(themePref);
+    applyTheme(themePref);
+  }
+
 
   async function openLog() {
     try {
@@ -52,7 +55,7 @@
   <div class="left">
     <span class="status {statusClass}">
       {#if running && app.status.elevated}
-        <IconShield width="7" height="7" class="shield-dot" />
+        <IconShield width="10" height="10" class="shield-dot" />
       {:else}
         <i class="dot"></i>
       {/if}
@@ -95,12 +98,6 @@
           <IconShield width="14" height="14" />
         </button>
       {/if}
-      <button class="act icon-only warn" onclick={() => {}} title="暂停" aria-label="暂停">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-          <rect x="6" y="3" width="4" height="18" rx="1" />
-          <rect x="14" y="3" width="4" height="18" rx="1" />
-        </svg>
-      </button>
       <button class="act icon-only danger" onclick={quitCore} title="退出核心" aria-label="退出核心">
         <IconPower width="14" height="14" />
       </button>
@@ -112,29 +109,9 @@
       <IconScrollText width="14" height="14" />
     </button>
 
-    <div class="menu-container" bind:this={menuContainer}>
-      <button
-        class="act icon"
-        class:active={menuOpen}
-        onclick={() => menuOpen = !menuOpen}
-        title="更多选项"
-        aria-label="更多选项"
-      >
-        <IconChevronDown width="14" height="14" />
-      </button>
-      {#if menuOpen}
-        <div class="dropdown-menu">
-          <label class="menu-item">
-            <input type="checkbox" bind:checked={app.showBackground} />
-            <span>后台进程</span>
-          </label>
-          <label class="menu-item">
-            <input type="checkbox" bind:checked={app.showUntitled} />
-            <span>无标题窗口</span>
-          </label>
-        </div>
-      {/if}
-    </div>
+    <button class="act icon" onclick={cycleTheme} title={themeLabel(themePref)} aria-label={themeLabel(themePref)}>
+      {themeIcon(themePref)}
+    </button>
 
     <span class="save" class:saving={app.saving}>
       {#if app.saving}保存中…{:else}<IconCheck width="12" height="12" /> 已保存{/if}
@@ -264,46 +241,6 @@
   }
   .act.danger:hover {
     background: rgba(229, 72, 77, 0.1);
-  }
-
-  .menu-container {
-    position: relative;
-  }
-
-  .dropdown-menu {
-    position: absolute;
-    bottom: 100%;
-    right: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    padding: 4px 0;
-    margin-bottom: 6px;
-    min-width: 140px;
-    z-index: 100;
-  }
-
-  .menu-item {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    user-select: none;
-    color: var(--text);
-    font-size: 12px;
-    transition: background 0.12s;
-  }
-  .menu-item:hover {
-    background: var(--hover);
-  }
-  .menu-item input[type="checkbox"] {
-    cursor: pointer;
-    accent-color: var(--accent);
-    width: 14px;
-    height: 14px;
-    flex: none;
   }
 
   .save {

@@ -1,10 +1,12 @@
 <script>
+  import { onMount } from "svelte";
   // 可勾选的窗口列表：先按可见/后台拆两段，各段内再按进程分组（含图标）。
   // selected 双向绑定 hwnd 数组。标题栏样式对齐 WindowRuleList（隐藏窗口）。
   import IconAppWindow from "~icons/lucide/app-window";
   import IconSearch from "~icons/lucide/search";
   import IconX from "~icons/lucide/x";
   import IconRefresh from "~icons/lucide/refresh-cw";
+  import IconChevronDown from "~icons/lucide/chevron-down";
   import { groupByProcess, splitByVisibility } from "../lib/grouping.js";
   import { app } from "../lib/state.svelte.js";
 
@@ -19,6 +21,8 @@
   } = $props();
 
   let searchOpen = $state(false);
+  let menuOpen = $state(false);
+  let menuContainer;
 
   const parts = $derived(splitByVisibility(windows));
 
@@ -26,6 +30,16 @@
     searchOpen = !searchOpen;
     if (!searchOpen) search = "";
   }
+
+  onMount(() => {
+    function handleClickOutside(e) {
+      if (menuOpen && menuContainer && !menuContainer.contains(e.target)) {
+        menuOpen = false;
+      }
+    }
+    document.addEventListener("click", handleClickOutside);
+    return () => document.removeEventListener("click", handleClickOutside);
+  });
 </script>
 
 <div class="list-box">
@@ -45,6 +59,29 @@
       >
         <IconSearch width="14" height="14" />
       </button>
+      <div class="menu-container" bind:this={menuContainer}>
+        <button
+          class="mini"
+          class:active={menuOpen}
+          onclick={() => menuOpen = !menuOpen}
+          title="更多选项"
+          aria-label="更多选项"
+        >
+          <IconChevronDown width="14" height="14" />
+        </button>
+        {#if menuOpen}
+          <div class="dropdown-menu">
+            <label class="menu-item">
+              <input type="checkbox" bind:checked={showBackground} />
+              <span>后台进程</span>
+            </label>
+            <label class="menu-item">
+              <input type="checkbox" bind:checked={showUntitled} />
+              <span>无标题窗口</span>
+            </label>
+          </div>
+        {/if}
+      </div>
     </div>
   </div>
 
@@ -171,6 +208,46 @@
     color: #fff;
     background: var(--accent);
     border-color: var(--accent);
+  }
+
+  .menu-container {
+    position: relative;
+  }
+
+  .dropdown-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    padding: 4px 0;
+    margin-top: 4px;
+    min-width: 140px;
+    z-index: 100;
+  }
+
+  .menu-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    cursor: pointer;
+    user-select: none;
+    color: var(--text);
+    font-size: 12px;
+    transition: background 0.12s;
+  }
+  .menu-item:hover {
+    background: var(--hover);
+  }
+  .menu-item input[type="checkbox"] {
+    cursor: pointer;
+    accent-color: var(--accent);
+    width: 14px;
+    height: 14px;
+    flex: none;
   }
 
   .search {
