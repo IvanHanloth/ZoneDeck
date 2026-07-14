@@ -3,7 +3,12 @@
   import { app } from "../lib/state.svelte.js";
 </script>
 
-<header class="titlebar" data-tauri-drag-region ondblclick={() => win.toggleMaximize()}>
+<header
+  class="titlebar"
+  data-tauri-drag-region
+  role="presentation"
+  ondblclick={() => win.toggleMaximize()}
+>
   <div class="brand" data-tauri-drag-region>
     <img class="logo" src="/icon.ico" alt="" data-tauri-drag-region />
     <span class="name" data-tauri-drag-region>Boss Key</span>

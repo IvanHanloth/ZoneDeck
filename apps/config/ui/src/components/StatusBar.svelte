@@ -5,7 +5,6 @@
   import IconRotateCw from "~icons/lucide/rotate-cw";
   import IconPower from "~icons/lucide/power";
   import IconPlay from "~icons/lucide/play";
-  import IconChevronDown from "~icons/lucide/chevron-down";
   import { invoke } from "../lib/ipc.js";
   import { app, startCore, restartCore, quitCore, toast } from "../lib/state.svelte.js";
   import {
@@ -80,14 +79,6 @@
         <IconShield width="14" height="14" />
       </button>
     {:else if running}
-      <button
-        class="act icon-only blue"
-        onclick={() => restartCore(app.status.elevated)}
-        title="重启核心"
-        aria-label="重启核心"
-      >
-        <IconRotateCw width="14" height="14" />
-      </button>
       {#if !app.status.elevated}
         <button
           class="act icon-only blue"
@@ -98,6 +89,14 @@
           <IconShield width="14" height="14" />
         </button>
       {/if}
+      <button
+        class="act icon-only warn"
+        onclick={() => restartCore(app.status.elevated)}
+        title="重启核心"
+        aria-label="重启核心"
+      >
+        <IconRotateCw width="14" height="14" />
+      </button>
       <button class="act icon-only danger" onclick={quitCore} title="退出核心" aria-label="退出核心">
         <IconPower width="14" height="14" />
       </button>

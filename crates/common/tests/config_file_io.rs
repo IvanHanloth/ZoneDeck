@@ -1,4 +1,4 @@
-use bosskey_common::{Config, WindowInfo};
+use bosskey_common::{Config, ProcessRule, WindowInfo, WindowRule};
 
 #[test]
 fn save_then_load_round_trips_through_a_real_file() {
@@ -9,13 +9,16 @@ fn save_then_load_round_trips_through_a_real_file() {
     cfg.setting.freeze_after_hide = true;
     cfg.setting.auto_hide_time = 12;
     cfg.hotkey.hide_hotkey = "Ctrl+Shift+B".to_string();
-    cfg.hide_binding.push(WindowInfo::new(
-        "微信",
-        555,
-        "WeChat.exe",
-        2020,
-        "C:\\WeChat.exe",
-    ));
+    cfg.window_rules
+        .push(WindowRule::from_window(&WindowInfo::new(
+            "微信",
+            555,
+            "WeChat.exe",
+            2020,
+            "C:\\WeChat.exe",
+        )));
+    cfg.process_rules
+        .push(ProcessRule::from_regex(r".*\\game\.exe$"));
 
     cfg.save(&path).unwrap();
     assert!(path.exists());
@@ -59,5 +62,7 @@ fn written_file_is_readable_by_a_generic_json_parser() {
     let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
     assert!(value.get("setting").is_some());
     assert!(value.get("hotkey").is_some());
-    assert!(value.get("hide_binding").is_some());
+    assert!(value.get("window_rules").is_some());
+    assert!(value.get("process_rules").is_some());
+    assert!(value.get("notifications").is_some());
 }

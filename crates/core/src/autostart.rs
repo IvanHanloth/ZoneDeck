@@ -36,12 +36,18 @@ pub struct Autostart {
 impl Autostart {
     pub fn standard() -> Result<Self, AutostartError> {
         let exe_path = std::env::current_exe().map_err(|_| AutostartError::NoExePath)?;
-        Ok(Self {
+        Ok(Self::for_exe(exe_path))
+    }
+
+    /// 针对指定 exe 路径构造。配置程序查询自启状态时须传**核心** exe 路径，
+    /// 与核心 enable 时写入的路径一致，否则状态永远比对不上。
+    pub fn for_exe(exe_path: PathBuf) -> Self {
+        Self {
             task_name: TASK_NAME.to_string(),
             run_subkey: RUN_SUBKEY.to_string(),
             reg_value_name: REG_VALUE_NAME.to_string(),
             exe_path,
-        })
+        }
     }
 
     pub fn status(&self) -> Option<Method> {

@@ -77,6 +77,14 @@ fn key_to_vk(token: &str) -> Option<u16> {
     Some(vk)
 }
 
+/// 只解析修饰键组合（如 `"Ctrl+Shift"`），忽略无法识别的片段。空串得到 0。
+/// 鼠标触发用它把配置里的修饰键字符串变成位掩码。
+pub fn parse_modifiers(s: &str) -> u32 {
+    s.split('+')
+        .filter_map(|part| modifier_bit(part.trim()))
+        .fold(0, |acc, bit| acc | bit)
+}
+
 pub fn parse_hotkey(s: &str) -> Result<ParsedHotkey, HotkeyParseError> {
     let s = s.trim();
     if s.is_empty() {
@@ -112,6 +120,15 @@ pub fn parse_hotkey(s: &str) -> Result<ParsedHotkey, HotkeyParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_modifiers_reads_only_modifier_tokens() {
+        assert_eq!(parse_modifiers(""), 0);
+        assert_eq!(parse_modifiers("Ctrl"), MOD_CONTROL);
+        assert_eq!(parse_modifiers("Ctrl+Shift"), MOD_CONTROL | MOD_SHIFT);
+        assert_eq!(parse_modifiers("Win+Alt"), MOD_WIN | MOD_ALT);
+        assert_eq!(parse_modifiers("Ctrl+Q"), MOD_CONTROL, "主键片段被忽略");
+    }
 
     #[test]
     fn parses_default_hide_hotkey() {

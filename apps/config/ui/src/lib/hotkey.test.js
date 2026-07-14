@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comboFromEvent, keyName } from "./hotkey.js";
+import { comboFromEvent, keyName, modifiersFromEvent } from "./hotkey.js";
 
 const ev = (key, mods = {}) => ({
   key,
@@ -8,6 +8,20 @@ const ev = (key, mods = {}) => ({
   shiftKey: false,
   metaKey: false,
   ...mods,
+});
+
+describe("modifiersFromEvent", () => {
+  it("没按修饰键时返回空串", () => {
+    expect(modifiersFromEvent(ev("Control"))).toBe("");
+  });
+
+  it("按固定顺序拼接 Ctrl / Alt / Shift / Win", () => {
+    expect(modifiersFromEvent(ev("Control", { ctrlKey: true }))).toBe("Ctrl");
+    expect(
+      modifiersFromEvent(ev("Shift", { shiftKey: true, ctrlKey: true, metaKey: true })),
+    ).toBe("Ctrl+Shift+Win");
+    expect(modifiersFromEvent(ev("Alt", { altKey: true, shiftKey: true }))).toBe("Alt+Shift");
+  });
 });
 
 describe("keyName", () => {

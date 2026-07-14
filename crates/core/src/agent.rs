@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
-use bosskey_common::Config;
 use bosskey_common::ipc::{Command, Response};
+use bosskey_common::{ARG_RESTORE, Config};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -21,7 +21,7 @@ use windows::core::{PCWSTR, w};
 
 use crate::effects::WinEffects;
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
-use crate::hide::HideController;
+use crate::hide::{HideController, RuleOutcome, freezable_pids, resolve_targets};
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
@@ -38,6 +38,7 @@ const MENU_SETTINGS: usize = 1001;
 const MENU_TOGGLE: usize = 1002;
 const MENU_QUIT: usize = 1003;
 const MENU_AUTOSTART: usize = 1004;
+const MENU_RESTORE: usize = 1005;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
 const AUTO_HIDE_TIMER_ID: usize = 11;
@@ -146,23 +147,45 @@ impl AgentState {
     }
 
     fn apply_hide(&mut self) {
-        let config = self.config.clone();
-        self.controller.hide(&config);
+        let windows = self.controller.enumerate();
+        let foreground = self.controller.foreground();
+        // 解析目标：窗口规则会就地追溯回填句柄 / 同步标题。
+        let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
+        // 冻结只能整进程挂起，因此仅冻结「可见窗口已被全部隐藏」的进程。
+        let freezable = freezable_pids(&targets, &windows);
+        log_resolution(&self.config, &outcomes, &targets);
+        self.controller
+            .apply_hide(&self.config.setting, &targets, &freezable);
         self.persist_recovery();
         self.sync_tray();
+        if self.config.notifications.on_hide {
+            self.balloon("Boss Key", "已隐藏窗口");
+        }
     }
 
     fn apply_show(&mut self) {
         self.controller.show();
+        logging::info("已显示先前隐藏的窗口");
         self.persist_recovery();
         self.sync_tray();
+        if self.config.notifications.on_show {
+            self.balloon("Boss Key", "已恢复显示窗口");
+        }
+    }
+
+    /// 发送托盘气泡（托盘不存在或已隐藏时静默忽略）。
+    fn balloon(&self, title: &str, message: &str) {
+        if let Some(tray) = &self.tray {
+            tray.balloon(title, message);
+        }
     }
 
     fn apply_toggle(&mut self) {
-        let config = self.config.clone();
-        self.controller.toggle(&config);
-        self.persist_recovery();
-        self.sync_tray();
+        if self.controller.is_hidden() {
+            self.apply_show();
+        } else {
+            self.apply_hide();
+        }
     }
 
     fn execute(&mut self, hwnd: HWND, cmd: Command) -> (Response, bool) {
@@ -214,8 +237,44 @@ impl AgentState {
                 (Response::Ok, false)
             }
             Command::SetAutostart { enabled } => (set_autostart(enabled), false),
+            // 录制热键期间停用全局热键，录完再恢复。ReloadConfig（保存配置时触发）
+            // 也会重注册热键，作为“配置程序中途崩溃”的兜底。
+            Command::SetHotkeys { enabled } => {
+                if enabled {
+                    self.register_hotkeys(hwnd);
+                    logging::debug("已恢复全局热键");
+                } else {
+                    self.unregister_hotkeys(hwnd);
+                    logging::debug("录制中：已临时停用全局热键");
+                }
+                (Response::Ok, false)
+            }
             Command::Quit => (Response::Ok, true),
         }
+    }
+}
+
+/// 记录本次隐藏的分级日志：概览走 INFO，句柄追溯回填走 INFO，追溯失败走 WARN。
+fn log_resolution(config: &Config, outcomes: &[RuleOutcome], targets: &[crate::hide::Target]) {
+    logging::info(&format!(
+        "触发隐藏：命中 {} 个窗口（窗口规则 {} 条 / 进程规则 {} 条）",
+        targets.len(),
+        config.window_rules.len(),
+        config.process_rules.len()
+    ));
+    for (rule, outcome) in config.window_rules.iter().zip(outcomes) {
+        match outcome {
+            RuleOutcome::Reacquired => {
+                logging::info(&format!("窗口「{}」句柄已变化，已追溯回填", rule.title))
+            }
+            RuleOutcome::Missing => {
+                logging::warn(&format!("窗口「{}」已关闭或重启，未能追溯", rule.title))
+            }
+            _ => {}
+        }
+    }
+    for t in targets {
+        logging::debug(&format!("隐藏目标 hwnd={} pid={}", t.hwnd, t.pid));
     }
 }
 
@@ -269,7 +328,9 @@ fn toggle_autostart(state: &AgentState) {
             Err(_) => ("开机自启设置失败", "计划任务与注册表方式均失败"),
         }
     };
-    if let Some(tray) = &state.tray {
+    if state.config.notifications.on_autostart
+        && let Some(tray) = &state.tray
+    {
         tray.balloon(title, message);
     }
 }
@@ -301,6 +362,7 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
         };
         let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, w!("设置"));
         let _ = AppendMenuW(menu, MF_STRING, MENU_TOGGLE, toggle_label);
+        let _ = AppendMenuW(menu, MF_STRING, MENU_RESTORE, w!("窗口恢复工具"));
         let _ = AppendMenuW(menu, autostart_flags, MENU_AUTOSTART, w!("开机自启"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, MENU_QUIT, w!("退出"));
@@ -323,20 +385,66 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
     }
 }
 
-fn launch_settings(state: &AgentState) {
-    let config_exe = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("bosskey-config.exe")));
+/// 两个路径是否指向同一个可执行文件（Windows 路径大小写不敏感）。
+fn same_exe(path: &str, exe: &Path) -> bool {
+    exe.to_str()
+        .is_some_and(|e| !path.is_empty() && path.eq_ignore_ascii_case(e))
+}
 
-    match config_exe {
-        Some(path) if path.exists() => {
-            let _ = std::process::Command::new(path).spawn();
+/// 把配置程序自己的窗口从「被隐藏」状态里放出来。
+///
+/// 配置窗口完全可能被 Boss Key 自己藏起来（用户绑定了它，或开了「同时隐藏当前活动窗口」）。
+/// 一旦它还被**冻结**，单实例通知根本发不进那个被挂起的进程——表现就是点托盘「设置」没反应。
+/// 所以拉起之前必须先解冻 + 显示。
+fn release_config_windows(state: &mut AgentState, exe: &Path) {
+    let windows = state.controller.enumerate();
+    let mut pids: Vec<u32> = windows
+        .iter()
+        .filter(|w| same_exe(&w.path, exe))
+        .map(|w| w.pid)
+        .filter(|pid| *pid != 0)
+        .collect();
+    pids.sort_unstable();
+    pids.dedup();
+
+    let released = state.controller.release_pids(&pids);
+    if released > 0 {
+        logging::info(&format!(
+            "配置窗口此前被 Boss Key 隐藏，已先释放 {released} 个窗口再拉起设置"
+        ));
+        state.persist_recovery();
+        state.sync_tray();
+    }
+}
+
+/// 拉起配置程序。`action` 会作为命令行参数传入（如 `restore` 直达窗口恢复工具）。
+fn launch_settings(state: &mut AgentState, action: Option<&str>) {
+    // 生产打包名为 "Boss Key.exe"，开发（cargo）产物名为 "bosskey-config.exe"。
+    let dir = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(PathBuf::from));
+    let found = dir.and_then(|d| {
+        ["Boss Key.exe", "bosskey-config.exe"]
+            .into_iter()
+            .map(|name| d.join(name))
+            .find(|p| p.exists())
+    });
+
+    let Some(path) = found else {
+        if let Some(tray) = &state.tray {
+            tray.balloon("Boss Key", "未找到配置程序");
         }
-        _ => {
-            if let Some(tray) = &state.tray {
-                tray.balloon("Boss Key", "未找到配置程序 bosskey-config.exe");
-            }
-        }
+        return;
+    };
+
+    release_config_windows(state, &path);
+
+    let mut cmd = std::process::Command::new(&path);
+    if let Some(arg) = action {
+        cmd.arg(arg);
+    }
+    if let Err(e) = cmd.spawn() {
+        logging::warn(&format!("启动配置程序失败: {e}"));
     }
 }
 
@@ -345,8 +453,11 @@ fn quit(state: &mut AgentState, hwnd: HWND) {
     state.persist_recovery(); // 已无隐藏内容，等价于清除恢复文件
     state.unregister_hotkeys(hwnd);
     logging::info("核心正常退出");
+    let notify_quit = state.config.notifications.on_quit;
     if let Some(tray) = &mut state.tray {
-        tray.balloon("Boss Key已停止服务", "Boss Key已成功退出");
+        if notify_quit {
+            tray.balloon("Boss Key已停止服务", "Boss Key已成功退出");
+        }
         tray.hide();
     }
     unsafe {
@@ -412,7 +523,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_COMMAND => {
             match wparam.0 & 0xFFFF {
-                MENU_SETTINGS => launch_settings(state),
+                MENU_SETTINGS => launch_settings(state, None),
+                MENU_RESTORE => launch_settings(state, Some(ARG_RESTORE)),
                 MENU_TOGGLE => state.apply_toggle(),
                 MENU_AUTOSTART => toggle_autostart(state),
                 MENU_QUIT => quit(state, hwnd),
@@ -575,7 +687,9 @@ pub fn run(options: AgentOptions) {
             })
     });
 
-    if let Some(tray) = &state.tray {
+    if state.config.notifications.on_start
+        && let Some(tray) = &state.tray
+    {
         tray.balloon(
             "Boss Key正在运行！",
             "Boss Key正在为您服务，您可通过托盘图标看到我",

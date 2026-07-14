@@ -11,7 +11,6 @@ use bosskey_core::logging;
 use bosskey_core::single_instance::SingleInstance;
 
 const MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
-const LOG_FILE_NAME: &str = "bosskey.log";
 
 fn exe_dir() -> PathBuf {
     std::env::current_exe()
@@ -27,7 +26,11 @@ fn config_path() -> PathBuf {
 fn main() {
     // 日志与 panic 钩子最先就位：崩溃信息落盘后进程以非零码退出，
     // 由计划任务的 RestartOnFailure 负责重新拉起。
-    logging::init(exe_dir().join(LOG_FILE_NAME));
+    // 日志保留天数取自配置（0 = 关闭日志）；此处轻量读取一次，agent 内再正式加载。
+    let retention_days = bosskey_common::Config::load(&config_path())
+        .map(|c| c.setting.log_retention_days)
+        .unwrap_or(bosskey_common::config::DEFAULT_LOG_RETENTION_DAYS);
+    logging::init(exe_dir().join(logging::LOG_DIR_NAME), retention_days);
     logging::install_panic_hook();
     logging::info(&format!("核心启动 {}", bosskey_common::APP_CONFIG_VERSION));
 

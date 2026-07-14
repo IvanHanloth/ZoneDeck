@@ -154,6 +154,22 @@ input[type="number"]:focus {
   color: var(--muted);
 }
 
+/* Fluent 风格配置卡：标题 + 若干 SettingRow */
+.fcard {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.fcard > h3 {
+  padding: 11px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * {
     transition: none !important;

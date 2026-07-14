@@ -1,12 +1,20 @@
 <script>
   // 热键录制：点击后捕获下一个组合键，写回双向绑定的 value。
+  //
+  // 录制期间必须让核心先停用全局热键——否则你按下的组合键会直接触发现有热键
+  // （比如按到 Ctrl+Q 就把窗口藏了），根本录不进来。取消 / 完成 / 组件销毁后恢复。
   import { onDestroy } from "svelte";
   import { comboFromEvent } from "../lib/hotkey.js";
+  import { invoke } from "../lib/ipc.js";
 
   let { label, value = $bindable("") } = $props();
 
   let recording = $state(false);
   let timer = null;
+
+  function setCoreHotkeys(enabled) {
+    invoke("set_hotkeys_enabled", { enabled }).catch(() => {});
+  }
 
   function onKeydown(e) {
     e.preventDefault();
@@ -20,14 +28,17 @@
   function start() {
     if (recording) return stop();
     recording = true;
+    setCoreHotkeys(false);
     window.addEventListener("keydown", onKeydown, true);
     timer = setTimeout(stop, 10_000); // 超时自动取消
   }
 
   function stop() {
+    if (!recording) return;
     recording = false;
     clearTimeout(timer);
     window.removeEventListener("keydown", onKeydown, true);
+    setCoreHotkeys(true);
   }
 
   onDestroy(stop);

@@ -16,6 +16,11 @@ pub enum Command {
     SetAutostart {
         enabled: bool,
     },
+    /// 临时停用 / 恢复全局热键。配置界面录制热键时必须先停用，
+    /// 否则按下的组合键会直接触发现有热键（比如把窗口藏了）。
+    SetHotkeys {
+        enabled: bool,
+    },
     Quit,
 }
 
@@ -132,6 +137,8 @@ mod tests {
             Command::Show,
             Command::Toggle,
             Command::SetAutostart { enabled: true },
+            Command::SetHotkeys { enabled: true },
+            Command::SetHotkeys { enabled: false },
             Command::Quit,
         ];
         for c in cases {

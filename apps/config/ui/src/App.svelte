@@ -5,59 +5,79 @@
   import BindingPanel from "./components/BindingPanel.svelte";
   import HotkeysPanel from "./components/HotkeysPanel.svelte";
   import OptionsPanel from "./components/OptionsPanel.svelte";
+  import NotificationsPanel from "./components/NotificationsPanel.svelte";
   import AboutPanel from "./components/AboutPanel.svelte";
-  import Toggle from "./components/Toggle.svelte";
+  import StatusBar from "./components/StatusBar.svelte";
+  import RestoreWindowsModal from "./components/RestoreWindowsModal.svelte";
   import Toast from "./components/Toast.svelte";
-  import { invoke, win } from "./lib/ipc.js";
+  import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
     app,
     loadAll,
-    saveConfig,
+    openRestoreTool,
+    refreshStatus,
+    scheduleSave,
+    startCore,
     startStatusPolling,
-    toast,
   } from "./lib/state.svelte.js";
+  import { hideSplash } from "./lib/splash.js";
   import { applyTheme, loadPreference } from "./lib/theme.js";
 
   const TABS = [
     { id: "binding", label: "窗口绑定" },
     { id: "hotkeys", label: "热键与鼠标" },
+    { id: "notify", label: "通知设置" },
     { id: "options", label: "其他选项" },
     { id: "about", label: "关于" },
   ];
-  let active = $state("binding");
 
-  async function onAutostartChange(e) {
-    const enabled = e.target.checked;
-    try {
-      await invoke("set_autostart", { enabled });
-      toast(enabled ? "已开启开机自启" : "已关闭开机自启");
-    } catch (err) {
-      app.autostart = !enabled; // 失败回滚
-      toast("设置开机自启失败：" + err, true);
-    }
-  }
+  // 加载阶段不自动保存；loadAll 完成后才武装。普通 let 不参与响应式追踪。
+  let autoSaveReady = false;
+
+  // 自动保存：任何配置或绑定改动，停顿后自动写盘（scheduleSave 内部 debounce）。
+  $effect(() => {
+    const cfg = app.config;
+    if (!cfg) return;
+    // 深度读取以建立对所有字段的依赖追踪（含 window_rules / process_rules）。
+    JSON.stringify($state.snapshot(cfg));
+    if (!autoSaveReady) return;
+    scheduleSave();
+  });
 
   onMount(() => {
-    // 主题：立即应用并跟随系统变化（auto 模式）。
-    applyTheme(loadPreference());
+    // 主题：main.js 已在挂载前应用过一次（免得启动屏配色跳变），这里只负责跟随系统变化。
     const media = matchMedia("(prefers-color-scheme: dark)");
     const onSystemTheme = () => applyTheme(loadPreference());
     media.addEventListener("change", onSystemTheme);
 
-    loadAll();
+    // 配置到手、界面有内容可看了，才把启动屏淡掉；失败时也得淡掉，否则永远卡在启动屏。
+    loadAll()
+      .then(() => {
+        autoSaveReady = true;
+      })
+      .finally(hideSplash);
     const stopPolling = startStatusPolling(2000);
 
-    // 跟踪最大化状态（控制圆角/缩放热区/还原按钮图标）。
+    // 核心托盘的「窗口恢复工具」会带 restore 参数拉起本程序：
+    // 冷启动时从启动参数读到，已在运行时则由单实例插件发来 open-restore 事件。
+    invoke("startup_action").then((a) => a === "restore" && openRestoreTool());
+    const stopRestoreEvent = onAppEvent("open-restore", openRestoreTool);
+
+    // 首次启动：若核心未运行，自动拉起（仅本次，不与轮询重复）。
+    refreshStatus().then(() => {
+      if (app.status.running === false) startCore(false);
+    });
+
+    // 跟踪最大化状态（控制圆角 / 缩放热区 / 还原按钮图标）。
     let unlisten = () => {};
     win.isMaximized().then((m) => (app.maximized = m));
-    win
-      .onResized(async () => {
-        app.maximized = await win.isMaximized();
-      })
-      .then((fn) => (unlisten = fn));
+    win.onResized(async () => {
+      app.maximized = await win.isMaximized();
+    }).then((fn) => (unlisten = fn));
 
     return () => {
       stopPolling();
+      stopRestoreEvent();
       unlisten();
       media.removeEventListener("change", onSystemTheme);
     };
@@ -67,45 +87,39 @@
 <div class="window" class:maximized={app.maximized}>
   <TitleBar />
 
-  <nav class="tabs" role="tablist" aria-label="设置分类">
+  <div class="tabs" role="tablist" aria-label="设置分类">
     {#each TABS as tab (tab.id)}
       <button
         class="tab"
-        class:active={active === tab.id}
+        class:active={app.tab === tab.id}
         role="tab"
-        aria-selected={active === tab.id}
-        onclick={() => (active = tab.id)}
+        aria-selected={app.tab === tab.id}
+        onclick={() => (app.tab = tab.id)}
       >
         {tab.label}
       </button>
     {/each}
-  </nav>
+  </div>
 
   <main class="content">
     {#if !app.config}
       <p class="hint loading">正在加载配置…</p>
-    {:else if active === "binding"}
+    {:else if app.tab === "binding"}
       <BindingPanel />
-    {:else if active === "hotkeys"}
+    {:else if app.tab === "hotkeys"}
       <HotkeysPanel />
-    {:else if active === "options"}
+    {:else if app.tab === "options"}
       <OptionsPanel />
+    {:else if app.tab === "notify"}
+      <NotificationsPanel />
     {:else}
       <AboutPanel />
     {/if}
   </main>
 
-  <footer class="footer">
-    <Toggle
-      label="开机自启"
-      bind:checked={app.autostart}
-      onchange={onAutostartChange}
-    />
-    <button class="btn primary save" onclick={saveConfig} disabled={!app.config || app.saving}>
-      {app.saving ? "保存中…" : "保存设置"}
-    </button>
-  </footer>
+  <StatusBar />
 
+  <RestoreWindowsModal bind:open={app.restoreOpen} />
   <Toast />
   <ResizeHandles />
 </div>
@@ -188,17 +202,4 @@
     padding: 48px 0;
   }
 
-  .footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 16px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    flex: none;
-  }
-  .save {
-    min-width: 110px;
-  }
 </style>

@@ -19,3 +19,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 bosskey-common = { path = "../../../crates/common" }
 bosskey-core = { path = "../../../crates/core" }
+tauri-plugin-single-instance = "2.4.2"

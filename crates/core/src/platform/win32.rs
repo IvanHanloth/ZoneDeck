@@ -6,8 +6,9 @@ use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetForegroundWindow, GetWindowTextLengthW, GetWindowTextW,
-    GetWindowThreadProcessId, IsWindowVisible, SW_HIDE, SW_SHOW, ShowWindow,
+    EnumWindows, GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
+    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SW_HIDE,
+    SW_SHOW, ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 use windows::core::{BOOL, PWSTR};
 
@@ -84,23 +85,39 @@ fn process_name_from_path(path: &str) -> String {
         .to_string()
 }
 
+/// 是否应把该顶层窗口列入进程列表（类 Alt+Tab 的过滤，纯逻辑便于测试）：
+/// - 排除工具窗口（`WS_EX_TOOLWINDOW`）；
+/// - 只保留顶层应用窗口：无属主，或显式标记为 `WS_EX_APPWINDOW`。
+///
+/// 不按可见性和标题过滤——隐藏窗口、无标题窗口都会列出，由界面按 `visible`
+/// 分组、并用「显示后台 / 显示无标题」开关决定是否展示。
+fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
+    if ex_style & WS_EX_TOOLWINDOW.0 != 0 {
+        return false;
+    }
+    if has_owner && (ex_style & WS_EX_APPWINDOW.0 == 0) {
+        return false;
+    }
+    true
+}
+
 unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     unsafe {
-        if !IsWindowVisible(hwnd).as_bool() {
+        let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
+        let has_owner = GetWindow(hwnd, GW_OWNER).is_ok_and(|o| !o.is_invalid());
+        if !is_listable_window(ex_style, has_owner) {
             return BOOL(1);
         }
+
         let sink = &mut *(lparam.0 as *mut Vec<WindowInfo>);
+        let visible = IsWindowVisible(hwnd).as_bool();
         let title = window_title(hwnd);
         let pid = window_pid(hwnd);
         let path = process_path(pid);
         let process = process_name_from_path(&path);
-        sink.push(WindowInfo::new(
-            title,
-            hwnd_to_i64(hwnd),
-            process,
-            pid,
-            path,
-        ));
+        sink.push(
+            WindowInfo::new(title, hwnd_to_i64(hwnd), process, pid, path).with_visibility(visible),
+        );
     }
     BOOL(1)
 }
@@ -161,6 +178,21 @@ mod tests {
         assert_eq!(hwnd_to_i64(h), 123456);
     }
 
+    #[test]
+    fn is_listable_window_filters_like_alt_tab() {
+        const TOOL: u32 = WS_EX_TOOLWINDOW.0;
+        const APP: u32 = WS_EX_APPWINDOW.0;
+
+        // 顶层窗口（无属主）保留（含无标题窗口，由界面过滤）。
+        assert!(is_listable_window(0, false));
+        // 工具窗口排除。
+        assert!(!is_listable_window(TOOL, false));
+        // 有属主的普通窗口排除（如对话框、子面板）。
+        assert!(!is_listable_window(0, true));
+        // 有属主但显式标记为 APPWINDOW 的仍保留。
+        assert!(is_listable_window(APP, true));
+    }
+
     use windows::Win32::UI::WindowsAndMessaging::{
         CW_USEDEFAULT, CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WS_OVERLAPPEDWINDOW,
     };
@@ -199,9 +231,14 @@ mod tests {
 
             wm.hide(id);
             assert!(!wm.is_visible(id), "隐藏后应不可见");
+            let hidden_entry = wm.enumerate().into_iter().find(|w| w.hwnd == id);
             assert!(
-                !wm.enumerate().iter().any(|w| w.hwnd == id),
-                "隐藏后不应枚举到测试窗口"
+                hidden_entry.is_some(),
+                "隐藏后仍应能枚举到窗口（供界面后台分组展示）"
+            );
+            assert!(
+                !hidden_entry.unwrap().visible,
+                "隐藏后枚举结果的 visible 应为 false"
             );
 
             let _ = DestroyWindow(hwnd);

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Boss Key 配置",
+  "productName": "Boss Key",
   "version": "3.0.0",
   "identifier": "cn.hanloth.bosskey.config",
   "build": {
@@ -19,7 +19,8 @@
         "minHeight": 520,
         "resizable": true,
         "center": true,
-        "decorations": false
+        "decorations": false,
+        "visible": false
       }
     ],
     "security": {

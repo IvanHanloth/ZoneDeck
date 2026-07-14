@@ -1,4 +1,4 @@
-﻿# Boss Key v3 一键生产打包脚本
+﻿# Boss Key 一键生产打包脚本
 # 流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace → 组装便携文件夹
 #      → 可选生成 InnoSetup 安装包（-Installer）
 #
@@ -6,15 +6,27 @@
 #   powershell -File scripts/package.ps1               # 便携文件夹
 #   powershell -File scripts/package.ps1 -Installer    # 便携文件夹 + 安装包
 #   powershell -File scripts/package.ps1 -SkipFrontend # 复用已有 dist（前端没改时提速）
+#
+# 版本号默认取自 Cargo.toml（唯一真源，见 scripts/version.ps1），无需手动传 -Version。
 param(
     [switch]$Installer,
     [switch]$SkipFrontend,
-    [string]$Version = "3.0.0.0"
+    [string]$Version
 )
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
+
+if (-not $Version) {
+    $cargoToml = Get-Content (Join-Path $root "Cargo.toml") -Raw
+    if ($cargoToml -notmatch '(?ms)^\[workspace\.package\].*?^version\s*=\s*"([^"]+)"') {
+        throw "无法从 Cargo.toml 读取版本号，请显式传入 -Version"
+    }
+    $Version = $Matches[1]
+}
+# 安装包资源信息要求纯数字四段号：3.1.0-rc.1 → 3.1.0.0
+$Version4 = "$(($Version -split '-')[0]).0"
 
 # 1. 前端
 $uiDir = Join-Path $root "apps\config\ui"
@@ -37,13 +49,14 @@ Write-Host "==> 生产编译（cargo build --release）..." -ForegroundColor Cya
 cargo build --release
 if ($LASTEXITCODE -ne 0) { throw "cargo 编译失败" }
 
-# 3. 组装便携文件夹
-$outDir = Join-Path $root "package\Boss-Key"
+# 3. 组装便携文件夹（仓库根 dist/）
+$outDir = Join-Path $root "dist"
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-Copy-Item "target\release\bosskey-core.exe" $outDir
-Copy-Item "target\release\bosskey-config.exe" $outDir
+# 核心 exe 名为 core.exe；配置程序（带前端）命名为 "Boss Key.exe"
+Copy-Item "target\release\core.exe" (Join-Path $outDir "core.exe")
+Copy-Item "target\release\bosskey-config.exe" (Join-Path $outDir "Boss Key.exe")
 Copy-Item "icon.ico" $outDir
 
 Write-Host "==> 便携版组装完成：$outDir" -ForegroundColor Green
@@ -52,20 +65,12 @@ Get-ChildItem $outDir | Select-Object Name, @{Name = "Size"; Expression = { "{0:
 # 4. 安装包（可选）
 if ($Installer) {
     Write-Host "==> 生成 InnoSetup 安装包..." -ForegroundColor Cyan
-    $iscc = Get-Command iscc.exe -ErrorAction SilentlyContinue
-    if (-not $iscc) {
-        $candidates = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-        )
-        $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-    } else {
-        $iscc = $iscc.Source
-    }
-    if (-not $iscc) { throw "未找到 ISCC.exe，请安装 Inno Setup 6（winget install JRSoftware.InnoSetup）" }
+    # 按需安装 Inno Setup 并补齐中文语言包（官方安装包不带），返回 ISCC.exe 路径
+    $iscc = & (Join-Path $PSScriptRoot "install-inno.ps1") | Select-Object -Last 1
+    if (-not $iscc) { throw "Inno Setup 环境准备失败" }
 
-    & $iscc "/DMyAppVersion=$Version" ".github\inno-script\Boss-Key-v3.iss"
+    & $iscc "/DMyAppVersion=$Version" "/DMyAppVersion4=$Version4" ".github\inno-script\Boss-Key.iss"
     if ($LASTEXITCODE -ne 0) { throw "InnoSetup 编译失败" }
-    Write-Host "==> 安装包输出：package\installer" -ForegroundColor Green
-    Get-ChildItem (Join-Path $root "package\installer")
+    Write-Host "==> 安装包输出：dist\installer" -ForegroundColor Green
+    Get-ChildItem (Join-Path $root "dist\installer")
 }

@@ -34,6 +34,19 @@ export function keyName(event) {
 }
 
 /**
+ * 事件当下按住的修饰键组合，如 "Ctrl+Shift"；一个都没按返回空串。
+ * 鼠标触发只需要修饰键（主键是鼠标按钮本身），所以单独拆一个纯函数出来。
+ */
+export function modifiersFromEvent(event) {
+  const parts = [];
+  if (event.ctrlKey) parts.push("Ctrl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+  if (event.metaKey) parts.push("Win");
+  return parts.join("+");
+}
+
+/**
  * 由键盘事件构造完整组合键字符串。
  * 仅按下修饰键、或主键不受支持时返回 null（继续等待）。
  */

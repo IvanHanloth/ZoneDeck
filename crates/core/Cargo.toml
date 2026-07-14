@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "bosskey-core"
+name = "core"
 path = "src/main.rs"
 
 [dependencies]

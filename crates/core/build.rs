@@ -1,4 +1,4 @@
-//! 构建脚本：为 bosskey-core.exe 嵌入 Windows 资源。
+//! 构建脚本：为核心 exe（core.exe）嵌入 Windows 资源。
 //!
 //! - 应用清单（manifest.xml）：PerMonitorV2 DPI 感知、长路径、系统版本声明、asInvoker；
 //! - 版本信息（取自 Cargo 包版本）与产品元数据——正规化二进制，降低杀软误报；
@@ -21,6 +21,6 @@ fn main() {
     res.set("FileDescription", "Boss Key 核心服务");
     res.set("CompanyName", "Ivan Hanloth");
     res.set("LegalCopyright", "Copyright © Ivan Hanloth");
-    res.set("OriginalFilename", "bosskey-core.exe");
+    res.set("OriginalFilename", "core.exe");
     res.compile().expect("嵌入 Windows 资源失败");
 }

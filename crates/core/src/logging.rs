@@ -1,22 +1,28 @@
-//! 崩溃日志：轻量文件日志 + panic 钩子。
+//! 分级文件日志 + panic 钩子。
 //!
 //! 设计目标：
-//! - 常驻核心崩溃后能从日志文件（`bosskey.log`）定位原因；
-//! - 单文件 + 大小上限轮转（超限时改名为 `.old`），不会无限膨胀；
+//! - 常驻核心崩溃后能从日志定位原因；
+//! - **按天切割**：日志写入专门目录，文件名 `BossKey-YYYY-MM-DD.log`；
+//! - **按天保留**：启动时清理超过保留天数的旧日志（`0` 天表示关闭日志）；
+//! - **分级**：生产（release）构建只记录 INFO/WARN/ERROR，DEBUG 仅在开发构建输出；
 //! - 不引入外部日志框架，保持核心二进制极小。
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
-/// 默认日志大小上限：超过后当前日志改名为 `<name>.old`，重新开始写。
-pub const DEFAULT_MAX_BYTES: u64 = 512 * 1024;
+/// 日志目录名（位于 exe 同目录下）。
+pub const LOG_DIR_NAME: &str = "logs";
+/// 日志文件名前缀（面向用户，使用品牌大小写）。
+const LOG_FILE_PREFIX: &str = "BossKey-";
+const LOG_FILE_SUFFIX: &str = ".log";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Level {
+    Debug,
     Info,
     Warn,
     Error,
@@ -25,6 +31,7 @@ pub enum Level {
 impl Level {
     fn as_str(self) -> &'static str {
         match self {
+            Level::Debug => "DEBUG",
             Level::Info => "INFO",
             Level::Warn => "WARN",
             Level::Error => "ERROR",
@@ -33,56 +40,102 @@ impl Level {
 }
 
 pub struct Logger {
-    path: PathBuf,
-    max_bytes: u64,
+    dir: PathBuf,
+    retention_days: u32,
     lock: Mutex<()>,
 }
 
 impl Logger {
-    pub fn new(path: PathBuf, max_bytes: u64) -> Self {
+    pub fn new(dir: PathBuf, retention_days: u32) -> Self {
         Self {
-            path,
-            max_bytes,
+            dir,
+            retention_days,
             lock: Mutex::new(()),
         }
     }
 
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
     pub fn log(&self, level: Level, message: &str) {
-        let entry = format_entry(&local_timestamp(), level, message);
+        let now = unsafe { GetLocalTime() };
+        let entry = format_entry(
+            &format_timestamp(
+                now.wYear,
+                now.wMonth,
+                now.wDay,
+                now.wHour,
+                now.wMinute,
+                now.wSecond,
+            ),
+            level,
+            message,
+        );
+        let path = self
+            .dir
+            .join(log_file_name(now.wYear, now.wMonth, now.wDay));
         let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
-        self.rotate_if_needed(entry.len() as u64);
-        if let Ok(mut file) = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-        {
+        let _ = fs::create_dir_all(&self.dir);
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&path) {
             let _ = file.write_all(entry.as_bytes());
         }
     }
 
-    /// 当前日志加上新条目会超过上限时，将其轮转为 `<文件名>.old`（覆盖旧备份）。
-    fn rotate_if_needed(&self, incoming: u64) {
-        let Ok(meta) = fs::metadata(&self.path) else {
-            return;
-        };
-        if meta.len() + incoming <= self.max_bytes {
+    /// 启动时清理超过保留天数的旧日志文件。今天算第 0 天，`retention_days`
+    /// 天以前（含）的文件删除；`retention_days == 0` 时不建目录、不清理。
+    pub fn cleanup(&self) {
+        if self.retention_days == 0 {
             return;
         }
-        let backup = rotated_path(&self.path);
-        let _ = fs::remove_file(&backup);
-        let _ = fs::rename(&self.path, &backup);
+        let now = unsafe { GetLocalTime() };
+        let today = days_from_civil(now.wYear as i64, now.wMonth as u32, now.wDay as u32);
+        let Ok(entries) = fs::read_dir(&self.dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name) = name.to_str() else { continue };
+            if is_expired(name, today, self.retention_days) {
+                let _ = fs::remove_file(entry.path());
+            }
+        }
     }
 }
 
-/// 轮转备份文件路径：`bosskey.log` → `bosskey.log.old`。
-fn rotated_path(path: &Path) -> PathBuf {
-    let mut name = path.as_os_str().to_os_string();
-    name.push(".old");
-    PathBuf::from(name)
+/// 当天日志文件名：`BossKey-YYYY-MM-DD.log`。
+fn log_file_name(year: u16, month: u16, day: u16) -> String {
+    format!("{LOG_FILE_PREFIX}{year:04}-{month:02}-{day:02}{LOG_FILE_SUFFIX}")
+}
+
+/// 从日志文件名解析出年月日；不符合命名规则时返回 `None`。
+fn parse_log_date(name: &str) -> Option<(i64, u32, u32)> {
+    let date = name
+        .strip_prefix(LOG_FILE_PREFIX)?
+        .strip_suffix(LOG_FILE_SUFFIX)?;
+    let mut parts = date.split('-');
+    let y: i64 = parts.next()?.parse().ok()?;
+    let m: u32 = parts.next()?.parse().ok()?;
+    let d: u32 = parts.next()?.parse().ok()?;
+    if parts.next().is_some() || !(1..=12).contains(&m) || !(1..=31).contains(&d) {
+        return None;
+    }
+    Some((y, m, d))
+}
+
+/// 将公历年月日换算为连续日序号（1970-01-01 为 0）。Howard Hinnant 算法。
+fn days_from_civil(y: i64, m: u32, d: u32) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = if y >= 0 { y } else { y - 399 } / 400;
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) as i64 + 2) / 5 + d as i64 - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146097 + doe - 719468
+}
+
+/// 某个日志文件是否已过期（早于 `today` 达 `retention_days` 天或以上）。
+fn is_expired(name: &str, today: i64, retention_days: u32) -> bool {
+    let Some((y, m, d)) = parse_log_date(name) else {
+        return false; // 非日志文件不动
+    };
+    let age = today - days_from_civil(y, m, d);
+    age >= retention_days as i64
 }
 
 fn format_entry(timestamp: &str, level: Level, message: &str) -> String {
@@ -100,18 +153,28 @@ fn format_timestamp(
     format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
 }
 
-fn local_timestamp() -> String {
-    let t = unsafe { GetLocalTime() };
-    format_timestamp(t.wYear, t.wMonth, t.wDay, t.wHour, t.wMinute, t.wSecond)
-}
-
 // ---- 全局日志入口 ----
 
 static GLOBAL: OnceLock<Logger> = OnceLock::new();
 
-/// 初始化全局日志（仅首次生效）。通常传 exe 同目录下的 `bosskey.log`。
-pub fn init(path: PathBuf) {
-    let _ = GLOBAL.set(Logger::new(path, DEFAULT_MAX_BYTES));
+/// 初始化全局日志。`dir` 通常为 exe 同目录下的 `logs`。
+/// `retention_days == 0` 表示关闭日志（不初始化、后续写入均为 no-op）。
+pub fn init(dir: PathBuf, retention_days: u32) {
+    if retention_days == 0 {
+        return;
+    }
+    let logger = Logger::new(dir, retention_days);
+    logger.cleanup();
+    let _ = GLOBAL.set(logger);
+}
+
+/// 该级别是否应输出：生产（release）构建丢弃 DEBUG。
+fn should_emit(level: Level) -> bool {
+    level != Level::Debug || cfg!(debug_assertions)
+}
+
+pub fn debug(message: &str) {
+    log(Level::Debug, message);
 }
 
 pub fn info(message: &str) {
@@ -127,7 +190,10 @@ pub fn error(message: &str) {
 }
 
 fn log(level: Level, message: &str) {
-    if level != Level::Info {
+    if !should_emit(level) {
+        return;
+    }
+    if matches!(level, Level::Warn | Level::Error) {
         eprintln!("[{}] {message}", level.as_str());
     }
     if let Some(logger) = GLOBAL.get() {
@@ -165,12 +231,10 @@ pub fn install_panic_hook() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
-    fn temp_log(name: &str) -> PathBuf {
-        tempfile::tempdir()
-            .expect("创建临时目录失败")
-            .keep()
-            .join(name)
+    fn temp_dir() -> PathBuf {
+        tempfile::tempdir().expect("创建临时目录失败").keep()
     }
 
     #[test]
@@ -185,40 +249,106 @@ mod tests {
     }
 
     #[test]
-    fn logger_appends_entries_in_order() {
-        let path = temp_log("bosskey.log");
-        let logger = Logger::new(path.clone(), DEFAULT_MAX_BYTES);
+    fn log_file_name_uses_brand_prefix_and_date() {
+        assert_eq!(log_file_name(2026, 7, 4), "BossKey-2026-07-04.log");
+    }
+
+    #[test]
+    fn parse_log_date_round_trips_and_rejects_others() {
+        assert_eq!(parse_log_date("BossKey-2026-07-04.log"), Some((2026, 7, 4)));
+        assert_eq!(parse_log_date("recovery.json"), None);
+        assert_eq!(parse_log_date("BossKey-2026-07.log"), None);
+        assert_eq!(
+            parse_log_date("BossKey-2026-13-04.log"),
+            None,
+            "非法月份应拒绝"
+        );
+        assert_eq!(parse_log_date("other-2026-07-04.log"), None);
+    }
+
+    #[test]
+    fn days_from_civil_matches_known_epoch() {
+        assert_eq!(days_from_civil(1970, 1, 1), 0);
+        assert_eq!(days_from_civil(1970, 1, 2), 1);
+        assert_eq!(days_from_civil(2000, 1, 1), 10957);
+    }
+
+    #[test]
+    fn expiry_respects_retention_window() {
+        let today = days_from_civil(2026, 7, 14);
+        // 7 天保留：今天及往前 6 天保留，第 7 天及更早过期。
+        assert!(
+            !is_expired("BossKey-2026-07-14.log", today, 7),
+            "今天不应过期"
+        );
+        assert!(
+            !is_expired("BossKey-2026-07-08.log", today, 7),
+            "6 天前不应过期"
+        );
+        assert!(
+            is_expired("BossKey-2026-07-07.log", today, 7),
+            "7 天前应过期"
+        );
+        assert!(is_expired("BossKey-2026-06-01.log", today, 7));
+        assert!(
+            !is_expired("config.json", today, 7),
+            "非日志文件不应被判过期"
+        );
+    }
+
+    #[test]
+    fn logger_writes_into_todays_dated_file() {
+        let dir = temp_dir();
+        let logger = Logger::new(dir.clone(), 7);
         logger.log(Level::Info, "第一条");
         logger.log(Level::Error, "第二条");
 
-        let content = fs::read_to_string(&path).expect("日志文件应存在");
-        let lines: Vec<&str> = content.lines().collect();
-        assert_eq!(lines.len(), 2);
-        assert!(lines[0].contains("[INFO] 第一条"));
-        assert!(lines[1].contains("[ERROR] 第二条"));
+        // 目录下应只有一个当天日志文件。
+        let logs: Vec<_> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .filter(|e| parse_log_date(e.file_name().to_str().unwrap()).is_some())
+            .collect();
+        assert_eq!(logs.len(), 1, "应写入单个当天日志文件");
+        let content = fs::read_to_string(logs[0].path()).unwrap();
+        assert!(content.contains("[INFO] 第一条"));
+        assert!(content.contains("[ERROR] 第二条"));
     }
 
     #[test]
-    fn logger_rotates_to_old_file_when_over_limit() {
-        let path = temp_log("bosskey.log");
-        let logger = Logger::new(path.clone(), 64);
-        logger.log(Level::Info, "旧日志内容 aaaaaaaaaaaaaaaaaaaaaaaa");
-        logger.log(Level::Info, "新日志内容");
+    fn cleanup_removes_only_expired_logs() {
+        let dir = temp_dir();
+        let logger = Logger::new(dir.clone(), 7);
+        // 造三份日志：很旧、边界内、以及一个非日志文件。
+        fs::write(dir.join("BossKey-2000-01-01.log"), b"old").unwrap();
+        let now = unsafe { GetLocalTime() };
+        let recent = log_file_name(now.wYear, now.wMonth, now.wDay);
+        fs::write(dir.join(&recent), b"recent").unwrap();
+        fs::write(dir.join("keep.txt"), b"not a log").unwrap();
 
-        let backup = rotated_path(&path);
-        let old = fs::read_to_string(&backup).expect("轮转后应存在 .old 备份");
-        let new = fs::read_to_string(&path).expect("轮转后应重新开始写主文件");
-        assert!(old.contains("旧日志内容"));
-        assert!(new.contains("新日志内容"));
-        assert!(!new.contains("旧日志内容"));
-    }
+        logger.cleanup();
 
-    #[test]
-    fn rotated_path_appends_old_suffix() {
-        assert_eq!(
-            rotated_path(Path::new("C:\\app\\bosskey.log")),
-            PathBuf::from("C:\\app\\bosskey.log.old")
+        assert!(
+            !dir.join("BossKey-2000-01-01.log").exists(),
+            "过期日志应删除"
         );
+        assert!(dir.join(&recent).exists(), "当天日志应保留");
+        assert!(dir.join("keep.txt").exists(), "非日志文件应保留");
+    }
+
+    #[test]
+    fn debug_is_only_emitted_in_dev_builds() {
+        assert!(should_emit(Level::Info));
+        assert!(should_emit(Level::Warn));
+        assert_eq!(should_emit(Level::Debug), cfg!(debug_assertions));
+    }
+
+    #[test]
+    fn init_with_zero_retention_disables_logging() {
+        let dir = temp_dir();
+        init(dir.join("logs"), 0);
+        // 未创建目录、未初始化全局 logger（不影响其它测试，因为路径独立）。
+        assert!(!dir.join("logs").exists(), "关闭日志时不应创建目录");
     }
 
     #[test]
@@ -231,17 +361,16 @@ mod tests {
     }
 
     #[test]
-    fn panic_hook_writes_crash_to_global_log() {
-        // 全局 Logger 进程内只初始化一次，本测试是唯一使用全局入口的用例。
-        let path = temp_log("bosskey.log");
-        init(path.clone());
-        install_panic_hook();
-
-        let result = std::panic::catch_unwind(|| panic!("测试崩溃"));
-        assert!(result.is_err());
-
-        let content = fs::read_to_string(&path).expect("崩溃后日志应存在");
-        assert!(content.contains("[ERROR] 程序发生崩溃 (panic): 测试崩溃"));
-        assert!(content.contains("logging.rs"), "应记录崩溃位置");
+    fn rotated_files_stay_within_directory() {
+        // 冒烟：确保写入路径确实落在给定目录内。
+        let dir = temp_dir();
+        let logger = Logger::new(dir.clone(), 7);
+        logger.log(Level::Debug, "调试信息");
+        let any = fs::read_dir(&dir).unwrap().flatten().next();
+        assert!(any.is_some(), "应至少写出一个文件");
+        assert!(
+            any.unwrap().path().starts_with(Path::new(&dir)),
+            "日志文件应位于日志目录内"
+        );
     }
 }

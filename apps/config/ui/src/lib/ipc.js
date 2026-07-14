@@ -1,6 +1,7 @@
 // Tauri 桥接：真实环境走 invoke / window API；浏览器预览走 mock，方便脱离 Tauri 调试。
 
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export const IN_TAURI =
@@ -19,13 +20,17 @@ const mockConfig = {
     hide_current: true,
     click_to_hide: true,
     hide_icon_after_hide: false,
-    path_match: false,
     freeze_after_hide: false,
     enhanced_freeze: false,
     show_float_window: false,
-    middle_button_hide: false,
-    side_button1_hide: false,
-    side_button2_hide: false,
+    mouse: {
+      left: { enabled: false, clicks: 1, modifiers: "" },
+      middle: { enabled: false, clicks: 1, modifiers: "" },
+      right: { enabled: false, clicks: 1, modifiers: "" },
+      side1: { enabled: false, clicks: 1, modifiers: "" },
+      side2: { enabled: false, clicks: 1, modifiers: "" },
+      multi_click_ms: 400,
+    },
     auto_hide_enabled: false,
     auto_hide_time: 5,
     top_left_hide: false,
@@ -33,8 +38,36 @@ const mockConfig = {
     bottom_left_hide: false,
     bottom_right_hide: false,
     allow_move_restore: false,
+    log_retention_days: 7,
   },
-  hide_binding: [],
+  notifications: {
+    on_start: true,
+    on_quit: true,
+    on_autostart: true,
+    on_hide: false,
+    on_show: false,
+  },
+  advanced_mode: false,
+  window_rules: [
+    {
+      title: "微信",
+      hwnd: 101,
+      process: "WeChat.exe",
+      PID: 2001,
+      path: "C:\\WeChat.exe",
+      include_untitled: false,
+      include_background: false,
+    },
+  ],
+  process_rules: [
+    {
+      process: "TiMi.exe",
+      path: "D:\\Games\\TiMi.exe",
+      by_name: false,
+      include_untitled: true,
+      include_background: false,
+    },
+  ],
 };
 
 const mockWindows = [
@@ -56,8 +89,20 @@ function mockInvoke(cmd) {
       return false;
     case "core_status":
       return { running: true, hidden: false, elevated: false };
-    case "restart_core_elevated":
+    case "start_core":
+    case "restart_core":
       return true;
+    case "pssuspend_available":
+      return false;
+    case "startup_action":
+      return null;
+    case "quit_core":
+    case "show_windows":
+    case "show_all_windows":
+    case "set_autostart":
+    case "set_hotkeys_enabled":
+    case "open_log_dir":
+      return null;
     case "app_info":
       return {
         name: "Boss Key",
@@ -77,8 +122,27 @@ export async function invoke(cmd, args) {
   return mockInvoke(cmd, args);
 }
 
+/**
+ * 订阅后端事件（如单实例插件转发的 open-restore）。返回同步的取消订阅函数；
+ * 浏览器预览下降级为 no-op。
+ */
+export function onAppEvent(name, handler) {
+  if (!IN_TAURI) return () => {};
+  let off = () => {};
+  let cancelled = false;
+  listen(name, handler).then((fn) => {
+    if (cancelled) fn();
+    else off = fn;
+  });
+  return () => {
+    cancelled = true;
+    off();
+  };
+}
+
 /** 窗口控制：浏览器预览时静默降级为 no-op。 */
 export const win = {
+  show: () => IN_TAURI && getCurrentWindow().show(),
   minimize: () => IN_TAURI && getCurrentWindow().minimize(),
   toggleMaximize: () => IN_TAURI && getCurrentWindow().toggleMaximize(),
   close: () => IN_TAURI && getCurrentWindow().close(),

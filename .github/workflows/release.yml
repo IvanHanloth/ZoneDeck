@@ -1,0 +1,112 @@
+name: Release
+
+# 构建并发布一个已存在的 tag。
+#
+# 两种进入方式：
+#   1. 直接推送 v* tag（手动打的 tag）；
+#   2. 由 tag.yml 通过 workflow_call 调用 —— 用默认 GITHUB_TOKEN 推的 tag 不会触发
+#      上面的 push 事件，所以 tag.yml 必须显式调用本工作流，而不能指望 tag 推送。
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        description: "要发布的 tag，例如 v3.0.1"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      id-token: write # attest-build-provenance 取 OIDC token
+      attestations: write # 写入构建来源证明
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      # tag 与代码里的版本号必须一致，否则装出来的包版本号是错的
+      - name: Verify version matches tag
+        id: version
+        shell: pwsh
+        run: ./scripts/version.ps1 check "$env:TAG"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/config/ui/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Frontend install, test & build
+        run: |
+          npm --prefix apps/config/ui ci
+          npm --prefix apps/config/ui test
+          npm --prefix apps/config/ui run build
+
+      - name: Rust tests
+        run: cargo test --workspace
+
+      # 便携文件夹（dist/）+ InnoSetup 安装包（dist/installer/）。
+      # package.ps1 会调 install-inno.ps1 按需装 Inno Setup 并补齐中文语言包，
+      # 版本号则由它从 Cargo.toml 读取，这里不用再传。
+      - name: Package portable folder & installer
+        shell: pwsh
+        run: ./scripts/package.ps1 -SkipFrontend -Installer
+
+      - name: Zip portable build
+        shell: pwsh
+        run: Compress-Archive -Path "dist/*" -DestinationPath "Boss-Key-$env:TAG-portable.zip"
+
+      # 构建来源证明（Sigstore）：证明产物由本仓库的本 workflow 从该 commit 构建。
+      # 用户可用 gh attestation verify <文件> -R IvanHanloth/Boss-Key 核验。
+      # 注意这不是 Authenticode 代码签名，消不掉 SmartScreen 警告——那需要下面注释里的证书签名。
+      - name: Generate artifact attestation
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/installer/Boss-Key-*-Setup.exe
+            Boss-Key-${{ env.TAG }}-portable.zip
+
+      # ---- 代码签名（可选，反杀软误报最有效的单项措施）----
+      # 取得 OV/EV 证书后：PFX 以 base64 存入 secrets.CODE_SIGN_PFX，
+      # 密码存入 secrets.CODE_SIGN_PASSWORD，再取消下方步骤注释。
+      # - name: Sign binaries
+      #   shell: pwsh
+      #   run: |
+      #     [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String("${{ secrets.CODE_SIGN_PFX }}"))
+      #     $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
+      #     & $signtool sign /f cert.pfx /p "${{ secrets.CODE_SIGN_PASSWORD }}" `
+      #       /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 `
+      #       dist/core.exe "dist/Boss Key.exe" dist/installer/Boss-Key-*-Setup.exe
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Boss Key ${{ env.TAG }}
+          tag_name: ${{ env.TAG }}
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          make_latest: ${{ steps.version.outputs.is_prerelease != 'true' }}
+          files: |
+            Boss-Key-${{ env.TAG }}-portable.zip
+            dist/installer/Boss-Key-*-Setup.exe

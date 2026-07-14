@@ -1,13 +1,17 @@
-name: Buildup Test
+name: Build & Test
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: ["**"]
   push:
-    branches:
-      - refactor/rust-rewrite
+    branches: ["**"]
+    tags-ignore: ["**"] # tag 由 release.yml 负责，别重复跑
   workflow_dispatch:
+
+# 同一分支上有新推送时，取消还在跑的旧任务
+concurrency:
+  group: build-test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -31,6 +35,11 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
+
+      # ---- 版本号：四处文件是否一致（手改 Cargo.toml 后忘了同步的话在这里挡下）----
+      - name: Version consistency check
+        shell: pwsh
+        run: ./scripts/version.ps1 check
 
       # ---- 前端：依赖 / 单元测试 / 构建 ----
       - name: Frontend install, test & build
@@ -57,6 +66,6 @@ jobs:
         with:
           name: bosskey-binaries
           path: |
-            target/release/bosskey-core.exe
+            target/release/core.exe
             target/release/bosskey-config.exe
           retention-days: 7

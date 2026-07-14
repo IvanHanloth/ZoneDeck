@@ -14,8 +14,10 @@
     "@tauri-apps/api": "^2"
   },
   "devDependencies": {
+    "@iconify-json/lucide": "^1.2.117",
     "@sveltejs/vite-plugin-svelte": "^6",
     "svelte": "^5",
+    "unplugin-icons": "^23.0.1",
     "vite": "^7",
     "vitest": "^3"
   }

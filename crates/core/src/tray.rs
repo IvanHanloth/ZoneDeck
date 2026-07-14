@@ -1,4 +1,5 @@
 use windows::Win32::Foundation::HWND;
+use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::{
     NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
     NOTIFYICONDATAW, Shell_NotifyIconW,
@@ -12,6 +13,10 @@ use crate::util::to_wide_null;
 
 const TRAY_ID: u32 = 1;
 
+/// 嵌入到 exe 里的主图标资源 ID。tauri-winres 的 `set_icon` 默认用 32512
+/// （即 IDI_APPLICATION），此前误用 1 导致找不到图标、回退成默认无图标样式。
+const APP_ICON_RESOURCE_ID: u16 = 32512;
+
 fn fill_wide(dst: &mut [u16], src: &str) {
     let wide: Vec<u16> = src.encode_utf16().take(dst.len() - 1).collect();
     dst[..wide.len()].copy_from_slice(&wide);
@@ -19,31 +24,65 @@ fn fill_wide(dst: &mut [u16], src: &str) {
 }
 
 pub(crate) fn load_app_icon() -> HICON {
-    let ico_path = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("icon.ico")));
-
-    if let Some(path) = ico_path
-        && path.exists()
-        && let Some(path_str) = path.to_str()
-    {
-        let wide = to_wide_null(path_str);
-        let loaded = unsafe {
-            LoadImageW(
-                None,
-                PCWSTR(wide.as_ptr()),
-                IMAGE_ICON,
-                0,
-                0,
-                LR_LOADFROMFILE | LR_DEFAULTSIZE,
-            )
-        };
-        if let Ok(handle) = loaded {
-            return HICON(handle.0);
-        }
+    // 1) 优先从 exe 内嵌的图标资源加载——无论开发运行还是打包分发都可用，
+    //    不依赖磁盘上是否存在 icon.ico（这是此前托盘“无图标”的根因）。
+    if let Some(icon) = load_embedded_icon() {
+        return icon;
     }
 
+    // 2) 回退：exe 同目录的 icon.ico 文件（兼容仅放置图标文件的场景）。
+    if let Some(icon) = load_icon_from_file() {
+        return icon;
+    }
+
+    // 3) 最终回退：系统默认应用图标。
     unsafe { LoadIconW(None, IDI_APPLICATION).unwrap_or_default() }
+}
+
+fn load_embedded_icon() -> Option<HICON> {
+    unsafe {
+        let hinst = GetModuleHandleW(None).ok()?;
+        let handle = LoadImageW(
+            Some(hinst.into()),
+            PCWSTR(APP_ICON_RESOURCE_ID as usize as *const u16),
+            IMAGE_ICON,
+            0,
+            0,
+            LR_DEFAULTSIZE,
+        )
+        .ok()?;
+        if handle.is_invalid() {
+            None
+        } else {
+            Some(HICON(handle.0))
+        }
+    }
+}
+
+fn load_icon_from_file() -> Option<HICON> {
+    let path = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("icon.ico")))?;
+    if !path.exists() {
+        return None;
+    }
+    let wide = to_wide_null(path.to_str()?);
+    unsafe {
+        let handle = LoadImageW(
+            None,
+            PCWSTR(wide.as_ptr()),
+            IMAGE_ICON,
+            0,
+            0,
+            LR_LOADFROMFILE | LR_DEFAULTSIZE,
+        )
+        .ok()?;
+        if handle.is_invalid() {
+            None
+        } else {
+            Some(HICON(handle.0))
+        }
+    }
 }
 
 pub struct TrayIcon {

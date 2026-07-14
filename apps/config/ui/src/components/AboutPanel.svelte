@@ -1,15 +1,13 @@
 <script>
   import Card from "./Card.svelte";
-  import { app, toast } from "../lib/state.svelte.js";
-  import { invoke } from "../lib/ipc.js";
+  import { app } from "../lib/state.svelte.js";
 
   let updateResult = $state({ text: "", error: false, checking: false });
 
   async function checkUpdate() {
     updateResult = { text: "检查中…", error: false, checking: true };
     try {
-      const feed = app.info?.update_feed;
-      const resp = await fetch(feed, { cache: "no-store" });
+      const resp = await fetch(app.info?.update_feed, { cache: "no-store" });
       if (!resp.ok) throw new Error("HTTP " + resp.status);
       const releases = await resp.json();
       if (!Array.isArray(releases) || releases.length === 0) {
@@ -27,20 +25,11 @@
       updateResult = { text: "检查更新失败：" + err.message, error: true, checking: false };
     }
   }
-
-  async function restoreAll() {
-    try {
-      await invoke("show_all_windows");
-      toast("已请求显示所有隐藏窗口");
-    } catch (err) {
-      toast("操作失败：" + err, true);
-    }
-  }
 </script>
 
 <div class="panel-stack">
   <div class="hero">
-    <span class="logo">🛡️</span>
+    <img class="logo" src="/icon.ico" alt="Boss Key" />
     <h2>{app.info?.name ?? "Boss Key"}</h2>
     <p class="muted">版本 {app.info?.version ?? "…"}</p>
     <p>老板来了？一键隐藏窗口，上班摸鱼必备神器。</p>
@@ -59,11 +48,6 @@
       </span>
     </div>
   </Card>
-
-  <Card title="窗口恢复工具">
-    <p class="hint">若窗口被误隐藏无法找回，点击下方按钮显示全部已隐藏窗口。</p>
-    <div><button class="btn" onclick={restoreAll}>显示所有隐藏窗口</button></div>
-  </Card>
 </div>
 
 <style>
@@ -76,12 +60,12 @@
     align-items: center;
   }
   .hero .logo {
-    font-size: 40px;
+    width: 56px;
+    height: 56px;
   }
   .hero h2 {
     font-size: 20px;
   }
-
   .update-row {
     display: flex;
     align-items: center;

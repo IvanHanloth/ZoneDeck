@@ -1,0 +1,76 @@
+name: Bump version and tag
+
+# 手动触发的发版入口：填一个版本号，工作流会
+#   1. 把版本号写进 Cargo.toml / tauri.conf.json / package.json / Cargo.lock；
+#   2. 提交这次改动并推回当前分支，然后打上 v<版本号> 的 tag 并推送；
+#   3. 调用 release.yml 构建并发布 GitHub Release。
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本号，例如 3.0.1 或 3.1.0-rc.1（可带前导 v）"
+        required: true
+        type: string
+
+jobs:
+  bump:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Apply version to files
+        id: version
+        shell: pwsh
+        run: ./scripts/version.ps1 apply "${{ inputs.version }}"
+
+      - name: Commit, tag and push
+        id: bump
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          $tag = "v$env:VERSION"
+
+          # tag 已存在说明这个版本发过了，直接失败而不是覆盖历史
+          git ls-remote --tags --exit-code origin "refs/tags/$tag" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "::error::tag $tag 已存在于远端，请换一个新版本号"
+            exit 1
+          }
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add Cargo.toml Cargo.lock apps/config/src-tauri/tauri.conf.json apps/config/ui/package.json
+          git commit -m "chore(release): $tag"
+          git tag $tag
+
+          git push origin "HEAD:$env:BRANCH"
+          git push origin "refs/tags/$tag"
+
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+  # 构建并发布刚刚推上去的 tag
+  release:
+    needs: bump
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/release.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.bump.outputs.tag }}

@@ -18,8 +18,8 @@ v3 用 Rust 重写，目标是：**更低内存、更稳、单文件原生二进
 │ 用户交互会话（Session 1+）                                       │
 │                                                                  │
 │  ┌──────────────────────────┐        ┌────────────────────────┐ │
-│  │ bosskey-core.exe（常驻）  │        │ bosskey-config.exe     │ │
-│  │ 纯 Rust 原生，~350KB      │◀─IPC──▶│ Tauri（Rust + WebView）│ │
+│  │ core.exe（常驻）          │        │ Boss Key.exe           │ │
+│  │ 纯 Rust 原生，~400KB      │◀─IPC──▶│ Tauri（Rust + WebView）│ │
 │  │ 隐藏的消息窗口 + wndproc  │ 命名   │ 按需打开，关闭即退出   │ │
 │  │                          │ 管道   │                        │ │
 │  │ • RegisterHotKey 全局热键 │        │ • 窗口绑定 / 热键录制   │ │
@@ -138,11 +138,11 @@ powershell -File scripts/package.ps1 -Installer   # 追加生成 InnoSetup 安�
 产物：
 
 ```
-package/Boss-Key/                便携版（拷走即用）
-├── bosskey-core.exe               常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
-├── bosskey-config.exe             配置界面（前端已内嵌，自包含）
+dist/                            便携版（拷走即用）
+├── core.exe                       常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
+├── Boss Key.exe                   配置界面（前端已内嵌，自包含）
 └── icon.ico                       托盘图标
-package/installer/               安装包（-Installer 时生成）
+dist/installer/                  安装包（-Installer 时生成）
 └── Boss-Key-<版本>-Setup.exe      InnoSetup（安装前自动结束运行中的核心）
 ```
 

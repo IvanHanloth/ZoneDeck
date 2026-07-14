@@ -3,10 +3,113 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/icon.ico" />
     <title>Boss Key 设置</title>
+
+    <!--
+      启动屏：内联在 HTML 里，浏览器解析到这儿就能画，不必等 JS bundle 下载解析完。
+      窗口本身以 visible:false 启动（见 tauri.conf.json），由 main.js 在首帧画出来之后才 show，
+      两件事合起来，原来那段「白屏 → 界面」就变成了「启动屏 → 界面」。
+      配色变量在这里重抄一份而不是引用 app.css——app.css 是打包产物，加载得更晚。
+      CSP 放行内联样式但不放行内联脚本，所以这里只能是纯 CSS。
+    -->
+    <style>
+      :root {
+        --splash-bg: #f3f4f8;
+        --splash-fg: #6b7280;
+        --splash-accent: #4f6ef7;
+        --splash-track: rgba(17, 24, 39, 0.12);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --splash-bg: #16181f;
+          --splash-fg: #9aa1b2;
+          --splash-accent: #6c85ff;
+          --splash-track: rgba(255, 255, 255, 0.14);
+        }
+      }
+      /* main.js 读到用户的主题偏好后会写 data-theme，覆盖上面的系统默认值 */
+      :root[data-theme="light"] {
+        --splash-bg: #f3f4f8;
+        --splash-fg: #6b7280;
+        --splash-accent: #4f6ef7;
+        --splash-track: rgba(17, 24, 39, 0.12);
+      }
+      :root[data-theme="dark"] {
+        --splash-bg: #16181f;
+        --splash-fg: #9aa1b2;
+        --splash-accent: #6c85ff;
+        --splash-track: rgba(255, 255, 255, 0.14);
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        background: var(--splash-bg);
+      }
+
+      #splash {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        background: var(--splash-bg);
+        transition: opacity 0.22s ease;
+        font-family:
+          "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", system-ui,
+          sans-serif;
+        user-select: none;
+      }
+      #splash.gone {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #splash img {
+        width: 52px;
+        height: 52px;
+      }
+      #splash .ring {
+        width: 22px;
+        height: 22px;
+        border-radius: 50%;
+        border: 2.5px solid var(--splash-track);
+        border-top-color: var(--splash-accent);
+        animation: splash-spin 0.8s linear infinite;
+      }
+      #splash .label {
+        font-size: 13px;
+        color: var(--splash-fg);
+        letter-spacing: 0.04em;
+      }
+      @keyframes splash-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        #splash {
+          transition: none;
+        }
+        #splash .ring {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+
+    <div id="splash">
+      <img src="/icon.ico" alt="" />
+      <div class="ring"></div>
+      <div class="label">Boss Key 正在启动…</div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
