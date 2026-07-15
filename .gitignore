@@ -29,3 +29,6 @@ apps/config/src-tauri/gen/
 bosskey.log
 bosskey.log.old
 recovery.json
+
+docs/.vitepress/dist
+docs/.vitepress/cache

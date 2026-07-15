@@ -79,7 +79,6 @@ jobs:
 
       # 构建来源证明（Sigstore）：证明产物由本仓库的本 workflow 从该 commit 构建。
       # 用户可用 gh attestation verify <文件> -R IvanHanloth/Boss-Key 核验。
-      # 注意这不是 Authenticode 代码签名，消不掉 SmartScreen 警告——那需要下面注释里的证书签名。
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:
@@ -105,6 +104,7 @@ jobs:
           name: Boss Key ${{ env.TAG }}
           tag_name: ${{ env.TAG }}
           generate_release_notes: true
+          draft: true
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.version.outputs.is_prerelease != 'true' }}
           files: |

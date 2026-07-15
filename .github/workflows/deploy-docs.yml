@@ -1,0 +1,90 @@
+name: Deploy Docs
+
+# 构建 VitePress 文档站并部署到 GitHub Pages。
+#
+# 触发方式：
+#   1. 改动涉及 docs/ 或本工作流；
+#   2. 发布 / 编辑 / 删除 Release —— 刷新 docs/public/releases.json（旧版客户端更新检查用）；
+#   3. 手动触发（workflow_dispatch）—— 不受路径限制，可随时重新部署。
+on:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "/docs/**"
+      - "/package.json"
+      - "/pnpm-lock.yaml"
+      - "/.github/workflows/deploy-docs.yml"
+  release:
+    types: [published, edited, deleted]
+  workflow_dispatch:
+
+# GitHub Pages 部署所需权限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只允许一个部署；不取消进行中的部署，让它跑完
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # VitePress lastUpdated 依赖完整的 git 历史
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 旧版客户端仍通过 Pages 上的 releases.json 检查更新，这里用 curl+jq（runner 自带，免安装）
+      # 重新生成它，替代原来单独的 jekyll-gh-pages 工作流。
+      - name: Update releases.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -sf \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/releases" \
+          | jq 'map({tag_name, published_at, body, assets: [.assets[] | {name, browser_download_url}]}) | sort_by(.published_at)' \
+          > docs/public/releases.json
+
+      - name: Build with VitePress
+        run: pnpm docs:build
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/.vitepress/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
