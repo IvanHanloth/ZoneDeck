@@ -1,4 +1,4 @@
-// Tauri 桥接：真实环境走 invoke / window API；浏览器预览走 mock，方便脱离 Tauri 调试。
+// Tauri 桥接：真实环境走 invoke / window API，浏览器预览走 mock。
 
 import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -80,7 +80,7 @@ const mockWindows = [
   { title: "记事本", hwnd: 301, process: "notepad.exe", PID: 4003, path: "C:\\Windows\\notepad.exe" },
 ];
 
-/** mock 下的核心监控状态：让 set_hotkeys_enabled 真的影响 core_status 的回报。 */
+/** mock 下的核心监控状态。 */
 let mockMonitoring = true;
 
 function mockInvoke(cmd, args) {
@@ -121,7 +121,6 @@ function mockInvoke(cmd, args) {
         blog: "https://blog.ivan-hanloth.cn/",
         license: "MIT",
       };
-    // Verhub：浏览器预览下不真的联网，给一份能把界面撑起来的假数据。
     case "verhub_check_update":
       return {
         should_update: false,
@@ -159,10 +158,7 @@ export async function invoke(cmd, args) {
   return mockInvoke(cmd, args);
 }
 
-/**
- * 订阅后端事件（如单实例插件转发的 open-restore）。返回同步的取消订阅函数；
- * 浏览器预览下降级为 no-op。
- */
+/** 订阅后端事件，返回取消订阅函数。 */
 export function onAppEvent(name, handler) {
   if (!IN_TAURI) return () => {};
   let off = () => {};

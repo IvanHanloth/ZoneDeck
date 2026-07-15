@@ -1,7 +1,5 @@
-//! 进程图标提取：从可执行文件取图标，编码为 PNG data URI 供配置界面显示。
-//!
-//! PNG/base64 为手写最小实现（stored deflate 块，无压缩）：图标只有 32×32，
-//! 未压缩也只有约 4KB，省掉外部依赖，保持核心二进制极小。
+//! 进程图标提取：从可执行文件取图标，编码为 PNG data URI。
+//! PNG/base64 为手写最小实现（stored deflate 块，无压缩）。
 
 use std::ffi::c_void;
 
@@ -369,7 +367,6 @@ mod tests {
 
     #[test]
     fn encoded_png_has_valid_structure_and_round_trips_pixels() {
-        // 2×2：红、绿、蓝、半透明白。
         #[rustfmt::skip]
         let pixels: Vec<u8> = vec![
             255, 0, 0, 255,   0, 255, 0, 255,
@@ -388,7 +385,6 @@ mod tests {
         assert_eq!(ihdr[9], 6, "颜色类型应为 RGBA");
 
         let raw = inflate_stored(&chunks[1].1);
-        // 每行：过滤器字节 0 + 8 字节像素。
         assert_eq!(raw.len(), 2 * (1 + 8));
         assert_eq!(raw[0], 0);
         assert_eq!(&raw[1..9], &pixels[0..8]);
@@ -398,7 +394,6 @@ mod tests {
 
     #[test]
     fn large_image_splits_into_multiple_stored_blocks() {
-        // 150×150 RGBA = 90000 字节原始数据 > 单个 stored 块上限 65535。
         let size = 150u32;
         let pixels = vec![0xABu8; (size * size * 4) as usize];
         let png = encode_png(size, size, &pixels).expect("编码应成功");
@@ -409,14 +404,11 @@ mod tests {
 
     #[test]
     fn bgra_conversion_uses_mask_when_alpha_channel_is_empty() {
-        // 两个像素：BGRA (1,2,3,0) 与 (4,5,6,0)，alpha 全 0。
         let bgra = [1, 2, 3, 0, 4, 5, 6, 0];
-        // 掩码：第一个像素不透明（0），第二个透明（255）。
         let mask = [0, 0, 0, 0, 255, 255, 255, 0];
         let rgba = bgra_to_rgba(&bgra, Some(&mask));
         assert_eq!(rgba, vec![3, 2, 1, 255, 6, 5, 4, 0]);
 
-        // 无掩码时保留原 alpha。
         let with_alpha = [1, 2, 3, 200];
         assert_eq!(bgra_to_rgba(&with_alpha, None), vec![3, 2, 1, 200]);
     }

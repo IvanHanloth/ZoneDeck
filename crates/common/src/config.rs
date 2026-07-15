@@ -114,7 +114,7 @@ pub struct MouseSetting {
     /// 连击判定窗口（毫秒），[`MIN_MULTI_CLICK_MS`]..=[`MAX_MULTI_CLICK_MS`]。
     #[serde(default = "default_multi_click_ms")]
     pub multi_click_ms: u32,
-    /// 是否允许「再按一次同样的键」恢复窗口；关掉的话按键只负责隐藏，靠热键 / 托盘恢复。
+    /// 是否允许再按一次同样的键恢复窗口。
     #[serde(default = "default_true")]
     pub allow_click_restore: bool,
 }
@@ -133,10 +133,7 @@ impl Default for MouseSetting {
 }
 
 impl MouseSetting {
-    /// 配置文件里没有 `mouse` 这一节时用的值：全部关闭。
-    ///
-    /// 不能直接用 [`MouseSetting::default`]——那是给全新安装准备的（中键默认开），
-    /// 老配置读进来时套上去会凭空给用户开一颗中键，还会让下面的旧开关迁移逻辑误判。
+    /// 配置文件没有 `mouse` 一节时用的值：全部关闭。
     fn all_off() -> Self {
         Self {
             left: MouseButton::default(),
@@ -197,8 +194,7 @@ pub struct Setting {
     pub enhanced_freeze: bool,
     #[serde(default)]
     pub show_float_window: bool,
-    /// 鼠标触发：每颗键的连击 / 修饰键条件。缺这一节的老配置读进来是「全关」，
-    /// 而不是 `MouseSetting::default()`（那是全新安装用的，中键默认开）。
+    /// 鼠标触发条件；缺这一节的老配置读进来是「全关」。
     #[serde(default = "MouseSetting::all_off")]
     pub mouse: MouseSetting,
     /// 旧版扁平鼠标开关，仅用于反序列化迁移；迁移后清零、不再写回文件。
@@ -222,7 +218,7 @@ pub struct Setting {
     pub bottom_right_hide: bool,
     #[serde(default)]
     pub allow_move_restore: bool,
-    /// 只有「快速甩」到角落才触发；慢慢挪过去不算。默认开，免得贴边操作时误触发。
+    /// 仅快速甩到角落才触发；默认开。
     #[serde(default = "default_true")]
     pub corner_fast_only: bool,
     /// 日志保留天数；`0` 表示关闭日志。
@@ -259,9 +255,7 @@ impl Default for Setting {
 }
 
 impl Setting {
-    /// 迁移旧版的三个扁平鼠标开关：只要新的 `mouse` 还没有任何一颗键启用，就把旧开关
-    /// 升级为「单击 + 无修饰键」的触发条件；随后清零旧字段（它们也不再序列化）。幂等。
-    /// 顺带把连击次数、连击窗口夹到合法范围，防止手改配置文件写出越界值。
+    /// 迁移旧版扁平鼠标开关，并把连击次数、连击窗口夹到合法范围。幂等。
     pub fn normalize(&mut self) {
         if !self.mouse.any_enabled() {
             self.mouse.middle.enabled = self.middle_button_hide;
@@ -275,7 +269,7 @@ impl Setting {
     }
 }
 
-/// 通知开关：逐事件控制是否弹出托盘气泡。隐藏/显示默认关闭，其余默认开启。
+/// 通知开关：逐事件控制是否弹出托盘气泡。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Notifications {
     /// 核心启动运行时的气泡。
@@ -307,17 +301,13 @@ impl Default for Notifications {
     }
 }
 
-/// Verhub（版本 / 公告 / 反馈 / 日志服务）相关的用户可见设置。
-///
-/// 「启动时检查更新」和「启动时接收公告」不做成开关：这俩是必须的一步——
-/// 强制更新要靠检查才能拦住用户，公告是唯一的下行通知渠道。用户能配的只有
-/// 「同一条公告不再提示」（记 [`seen_announcement_id`]）和「是否接收预览版」。
+/// Verhub 相关的用户可见设置。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Verhub {
-    /// 把预览版也算进「有没有新版本」。默认只看稳定版。
+    /// 是否把预览版也算进更新检查；默认只看稳定版。
     #[serde(default)]
     pub include_preview: bool,
-    /// 用户已读过的最新一条公告 id：只有比它新的公告才会在启动时弹出来。
+    /// 用户已读过的最新一条公告 id。
     #[serde(default)]
     pub seen_announcement_id: String,
 }
@@ -398,8 +388,7 @@ impl Config {
         }
     }
 
-    /// 迁移旧版扁平绑定：`window_rules` 为空且旧 `hide_binding` 非空时，把每条
-    /// 旧绑定升级为「窗口」精确规则，然后清空 `hide_binding`。幂等。
+    /// 迁移旧版扁平绑定 `hide_binding` 为「窗口」精确规则。幂等。
     pub fn normalize(&mut self) {
         if self.window_rules.is_empty() && !self.hide_binding.is_empty() {
             self.window_rules = self
@@ -545,7 +534,6 @@ mod tests {
 
     #[test]
     fn old_config_without_mouse_section_stays_all_off() {
-        // 老配置没有 mouse 这一节，不能因为「全新安装默认开中键」就凭空给用户开一颗键。
         let c = Config::from_json(r#"{"setting": {"mute_after_hide": true}}"#).unwrap();
         assert!(!c.setting.mouse.any_enabled(), "老配置不该被塞进默认的中键");
         assert!(c.setting.mouse.allow_click_restore);
@@ -579,14 +567,12 @@ mod tests {
 
     #[test]
     fn legacy_path_match_key_is_ignored() {
-        // 旧配置里的 path_match 字段应被 serde 静默忽略、不影响其它默认值。
         let c = Config::from_json(r#"{"setting": {"path_match": true}}"#).unwrap();
         assert_eq!(c.setting, setting_from_old_file());
     }
 
     #[test]
     fn migration_is_idempotent_and_preserves_existing_rules() {
-        // 已有 window_rules 时，不应再从 hide_binding 迁移覆盖。
         let json = r#"{
             "window_rules": [{"title": "已存在", "hwnd": 1, "process": "a.exe", "PID": 2, "path": "C:\\a.exe"}],
             "hide_binding": [{"title": "旧的", "hwnd": 9, "process": "b.exe", "PID": 8, "path": "C:\\b.exe"}]

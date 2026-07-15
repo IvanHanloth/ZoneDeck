@@ -85,12 +85,7 @@ fn process_name_from_path(path: &str) -> String {
         .to_string()
 }
 
-/// 是否应把该顶层窗口列入进程列表（类 Alt+Tab 的过滤，纯逻辑便于测试）：
-/// - 排除工具窗口（`WS_EX_TOOLWINDOW`）；
-/// - 只保留顶层应用窗口：无属主，或显式标记为 `WS_EX_APPWINDOW`。
-///
-/// 不按可见性和标题过滤——隐藏窗口、无标题窗口都会列出，由界面按 `visible`
-/// 分组、并用「显示后台 / 显示无标题」开关决定是否展示。
+/// 是否把该顶层窗口列入进程列表（类 Alt+Tab 过滤）：排除工具窗口，只保留顶层应用窗口。
 fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
     if ex_style & WS_EX_TOOLWINDOW.0 != 0 {
         return false;
@@ -183,13 +178,9 @@ mod tests {
         const TOOL: u32 = WS_EX_TOOLWINDOW.0;
         const APP: u32 = WS_EX_APPWINDOW.0;
 
-        // 顶层窗口（无属主）保留（含无标题窗口，由界面过滤）。
         assert!(is_listable_window(0, false));
-        // 工具窗口排除。
         assert!(!is_listable_window(TOOL, false));
-        // 有属主的普通窗口排除（如对话框、子面板）。
         assert!(!is_listable_window(0, true));
-        // 有属主但显式标记为 APPWINDOW 的仍保留。
         assert!(is_listable_window(APP, true));
     }
 

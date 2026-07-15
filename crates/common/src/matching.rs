@@ -1,12 +1,7 @@
 //! 窗口 / 进程规则匹配引擎。
 //!
-//! 两层语义：
-//! - **窗口规则**（细）：按句柄 + 标题精确锁定单个窗口；句柄失效时按
-//!   「标题 + 进程路径」追溯回填。`regex` 为 `Some` 时按标题正则命中（可多命中）。
-//! - **进程规则**（粗）：按可执行文件路径隐藏该程序的所有窗口；`regex` 为 `Some`
-//!   时按路径正则命中。
-//!
-//! 全部为纯函数，便于单元测试；副作用（回填、隐藏、日志）由核心侧完成。
+//! 窗口规则（细）按句柄 + 标题锁定单个窗口，句柄失效时按「标题 + 进程路径」追溯；
+//! 进程规则（粗）按可执行文件路径隐藏该程序的所有窗口。均为纯函数。
 
 use regex::Regex;
 
@@ -36,11 +31,7 @@ fn usable_title(title: &str) -> bool {
     !title.is_empty() && title != NO_TITLE
 }
 
-/// 窗口是否落在规则声明的「匹配范围」内。
-///
-/// 默认只看**可见且有标题**的窗口——与界面左侧「现有窗口」的默认筛选一致。
-/// 放开 `include_background` 才会把当前不可见的窗口纳入（否则恢复显示时会把
-/// 本来就不可见的窗口"显示"出来）；放开 `include_untitled` 才纳入无标题窗口。
+/// 窗口是否落在规则声明的「匹配范围」内。默认只看可见且有标题的窗口。
 pub fn in_scope(w: &WindowInfo, include_untitled: bool, include_background: bool) -> bool {
     if !include_background && !w.visible {
         return false;
@@ -78,7 +69,7 @@ pub fn resolve_window_rule<'a>(
         );
     }
 
-    // 精确规则：先按句柄命中（并校验位置一致，防止句柄被系统回收后误伤别的窗口）。
+    // 精确规则：先按句柄命中，并校验位置一致。
     if rule.hwnd != 0
         && let Some(w) = windows.iter().find(|w| w.hwnd == rule.hwnd)
         && (rule.path.is_empty() || w.path == rule.path)
@@ -86,7 +77,7 @@ pub fn resolve_window_rule<'a>(
         return WindowResolution::Live(w);
     }
 
-    // 追溯：按「标题 + 进程路径」找回同一逻辑窗口，回填新句柄。
+    // 追溯：按「标题 + 进程路径」找回同一逻辑窗口。
     if usable_title(&rule.title)
         && let Some(w) = windows
             .iter()
@@ -98,10 +89,7 @@ pub fn resolve_window_rule<'a>(
     WindowResolution::Missing
 }
 
-/// 一条进程规则命中的所有存活窗口（正则不合法时视为无命中）。
-///
-/// `by_name` 决定匹配主体：`true` 只看可执行文件名（同名程序在任意目录都命中），
-/// `false`（默认）看完整路径。范围由 `include_untitled` / `include_background` 决定。
+/// 一条进程规则命中的所有存活窗口。`by_name` 为 true 时按文件名匹配，否则按完整路径。
 pub fn match_process_rule<'a>(
     rule: &ProcessRule,
     windows: &'a [WindowInfo],
@@ -160,7 +148,6 @@ mod tests {
 
     #[test]
     fn window_rule_hwnd_recycled_to_other_process_is_not_live() {
-        // 句柄相同但路径不同（系统回收句柄给了别的进程）——不应误判为 Live。
         let rule = WindowRule::from_window(&win("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe"));
         let windows = vec![win("别的窗口", 10, "other.exe", 200, "C:\\other.exe")];
         assert_eq!(
@@ -171,7 +158,6 @@ mod tests {
 
     #[test]
     fn window_rule_reacquires_by_title_and_path_when_hwnd_changed() {
-        // 程序重启：句柄变了，但标题 + 路径一致，应追溯回填。
         let rule = WindowRule::from_window(&win("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe"));
         let windows = vec![win("微信", 99, "WeChat.exe", 300, "C:\\WeChat.exe")];
         match resolve_window_rule(&rule, &windows) {
@@ -192,7 +178,6 @@ mod tests {
 
     #[test]
     fn window_rule_no_title_does_not_reacquire_on_title() {
-        // 标题是占位符「无标题窗口」时，不应仅凭同占位标题追溯。
         let rule = WindowRule::from_window(&win(NO_TITLE, 10, "a.exe", 100, "C:\\a.exe"));
         let windows = vec![win(NO_TITLE, 77, "a.exe", 200, "C:\\a.exe")];
         assert_eq!(
@@ -219,7 +204,7 @@ mod tests {
 
     #[test]
     fn window_regex_invalid_pattern_matches_nothing() {
-        let rule = WindowRule::from_regex("("); // 非法正则
+        let rule = WindowRule::from_regex("(");
         let windows = vec![win("任意", 1, "a.exe", 1, "C:\\a.exe")];
         assert_eq!(
             resolve_window_rule(&rule, &windows),
@@ -242,7 +227,7 @@ mod tests {
     #[test]
     fn process_rule_empty_path_matches_nothing() {
         let orphan = win("无路径窗口", 1, "", 1, "");
-        let rule = ProcessRule::from_window(&orphan); // process 与 path 均为空
+        let rule = ProcessRule::from_window(&orphan);
         let windows = vec![orphan.clone()];
         assert!(
             match_process_rule(&rule, &windows).is_empty(),
@@ -285,7 +270,6 @@ mod tests {
 
     #[test]
     fn process_rule_includes_untitled_windows_by_default() {
-        // 「隐藏整个程序」默认要连同它的无标题窗口一起藏。
         let windows = vec![
             win("主窗口", 1, "game.exe", 1, "C:\\game.exe"),
             win(NO_TITLE, 2, "game.exe", 1, "C:\\game.exe"),

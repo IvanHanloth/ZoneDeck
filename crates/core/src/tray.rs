@@ -13,8 +13,7 @@ use crate::util::to_wide_null;
 
 const TRAY_ID: u32 = 1;
 
-/// 嵌入到 exe 里的主图标资源 ID。tauri-winres 的 `set_icon` 默认用 32512
-/// （即 IDI_APPLICATION）。
+/// 嵌入 exe 的主图标资源 ID（tauri-winres 默认，即 IDI_APPLICATION）。
 const APP_ICON_RESOURCE_ID: u16 = 32512;
 
 fn fill_wide(dst: &mut [u16], src: &str) {
@@ -24,18 +23,15 @@ fn fill_wide(dst: &mut [u16], src: &str) {
 }
 
 pub(crate) fn load_app_icon() -> HICON {
-    // 1) 优先从 exe 内嵌的图标资源加载——无论开发运行还是打包分发都可用，
-    //    不依赖磁盘上是否存在 icon.ico。
+    // 优先 exe 内嵌图标，其次同目录 icon.ico，最后系统默认图标。
     if let Some(icon) = load_embedded_icon() {
         return icon;
     }
 
-    // 2) 回退：exe 同目录的 icon.ico 文件（兼容仅放置图标文件的场景）。
     if let Some(icon) = load_icon_from_file() {
         return icon;
     }
 
-    // 3) 最终回退：系统默认应用图标。
     unsafe { LoadIconW(None, IDI_APPLICATION).unwrap_or_default() }
 }
 

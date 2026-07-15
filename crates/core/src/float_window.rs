@@ -1,12 +1,5 @@
-//! 桌面悬浮窗：一个无边框、置顶、不占任务栏的小窗口，显示程序图标。
-//!
-//! 交互：
-//! - 左键拖动移动位置（拖出屏幕自动夹回工作区内）；
-//! - 双击 = 触发老板键隐藏/显示；
-//! - 右键弹出菜单：设置 / 退出。
-//!
-//! 窗口通过 `WS_EX_LAYERED` + 颜色键让背景透明，看起来是一枚悬浮的图标。
-//! 纯几何逻辑（初始位置、拖动夹取）与 Win32 胶水分离，前者有单元测试覆盖。
+//! 桌面悬浮窗：无边框、置顶、不占任务栏的小窗口，显示程序图标。
+//! 左键拖动、双击触发老板键、右键弹菜单；背景经颜色键透明。
 
 use core::ffi::c_void;
 
@@ -79,8 +72,7 @@ pub(crate) struct FloatWindow {
 }
 
 impl FloatWindow {
-    /// 创建并显示悬浮窗；失败返回 `None`（不影响核心其余功能）。
-    /// 必须在拥有消息循环的线程（代理线程）上调用。
+    /// 创建并显示悬浮窗；须在拥有消息循环的线程上调用，失败返回 `None`。
     pub(crate) fn create(agent_hwnd: HWND) -> Option<FloatWindow> {
         unsafe {
             let hinstance = GetModuleHandleW(PCWSTR::null()).ok()?;
@@ -295,8 +287,7 @@ unsafe extern "system" fn float_wndproc(
     }
 }
 
-/// 悬浮窗右键菜单：设置 / 退出。以代理窗口为宿主，选择项经 `WM_COMMAND`
-/// 回到代理窗口的既有处理（`MENU_SETTINGS` / `MENU_QUIT`）。
+/// 悬浮窗右键菜单：设置 / 退出。以代理窗口为宿主，选择项经 `WM_COMMAND` 处理。
 pub(crate) fn show_float_menu(agent_hwnd: HWND, id_settings: usize, id_quit: usize) -> bool {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else {
@@ -385,7 +376,6 @@ mod tests {
 
     #[test]
     fn clamp_respects_negative_origin_multi_monitor() {
-        // 左侧副屏，工作区 x ∈ [-1920, 0]。
         let left_monitor = WorkArea {
             left: -1920,
             top: 0,

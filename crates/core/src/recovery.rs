@@ -1,10 +1,4 @@
 //! 崩溃恢复：隐藏状态落盘，核心异常退出后下次启动自动找回窗口。
-//!
-//! 流程：
-//! - 每次隐藏后，把「隐藏的窗口 + 冻结/静音的进程」写入恢复文件；
-//! - 正常显示或正常退出时删除恢复文件；
-//! - 启动时若恢复文件存在，说明上次是异常退出——恢复窗口、解冻、取消静音，
-//!   避免窗口永远“找不回来”。
 
 use std::path::Path;
 
@@ -104,7 +98,6 @@ mod tests {
     #[test]
     fn empty_snapshot_is_treated_as_absent() {
         let path = temp_file();
-        // 先写入有效快照，再保存空快照——应把文件清掉。
         save(&path, &sample()).unwrap();
         save(&path, &Snapshot::default()).unwrap();
         assert!(!path.exists(), "空快照应删除恢复文件");
@@ -117,6 +110,6 @@ mod tests {
         save(&path, &sample()).unwrap();
         clear(&path);
         assert!(!path.exists());
-        clear(&path); // 再次清除不应报错
+        clear(&path);
     }
 }

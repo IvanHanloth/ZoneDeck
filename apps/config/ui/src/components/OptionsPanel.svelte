@@ -17,7 +17,7 @@
 
   const s = $derived(app.config.setting);
 
-  // 增强冻结要求：核心以管理员身份运行 + 程序目录存在 pssuspend64.exe。任一不满足就置灰。
+  // 增强冻结的前置条件；任一不满足即置灰。
   const enhancedBlocked = $derived.by(() => {
     const reasons = [];
     if (!app.status.running) reasons.push("核心未运行");

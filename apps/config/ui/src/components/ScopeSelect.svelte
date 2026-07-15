@@ -1,5 +1,4 @@
 <script>
-  // 默认（都不勾）＝只在当前可见且有标题的窗口中匹配，与左侧「现有窗口」的默认筛选一致。
   import IconFilter from "~icons/lucide/list-filter";
   import IconChevron from "~icons/lucide/chevron-down";
 
@@ -125,12 +124,5 @@
     accent-color: var(--accent);
     margin-top: 2px;
     flex: none;
-  }
-  .opt em {
-    display: block;
-    margin-top: 2px;
-    font-style: normal;
-    font-size: 11.5px;
-    color: var(--muted);
   }
 </style>

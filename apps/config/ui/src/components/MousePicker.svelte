@@ -1,9 +1,5 @@
 <script>
-  // 连击判定窗口全局共用一个（那一项在 HotkeysPanel 的 SettingRow 里，与「按键恢复」并排）。
-  // 图形几何取自根目录 mouse_icon.svg。
-  //
-  // 「鼠标进了设置区就让核心停手」的热区在 HotkeysPanel 上（整张卡片），
-  // 不在这里——否则卡片里的其它设置行不在热区内，在那儿双击照样会把窗口藏掉。
+  // 鼠标按键选择器；图形几何取自根目录 mouse_icon.svg。
   import ModifierRecorder from "./ModifierRecorder.svelte";
   import { MOUSE_PARTS, describeTrigger } from "../lib/pointer.js";
 
@@ -53,7 +49,7 @@
       <path d="M 591 418 L 591 303.5 A 287.5 287.5 0 0 0 303.5 16 L 303.5 418 Z" />
     </g>
 
-    <!-- 侧键画得很窄，用透明矩形把点击区扩到壳体外侧 -->
+    <!-- 透明矩形扩大侧键点击区 -->
     <g
       class="part"
       class:on={mouse.side1.enabled}
@@ -82,7 +78,7 @@
       <path d="M 16 510 L 64 510 L 64 615 C 64 665, 64 665, 16 665 Z" />
     </g>
 
-    <!-- 画在左右键之上，压住它们的分界线 -->
+    <!-- 中键，画在左右键之上 -->
     <g
       class="part"
       class:on={mouse.middle.enabled}
@@ -142,12 +138,9 @@
     align-items: flex-start;
     gap: 18px;
 
-    /* 线条和填充一律用不透明色：左右键的描边和外壳、滚轮和左右键都有重叠，
-       只要有一点透明度，重叠处就会叠出更深的假描边，悬浮时还会把底下压着的线透出来。 */
     --line: color-mix(in srgb, var(--text) 58%, var(--surface-2));
     --face: var(--surface);
     --face-hover: color-mix(in srgb, var(--text) 9%, var(--surface));
-    /* 混 --text 而不是混黑：亮色主题下描边偏深、暗色主题下自动偏淡，两边都压得住蓝色填充 */
     --face-on-line: color-mix(in srgb, var(--accent) 50%, var(--text));
   }
 

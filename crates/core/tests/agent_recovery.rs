@@ -16,7 +16,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 /// 在带消息循环的独立线程上创建一个“已被隐藏”的窗口。
-/// 跨线程 ShowWindow 会向窗口属主线程发消息，属主必须泵消息才能响应。
 fn spawn_hidden_window() -> (i64, u32, std::thread::JoinHandle<()>) {
     let (tx, rx) = std::sync::mpsc::channel::<(i64, u32)>();
     let handle = std::thread::spawn(move || unsafe {
@@ -57,7 +56,6 @@ fn is_visible(hwnd: i64) -> bool {
 
 #[test]
 fn agent_restores_hidden_windows_left_by_a_crash() {
-    // 造一个“崩溃现场”：真实窗口已被隐藏，恢复文件记录着它。
     let (hwnd, window_tid, window_thread) = spawn_hidden_window();
     assert!(!is_visible(hwnd), "测试前提：窗口已隐藏");
 
@@ -88,7 +86,7 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
 
-    // 能应答 IPC 即代表启动流程（含崩溃恢复）已完成。
+    // 能应答 IPC 即代表启动流程已完成。
     let client = PipeClient::new(pipe);
     let state = client.send(&Command::GetState).unwrap();
     assert_eq!(

@@ -24,7 +24,6 @@
 
   let content = $state("");
   let rating = $state(0);
-  /** 鼠标悬停/滑过时预览的星级；0 表示没在悬停。点亮几颗看 hover||rating。 */
   let hoverRating = $state(0);
   let contact = $state("");
   let sending = $state(false);
@@ -58,7 +57,7 @@
     }
   }
 
-  // 进「关于」页就把公告拉一遍（不弹窗，只填列表）。
+  // 进「关于」页拉取公告列表。
   $effect(() => {
     if (app.announcements.length === 0) loadAnnouncements();
   });
@@ -81,16 +80,14 @@
     <p class="muted">版本 {info?.version ?? "…"}</p>
     <p>老板来了？一键隐藏窗口，上班摸鱼必备神器。</p>
     <p>
-        <button class="val link" onclick={() => open(info?.website ?? "https://github.com/IvanHanloth/Boss-Key")}>
-          项目主页
-        </button>
-        
+      <button class="val link" onclick={() => open(info?.website ?? "https://github.com/IvanHanloth/Boss-Key")}>
+        项目主页
+      </button>
     </p>
-    <p>Copyright © 2022-{year} 
-        <button class="val link" onclick={() => open(info?.blog ?? "https://www.ivan-hanloth.cn/")}>
-          Ivan Hanloth
-        </button> All Rights Reserved.</p>
-      
+    <p>Copyright © 2022-{year}
+      <button class="val link" onclick={() => open(info?.blog ?? "https://www.ivan-hanloth.cn/")}>
+        Ivan Hanloth
+      </button> All Rights Reserved.</p>
   </div>
 
   <Card title="更新">
@@ -105,7 +102,7 @@
       {/if}{/snippet}
     </SettingRow>
 
-    <SettingRow label="接收预览版" description="允许接收预览版更新，可能有不稳定的情况。">
+    <SettingRow label="接收预览版" description="接收预览版更新（可能不稳定）。">
       {#snippet control()}<Toggle bind:checked={v.include_preview} />{/snippet}
     </SettingRow>
   </Card>
@@ -131,7 +128,6 @@
   </Card>
 
   <Card title="反馈">
-    <!-- 悬停/滑过第 n 颗星时，1..n 一并点亮（低等级自动填充）；再点已选的星取消评分。 -->
     <div
       class="stars"
       role="radiogroup"
@@ -202,31 +198,6 @@
     font-size: 20px;
   }
 
-  .links {
-    list-style: none;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-  }
-  .links li {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
-    padding: 9px 2px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-  }
-  .links li:last-child {
-    border-bottom: none;
-  }
-  .k {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    color: var(--muted);
-    flex: none;
-  }
   .val {
     min-width: 0;
     text-align: right;
@@ -246,17 +217,6 @@
     text-decoration: underline;
   }
 
-  .update-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .update-row .btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
   .result {
     font-size: 12.5px;
   }

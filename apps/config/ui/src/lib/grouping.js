@@ -1,10 +1,5 @@
 // 窗口列表分组与集合运算。
 
-/** 两个 WindowInfo 是否指同一窗口（枚举快照内 hwnd + 进程名唯一）。 */
-export function sameWindow(a, b) {
-  return a.hwnd === b.hwnd && a.process === b.process;
-}
-
 /** 按进程名分组并排序，返回 [{ process, path, windows }]。 */
 export function groupByProcess(windows) {
   const groups = new Map();
@@ -18,20 +13,6 @@ export function groupByProcess(windows) {
   return [...groups.values()].sort((a, b) =>
     a.process.localeCompare(b.process, "zh-CN"),
   );
-}
-
-/** 把 picked 从 from 移到 to，返回新的 { from, to }（不修改入参）。 */
-export function moveWindows(from, to, picked) {
-  const moved = from.filter((w) => picked.some((p) => sameWindow(p, w)));
-  return {
-    from: from.filter((w) => !picked.some((p) => sameWindow(p, w))),
-    to: [...to, ...moved],
-  };
-}
-
-/** 全量窗口里排除已绑定的，得到"可添加"列表。 */
-export function availableWindows(all, bound) {
-  return all.filter((w) => !bound.some((b) => sameWindow(b, w)));
 }
 
 /** 需要请求图标的去重路径列表（跳过已缓存的，含"无图标"负缓存）。 */
@@ -65,9 +46,7 @@ export function splitByVisibility(windows) {
 /** 与核心 NO_TITLE 常量一致，用于识别无标题窗口。 */
 export const NO_TITLE = "无标题窗口";
 
-// 规则构造与追溯：与核心 matching.rs 语义同构。
-
-/** 转义正则元字符，把任意字面量安全地嵌进正则里。 */
+/** 转义正则元字符。 */
 export function escapeRegex(text) {
   return String(text).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -96,16 +75,12 @@ export function processRuleFromWindow(w) {
     process: w.process,
     path: w.path,
     by_name: false,
-    // 「隐藏整个程序」默认连它的无标题窗口一起藏；后台不可见窗口则不动。
     include_untitled: true,
     include_background: false,
   };
 }
 
-/**
- * 新的「窗口」正则规则（标题正则）。
- * 默认值是一条「包含式」正则——优先用左侧选中窗口的标题作为种子。
- */
+/** 新的「窗口」正则规则（标题正则）。 */
 export function newWindowRegexRule(seedTitle) {
   const seed = seedTitle && seedTitle !== NO_TITLE ? seedTitle : "关键词";
   return {
@@ -120,10 +95,7 @@ export function newWindowRegexRule(seedTitle) {
   };
 }
 
-/**
- * 新的「进程」正则规则。默认作用于完整路径，种子取选中窗口的进程名——
- * 「包含式」正则对路径和文件名两种模式都成立。
- */
+/** 新的「进程」正则规则。 */
 export function newProcessRegexRule(seedProcess) {
   return {
     process: "",
@@ -146,10 +118,7 @@ function windowRuleCoversWindow(rule, w) {
   return !!rule.path && rule.path === w.path && rule.title === w.title;
 }
 
-/**
- * 把选中的窗口追加为「窗口」精确规则，跳过已被现有规则覆盖的（去重）。
- * 不修改入参，返回新数组。
- */
+/** 追加为「窗口」精确规则，跳过已覆盖项，返回新数组。 */
 export function addWindowRules(existing, pickedWindows) {
   const result = existing.slice();
   for (const w of pickedWindows) {
@@ -159,10 +128,7 @@ export function addWindowRules(existing, pickedWindows) {
   return result;
 }
 
-/**
- * 把选中窗口的「进程」按可执行文件路径去重后追加为进程规则。
- * 已存在同路径规则、或路径为空的窗口都会跳过。不修改入参。
- */
+/** 按可执行文件路径去重后追加为进程规则，返回新数组。 */
 export function addProcessRules(existing, pickedWindows) {
   const result = existing.slice();
   const seen = new Set(result.filter((r) => !isRegexRule(r)).map((r) => r.path));
@@ -174,13 +140,7 @@ export function addProcessRules(existing, pickedWindows) {
   return result;
 }
 
-/**
- * 追溯一条窗口精确规则在当前存活窗口中的状态：
- * - `regex`：正则规则（不参与句柄追溯）；
- * - `live`：句柄仍命中原窗口；
- * - `reacquired`：句柄失效，但按标题 + 进程路径追溯到新窗口；
- * - `missing`：窗口已关闭 / 进程已重启且无法追溯。
- */
+/** 追溯窗口精确规则的状态：regex / live / reacquired / missing。 */
 export function traceWindowRule(rule, liveWindows) {
   if (isRegexRule(rule)) return "regex";
 
@@ -198,10 +158,7 @@ export function traceWindowRule(rule, liveWindows) {
   return traced ? "reacquired" : "missing";
 }
 
-/**
- * 现有窗口列表过滤：默认只显示有标题的可见窗口。
- * showBackground 放开后台（不可见）窗口，showUntitled 放开无标题窗口，最后按 search 过滤。
- */
+/** 现有窗口列表过滤：默认只显示有标题的可见窗口。 */
 export function applyListFilters(
   windows,
   { showBackground = false, showUntitled = false, search = "" } = {},

@@ -74,11 +74,9 @@ struct AgentState {
     ipc_rx: Receiver<(Command, Sender<Response>)>,
     mouse_hook: Option<MouseHook>,
     float_window: Option<FloatWindow>,
-    /// 是否正在监听热键与鼠标。配置程序录制热键 / 在鼠标设置区里操作时会把它按下去
-    /// （见 `Command::SetHotkeys`），此后一切重装监控的动作都必须尊重它——
-    /// 尤其是保存配置触发的 `ReloadConfig`，否则暂停会被自动保存悄悄复活。
+    /// 是否正在监听热键与鼠标（见 `Command::SetHotkeys`）。
     monitoring: bool,
-    /// 热键当前是否已注册。重复 RegisterHotKey 会失败并刷出误导性的告警，故显式记账。
+    /// 热键当前是否已注册（避免重复 RegisterHotKey）。
     hotkeys_armed: bool,
 }
 
@@ -119,7 +117,7 @@ impl AgentState {
     }
 
     fn refresh_runtime(&mut self, hwnd: HWND) {
-        // 监控停用期间一律不装鼠标钩子：用户正在设置界面里点鼠标，装上就是自找触发。
+        // 监控停用期间不装鼠标钩子。
         if self.monitoring && mouse_hook::wants_hook(&self.config.setting) {
             mouse_hook::set_flags(&self.config.setting);
             if self.mouse_hook.is_none() {
@@ -169,9 +167,7 @@ impl AgentState {
     fn apply_hide(&mut self) {
         let windows = self.controller.enumerate();
         let foreground = self.controller.foreground();
-        // 解析目标：窗口规则会就地追溯回填句柄 / 同步标题。
         let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
-        // 冻结只能整进程挂起，因此仅冻结「可见窗口已被全部隐藏」的进程。
         let freezable = freezable_pids(&targets, &windows);
         log_resolution(&self.config, &outcomes, &targets);
         self.controller
@@ -212,8 +208,7 @@ impl AgentState {
         match cmd {
             Command::ReloadConfig => match Config::load(&self.config_path) {
                 Ok(config) => {
-                    // 热键内容可能变了，先摘掉旧的；能不能装回去由 sync_monitoring 说了算
-                    // （监控被配置界面停用时，这里绝不能把它复活）。
+                    // 先摘掉旧热键，能否重装由 sync_monitoring 决定。
                     if self.hotkeys_armed {
                         self.unregister_hotkeys(hwnd);
                         self.hotkeys_armed = false;
@@ -262,13 +257,7 @@ impl AgentState {
                 (Response::Ok, false)
             }
             Command::SetAutostart { enabled } => (set_autostart(enabled), false),
-            // 配置界面录制热键 / 在鼠标设置区里操作时，整套监控都得停：热键会被录制的组合键
-            // 直接触发，鼠标钩子则会把用户在设置界面里的点击当成触发（比如刚设好左键双击，
-            // 一双击就把设置窗口藏了）。
-            //
-            // 停用是有状态的，期间的 ReloadConfig 不会复活它——自动保存每改一下就发一次
-            // ReloadConfig。代价是配置程序若在停用期间崩溃，热键就再也回不来，故用看门狗
-            // 兜底：配置程序须持续重发停用心跳（幂等），超时未收到就自行恢复。
+            // 停用有状态，期间的 ReloadConfig 不会复活它；看门狗定时器兜底超时恢复。
             Command::SetHotkeys { enabled } => {
                 let changed = self.monitoring != enabled;
                 self.monitoring = enabled;
@@ -298,7 +287,7 @@ impl AgentState {
     }
 }
 
-/// 记录本次隐藏的分级日志：概览走 INFO，句柄追溯回填走 INFO，追溯失败走 WARN。
+/// 记录本次隐藏的分级日志。
 fn log_resolution(config: &Config, outcomes: &[RuleOutcome], targets: &[crate::hide::Target]) {
     logging::info(&format!(
         "触发隐藏：命中 {} 个窗口（窗口规则 {} 条 / 进程规则 {} 条）",
@@ -435,11 +424,7 @@ fn same_exe(path: &str, exe: &Path) -> bool {
         .is_some_and(|e| !path.is_empty() && path.eq_ignore_ascii_case(e))
 }
 
-/// 把配置程序自己的窗口从「被隐藏」状态里放出来。
-///
-/// 配置窗口完全可能被 Boss Key 自己藏起来（用户绑定了它，或开了「同时隐藏当前活动窗口」）。
-/// 一旦它还被**冻结**，单实例通知根本发不进那个被挂起的进程——表现就是点托盘「设置」没反应。
-/// 所以拉起之前必须先解冻 + 显示。
+/// 把配置程序自己的窗口从「被隐藏」状态里放出来，再拉起设置。
 fn release_config_windows(state: &mut AgentState, exe: &Path) {
     let windows = state.controller.enumerate();
     let mut pids: Vec<u32> = windows
@@ -463,7 +448,7 @@ fn release_config_windows(state: &mut AgentState, exe: &Path) {
 
 /// 拉起配置程序。`action` 会作为命令行参数传入（如 `restore` 直达窗口恢复工具）。
 fn launch_settings(state: &mut AgentState, action: Option<&str>) {
-    // 生产打包名为 "Boss Key.exe"，开发（cargo）产物名为 "bosskey-config.exe"。
+    // 生产名 "Boss Key.exe"，开发名 "bosskey-config.exe"。
     let dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from));
@@ -494,7 +479,7 @@ fn launch_settings(state: &mut AgentState, action: Option<&str>) {
 
 fn quit(state: &mut AgentState, hwnd: HWND) {
     state.controller.show();
-    state.persist_recovery(); // 已无隐藏内容，等价于清除恢复文件
+    state.persist_recovery();
     state.unregister_hotkeys(hwnd);
     logging::info("核心正常退出");
     let notify_quit = state.config.notifications.on_quit;
@@ -551,13 +536,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_APP_FLOAT => {
             match wparam.0 {
-                // 双击悬浮窗 = 触发老板键（受 click_to_hide 约束）。
+                // 双击悬浮窗触发老板键。
                 FLOAT_TOGGLE => {
                     if state.config.setting.click_to_hide {
                         state.apply_toggle();
                     }
                 }
-                // 右键菜单以代理窗口为宿主，选择项经 WM_COMMAND 复用既有处理。
+                // 右键菜单以代理窗口为宿主，经 WM_COMMAND 复用处理。
                 FLOAT_MENU => {
                     crate::float_window::show_float_menu(hwnd, MENU_SETTINGS, MENU_QUIT);
                 }
@@ -577,7 +562,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_MOUSE_TRIGGER => {
-            // 角落和按键都是「隐藏一律生效，恢复看各自的开关」。
+            // 隐藏一律生效，恢复取决于各自的开关。
             let allow_restore = if wparam.0 == TRIGGER_CORNER {
                 state.config.setting.allow_move_restore
             } else {
@@ -600,7 +585,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     }
                     quit(state, hwnd);
                 }
-                // 配置程序在“监控已停用”期间崩了（心跳断了），把热键还给用户。
+                // 停用心跳超时，恢复监控。
                 SUSPEND_GUARD_TIMER_ID => {
                     unsafe {
                         let _ = KillTimer(Some(hwnd), SUSPEND_GUARD_TIMER_ID);
@@ -705,7 +690,7 @@ pub fn run(options: AgentOptions) {
         hotkeys_armed: false,
     });
 
-    // 恢复文件存在 = 上次异常退出时仍有窗口被隐藏，先把它们找回来。
+    // 恢复文件存在即上次异常退出仍有窗口被隐藏，先找回。
     if let Some(snapshot) = recovery::load(&state.recovery_path) {
         logging::warn(&format!(
             "检测到上次异常退出，正在恢复 {} 个被隐藏的窗口",
