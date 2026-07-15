@@ -1,0 +1,150 @@
+[
+  {
+    "tag_name": "v1.4.2.0",
+    "published_at": "2024-11-16T05:52:49Z",
+    "body": "## What's Changed\n* 允许使用多个键组合，支持热键记录 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/1\n\n## New Contributors\n* @IvanHanloth made their first contribution in https://github.com/IvanHanloth/Boss-Key/pull/1\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/commits/v1.4.2.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v1.4.2.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v1.4.2.0/Boss-Key-v1.4.2.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v1.4.2.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v1.4.2.0/Boss-Key-v1.4.2.0-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v1.4.3.0",
+    "published_at": "2024-12-19T09:13:00Z",
+    "body": "## 更新日志\r\n- 新增隐藏前发送暂停功能\r\n- 新增热键录制窗口\r\n- 新增关于页面\r\n- 新增托盘开机自启设置菜单项\r\n- 修复部分热键录制时出错问题\r\n- 修复单文件版提示无图标的问题\r\n\r\n## What's Changed\r\n* Move startup by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/6\r\n* Send before hide by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/7\r\n\r\n\r\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v1.4.2.0...v1.4.3.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v1.4.3.0-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v1.4.3.0/Boss-Key-v1.4.3.0-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v1.4.3.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v1.4.3.0/Boss-Key-v1.4.3.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v1.4.3.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v1.4.3.0/Boss-Key-v1.4.3.0-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v2.0.0.1",
+    "published_at": "2025-01-04T14:24:18Z",
+    "body": "## What's Changed\n* 完全移除启动切换热键 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/8\n* 将配置文件更换为json文件，移除开机切换热键 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/9\n* 修改关于页面 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/11\n* 合并修改 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/12\n* 优化通知功能 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/13\n* 同步修改 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/14\n* 新增是否同时隐藏当前窗口的选项 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/18\n* 优化窗口隐藏相关功能 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/19\n* 新增检查更新功能 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/20\n* 优化检查更新UI by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/22\n* 新增点击托盘图标切换窗口隐藏功能 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/25\n* Clear structure by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/28\n* 将热键监听切换为子进程 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/29\n* V2.0.0.0 版本更新 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/31\n* 重构项目结构 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/32\n\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v1.4.3.0...v2.0.0.1",
+    "assets": [
+      {
+        "name": "Boss-Key-v2.0.0.1-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.0.1/Boss-Key-v2.0.0.1-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v2.0.0.1-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.0.1/Boss-Key-v2.0.0.1-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v2.0.0.1-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.0.1/Boss-Key-v2.0.0.1-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v2.0.1.0",
+    "published_at": "2025-01-17T02:42:27Z",
+    "body": "## What's Changed\n* 修改已在运行时的提醒 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/36\n* 修复窗口销毁后再打开隐藏失败的问题 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/38\n* 优化同时运行检测 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/42\n* 保存新窗口绑定时自动显示已隐藏的窗口 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/45\n* 更新v2.0.1.0版本号 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/47\n* V2.0.1.0版本发布 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/48\n\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v2.0.0.1...v2.0.1.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v2.0.1.0-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.1.0/Boss-Key-v2.0.1.0-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v2.0.1.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.1.0/Boss-Key-v2.0.1.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v2.0.1.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.1.0/Boss-Key-v2.0.1.0-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v2.0.2.0",
+    "published_at": "2025-02-02T08:07:53Z",
+    "body": "## What's Changed\n* 新增全选窗口选项 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/50\n* 新增隐藏窗口后同时隐藏程序托盘图标选项 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/52\n* 修复无法使用热键关闭程序的问题 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/56\n* 优化界面UI设计 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/57\n* 优化配置文件读取 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/59\n* Merge pull request #48 from IvanHanloth/dev by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/61\n* v2.0.2版本更新 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/60\n* V2.0.2版本更新 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/62\n\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v2.0.1.0...v2.0.2.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v2.0.2.0-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.2.0/Boss-Key-v2.0.2.0-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v2.0.2.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.2.0/Boss-Key-v2.0.2.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v2.0.2.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.2.0/Boss-Key-v2.0.2.0-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v2.0.3.0",
+    "published_at": "2025-04-05T05:40:25Z",
+    "body": "## What's Changed\n* 更新项目说明 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/63\n* 增加对win7系统的适配 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/64\n* 新增文件路径匹配 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/68\n* 新增窗口恢复工具 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/70\n* v2.0.3版本更新 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/72\n* 修复工作流 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/74\n* 完善发布流程 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/75\n* v2.0.3版本更新 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/73\n\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v2.0.2.0...v2.0.3.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v2.0.3.0-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.3.0/Boss-Key-v2.0.3.0-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v2.0.3.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.3.0/Boss-Key-v2.0.3.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v2.0.3.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.3.0/Boss-Key-v2.0.3.0-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v2.0.4.0",
+    "published_at": "2025-04-09T13:30:15Z",
+    "body": "## What's Changed\n* 修复无法禁音问题 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/78\n* Merge pull request #73 from IvanHanloth/dev by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/80\n* 更新v2.0.4版本 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/79\n* 修复已知问题 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/81\n* Merge pull request #79 from IvanHanloth/dev by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/82\n* 更新v2.0.4版本 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/83\n\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v2.0.3.0...v2.0.4.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v2.0.4.0-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.4.0/Boss-Key-v2.0.4.0-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v2.0.4.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.4.0/Boss-Key-v2.0.4.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v2.0.4.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.0.4.0/Boss-Key-v2.0.4.0-onefile.exe"
+      }
+    ]
+  },
+  {
+    "tag_name": "v2.1.0.0",
+    "published_at": "2025-04-21T05:38:49Z",
+    "body": "## What's Changed\n* 新增进程冻结工具 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/86\n* 新增鼠标隐藏支持、自动隐藏功能 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/90\n* 新增鼠标移动至四角隐藏功能 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/91\n* 新增窗口菜单 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/93\n* 更新v2.1.0.0版本 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/95\n* up to date by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/96\n* 修复非首次启动弹出提示问题 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/98\n* 更新v2.1.0.0版本 by @IvanHanloth in https://github.com/IvanHanloth/Boss-Key/pull/97\n\n\n**Full Changelog**: https://github.com/IvanHanloth/Boss-Key/compare/v2.0.4.0...v2.1.0.0",
+    "assets": [
+      {
+        "name": "Boss-Key-v2.1.0.0-Installer.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.1.0.0/Boss-Key-v2.1.0.0-Installer.exe"
+      },
+      {
+        "name": "Boss-Key-v2.1.0.0-multifile.zip",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.1.0.0/Boss-Key-v2.1.0.0-multifile.zip"
+      },
+      {
+        "name": "Boss-Key-v2.1.0.0-onefile.exe",
+        "browser_download_url": "https://github.com/IvanHanloth/Boss-Key/releases/download/v2.1.0.0/Boss-Key-v2.1.0.0-onefile.exe"
+      }
+    ]
+  }
+]

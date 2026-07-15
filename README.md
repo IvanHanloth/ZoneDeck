@@ -1,6 +1,6 @@
 # Boss-Key
 
-![Boss-Key logo bannar](/static/bannar.jpg)
+![Boss-Key logo bannar](/docs/public/static/bannar.jpg)
 
 ![Github Release Version](https://img.shields.io/github/v/release/IvanHanloth/Boss-Key)
 ![Github Repo License](https://img.shields.io/github/license/IvanHanloth/Boss-Key)
@@ -15,22 +15,22 @@
 
 ## 应用截图
 
-![Boss-Key设置窗口绑定页](/static/screenshot-1.png)
+![Boss-Key设置窗口绑定页](/docs/public/static/screenshot-1.png)
 
-![Boss-Key设置鼠标热键设置页-1](/static/screenshot-2.png)
+![Boss-Key设置鼠标热键设置页-1](/docs/public/static/screenshot-2.png)
 
-![Boss-Key设置鼠标热键设置页-2](/static/screenshot-3.png)
+![Boss-Key设置鼠标热键设置页-2](/docs/public/static/screenshot-3.png)
 
-![Boss-Key设置窗口其他选项页](/static/screenshot-4.png)
+![Boss-Key设置窗口其他选项页](/docs/public/static/screenshot-4.png)
 
-![Boss-Key核心托盘菜单](/static/screenshot-5.png)
+![Boss-Key核心托盘菜单](/docs/public/static/screenshot-5.png)
 
 ## 使用说明
 
 从v3.0.0版本开始，每个版本都会提供两种类型的程序，可以从[Release页面](https://github.com/IvanHanloth/Boss-Key/releases)下载
 
 - installer - 安装程序（推荐），完整封装的Boss-Key程序安装程序，提供一键安装、更新、卸载，可以更高效安全的管理Boss-Key程序
-- portable - 免安装版，包含Boss-Key的核心程序和配置程序的压缩包，解压后可以运行
+- portable - 便携版，包含Boss-Key的核心程序和配置程序的压缩包，解压后可以运行
 
 部分版本会提供win7系统的软件包，带有win7标识的可以在Windows 7系统上运行
 
@@ -175,6 +175,7 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 - 【优化】大幅优化后台内存占用
 - 【优化】缩小编译后体积
 - 【优化】大幅提高后台稳定性
+- 【优化】优化窗口匹配规则
 - 【优化】使用全新的检查更新端点
 
 **V2.1.0 （更新于2025/4/21）**
@@ -273,4 +274,4 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 
 - Boss-Key发布
 
-![](/static/icon.png)
+![](/docs/public/static/icon.png)
