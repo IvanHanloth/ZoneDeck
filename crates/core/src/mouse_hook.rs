@@ -31,9 +31,9 @@ const F_FAST: u32 = 128;
 
 const CORNER_THRESHOLD: i32 = 10;
 const CORNER_COOLDOWN_MS: u64 = 1000;
-/// 甩入角落的速度门槛（像素/毫秒）：约 1500 px/s，日常拖拽、贴边点任务栏都到不了这个速度。
+/// 移入角落的速度门槛（像素/毫秒），约 1500 px/s。
 const FAST_SPEED_PX_PER_MS: f32 = 1.5;
-/// 两次 WM_MOUSEMOVE 间隔超过这个值就不算同一次「甩」，速度不予采信（比如刚从别的屏幕/静止状态挪进来）。
+/// 两次移动采样间隔超过此值则不算同一次。
 const SPEED_SAMPLE_MAX_MS: u64 = 120;
 
 /// 五颗键在 [`Buttons`] 数组里的下标，和 `MouseSetting` 的字段一一对应。
@@ -51,7 +51,6 @@ static SCREEN_H: AtomicI32 = AtomicI32::new(0);
 static LAST_CORNER: AtomicU64 = AtomicU64::new(0);
 /// 上一个鼠标位置与时刻，用来估算甩入角落的速度。
 static LAST_MOVE: Mutex<Option<MoveSample>> = Mutex::new(None);
-/// 钩子回调与配置刷新都跑在核心的消息循环线程上，这里的锁只是为了满足 `Sync`，不会真的争用。
 static BUTTONS: Mutex<Buttons> = Mutex::new(Buttons::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,10 +125,7 @@ struct MoveSample {
     ms: u64,
 }
 
-/// 这一步移动算不算「甩」：位移 / 用时超过速度门槛。
-///
-/// 两次采样间隔太久（鼠标本来是静止的，或者事件被丢了）就不予采信——否则「静止很久后
-/// 轻轻挪一格」会被算成一次瞬时高速。同一时刻的两个采样（dt == 0）同理不算。
+/// 这一步移动是否算「甩」：位移 / 用时超过速度门槛，且采样间隔有效。
 fn is_fast_move(from: MoveSample, to: MoveSample) -> bool {
     let dt = to.ms.saturating_sub(from.ms);
     if dt == 0 || dt > SPEED_SAMPLE_MAX_MS {
@@ -171,9 +167,7 @@ pub fn set_flags(s: &Setting) {
     }
 }
 
-/// 记一次点击：窗口内则累加，超时则重新从 1 开始。数满 `clicks` 下就触发并清零。
-///
-/// 我们只观察、不吞事件——点击照常送到底下的程序，所以这里不需要任何延迟判定。
+/// 记一次点击：窗口内累加、超时重置。数满 `clicks` 下即触发并清零。
 fn register_click(state: &mut ButtonState, now: u64, window_ms: u64) -> bool {
     if state.count > 0 && now.wrapping_sub(state.last_ms) <= window_ms {
         state.count += 1;
@@ -256,7 +250,7 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
             y: data.pt.y,
             ms: now,
         };
-        // 速度要拿上一次采样算，所以无论后面触不触发都得先记下这一次。
+        // 无论是否触发都先记下这次采样，供下次算速度。
         let previous = LAST_MOVE
             .lock()
             .ok()
@@ -269,7 +263,7 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
         if !corner_hit(sample.x, sample.y, w, h, flags) {
             return;
         }
-        // 开了「仅快速移动」时，慢慢挪到角落不算数——贴边点关闭按钮之类的操作不该触发隐藏。
+        // 开了「仅快速移动」时，慢慢挪到角落不触发。
         if flags & F_FAST != 0 && !previous.is_some_and(|p| is_fast_move(p, sample)) {
             return;
         }
@@ -289,7 +283,7 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
     if !state.enabled {
         return;
     }
-    // 要求修饰键时必须完全吻合，多按了别的修饰键也不算，免得和别人的快捷键打架。
+    // 要求修饰键时必须完全吻合。
     if state.modifiers != 0 && pressed_modifiers() != state.modifiers {
         state.count = 0;
         return;
@@ -308,7 +302,7 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
             let data = &*(lparam.0 as *const MSLLHOOKSTRUCT);
             handle_event(wparam.0 as u32, data);
         }
-        // 永远放行：点击原样送到底下的程序，我们只是顺手数一下。
+        // 永远放行，只观察不吞事件。
         CallNextHookEx(None, ncode, wparam, lparam)
     }
 }
@@ -417,7 +411,6 @@ mod tests {
         assert!(!register_click(&mut st, 1000, 400));
         assert!(!register_click(&mut st, 1300, 400));
         assert!(register_click(&mut st, 1600, 400), "窗口内第三下触发");
-        // 触发后计数清零，下一串重新数。
         assert!(!register_click(&mut st, 1700, 400));
     }
 
@@ -433,8 +426,8 @@ mod tests {
     fn a_late_click_restarts_the_streak() {
         let mut st = armed(3);
         assert!(!register_click(&mut st, 1000, 400));
-        assert!(!register_click(&mut st, 2000, 400)); // 超时，重新计为第 1 下
-        assert!(!register_click(&mut st, 2200, 400)); // 第 2 下
+        assert!(!register_click(&mut st, 2000, 400));
+        assert!(!register_click(&mut st, 2200, 400));
         assert!(register_click(&mut st, 2400, 400), "第 3 下才触发");
     }
 
@@ -444,12 +437,10 @@ mod tests {
 
     #[test]
     fn fast_flick_is_recognised_slow_drift_is_not() {
-        // 20ms 走 200px ≈ 10 px/ms：一次利落的甩。
         assert!(is_fast_move(
             sample(1700, 900, 1000),
             sample(1900, 1070, 1020)
         ));
-        // 200ms 才走 30px：慢慢挪过去，不算。
         assert!(!is_fast_move(
             sample(1870, 1050, 1000),
             sample(1900, 1070, 1200)
@@ -458,9 +449,7 @@ mod tests {
 
     #[test]
     fn stale_or_zero_interval_samples_are_not_trusted() {
-        // 采样间隔超过上限：鼠标本来是静止的，这一格不能当成瞬时高速。
         assert!(!is_fast_move(sample(0, 0, 1000), sample(1900, 1070, 1500)));
-        // 同一毫秒的两次采样：除零风险，直接不算。
         assert!(!is_fast_move(sample(0, 0, 1000), sample(1900, 1070, 1000)));
     }
 

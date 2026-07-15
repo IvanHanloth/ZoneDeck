@@ -77,8 +77,7 @@ fn key_to_vk(token: &str) -> Option<u16> {
     Some(vk)
 }
 
-/// 只解析修饰键组合（如 `"Ctrl+Shift"`），忽略无法识别的片段。空串得到 0。
-/// 鼠标触发用它把配置里的修饰键字符串变成位掩码。
+/// 只解析修饰键组合（如 `"Ctrl+Shift"`）为位掩码，忽略无法识别的片段。
 pub fn parse_modifiers(s: &str) -> u32 {
     s.split('+')
         .filter_map(|part| modifier_bit(part.trim()))

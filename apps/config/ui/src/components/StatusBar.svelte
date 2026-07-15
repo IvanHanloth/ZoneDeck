@@ -33,9 +33,7 @@
     }
   }
 
-  // 录制热键 / 鼠标停在鼠标设置区时，核心会临时停掉监控（见 state.svelte.js）。
-  // 这里显示的是**核心回报的真实状态**（core_status.monitoring），不是界面的一厢情愿：
-  // 状态灯变了，就意味着核心那边确实已经停手了。
+  // 显示核心回报的真实监控状态（core_status.monitoring）。
   const monitoring = $derived(app.status.monitoring);
   const monitorText = $derived(
     app.monitorPending ? "切换中…" : monitoring ? "热键生效" : "热键暂停",

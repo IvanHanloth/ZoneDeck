@@ -52,9 +52,7 @@ fn notify_core(command: &Command) -> Result<Response, String> {
         .map_err(|e| e.to_string())
 }
 
-/// 把阻塞工作丢到专用线程，避免占用 Tauri 主线程/异步运行时。
-/// 所有涉及命名管道、schtasks、图标提取的命令都必须经此包装，
-/// 否则会阻塞 WebView 渲染（曾导致"状态获取卡界面"）。
+/// 把阻塞工作丢到专用线程，避免阻塞 Tauri 异步运行时与 WebView 渲染。
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     tauri::async_runtime::spawn_blocking(f)
         .await
@@ -149,7 +147,7 @@ async fn set_autostart(enabled: bool) -> Result<(), String> {
 #[tauri::command]
 async fn autostart_status() -> bool {
     blocking(|| {
-        // 用核心 exe 路径查询：自启项由核心写入，比对路径须与之一致。
+        // 用核心 exe 路径查询，与核心写入的自启项一致。
         bosskey_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE))
             .status()
             .is_some()
@@ -162,7 +160,7 @@ struct CoreStatus {
     running: bool,
     hidden: bool,
     elevated: bool,
-    /// 核心此刻是否真的在监听热键与鼠标（由核心回报，不是界面自己猜的）。
+    /// 核心是否正在监听热键与鼠标（由核心回报）。
     monitoring: bool,
 }
 
@@ -197,8 +195,7 @@ async fn core_status() -> CoreStatus {
     .await
 }
 
-/// 启动核心（核心未运行时）。`elevated=true` 走 UAC 提权，返回值表示用户是否同意；
-/// 普通启动总是返回 true（spawn 成功）。
+/// 启动核心。`elevated=true` 走 UAC 提权，返回值表示用户是否同意。
 #[tauri::command]
 async fn start_core(elevated: bool) -> Result<bool, String> {
     let exe = core_exe_path()?;
@@ -237,11 +234,7 @@ async fn quit_core() -> Result<(), String> {
     .await
 }
 
-/// 停用 / 恢复核心的热键与鼠标监控（录制热键、在鼠标设置区里操作时用）。
-///
-/// 返回核心是否确实应答：界面据此显示真实状态，而不是一厢情愿地把状态灯改掉。
-/// 核心没运行时返回 false——本来就没有热键会被触发，不算错误。
-/// 停用期间界面须按 `SUSPEND_HEARTBEAT_MS` 重发本命令续期（核心侧有看门狗）。
+/// 停用 / 恢复核心的热键与鼠标监控。返回核心是否应答（未运行时返回 false）。
 #[tauri::command]
 async fn set_hotkeys_enabled(enabled: bool) -> Result<bool, String> {
     blocking(move || {
@@ -263,7 +256,7 @@ async fn pssuspend_available() -> bool {
     blocking(|| bosskey_core::freeze::pssuspend_available(&exe_dir())).await
 }
 
-/// 启动参数里请求的动作（如核心托盘「窗口恢复工具」传入的 `restore`）；只在启动时读一次。
+/// 启动参数里请求的动作（如 `restore`），只在启动时读一次。
 #[tauri::command]
 fn startup_action() -> Option<String> {
     std::env::args()
@@ -290,8 +283,7 @@ async fn open_log_dir() -> Result<(), String> {
 fn app_info() -> AppInfo {
     AppInfo {
         name: bosskey_common::APP_NAME,
-        // 程序版本（Cargo.toml 的 workspace 版本号，发版流程会改写它），
-        // 不是配置文件的 schema 版本 APP_CONFIG_VERSION
+        // 程序版本（非配置 schema 版本 APP_CONFIG_VERSION）。
         version: env!("CARGO_PKG_VERSION"),
         website: "https://github.com/IvanHanloth/Boss-Key",
         author: "Ivan Hanloth",
@@ -301,17 +293,13 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接（关于页的博客 / 项目主页 / 版本下载页）。
-///
-/// WebView 里的 `target="_blank"` 在 Tauri 下不会打开浏览器，只能走这里。
-/// 只放行 http/https：`url` 来自界面，但别给「用 ShellExecute 执行任意东西」留口子。
+/// 用系统默认浏览器打开外部链接。仅放行 http/https。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://") {
         return Err("只允许打开 http/https 链接".to_string());
     }
     blocking(move || {
-        // 交给 explorer 而不是 `cmd /c start`：不弹控制台窗口，也不会把 url 里的 & 当成命令分隔符。
         std::process::Command::new("explorer")
             .arg(&url)
             .spawn()
@@ -362,7 +350,7 @@ async fn verhub_submit_feedback(
     .await
 }
 
-/// 上报一段日志（出错弹框里由用户点了「上报」才会走到这里；本程序不自动上报）。
+/// 上报一段日志
 #[tauri::command]
 async fn verhub_upload_log(content: String) -> Result<(), String> {
     blocking(move || {
@@ -372,6 +360,7 @@ async fn verhub_upload_log(content: String) -> Result<(), String> {
             serde_json::json!({
                 "app_version": env!("CARGO_PKG_VERSION"),
                 "os": os_description(),
+
             }),
         )
         .map_err(|e| e.to_string())
@@ -379,8 +368,7 @@ async fn verhub_upload_log(content: String) -> Result<(), String> {
     .await
 }
 
-/// 最近的本地日志（出错弹框把它展示给用户过目，同意后才上报）。
-/// 取最新一个日志文件的末尾若干行。
+/// 最新日志文件的末尾若干行。
 #[tauri::command]
 async fn recent_log_tail(lines: usize) -> String {
     blocking(move || {
@@ -402,8 +390,7 @@ async fn recent_log_tail(lines: usize) -> String {
     .await
 }
 
-/// 形如 `Microsoft Windows [版本 10.0.26200.1234]`，随反馈 / 日志一起上报，
-/// 方便定位环境相关的问题。CREATE_NO_WINDOW：否则每次上报都闪一下黑窗口。
+/// 系统版本描述，形如 `Microsoft Windows [版本 10.0.26200.1234]`。
 fn os_description() -> String {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -423,15 +410,13 @@ fn os_description() -> String {
 
 pub fn run() {
     tauri::Builder::default()
-        // 单实例：核心「设置」或用户重复启动配置程序时，激活已有窗口而非再开一个。
-        // 必须是注册的第一个插件。
+        // 单实例：重复启动时激活已有窗口。必须是注册的第一个插件。
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
             }
-            // 核心托盘「窗口恢复工具」会带 restore 参数再拉一次；已在运行的实例据此直达该工具。
             if argv.iter().any(|a| a == bosskey_common::ARG_RESTORE) {
                 let _ = app.emit("open-restore", ());
             }
@@ -461,8 +446,7 @@ pub fn run() {
             verhub_upload_log,
             recent_log_tail,
         ])
-        // 窗口以 visible:false 启动，正常情况下由前端画出启动屏后自己 show（见 main.js）。
-        // 这里兜底：万一前端起不来，5 秒后强制显示，别留一个永远看不见的窗口。
+        // 兜底：前端起不来时，5 秒后强制显示窗口。
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 std::thread::spawn(move || {

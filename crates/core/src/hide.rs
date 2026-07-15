@@ -17,7 +17,7 @@ pub struct Target {
     pub pid: u32,
 }
 
-/// 一条窗口规则的解析结果摘要（供核心侧记录分级日志：Reacquired/Missing 值得关注）。
+/// 一条窗口规则的解析结果摘要。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuleOutcome {
     Live,
@@ -26,11 +26,8 @@ pub enum RuleOutcome {
     Regex(usize),
 }
 
-/// 依据配置里的窗口/进程规则，结合当前存活窗口解析出要隐藏的目标句柄集合。
-///
-/// **副作用**：对「窗口」精确规则做**追溯回填**——命中时把规则的 `title` 同步为最新标题，
-/// 追溯到新窗口时回填 `hwnd`/`pid`，以便后续隐藏继续生效。返回值 `outcomes` 与
-/// `config.window_rules` 一一对应，供上层记录日志 / 界面标注。
+/// 依据窗口/进程规则解析出要隐藏的目标句柄集合，并对精确规则做追溯回填。
+/// 返回值 `outcomes` 与 `config.window_rules` 一一对应。
 pub fn resolve_targets(
     config: &mut Config,
     windows: &[WindowInfo],
@@ -99,13 +96,7 @@ pub fn resolve_targets(
     (result, outcomes)
 }
 
-/// 可以安全冻结的进程 PID 集合。
-///
-/// 冻结只能按 PID 挂起**整个进程**（`NtSuspendProcess`），做不到窗口级。因此只有当
-/// 某进程的**全部可见顶层窗口**都在本次隐藏目标里时，冻结它才不会误伤——否则该进程
-/// 还有窗口开着，冻结会让那个窗口直接卡死。
-///
-/// 结果：隐藏单个窗口不会冻住多窗口程序；隐藏整个进程则自然满足条件。
+/// 可以安全冻结的进程 PID 集合：仅当某进程的全部可见窗口都在隐藏目标里时才纳入。
 pub fn freezable_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
     let hidden: HashSet<i64> = targets.iter().map(|t| t.hwnd).collect();
     let mut pids: Vec<u32> = targets
@@ -121,7 +112,7 @@ pub fn freezable_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
             .iter()
             .filter(|w| w.pid == *pid && w.visible)
             .peekable();
-        // 该进程当前没有可见窗口（枚举不到）时不冻结，保守起见。
+        // 没有可见窗口时不冻结。
         visible.peek().is_some() && visible.all(|w| hidden.contains(&w.hwnd))
     });
     pids
@@ -162,10 +153,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     }
 
     /// 隐藏已解析出的目标：隐藏窗口并按设置应用静音 / 冻结 / 发送暂停键。
-    /// 目标解析（含窗口追溯回填）在外层 [`resolve_targets`] 完成。
-    ///
-    /// `freezable` 为允许冻结的 PID（见 [`freezable_pids`]）——进程只有在其全部可见
-    /// 窗口都被隐藏时才会被挂起。
+    /// `freezable` 为允许冻结的 PID（见 [`freezable_pids`]）。
     pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freezable: &[u32]) {
         let mut frozen = Vec::new();
         let mut muted = Vec::new();
@@ -184,7 +172,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                 frozen.push(t.pid);
             }
         }
-        // 同一进程可能有多个窗口被隐藏；挂起是计数式的，必须去重，否则解冻次数对不上。
+        // 挂起是计数式的，去重以匹配解冻次数。
         frozen.sort_unstable();
         frozen.dedup();
         muted.sort_unstable();
@@ -217,17 +205,13 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.hidden.clear();
     }
 
-    /// 释放指定进程的隐藏状态：显示它被隐藏的窗口、解冻、取消静音，并从隐藏集移除。
-    ///
-    /// 用于托盘「设置」——配置窗口可能正被 Boss Key 自己隐藏（甚至冻结），
-    /// 此时直接拉起进程是没用的：单实例通知发不进一个被挂起的进程。必须先把它放出来。
-    /// 返回被释放的窗口数。
+    /// 释放指定进程的隐藏状态：显示窗口、解冻、取消静音，并从隐藏集移除。返回被释放的窗口数。
     pub fn release_pids(&mut self, pids: &[u32]) -> usize {
         if pids.is_empty() {
             return 0;
         }
 
-        // 先解冻，否则窗口显示出来也是卡死的。
+        // 先解冻，否则窗口显示出来仍是卡死的。
         let (thaw, keep): (Vec<u32>, Vec<u32>) = self
             .frozen
             .iter()
@@ -325,7 +309,6 @@ mod tests {
     fn window_rule_syncs_title_on_hide() {
         let mut config = Config::default();
         config.window_rules = vec![wrule("旧标题", 10, "app.exe", "C:\\app.exe")];
-        // 同一句柄，但标题已变化。
         let windows = vec![win("新标题", 10, "app.exe", "C:\\app.exe")];
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         assert_eq!(targets, vec![Target { hwnd: 10, pid: 10 }]);
@@ -339,7 +322,6 @@ mod tests {
     fn window_rule_reacquires_and_backfills_hwnd() {
         let mut config = Config::default();
         config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
-        // 程序重启：句柄从 10 变成 99，标题 + 路径不变。
         let windows = vec![win("微信", 99, "WeChat.exe", "C:\\WeChat.exe")];
         let (targets, outcomes) = resolve_targets(&mut config, &windows, 0);
         assert_eq!(targets, vec![Target { hwnd: 99, pid: 99 }]);
@@ -385,7 +367,6 @@ mod tests {
 
     #[test]
     fn freeze_skipped_when_process_still_has_a_visible_window() {
-        // 微信开着两个窗口，只隐藏其中一个——冻结会让另一个窗口卡死，必须跳过。
         let windows = vec![
             win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
             win_pid("文件传输助手", 11, "WeChat.exe", 500, "C:\\WeChat.exe"),
@@ -409,7 +390,6 @@ mod tests {
 
     #[test]
     fn freeze_ignores_already_invisible_windows() {
-        // 本来就不可见的后台窗口不算「还开着」，不应阻止冻结。
         let windows = vec![
             win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
             win_pid("后台窗口", 11, "WeChat.exe", 500, "C:\\WeChat.exe").with_visibility(false),
@@ -451,7 +431,6 @@ mod tests {
 
     #[test]
     fn release_pids_restores_hidden_and_frozen_windows_of_a_process() {
-        // 场景：Boss Key 把自己的配置窗口藏了并冻结了，托盘「设置」需要把它放出来。
         let mut config = Config::default();
         config.setting.hide_current = false;
         config.setting.freeze_after_hide = true;
@@ -633,7 +612,6 @@ mod tests {
 
     #[test]
     fn restore_from_snapshot_shows_windows_and_reverts_effects() {
-        // 模拟：上次崩溃前隐藏了窗口 10（已冻结+静音），窗口当前仍不可见。
         let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
         wm.hide(10);
         let mut controller = HideController::new(wm, MockEffects::default());

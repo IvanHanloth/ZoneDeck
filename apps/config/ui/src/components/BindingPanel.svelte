@@ -39,7 +39,7 @@
     selectedAvail = [];
   }
 
-  // 新正则规则预填一条「包含式」正则：勾了窗口就用它的标题 / 进程名作种子，否则给个模板。
+  // 新正则规则预填一条「包含式」正则，种子取自选中窗口。
   function addWindowRegex() {
     const seed = pickedWindows()[0];
     app.config.window_rules = [

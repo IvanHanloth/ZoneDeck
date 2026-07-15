@@ -1,14 +1,12 @@
 <script>
-  // 录制期间必须让核心先停用全局热键——否则你按下的组合键会直接触发现有热键
-  // （比如按到 Ctrl+Q 就把窗口藏了），根本录不进来。取消 / 完成 / 组件销毁后恢复。
+  // 录制热键期间暂停核心的全局热键监控，结束后恢复。
   import { onDestroy } from "svelte";
   import { comboFromEvent } from "../lib/hotkey.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
 
   let { label, value = $bindable("") } = $props();
 
-  // 每个录制器一个独立的理由（对象身份即标识）——两个录制器同时开着时，
-  // 先结束的那个不能把另一个还需要的停用给撤了。
+  // 独立理由，避免多个录制器互相撤销停用。
   const REASON = { recorder: "hotkey" };
 
   let recording = $state(false);
@@ -18,7 +16,7 @@
     e.preventDefault();
     e.stopPropagation();
     const combo = comboFromEvent(e);
-    if (!combo) return; // 只按了修饰键或不支持的键，继续等
+    if (!combo) return; // 修饰键或不支持的键，继续等待
     value = combo;
     stop();
   }

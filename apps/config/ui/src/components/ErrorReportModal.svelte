@@ -1,8 +1,5 @@
 <script>
-  // 出错弹框：Boss Key 出问题时唯一会把日志发出去的地方。
-  //
-  // 日志默认**不上报**。这里先把将要发送的内容原样摆给用户看（错误信息 + 本地日志末尾），
-  // 他点了「上报给开发者」才真的发。不点就只是个普通的错误提示。
+  // 出错弹框：日志仅在用户确认后才上报，默认不上报。
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import Modal from "./Modal.svelte";
   import { app, toast } from "../lib/state.svelte.js";
@@ -14,7 +11,7 @@
   let sending = $state(false);
   let sent = $state(false);
 
-  // 弹框一出现就把本地日志尾巴取来给用户过目——上报什么，他事先看得见。
+  // 弹框出现时取本地日志尾部供用户过目。
   $effect(() => {
     if (!report) return;
     sent = false;
@@ -65,10 +62,10 @@
       {#if report.detail}<p class="detail">{report.detail}</p>{/if}
 
       <details>
-        <summary>展开查看将要发送的内容（日志里可能含窗口标题与程序路径，请先过目）</summary>
+        <summary>展开查看将要发送的内容（日志里可能含窗口标题与程序路径，请先检查）</summary>
         <pre class="payload">{payload}</pre>
       </details>
-      <p class="hint">日志只在你点下面的按钮时才会发送，Boss Key 不会自动上报任何东西。</p>
+      <p class="hint">日志仅在点击上报后发送，不会自动上报。</p>
     </div>
 
     {#snippet footer()}

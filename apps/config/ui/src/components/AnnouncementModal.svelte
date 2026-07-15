@@ -1,5 +1,5 @@
 <script>
-  // 启动时弹出的未读公告（比「已读的那一条」更新才弹）。
+  // 启动时弹出的未读公告。
   import IconMegaphone from "~icons/lucide/megaphone";
   import Modal from "./Modal.svelte";
   import { app, markAnnouncementSeen } from "../lib/state.svelte.js";
@@ -7,8 +7,7 @@
 
   const item = $derived(app.pendingAnnouncement);
 
-  // Modal 的 open 是双向绑定的：用户按 Esc / 点遮罩关掉，也一样记为已读，
-  // 否则每次启动都拿同一条公告烦他。
+  // 关闭（含 Esc / 点遮罩）即记为已读。
   let open = $state(false);
   $effect(() => {
     open = !!item;

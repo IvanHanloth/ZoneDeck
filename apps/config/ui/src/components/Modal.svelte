@@ -9,7 +9,7 @@
   function onKey(e) {
     if (e.key === "Escape") close();
   }
-  // 只有点在遮罩本身（而非对话框内部）时才关闭，省掉对话框上的 stopPropagation 处理器。
+  // 仅点击遮罩本身时关闭。
   function onOverlayClick(e) {
     if (e.target === e.currentTarget) close();
   }

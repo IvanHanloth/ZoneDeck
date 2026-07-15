@@ -11,8 +11,7 @@ pub fn is_elevated() -> bool {
     unsafe { IsUserAnAdmin().as_bool() }
 }
 
-/// 以管理员身份（UAC 提权）启动指定程序。
-/// 返回 true 表示用户在 UAC 对话框点击了“是”，程序已启动。
+/// 以管理员身份（UAC 提权）启动指定程序；返回用户是否同意提权。
 pub fn relaunch_as_admin(exe: &Path, args: &str) -> bool {
     let file = to_wide_null(&exe.to_string_lossy());
     let params = to_wide_null(args);
@@ -40,7 +39,6 @@ mod tests {
 
     #[test]
     fn is_elevated_returns_without_panicking() {
-        // 仅验证 FFI 调用可用，不对结果做断言（取决于运行环境）。
         let _ = is_elevated();
     }
 }

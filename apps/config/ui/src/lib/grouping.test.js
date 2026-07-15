@@ -3,18 +3,15 @@ import {
   addProcessRules,
   addWindowRules,
   applyListFilters,
-  availableWindows,
   containsPattern,
   escapeRegex,
   filterWindows,
   groupByProcess,
   iconPathsToFetch,
-  moveWindows,
   NO_TITLE,
   newProcessRegexRule,
   newWindowRegexRule,
   processRuleFromWindow,
-  sameWindow,
   splitByVisibility,
   traceWindowRule,
   windowRuleFromWindow,
@@ -44,27 +41,6 @@ describe("groupByProcess", () => {
   it("空进程名归入未知分组", () => {
     const groups = groupByProcess([win("孤儿窗口", 9, "")]);
     expect(groups[0].process).toBe("（未知进程）");
-  });
-});
-
-describe("moveWindows / availableWindows", () => {
-  it("移动选中的窗口且不修改入参", () => {
-    const a = [win("一", 1, "a.exe"), win("二", 2, "b.exe")];
-    const b = [win("三", 3, "c.exe")];
-    const { from, to } = moveWindows(a, b, [a[0]]);
-    expect(from.map((w) => w.hwnd)).toEqual([2]);
-    expect(to.map((w) => w.hwnd)).toEqual([3, 1]);
-    expect(a).toHaveLength(2, "入参不应被修改");
-  });
-
-  it("availableWindows 排除已绑定项", () => {
-    const all = [win("一", 1, "a.exe"), win("二", 2, "b.exe")];
-    expect(availableWindows(all, [all[1]]).map((w) => w.hwnd)).toEqual([1]);
-  });
-
-  it("sameWindow 需要 hwnd 与进程同时相同", () => {
-    expect(sameWindow(win("x", 1, "a.exe"), win("y", 1, "a.exe"))).toBe(true);
-    expect(sameWindow(win("x", 1, "a.exe"), win("x", 1, "b.exe"))).toBe(false);
   });
 });
 

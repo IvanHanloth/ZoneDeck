@@ -3,10 +3,8 @@ import {
   CORNERS,
   CORNER_CENTER,
   buildTimeline,
-  cursorTarget,
   describeTrigger,
   enabledParts,
-  nextIndex,
 } from "./pointer.js";
 
 describe("enabledParts", () => {
@@ -45,17 +43,6 @@ describe("describeTrigger", () => {
   it("越界的连击次数被夹回 1..3", () => {
     expect(describeTrigger({ enabled: true, clicks: 0, modifiers: "" })).toBe("单击");
     expect(describeTrigger({ enabled: true, clicks: 9, modifiers: "" })).toBe("三击");
-  });
-});
-
-describe("nextIndex", () => {
-  it("环形推进", () => {
-    expect(nextIndex(3, 0)).toBe(1);
-    expect(nextIndex(3, 2)).toBe(0);
-  });
-
-  it("空列表恒为 0", () => {
-    expect(nextIndex(0, 5)).toBe(0);
   });
 });
 
@@ -108,21 +95,5 @@ describe("buildTimeline", () => {
       "bottom_right_hide",
       "bottom_right_hide",
     ]);
-  });
-});
-
-describe("cursorTarget", () => {
-  it("没有选中的角时停在屏幕中央", () => {
-    expect(cursorTarget([], 0)).toEqual(CORNER_CENTER);
-  });
-
-  it("在选中的角之间轮流停靠", () => {
-    const picked = enabledParts(CORNERS, {
-      top_right_hide: true,
-      bottom_left_hide: true,
-    });
-    expect(cursorTarget(picked, 0)).toEqual(picked[0].cursor);
-    expect(cursorTarget(picked, 1)).toEqual(picked[1].cursor);
-    expect(cursorTarget(picked, 2)).toEqual(picked[0].cursor);
   });
 });

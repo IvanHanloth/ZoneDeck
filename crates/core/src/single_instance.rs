@@ -29,8 +29,7 @@ impl SingleInstance {
         }
     }
 
-    /// 在超时时间内反复尝试获取单实例，等待上一个实例退出后成功接管。
-    /// 用于“以管理员身份重启”时新旧进程之间的互斥交接。
+    /// 在超时时间内反复尝试获取单实例，等待上一个实例退出后接管。
     pub fn acquire_waiting(name: &str, timeout: std::time::Duration) -> Self {
         let deadline = std::time::Instant::now() + timeout;
         loop {

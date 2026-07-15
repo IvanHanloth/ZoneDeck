@@ -2,8 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub const PIPE_NAME: &str = r"\\.\pipe\bosskey";
 
-/// 监控停用的看门狗时长：超过这么久没收到配置程序的心跳（重发 `SetHotkeys { enabled: false }`），
-/// 核心自动恢复监控。配置程序崩在“已停用”那一刻时，热键不至于一直失效。
+/// 监控停用的看门狗时长：超过这么久没收到心跳，核心自动恢复监控。
 pub const SUSPEND_TIMEOUT_MS: u32 = 15_000;
 /// 配置程序重发停用心跳的建议间隔，须显著小于 `SUSPEND_TIMEOUT_MS`。
 pub const SUSPEND_HEARTBEAT_MS: u32 = 4_000;
@@ -22,13 +21,7 @@ pub enum Command {
     SetAutostart {
         enabled: bool,
     },
-    /// 临时停用 / 恢复全局热键与鼠标监控。配置界面录制热键时必须先停用，
-    /// 否则按下的组合键会直接触发现有热键（比如把窗口藏了）。
-    ///
-    /// 停用是**有状态**的：核心会一直记着，直到收到 `enabled: true`，
-    /// 期间的 `ReloadConfig`（保存配置时发的）不会把监控复活。
-    /// 配置程序须在停用期间持续重发本命令做心跳，否则核心会在
-    /// `SUSPEND_TIMEOUT` 后自行恢复监控（防止配置程序崩溃导致热键永久失效）。
+    /// 临时停用 / 恢复全局热键与鼠标监控。停用有状态，须持续心跳续期。
     SetHotkeys {
         enabled: bool,
     },
@@ -39,16 +32,21 @@ pub enum Command {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Response {
     Ok,
-    State { hidden: bool },
-    Elevated { elevated: bool },
-    /// `monitoring`：核心此刻是否真的在监听热键与鼠标（被 `SetHotkeys` 停用时为 false）。
-    /// 配置界面的状态栏据此显示真实状态，而不是自己猜。
+    State {
+        hidden: bool,
+    },
+    Elevated {
+        elevated: bool,
+    },
+    /// `monitoring`：核心是否正在监听热键与鼠标（被 `SetHotkeys` 停用时为 false）。
     Status {
         hidden: bool,
         elevated: bool,
         monitoring: bool,
     },
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 impl Command {
@@ -71,8 +69,7 @@ impl Response {
     }
 }
 
-/// 配置程序连接常驻核心命名管道服务端的客户端。
-/// Windows 命名管道的客户端等价于按路径打开文件，因此这里仅用标准库实现，保持跨平台可编译。
+/// 连接常驻核心命名管道服务端的客户端。
 pub struct PipeClient {
     pipe_name: String,
     connect_attempts: u32,
@@ -93,7 +90,6 @@ impl PipeClient {
     }
 
     /// 快速失败模式：只尝试连接一次，不重试。
-    /// 用于状态轮询——核心未运行时立即返回错误，而不是白等 1 秒。
     pub fn fast(mut self) -> Self {
         self.connect_attempts = 1;
         self

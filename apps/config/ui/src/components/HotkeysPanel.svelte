@@ -11,13 +11,10 @@
 
   const s = $derived(app.config.setting);
 
-  // 鼠标只要进了这一页的设置区，就让核心先停手：这里的每一项——按键、连击次数、
-  // 屏幕四角——都是「鼠标动作即触发」，边设置边触发就会把设置窗口自己藏掉
-  // （刚把左键设成双击，随手一双击，窗口没了）。离开该区域再恢复。
+  // 鼠标进入本页设置区时暂停核心监控，离开时恢复。
   const REASON = { area: "hotkeys-panel" };
 
-  // 窗口失焦时必须恢复：用户可能没动鼠标就 Alt+Tab 走了，pointerleave 不会触发，
-  // 那样热键会一直停在暂停态，人在别处按热键完全没反应。回来鼠标一动会重新暂停。
+  // 窗口失焦时恢复监控（此时不会触发 pointerleave）。
   onMount(() => {
     const onBlur = () => resumeMonitoring(REASON);
     window.addEventListener("blur", onBlur);
@@ -98,11 +95,6 @@
 </div>
 
 <style>
-  .card-hint {
-    font-size: 12.5px;
-    color: var(--muted);
-  }
-  /* 数值输入（连击判定窗口 / 空闲时长）统一长相 */
   .num-ctl {
     display: flex;
     align-items: center;

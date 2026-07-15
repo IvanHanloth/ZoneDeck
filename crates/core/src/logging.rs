@@ -1,11 +1,6 @@
 //! 分级文件日志 + panic 钩子。
 //!
-//! 设计目标：
-//! - 常驻核心崩溃后能从日志定位原因；
-//! - **按天切割**：日志写入专门目录，文件名 `BossKey-YYYY-MM-DD.log`；
-//! - **按天保留**：启动时清理超过保留天数的旧日志（`0` 天表示关闭日志）；
-//! - **分级**：生产（release）构建只记录 INFO/WARN/ERROR，DEBUG 仅在开发构建输出；
-//! - 不引入外部日志框架，保持核心二进制极小。
+//! 按天切割（`BossKey-YYYY-MM-DD.log`）、按天保留、分级输出（release 丢弃 DEBUG）。
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -78,8 +73,7 @@ impl Logger {
         }
     }
 
-    /// 启动时清理超过保留天数的旧日志文件。今天算第 0 天，`retention_days`
-    /// 天以前（含）的文件删除；`retention_days == 0` 时不建目录、不清理。
+    /// 启动时清理超过保留天数的旧日志文件；`retention_days == 0` 时不清理。
     pub fn cleanup(&self) {
         if self.retention_days == 0 {
             return;
@@ -155,8 +149,7 @@ fn format_timestamp(
 
 static GLOBAL: OnceLock<Logger> = OnceLock::new();
 
-/// 初始化全局日志。`dir` 通常为 exe 同目录下的 `logs`。
-/// `retention_days == 0` 表示关闭日志（不初始化、后续写入均为 no-op）。
+/// 初始化全局日志；`retention_days == 0` 表示关闭日志。
 pub fn init(dir: PathBuf, retention_days: u32) {
     if retention_days == 0 {
         return;
@@ -208,8 +201,6 @@ fn format_panic(message: &str, location: Option<&str>) -> String {
 }
 
 /// 安装 panic 钩子：崩溃信息写入全局日志后再走默认钩子。
-/// release 下 `panic = "abort"`，钩子执行完后进程以非零码退出，
-/// 由计划任务的失败重启（RestartOnFailure）负责拉活。
 pub fn install_panic_hook() {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -274,7 +265,6 @@ mod tests {
     #[test]
     fn expiry_respects_retention_window() {
         let today = days_from_civil(2026, 7, 14);
-        // 7 天保留：今天及往前 6 天保留，第 7 天及更早过期。
         assert!(
             !is_expired("BossKey-2026-07-14.log", today, 7),
             "今天不应过期"
@@ -301,7 +291,6 @@ mod tests {
         logger.log(Level::Info, "第一条");
         logger.log(Level::Error, "第二条");
 
-        // 目录下应只有一个当天日志文件。
         let logs: Vec<_> = fs::read_dir(&dir)
             .unwrap()
             .flatten()
@@ -317,7 +306,6 @@ mod tests {
     fn cleanup_removes_only_expired_logs() {
         let dir = temp_dir();
         let logger = Logger::new(dir.clone(), 7);
-        // 造三份日志：很旧、边界内、以及一个非日志文件。
         fs::write(dir.join("BossKey-2000-01-01.log"), b"old").unwrap();
         let now = unsafe { GetLocalTime() };
         let recent = log_file_name(now.wYear, now.wMonth, now.wDay);
@@ -345,7 +333,6 @@ mod tests {
     fn init_with_zero_retention_disables_logging() {
         let dir = temp_dir();
         init(dir.join("logs"), 0);
-        // 未创建目录、未初始化全局 logger（不影响其它测试，因为路径独立）。
         assert!(!dir.join("logs").exists(), "关闭日志时不应创建目录");
     }
 
@@ -360,7 +347,6 @@ mod tests {
 
     #[test]
     fn rotated_files_stay_within_directory() {
-        // 冒烟：确保写入路径确实落在给定目录内。
         let dir = temp_dir();
         let logger = Logger::new(dir.clone(), 7);
         logger.log(Level::Debug, "调试信息");

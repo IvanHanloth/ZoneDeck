@@ -18,14 +18,8 @@ use crate::util::to_wide_null;
 
 const PIPE_BUF_SIZE: u32 = 4096;
 
-/// 命名管道安全描述符（SDDL）：
-/// - `D:(A;;GRGW;;;WD)`：允许所有人（Everyone）读写管道；
-/// - `S:(ML;;NW;;;LW)`：把对象完整性标签设为 **Low**。
-///
-/// 关键作用：当核心以**管理员（高完整性）**运行时，它创建的管道对象默认会继承
-/// High 完整性标签，中完整性的**普通配置程序**受 NoWriteUp 规则挡住而无法连接
-/// （表现为「检测不到核心状态」）。把标签降到 Low 后，中/高完整性进程都在其上，
-/// 均可读写，从而让普通配置程序能与管理员核心通信。
+/// 命名管道安全描述符（SDDL）：Everyone 可读写，完整性标签设为 Low，
+/// 使普通配置程序能连上以管理员运行的核心。
 const PIPE_SDDL: &str = "D:(A;;GRGW;;;WD)S:(ML;;NW;;;LW)";
 
 /// 持有由 SDDL 解析出的安全描述符，并在析构时释放其内存（`LocalFree`）。
@@ -88,7 +82,7 @@ where
     F: Fn(Command) -> Response,
 {
     let wide_name = to_wide_null(pipe_name);
-    // 安全描述符构造一次、供所有管道实例复用。失败时回退默认安全性（同完整性仍可用）。
+    // 安全描述符构造一次，供所有管道实例复用。
     let security = PipeSecurity::new();
     if security.is_none() {
         crate::logging::warn("命名管道安全描述符构造失败，管理员核心下普通配置程序可能无法连接");
@@ -199,7 +193,6 @@ mod tests {
             sec.sa.nLength as usize,
             std::mem::size_of::<SECURITY_ATTRIBUTES>()
         );
-        // 析构时应 LocalFree，不 panic。
     }
 
     #[test]

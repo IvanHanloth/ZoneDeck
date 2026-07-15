@@ -41,7 +41,7 @@ export function savePreference(preference) {
   try {
     localStorage.setItem(STORAGE_KEY, preference);
   } catch {
-    /* 隐私模式等场景下忽略 */
+    /* 忽略 */
   }
 }
 

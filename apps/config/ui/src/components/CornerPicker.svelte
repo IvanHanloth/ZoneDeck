@@ -71,10 +71,7 @@
       <clipPath id="screen-clip">
         <rect x="8" y="8" width="304" height="168" rx="12" ry="12" />
       </clipPath>
-      <!--
-        每个角一对渐变（选中蓝 / 未选中灰），球心是该角圆弧的圆心、半径 R√2 直抵方块的尖角。
-        圆角矩形之内（offset ≤ 0.707）一片纯透明，出了圆弧才从透明慢慢浓起来。
-      -->
+      <!-- 每个角一对渐变（选中 / 未选中）。 -->
       {#each CORNERS as corner (corner.key)}
         {@const c = ZONES[corner.key].c}
         {#each ["on", "off"] as state (state)}
@@ -138,7 +135,6 @@
     <rect class="stand" x="140" y="176" width="40" height="16" />
     <rect class="stand" x="112" y="192" width="96" height="10" rx="5" ry="5" />
 
-    <!-- fast 帧是「甩」，位移动画又快又冲 -->
     <g
       class="cursor"
       class:idle={picked.length === 0}
@@ -184,7 +180,6 @@
     fill: var(--border);
   }
 
-  /* 圆角矩形之内整片全透明（s0 == s1）→ 出了圆弧也从透明起步，到角上的尖角才最浓（s3） */
   .s0.off,
   .s1.off {
     stop-color: var(--muted);
@@ -217,7 +212,6 @@
     outline: none;
     transition: opacity 0.18s;
   }
-  /* 整个象限都能点，但只有角上那块方块画渐变 */
   .hit {
     fill: transparent;
     pointer-events: all;
@@ -225,7 +219,6 @@
   .zone:hover {
     opacity: 0.75;
   }
-  /* 正在演示的角落加亮一档，和配文对得上 */
   .zone.on.active {
     opacity: 1;
     filter: brightness(1.15);
@@ -237,9 +230,9 @@
   }
 
   .win {
-    pointer-events: none; /* 别挡住底下的角落热区 */
+    pointer-events: none;
     transform-box: view-box;
-    transform-origin: 160px 130px; /* 窗口底边，收起时往下缩 */
+    transform-origin: 160px 130px;
     transition:
       transform 0.5s ease-in,
       opacity 0.45s ease-in;
@@ -269,7 +262,6 @@
     translate: var(--x) var(--y);
     transition: translate 0.75s cubic-bezier(0.4, 0, 0.2, 1);
   }
-  /* 「快速移动」：一记加速冲进角落，和核心那边的速度门槛对得上 */
   .cursor.fast {
     transition:
       translate 0.22s cubic-bezier(0.7, 0, 0.9, 0.3),

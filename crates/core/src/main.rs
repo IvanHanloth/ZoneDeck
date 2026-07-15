@@ -1,6 +1,4 @@
-// release 下以「窗口子系统」编译：核心是无界面的常驻 agent，不应弹出控制台窗口，
-// 也不应因启动它的进程（如配置程序）关闭控制台而被连带终止。
-// debug 保留控制台，便于开发时直接看 stdout/eprintln。
+// release 下以窗口子系统编译（无控制台）；debug 保留控制台便于开发。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::path::PathBuf;
@@ -24,9 +22,7 @@ fn config_path() -> PathBuf {
 }
 
 fn main() {
-    // 日志与 panic 钩子最先就位：崩溃信息落盘后进程以非零码退出，
-    // 由计划任务的 RestartOnFailure 负责重新拉起。
-    // 日志保留天数取自配置（0 = 关闭日志）；此处轻量读取一次，agent 内再正式加载。
+    // 日志与 panic 钩子最先就位。日志保留天数取自配置（0 = 关闭日志）。
     let retention_days = bosskey_common::Config::load(&config_path())
         .map(|c| c.setting.log_retention_days)
         .unwrap_or(bosskey_common::config::DEFAULT_LOG_RETENTION_DAYS);

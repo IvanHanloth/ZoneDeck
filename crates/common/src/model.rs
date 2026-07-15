@@ -37,14 +37,12 @@ pub struct WindowInfo {
     pub pid: u32,
     #[serde(default, deserialize_with = "de_null_default")]
     pub path: String,
-    /// 枚举时该窗口当前是否可见（`IsWindowVisible`）。仅用于配置界面按
-    /// 可见/后台分组展示，**不参与窗口身份判定**（见下方手写的 `PartialEq`）。
+    /// 枚举时该窗口是否可见；不参与窗口身份判定。
     #[serde(default = "default_visible")]
     pub visible: bool,
 }
 
-/// 窗口身份只由标题/句柄/进程/PID/路径决定；`visible` 是运行时状态，
-/// 一个被隐藏（`visible=false`）的窗口与其绑定记录（`visible=true`）仍应视为同一窗口。
+/// 窗口身份只由标题/句柄/进程/PID/路径决定，不含 `visible`。
 impl PartialEq for WindowInfo {
     fn eq(&self, other: &Self) -> bool {
         self.title == other.title
@@ -82,9 +80,7 @@ impl WindowInfo {
     }
 }
 
-/// 「窗口」规则（细粒度）：按句柄 + 标题精确锁定单个窗口，句柄失效时按
-/// 「标题 + 进程路径」追溯回填。`regex` 为 `Some` 时升级为高级模式——按标题
-/// 正则命中（可命中多个窗口），此时忽略 hwnd/title 精确匹配。
+/// 「窗口」规则（细粒度）：按句柄 + 标题锁定单个窗口；`regex` 为 `Some` 时按标题正则命中。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WindowRule {
     #[serde(default = "default_title", deserialize_with = "de_title")]
@@ -100,15 +96,14 @@ pub struct WindowRule {
     /// 高级模式：标题正则。`None` 表示初级精确规则。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub regex: Option<String>,
-    /// 匹配范围：是否把无标题窗口纳入正则匹配。仅对正则规则生效。
+    /// 是否把无标题窗口纳入正则匹配。
     #[serde(default)]
     pub include_untitled: bool,
-    /// 匹配范围：是否把后台（当前不可见）窗口纳入正则匹配。仅对正则规则生效。
+    /// 是否把后台窗口纳入正则匹配。
     #[serde(default)]
     pub include_background: bool,
 }
 
-/// 窗口规则身份不含 `regex` 之外的运行时状态；这里直接派生结构相等即可。
 impl PartialEq for WindowRule {
     fn eq(&self, other: &Self) -> bool {
         self.title == other.title
@@ -160,7 +155,6 @@ impl WindowRule {
 }
 
 /// 「进程」规则（粗粒度）：按可执行文件路径隐藏该程序的所有窗口。
-/// `regex` 为 `Some` 时按路径正则命中。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessRule {
     #[serde(default, deserialize_with = "de_null_default")]
@@ -170,15 +164,13 @@ pub struct ProcessRule {
     /// 高级模式：正则（作用于路径或文件名，取决于 `by_name`）。`None` 表示初级精确规则。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub regex: Option<String>,
-    /// 只按可执行文件名匹配（忽略路径），可命中同名程序的任意安装位置。
+    /// 只按可执行文件名匹配，忽略路径。
     #[serde(default)]
     pub by_name: bool,
-    /// 匹配范围：是否把无标题窗口纳入。进程规则默认纳入——「隐藏整个程序」
-    /// 通常也要连同它的无标题窗口一起藏。
+    /// 是否把无标题窗口纳入；进程规则默认纳入。
     #[serde(default = "default_bool_true")]
     pub include_untitled: bool,
-    /// 匹配范围：是否把后台（当前不可见）窗口纳入。默认不纳入，避免恢复时
-    /// 把本来就不可见的窗口“显示”出来。
+    /// 是否把后台窗口纳入；默认不纳入。
     #[serde(default)]
     pub include_background: bool,
 }

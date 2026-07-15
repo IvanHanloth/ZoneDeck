@@ -1,5 +1,5 @@
 <script>
-  // 和 HotkeyRecorder 的区别是这里没有主键——主键是鼠标按钮本身。
+  // 只录制修饰键（主键是鼠标按钮本身）。
   import { onDestroy } from "svelte";
   import { modifiersFromEvent } from "../lib/hotkey.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
@@ -17,7 +17,7 @@
     if (e.key === "Escape") return stop();
     e.preventDefault();
     const mods = modifiersFromEvent(e);
-    // 取按下过的最长组合：按 Ctrl 再加 Shift 时不该被后一次事件覆盖成更短的
+    // 取按下过的最长组合。
     if (mods.split("+").filter(Boolean).length >= held.split("+").filter(Boolean).length) {
       held = mods;
     }

@@ -1,7 +1,6 @@
-// 鼠标 / 屏幕四角图示的元数据：把「配置字段 ↔ 图形部件」的对应关系集中在这里，
-// 组件只负责画图，选中状态一律由 setting 里的布尔字段驱动。
+// 鼠标 / 屏幕四角图示的元数据。
 
-// 五颗键对应 setting.mouse 里的同名字段，每颗键各有 { enabled, clicks, modifiers }。
+// 五颗键，对应 setting.mouse 的同名字段。
 export const MOUSE_PARTS = [
   { key: "left", label: "左键" },
   { key: "middle", label: "中键（滚轮）" },
@@ -21,7 +20,7 @@ export function describeTrigger(button) {
   return button.modifiers ? `${button.modifiers} + ${clicks}` : clicks;
 }
 
-// cursor 为该角落在四角图示 viewBox(0 0 320 210) 中的光标停靠点。
+// cursor：该角在四角图示 viewBox(0 0 320 210) 中的光标停靠点。
 export const CORNERS = [
   { key: "top_left_hide", label: "左上角", cursor: [26, 26] },
   { key: "top_right_hide", label: "右上角", cursor: [294, 26] },
@@ -36,26 +35,7 @@ export function enabledParts(items, setting) {
   return items.filter((it) => Boolean(setting?.[it.key]));
 }
 
-/** 环形推进下标；列表为空时恒为 0。 */
-export function nextIndex(length, index) {
-  if (length <= 0) return 0;
-  return (index + 1) % length;
-}
-
-/** 光标该停在哪儿：有选中的角就轮流停靠，否则停在屏幕中央。 */
-export function cursorTarget(corners, index) {
-  if (corners.length === 0) return CORNER_CENTER;
-  return corners[index % corners.length].cursor;
-}
-
-/**
- * 四角演示的时间轴：按 CORNERS 的顺序（左上→右上→左下→右下）逐个角落演示，
- * 每个角先演一遍「移动过去 → 窗口隐藏」，再按 allowRestore 演恢复的方式。
- * 每帧描述某一瞬间的画面：光标停在哪、骨架屏窗口是否可见、往哪个角收起、配文是什么。
- *
- * fastOnly 对应核心的「仅快速移动才触发」：为真时冲向角落的那两帧会标 fast，
- * 界面据此把光标的位移动画改成一记快甩，配文也说「快速甩到」。
- */
+/** 构造四角演示的时间轴帧序列。 */
 export function buildTimeline(corners, allowRestore, fastOnly = true) {
   const frames = [];
   const reach = fastOnly ? "快速移动到" : "把鼠标移动到";

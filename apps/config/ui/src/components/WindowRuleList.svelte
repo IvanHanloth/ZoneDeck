@@ -147,8 +147,6 @@
     background: var(--accent);
     border-color: var(--accent);
   }
-  /* 选择器要压过 .mini:hover:not(:disabled)，否则主按钮悬浮时会退回半透明的 --hover 底色，
-     白字落在近白的底上直接糊掉。 */
   .mini.primary:hover:not(:disabled) {
     color: #fff;
     background: var(--accent-strong);
