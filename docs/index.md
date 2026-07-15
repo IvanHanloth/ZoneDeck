@@ -4,8 +4,8 @@ layout: home
 
 hero:
   name: "Boss Key"
-  text: "一键隐藏窗口的摸鱼神器"
-  tagline: 老板来了？快用 Boss Key 老板键一键隐藏、静音、冻结当前窗口。后台常驻仅约 1 MB 内存，超高自定义度。
+  text: "快速隐藏，只需一键"
+  tagline: 老板来了？快用 Boss Key 老板键一键隐藏、静音、冻结窗口，摸鱼必备神器
   image:
     src: /static/icon.png
     alt: Boss Key
