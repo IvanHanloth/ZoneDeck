@@ -3,6 +3,7 @@ name: Build & Test
 on:
   pull_request:
     branches: ["**"]
+    paths-ignore: ["**/docs/**", "**/.github/workflows/deploy-docs.yml"] # 文档部署不需要跑测试
   push:
     tags-ignore: ["**"] # tag 由 release.yml 负责，别重复跑
     paths-ignore: ["**/docs/**", "**/.github/workflows/deploy-docs.yml"] # 文档部署不需要跑测试
