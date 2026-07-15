@@ -75,7 +75,7 @@ export function processRuleFromWindow(w) {
     process: w.process,
     path: w.path,
     by_name: false,
-    include_untitled: true,
+    include_untitled: false,
     include_background: false,
   };
 }
@@ -102,7 +102,7 @@ export function newProcessRegexRule(seedProcess) {
     path: "",
     regex: containsPattern(seedProcess || "程序名.exe"),
     by_name: false,
-    include_untitled: true,
+    include_untitled: false,
     include_background: false,
   };
 }

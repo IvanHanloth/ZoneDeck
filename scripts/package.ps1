@@ -54,9 +54,10 @@ $outDir = Join-Path $root "dist"
 if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-# 核心 exe 命名为 "Boss Key.exe"（承担主名称）；配置程序（带前端）命名为 config.exe
 Copy-Item "target\release\core.exe" (Join-Path $outDir "Boss Key.exe")
 Copy-Item "target\release\bosskey-config.exe" (Join-Path $outDir "config.exe")
+Copy-Item "LICENSE" (Join-Path $outDir "LICENSE")
+Copy-Item "README.md" (Join-Path $outDir "README.md")
 
 Write-Host "==> 便携版组装完成：$outDir" -ForegroundColor Green
 Get-ChildItem $outDir | Select-Object Name, @{Name = "Size"; Expression = { "{0:N0} KB" -f ($_.Length / 1KB) } } | Format-Table -AutoSize
