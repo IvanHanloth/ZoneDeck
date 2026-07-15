@@ -34,9 +34,7 @@ impl Effects for WinEffects {
                     logging::info(&format!("增强冻结成功 (pid={pid})"));
                     return;
                 }
-                Err(e) => logging::warn(&format!(
-                    "增强冻结失败，回退普通冻结 (pid={pid}): {e}"
-                )),
+                Err(e) => logging::warn(&format!("增强冻结失败，回退普通冻结 (pid={pid}): {e}")),
             }
         }
         match freeze::suspend_process(pid) {
@@ -52,9 +50,7 @@ impl Effects for WinEffects {
                     logging::info(&format!("增强解冻成功 (pid={pid})"));
                     return;
                 }
-                Err(e) => logging::warn(&format!(
-                    "增强解冻失败，回退普通解冻 (pid={pid}): {e}"
-                )),
+                Err(e) => logging::warn(&format!("增强解冻失败，回退普通解冻 (pid={pid}): {e}")),
             }
         }
         match freeze::resume_process(pid) {

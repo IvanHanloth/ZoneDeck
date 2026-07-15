@@ -43,6 +43,9 @@ mod tests {
     #[test]
     fn from_ansi_decodes_ascii_and_empty() {
         assert_eq!(from_ansi(b""), "");
-        assert_eq!(from_ansi(b"Unable to suspend process 42:"), "Unable to suspend process 42:");
+        assert_eq!(
+            from_ansi(b"Unable to suspend process 42:"),
+            "Unable to suspend process 42:"
+        );
     }
 }
