@@ -17,3 +17,6 @@ pub const NO_TITLE: &str = "无标题窗口";
 
 /// 命令行参数：让配置程序启动后直达「窗口恢复工具」（核心托盘菜单使用）。
 pub const ARG_RESTORE: &str = "restore";
+
+/// 命令行参数：让配置程序启动后直达「关于」页（核心托盘菜单使用）。
+pub const ARG_ABOUT: &str = "about";

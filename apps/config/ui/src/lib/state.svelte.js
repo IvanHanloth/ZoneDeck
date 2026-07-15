@@ -95,6 +95,21 @@ export function openRestoreTool() {
   app.restoreOpen = true;
 }
 
+/** 重新检测程序目录下的 pssuspend64.exe（放入文件后无需重启即可点亮增强冻结）。 */
+export async function refreshPssuspend() {
+  try {
+    app.pssuspend = !!(await invoke("pssuspend_available"));
+    toast(app.pssuspend ? "已检测到 pssuspend64.exe" : "未检测到 pssuspend64.exe", !app.pssuspend);
+  } catch (err) {
+    toast("检测失败：" + err, true);
+  }
+}
+
+/** 切到「关于与反馈」分页（供托盘直达使用）。 */
+export function openAboutTab() {
+  app.tab = "about";
+}
+
 export const toastState = $state({ message: "", error: false, visible: false });
 let toastTimer = null;
 

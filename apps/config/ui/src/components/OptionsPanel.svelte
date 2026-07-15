@@ -1,9 +1,18 @@
 <script>
   import SettingRow from "./SettingRow.svelte";
   import Toggle from "./Toggle.svelte";
-  import { app, openRestoreTool, restartCore, startCore, setAutostart } from "../lib/state.svelte.js";
+  import { app, openRestoreTool, restartCore, startCore, setAutostart, refreshPssuspend, toast } from "../lib/state.svelte.js";
+  import { openExternal } from "../lib/verhub.js";
 
   let elevating = $state(false);
+
+  async function openLink(url) {
+    try {
+      await openExternal(url);
+    } catch (err) {
+      toast("打开链接失败：" + err, true);
+    }
+  }
 
   async function elevate() {
     elevating = true;
@@ -70,10 +79,17 @@
         />
       {/snippet}
     </SettingRow>
+    <SettingRow
+      label="冻结完整进程（Beta）"
+      description="递归冻结命中程序的整棵子进程树，冻结更彻底；对普通与增强冻结均生效。可能影响这些子进程的后台任务"
+    >
+      {#snippet control()}<Toggle bind:checked={s.freeze_whole_tree} />{/snippet}
+    </SettingRow>
     <div class="note">
       增强冻结需下载
-      <a href="https://download.sysinternals.com/files/PSTools.zip" target="_blank" rel="noreferrer">PSTools</a>
+      <button class="link" onclick={() => openLink("https://download.sysinternals.com/files/PSTools.zip")}>PSTools</button>
       并将 pssuspend64.exe 放入程序目录，且核心以管理员身份运行。
+      <button class="link" onclick={refreshPssuspend}>重新检测</button>
     </div>
   </section>
 
@@ -149,6 +165,17 @@
     color: var(--muted);
     line-height: 1.6;
     border-top: 1px solid var(--border);
+  }
+  .note .link {
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+  .note .link:hover {
+    text-decoration: underline;
   }
   .perm-ctl {
     display: flex;

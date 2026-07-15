@@ -20,8 +20,8 @@ pub enum FreezeError {
     NtFailed(i32),
     #[error("未找到 pssuspend64.exe")]
     PssuspendMissing,
-    #[error("pssuspend64 执行失败")]
-    PssuspendFailed,
+    #[error("pssuspend64 执行失败: {0}")]
+    PssuspendFailed(String),
 }
 
 fn resolve(name: PCSTR) -> Option<NtProc> {
@@ -66,6 +66,36 @@ pub fn pssuspend_available(exe_dir: &Path) -> bool {
     exe_dir.join(PSSUSPEND_EXE).exists()
 }
 
+/// 枚举系统全部进程，返回 `(pid, 父 pid)` 列表。用于把冻结目标展开到整棵子进程树。
+/// 失败（快照打不开）时返回空表，调用方据此退化为「只冻结目标自身」。
+pub fn process_tree() -> Vec<(u32, u32)> {
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+        TH32CS_SNAPPROCESS,
+    };
+
+    let mut edges = Vec::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return edges;
+        };
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                edges.push((entry.th32ProcessID, entry.th32ParentProcessID));
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    edges
+}
+
 fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -74,17 +104,28 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if !exe.exists() {
         return Err(FreezeError::PssuspendMissing);
     }
-    let ok = std::process::Command::new(exe)
-        .args(args)
+    // `-accepteula` 必不可少：首次运行若未接受 EULA，pssuspend 会弹出许可
+    // 对话框并阻塞/失败（并写入 HKCU\Software\Sysinternals\PsSuspend）。
+    // 缺了它，增强冻结在没接受过 EULA 的机器上永远失败。旗标须在 PID 之前。
+    let output = std::process::Command::new(exe)
+        .arg("-accepteula")
         .arg("-nobanner")
+        .args(args)
         .creation_flags(CREATE_NO_WINDOW)
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false);
-    if ok {
+        .map_err(|e| FreezeError::PssuspendFailed(format!("无法启动进程: {e}")))?;
+
+    if output.status.success() {
         Ok(())
     } else {
-        Err(FreezeError::PssuspendFailed)
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let detail = stderr.trim();
+        let detail = if detail.is_empty() {
+            format!("退出码 {}", output.status)
+        } else {
+            format!("退出码 {}，{detail}", output.status)
+        };
+        Err(FreezeError::PssuspendFailed(detail))
     }
 }
 

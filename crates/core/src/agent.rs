@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
 use bosskey_common::ipc::{Command, Response};
-use bosskey_common::{ARG_RESTORE, Config};
+use bosskey_common::{ARG_ABOUT, ARG_RESTORE, Config};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -21,7 +21,9 @@ use windows::core::{PCWSTR, w};
 
 use crate::effects::WinEffects;
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
-use crate::hide::{HideController, RuleOutcome, freezable_pids, resolve_targets};
+use crate::hide::{
+    HideController, RuleOutcome, expand_descendants, freezable_pids, resolve_targets,
+};
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
@@ -39,6 +41,7 @@ const MENU_TOGGLE: usize = 1002;
 const MENU_QUIT: usize = 1003;
 const MENU_AUTOSTART: usize = 1004;
 const MENU_RESTORE: usize = 1005;
+const MENU_ABOUT: usize = 1006;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
 const AUTO_HIDE_TIMER_ID: usize = 11;
@@ -169,9 +172,15 @@ impl AgentState {
         let foreground = self.controller.foreground();
         let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
         let freezable = freezable_pids(&targets, &windows);
+        // 「冻结完整进程」：把可冻结集展开到整棵子进程树。
+        let freeze_set = if self.config.setting.freeze_whole_tree {
+            expand_descendants(&freezable, &crate::freeze::process_tree())
+        } else {
+            freezable
+        };
         log_resolution(&self.config, &outcomes, &targets);
         self.controller
-            .apply_hide(&self.config.setting, &targets, &freezable);
+            .apply_hide(&self.config.setting, &targets, &freeze_set);
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_hide {
@@ -397,6 +406,7 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
         let _ = AppendMenuW(menu, MF_STRING, MENU_TOGGLE, toggle_label);
         let _ = AppendMenuW(menu, MF_STRING, MENU_RESTORE, w!("窗口恢复工具"));
         let _ = AppendMenuW(menu, autostart_flags, MENU_AUTOSTART, w!("开机自启"));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_ABOUT, w!("关于"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, MENU_QUIT, w!("退出"));
 
@@ -554,6 +564,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             match wparam.0 & 0xFFFF {
                 MENU_SETTINGS => launch_settings(state, None),
                 MENU_RESTORE => launch_settings(state, Some(ARG_RESTORE)),
+                MENU_ABOUT => launch_settings(state, Some(ARG_ABOUT)),
                 MENU_TOGGLE => state.apply_toggle(),
                 MENU_AUTOSTART => toggle_autostart(state),
                 MENU_QUIT => quit(state, hwnd),

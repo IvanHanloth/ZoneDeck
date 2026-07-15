@@ -1,6 +1,6 @@
 use windows::Win32::Media::Audio::{
-    IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator, ISimpleAudioVolume,
-    MMDeviceEnumerator, eConsole, eRender,
+    AudioSessionStateActive, IAudioSessionControl2, IAudioSessionManager2, IMMDeviceEnumerator,
+    ISimpleAudioVolume, MMDeviceEnumerator, eConsole, eRender,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize,
@@ -60,6 +60,41 @@ unsafe fn mute_matching_sessions(pid: u32, mute: bool) -> Result<()> {
     }
 }
 
+/// 默认播放设备上是否有音频会话正处于「活动播放」状态。
+///
+/// 用于隐藏前判断当前是否真的有音视频在播放：媒体「播放/暂停」是切换键，
+/// 若此刻没有东西在播放却发送它，反而会把静止的播放器切成播放。
+pub fn is_audio_playing() -> bool {
+    unsafe {
+        let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
+        let should_uninit = hr.is_ok();
+        let playing = any_active_session().unwrap_or(false);
+        if should_uninit {
+            CoUninitialize();
+        }
+        playing
+    }
+}
+
+unsafe fn any_active_session() -> Result<bool> {
+    unsafe {
+        let enumerator: IMMDeviceEnumerator =
+            CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL)?;
+        let device = enumerator.GetDefaultAudioEndpoint(eRender, eConsole)?;
+        let manager: IAudioSessionManager2 = device.Activate(CLSCTX_ALL, None)?;
+        let sessions = manager.GetSessionEnumerator()?;
+        let count = sessions.GetCount()?;
+
+        for i in 0..count {
+            let control = sessions.GetSession(i)?;
+            if control.GetState()? == AudioSessionStateActive {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -74,5 +109,11 @@ mod tests {
     #[test]
     fn set_mute_on_zero_pid_returns_immediately() {
         set_mute(0, true);
+    }
+
+    #[test]
+    fn is_audio_playing_does_not_panic() {
+        // 环境不确定，只验证能安全求值（无音频会话时应为 false）。
+        let _ = is_audio_playing();
     }
 }

@@ -132,6 +132,74 @@ async fn show_windows(hwnds: Vec<i64>) {
     .await
 }
 
+/// 隐藏指定窗口（窗口恢复工具）：直接对选中的句柄隐藏。
+#[tauri::command]
+async fn hide_windows(hwnds: Vec<i64>) {
+    blocking(move || {
+        use bosskey_core::platform::WindowManager;
+        let mgr = bosskey_core::platform::manager();
+        for h in hwnds {
+            mgr.hide(h);
+        }
+    })
+    .await
+}
+
+/// 冻结指定进程（窗口恢复工具）。`whole_tree` 为真时先展开为整棵子进程树；
+/// `enhanced` 为真且 pssuspend64.exe 可用时走增强冻结，否则普通冻结。尽力而为，
+/// 失败个数汇总到错误信息。直接操作，不经核心的隐藏状态跟踪。
+#[tauri::command]
+async fn freeze_pids(pids: Vec<u32>, enhanced: bool, whole_tree: bool) -> Result<(), String> {
+    run_freeze(pids, enhanced, whole_tree, true).await
+}
+
+/// 解冻指定进程（窗口恢复工具）。参数含义同 [`freeze_pids`]。
+#[tauri::command]
+async fn resume_pids(pids: Vec<u32>, enhanced: bool, whole_tree: bool) -> Result<(), String> {
+    run_freeze(pids, enhanced, whole_tree, false).await
+}
+
+/// freeze_pids / resume_pids 的公共实现：`suspend=true` 冻结，否则解冻。
+async fn run_freeze(
+    pids: Vec<u32>,
+    enhanced: bool,
+    whole_tree: bool,
+    suspend: bool,
+) -> Result<(), String> {
+    blocking(move || {
+        use bosskey_core::freeze;
+        let dir = exe_dir();
+        let use_enhanced = enhanced && freeze::pssuspend_available(&dir);
+        let targets = if whole_tree {
+            bosskey_core::hide::expand_descendants(&pids, &freeze::process_tree())
+        } else {
+            pids
+        };
+        let mut failed = 0usize;
+        for pid in &targets {
+            if *pid == 0 {
+                continue;
+            }
+            let result = match (suspend, use_enhanced) {
+                (true, true) => freeze::suspend_enhanced(&dir, *pid),
+                (true, false) => freeze::suspend_process(*pid),
+                (false, true) => freeze::resume_enhanced(&dir, *pid),
+                (false, false) => freeze::resume_process(*pid),
+            };
+            if result.is_err() {
+                failed += 1;
+            }
+        }
+        if failed == 0 {
+            Ok(())
+        } else {
+            let action = if suspend { "冻结" } else { "解冻" };
+            Err(format!("{failed}/{} 个进程{action}失败", targets.len()))
+        }
+    })
+    .await
+}
+
 #[tauri::command]
 async fn set_autostart(enabled: bool) -> Result<(), String> {
     blocking(
@@ -256,12 +324,12 @@ async fn pssuspend_available() -> bool {
     blocking(|| bosskey_core::freeze::pssuspend_available(&exe_dir())).await
 }
 
-/// 启动参数里请求的动作（如 `restore`），只在启动时读一次。
+/// 启动参数里请求的动作（如 `restore`/`about`），只在启动时读一次。
 #[tauri::command]
 fn startup_action() -> Option<String> {
     std::env::args()
         .skip(1)
-        .find(|a| a == bosskey_common::ARG_RESTORE)
+        .find(|a| a == bosskey_common::ARG_RESTORE || a == bosskey_common::ARG_ABOUT)
 }
 
 /// 打开日志目录（`<exe 同目录>/logs`）；目录不存在时先创建，再用资源管理器打开。
@@ -270,11 +338,7 @@ async fn open_log_dir() -> Result<(), String> {
     blocking(|| {
         let dir = exe_dir().join(bosskey_core::logging::LOG_DIR_NAME);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        std::process::Command::new("explorer")
-            .arg(&dir)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        Ok(())
+        bosskey_core::shell::open(&dir.to_string_lossy())
     })
     .await
 }
@@ -299,14 +363,7 @@ async fn open_external(url: String) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://") {
         return Err("只允许打开 http/https 链接".to_string());
     }
-    blocking(move || {
-        std::process::Command::new("explorer")
-            .arg(&url)
-            .spawn()
-            .map(|_| ())
-            .map_err(|e| e.to_string())
-    })
-    .await
+    blocking(move || bosskey_core::shell::open(&url)).await
 }
 
 /// 检查更新。`required=true` 即强制更新，界面须阻断使用。
@@ -420,6 +477,9 @@ pub fn run() {
             if argv.iter().any(|a| a == bosskey_common::ARG_RESTORE) {
                 let _ = app.emit("open-restore", ());
             }
+            if argv.iter().any(|a| a == bosskey_common::ARG_ABOUT) {
+                let _ = app.emit("open-about", ());
+            }
         }))
         .invoke_handler(tauri::generate_handler![
             load_config,
@@ -428,6 +488,9 @@ pub fn run() {
             window_icons,
             show_all_windows,
             show_windows,
+            hide_windows,
+            freeze_pids,
+            resume_pids,
             set_autostart,
             autostart_status,
             core_status,
