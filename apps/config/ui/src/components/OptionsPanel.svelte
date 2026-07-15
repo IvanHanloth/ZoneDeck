@@ -1,9 +1,18 @@
 <script>
   import SettingRow from "./SettingRow.svelte";
   import Toggle from "./Toggle.svelte";
-  import { app, openRestoreTool, restartCore, startCore, setAutostart } from "../lib/state.svelte.js";
+  import { app, openRestoreTool, restartCore, startCore, setAutostart, refreshPssuspend, toast } from "../lib/state.svelte.js";
+  import { openExternal } from "../lib/verhub.js";
 
   let elevating = $state(false);
+
+  async function openLink(url) {
+    try {
+      await openExternal(url);
+    } catch (err) {
+      toast("打开链接失败：" + err, true);
+    }
+  }
 
   async function elevate() {
     elevating = true;
@@ -16,6 +25,9 @@
   }
 
   const s = $derived(app.config.setting);
+
+  // 未开启「隐藏窗口时冻结进程」时，冻结区下方的子选项一律置灰禁用。
+  const freezeOff = $derived(!s.freeze_after_hide);
 
   // 增强冻结的前置条件；任一不满足即置灰。
   const enhancedBlocked = $derived.by(() => {
@@ -58,22 +70,35 @@
     </SettingRow>
     <SettingRow
       label="使用增强冻结"
-      description={enhancedDisabled
+      disabled={freezeOff || enhancedDisabled}
+      description={!freezeOff && enhancedDisabled
         ? `当前不可用：${enhancedBlocked.join("；")}。`
         : "改用 pssuspend64.exe 冻结。需在程序目录放置该文件，且核心以管理员身份运行。"}
     >
       {#snippet control()}
         <Toggle
           bind:checked={s.enhanced_freeze}
-          disabled={enhancedDisabled}
-          title={enhancedDisabled ? enhancedBlocked.join("；") : ""}
+          disabled={freezeOff || enhancedDisabled}
+          title={freezeOff
+            ? "需先开启「隐藏窗口时冻结进程」"
+            : enhancedDisabled
+              ? enhancedBlocked.join("；")
+              : ""}
         />
       {/snippet}
     </SettingRow>
-    <div class="note">
+    <SettingRow
+      label="冻结完整进程（Beta）"
+      disabled={freezeOff}
+      description="递归冻结命中程序的整棵子进程树，冻结更彻底；对普通与增强冻结均生效。可能影响这些子进程的后台任务"
+    >
+      {#snippet control()}<Toggle bind:checked={s.freeze_whole_tree} disabled={freezeOff} />{/snippet}
+    </SettingRow>
+    <div class="note" class:disabled={freezeOff}>
       增强冻结需下载
-      <a href="https://download.sysinternals.com/files/PSTools.zip" target="_blank" rel="noreferrer">PSTools</a>
+      <button class="link" onclick={() => openLink("https://download.sysinternals.com/files/PSTools.zip")} disabled={freezeOff}>PSTools</button>
       并将 pssuspend64.exe 放入程序目录，且核心以管理员身份运行。
+      <button class="link" onclick={refreshPssuspend} disabled={freezeOff}>重新检测</button>
     </div>
   </section>
 
@@ -149,6 +174,25 @@
     color: var(--muted);
     line-height: 1.6;
     border-top: 1px solid var(--border);
+  }
+  .note.disabled {
+    opacity: 0.45;
+  }
+  .note .link {
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+  .note .link:hover {
+    text-decoration: underline;
+  }
+  .note .link:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+    text-decoration: none;
   }
   .perm-ctl {
     display: flex;

@@ -118,6 +118,42 @@ pub fn freezable_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
     pids
 }
 
+/// 把一组根 PID 展开为「根 ∪ 全部后代」：按 `edges`（`(pid, 父 pid)`）建父子关系，
+/// 从每个根 BFS 收集整棵子进程树。用 visited 去重并防环 / 自指（如 pid 0 的父是 0）。
+/// 返回排序去重后的 PID 列表。
+pub fn expand_descendants(roots: &[u32], edges: &[(u32, u32)]) -> Vec<u32> {
+    use std::collections::VecDeque;
+
+    let mut children: std::collections::HashMap<u32, Vec<u32>> = std::collections::HashMap::new();
+    for &(pid, ppid) in edges {
+        // 忽略自指边，避免把自己当成自己的子进程。
+        if pid != ppid {
+            children.entry(ppid).or_default().push(pid);
+        }
+    }
+
+    let mut visited: HashSet<u32> = HashSet::new();
+    let mut queue: VecDeque<u32> = VecDeque::new();
+    for &r in roots {
+        if r != 0 && visited.insert(r) {
+            queue.push_back(r);
+        }
+    }
+    while let Some(pid) = queue.pop_front() {
+        if let Some(kids) = children.get(&pid) {
+            for &kid in kids {
+                if kid != 0 && visited.insert(kid) {
+                    queue.push_back(kid);
+                }
+            }
+        }
+    }
+
+    let mut out: Vec<u32> = visited.into_iter().collect();
+    out.sort_unstable();
+    out
+}
+
 pub struct HideController<W: WindowManager, E: Effects> {
     wm: W,
     effects: E,
@@ -153,34 +189,40 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     }
 
     /// 隐藏已解析出的目标：隐藏窗口并按设置应用静音 / 冻结 / 发送暂停键。
-    /// `freezable` 为允许冻结的 PID（见 [`freezable_pids`]）。
-    pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freezable: &[u32]) {
-        let mut frozen = Vec::new();
+    /// `freeze_pids` 为最终要冻结的 PID 集（调用方算好，可能已含递归展开的子进程树，
+    /// 见 [`freezable_pids`] 与 [`expand_descendants`]）；仅在 `freeze_after_hide` 开启时生效。
+    pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
+        // 隐藏前先发一次媒体「播放/暂停」键，暂停正在播放的音视频。
+        // 只发一次：多目标时重复发送会把「播放/暂停」这个切换键又切回播放。
+        // 仅当确有音视频在播放时才真正发键（由 effects 判断），此时才需等待其生效。
+        if setting.send_before_hide && !targets.is_empty() && self.effects.send_pause() {
+            std::thread::sleep(SEND_PAUSE_DELAY);
+        }
+
         let mut muted = Vec::new();
 
         for t in targets {
-            if setting.send_before_hide {
-                self.effects.send_pause();
-                std::thread::sleep(SEND_PAUSE_DELAY);
-            }
             self.wm.hide(t.hwnd);
             if setting.mute_after_hide && t.pid != 0 {
                 self.effects.mute(t.pid, true);
                 muted.push(t.pid);
             }
-            if setting.freeze_after_hide && t.pid != 0 && freezable.contains(&t.pid) {
-                frozen.push(t.pid);
-            }
         }
-        // 挂起是计数式的，去重以匹配解冻次数。
-        frozen.sort_unstable();
-        frozen.dedup();
         muted.sort_unstable();
         muted.dedup();
 
-        self.used_enhanced = setting.enhanced_freeze;
-        for pid in &frozen {
-            self.effects.suspend(*pid, self.used_enhanced);
+        // 冻结与目标窗口解耦：freeze_pids 已是最终集合（含子进程树），逐个挂起。
+        let mut frozen = Vec::new();
+        if setting.freeze_after_hide {
+            frozen = freeze_pids.to_vec();
+            frozen.retain(|pid| *pid != 0);
+            // 挂起是计数式的，去重以匹配解冻次数。
+            frozen.sort_unstable();
+            frozen.dedup();
+            self.used_enhanced = setting.enhanced_freeze;
+            for pid in &frozen {
+                self.effects.suspend(*pid, self.used_enhanced);
+            }
         }
 
         self.frozen = frozen;
@@ -545,8 +587,9 @@ mod tests {
         fn resume(&self, pid: u32, _enhanced: bool) {
             self.resumes.borrow_mut().push(pid);
         }
-        fn send_pause(&self) {
+        fn send_pause(&self) -> bool {
             *self.pauses.borrow_mut() += 1;
+            true
         }
     }
 
@@ -584,6 +627,36 @@ mod tests {
             *controller.effects.mutes.borrow(),
             vec![(10, true), (10, false)],
             "恢复后应取消静音"
+        );
+    }
+
+    #[test]
+    fn send_before_hide_fires_once_regardless_of_target_count() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.setting.mute_after_hide = false;
+        config.setting.freeze_after_hide = false;
+        config.setting.send_before_hide = true;
+        config.window_rules = vec![
+            wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+            wrule("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+        ];
+
+        let wm = MockWm::new(
+            vec![
+                win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+                win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+            ],
+            10,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        do_hide(&mut controller, &mut config);
+        assert!(!controller.wm.is_visible(10) && !controller.wm.is_visible(20));
+        assert_eq!(
+            *controller.effects.pauses.borrow(),
+            1,
+            "多个目标也只应发送一次暂停键，否则「播放/暂停」会被切回播放"
         );
     }
 
@@ -632,6 +705,37 @@ mod tests {
             "应取消静音"
         );
         assert!(controller.snapshot().is_empty());
+    }
+
+    #[test]
+    fn expand_descendants_collects_multi_level_tree() {
+        // 1 → 2 → 4, 1 → 3；另有无关的 9 → 10。
+        let edges = [(2, 1), (3, 1), (4, 2), (10, 9)];
+        let got = expand_descendants(&[1], &edges);
+        assert_eq!(got, vec![1, 2, 3, 4], "应收集根及全部后代，不含无关分支");
+    }
+
+    #[test]
+    fn expand_descendants_handles_cycles_and_self_reference() {
+        // 自指 (0,0) 与环 1→2→1 都不能导致死循环。
+        let edges = [(0, 0), (1, 2), (2, 1)];
+        let got = expand_descendants(&[1], &edges);
+        assert_eq!(got, vec![1, 2]);
+    }
+
+    #[test]
+    fn expand_descendants_dedups_overlapping_roots_and_skips_zero() {
+        let edges = [(2, 1), (3, 1)];
+        // 根含 0（应跳过）与重叠子树。
+        let got = expand_descendants(&[1, 2, 0], &edges);
+        assert_eq!(got, vec![1, 2, 3]);
+    }
+
+    #[test]
+    fn expand_descendants_leaf_root_returns_itself() {
+        let edges = [(2, 1)];
+        assert_eq!(expand_descendants(&[2], &edges), vec![2]);
+        assert!(expand_descendants(&[], &edges).is_empty());
     }
 
     #[test]

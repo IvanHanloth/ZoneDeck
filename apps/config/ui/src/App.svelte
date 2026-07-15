@@ -19,6 +19,7 @@
     checkForUpdate,
     loadAll,
     loadAnnouncements,
+    openAboutTab,
     openRestoreTool,
     refreshStatus,
     scheduleSave,
@@ -65,10 +66,14 @@
       .finally(hideSplash);
     const stopPolling = startStatusPolling(2000);
 
-    // 核心托盘的「窗口恢复工具」会带 restore 参数拉起本程序：
-    // 冷启动时从启动参数读到，已在运行时则由单实例插件发来 open-restore 事件。
-    invoke("startup_action").then((a) => a === "restore" && openRestoreTool());
+    // 核心托盘的「窗口恢复工具」/「关于」会带参数拉起本程序：
+    // 冷启动时从启动参数读到，已在运行时则由单实例插件发来对应事件。
+    invoke("startup_action").then((a) => {
+      if (a === "restore") openRestoreTool();
+      else if (a === "about") openAboutTab();
+    });
     const stopRestoreEvent = onAppEvent("open-restore", openRestoreTool);
+    const stopAboutEvent = onAppEvent("open-about", openAboutTab);
 
     // 首次启动：若核心未运行，自动拉起（仅本次，不与轮询重复）。
     refreshStatus().then(() => {
@@ -85,6 +90,7 @@
     return () => {
       stopPolling();
       stopRestoreEvent();
+      stopAboutEvent();
       unlisten();
       media.removeEventListener("change", onSystemTheme);
     };

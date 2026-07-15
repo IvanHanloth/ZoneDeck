@@ -20,6 +20,6 @@ fn main() {
         "LegalCopyright",
         "Copyright © 2022-2026 Ivan Hanloth All Rights Reserved.",
     );
-    res.set("OriginalFilename", "core.exe");
+    res.set("OriginalFilename", "Boss Key.exe");
     res.compile().expect("嵌入 Windows 资源失败");
 }

@@ -13,8 +13,8 @@
 #define MyAppName "Boss Key"
 #define MyAppPublisher "Ivan Hanloth"
 #define MyAppURL "https://github.com/IvanHanloth/Boss-Key"
-#define CoreExe "core.exe"
-#define ConfigExe "Boss Key.exe"
+#define CoreExe "Boss Key.exe"
+#define ConfigExe "config.exe"
 #define SourceDir "..\..\dist"
 
 [Setup]

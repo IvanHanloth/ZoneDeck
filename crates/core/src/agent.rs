@@ -3,7 +3,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
 use bosskey_common::ipc::{Command, Response};
-use bosskey_common::{ARG_RESTORE, Config};
+use bosskey_common::{ARG_ABOUT, ARG_RESTORE, Config};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -21,7 +21,9 @@ use windows::core::{PCWSTR, w};
 
 use crate::effects::WinEffects;
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
-use crate::hide::{HideController, RuleOutcome, freezable_pids, resolve_targets};
+use crate::hide::{
+    HideController, RuleOutcome, expand_descendants, freezable_pids, resolve_targets,
+};
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
@@ -39,6 +41,7 @@ const MENU_TOGGLE: usize = 1002;
 const MENU_QUIT: usize = 1003;
 const MENU_AUTOSTART: usize = 1004;
 const MENU_RESTORE: usize = 1005;
+const MENU_ABOUT: usize = 1006;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
 const AUTO_HIDE_TIMER_ID: usize = 11;
@@ -169,9 +172,29 @@ impl AgentState {
         let foreground = self.controller.foreground();
         let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
         let freezable = freezable_pids(&targets, &windows);
-        log_resolution(&self.config, &outcomes, &targets);
+        // 「冻结完整进程」：把可冻结集展开到整棵子进程树。
+        let freeze_set = if self.config.setting.freeze_whole_tree {
+            expand_descendants(&freezable, &crate::freeze::process_tree())
+        } else {
+            freezable
+        };
+        log_resolution(&self.config, &outcomes, &targets, &windows);
+        // 冻结开启时，把最终冻结集连同进程名逐个写入日志，便于定位冻结问题。
+        if self.config.setting.freeze_after_hide && !freeze_set.is_empty() {
+            let names = crate::freeze::process_names();
+            logging::info(&format!(
+                "本次冻结集共 {} 个进程（增强冻结={}，完整进程树={}）",
+                freeze_set.len(),
+                self.config.setting.enhanced_freeze,
+                self.config.setting.freeze_whole_tree
+            ));
+            for pid in &freeze_set {
+                let name = names.get(pid).map(String::as_str).unwrap_or("未知进程");
+                logging::info(&format!("待冻结进程 pid={pid} name={name}"));
+            }
+        }
         self.controller
-            .apply_hide(&self.config.setting, &targets, &freezable);
+            .apply_hide(&self.config.setting, &targets, &freeze_set);
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_hide {
@@ -288,7 +311,12 @@ impl AgentState {
 }
 
 /// 记录本次隐藏的分级日志。
-fn log_resolution(config: &Config, outcomes: &[RuleOutcome], targets: &[crate::hide::Target]) {
+fn log_resolution(
+    config: &Config,
+    outcomes: &[RuleOutcome],
+    targets: &[crate::hide::Target],
+    windows: &[bosskey_common::WindowInfo],
+) {
     logging::info(&format!(
         "触发隐藏：命中 {} 个窗口（窗口规则 {} 条 / 进程规则 {} 条）",
         targets.len(),
@@ -306,8 +334,15 @@ fn log_resolution(config: &Config, outcomes: &[RuleOutcome], targets: &[crate::h
             _ => {}
         }
     }
+    // 逐个写出隐藏目标的句柄、PID 与进程名/标题（info 级，release 也可见）。
     for t in targets {
-        logging::debug(&format!("隐藏目标 hwnd={} pid={}", t.hwnd, t.pid));
+        let w = windows.iter().find(|w| w.hwnd == t.hwnd);
+        let process = w.map(|w| w.process.as_str()).unwrap_or("未知进程");
+        let title = w.map(|w| w.title.as_str()).unwrap_or("");
+        logging::info(&format!(
+            "隐藏目标 hwnd={} pid={} process={process} title=「{title}」",
+            t.hwnd, t.pid
+        ));
     }
 }
 
@@ -397,6 +432,7 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
         let _ = AppendMenuW(menu, MF_STRING, MENU_TOGGLE, toggle_label);
         let _ = AppendMenuW(menu, MF_STRING, MENU_RESTORE, w!("窗口恢复工具"));
         let _ = AppendMenuW(menu, autostart_flags, MENU_AUTOSTART, w!("开机自启"));
+        let _ = AppendMenuW(menu, MF_STRING, MENU_ABOUT, w!("关于"));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         let _ = AppendMenuW(menu, MF_STRING, MENU_QUIT, w!("退出"));
 
@@ -446,20 +482,20 @@ fn release_config_windows(state: &mut AgentState, exe: &Path) {
     }
 }
 
-/// 拉起配置程序。`action` 会作为命令行参数传入（如 `restore` 直达窗口恢复工具）。
-fn launch_settings(state: &mut AgentState, action: Option<&str>) {
-    // 生产名 "Boss Key.exe"，开发名 "bosskey-config.exe"。
+/// 定位同目录下的配置程序：生产名 config.exe，开发名 bosskey-config.exe。
+fn find_config_exe() -> Option<PathBuf> {
     let dir = std::env::current_exe()
         .ok()
-        .and_then(|p| p.parent().map(PathBuf::from));
-    let found = dir.and_then(|d| {
-        ["Boss Key.exe", "bosskey-config.exe"]
-            .into_iter()
-            .map(|name| d.join(name))
-            .find(|p| p.exists())
-    });
+        .and_then(|p| p.parent().map(PathBuf::from))?;
+    ["config.exe", "bosskey-config.exe"]
+        .into_iter()
+        .map(|name| dir.join(name))
+        .find(|p| p.exists())
+}
 
-    let Some(path) = found else {
+/// 拉起配置程序。`action` 会作为命令行参数传入（如 `restore` 直达窗口恢复工具）。
+fn launch_settings(state: &mut AgentState, action: Option<&str>) {
+    let Some(path) = find_config_exe() else {
         if let Some(tray) = &state.tray {
             tray.balloon("Boss Key", "未找到配置程序");
         }
@@ -554,6 +590,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             match wparam.0 & 0xFFFF {
                 MENU_SETTINGS => launch_settings(state, None),
                 MENU_RESTORE => launch_settings(state, Some(ARG_RESTORE)),
+                MENU_ABOUT => launch_settings(state, Some(ARG_ABOUT)),
                 MENU_TOGGLE => state.apply_toggle(),
                 MENU_AUTOSTART => toggle_autostart(state),
                 MENU_QUIT => quit(state, hwnd),
@@ -653,7 +690,32 @@ fn create_agent_window() -> Option<HWND> {
 }
 
 pub fn run(options: AgentOptions) {
-    let config = Config::load(&options.config_path).unwrap_or_default();
+    // 是否首次启动（尚无配置文件）/ 更新后首次启动（配置里记录的版本与当前不一致）。
+    // load() 在文件缺失时也返回默认值，故须先按文件是否存在判断「首次」。
+    let config_missing = !options.config_path.exists();
+    let mut config = Config::load(&options.config_path).unwrap_or_default();
+    let version_changed = !config_missing && config.version != bosskey_common::APP_CONFIG_VERSION;
+
+    // 仅正常运行时（非冒烟测试）在这两种情况下默认拉起配置程序。
+    if options.auto_quit_ms.is_none() && (config_missing || version_changed) {
+        logging::info(if config_missing {
+            "首次启动，拉起配置程序"
+        } else {
+            "更新后首次启动，拉起配置程序"
+        });
+        // 记录当前版本并落盘，避免下次启动重复弹出（首次启动时顺带创建配置文件）。
+        config.version = bosskey_common::APP_CONFIG_VERSION.to_string();
+        if let Err(e) = config.save(&options.config_path) {
+            logging::warn(&format!("写入配置版本失败: {e}"));
+        }
+        if let Some(path) = find_config_exe() {
+            if let Err(e) = std::process::Command::new(&path).spawn() {
+                logging::warn(&format!("启动配置程序失败: {e}"));
+            }
+        } else {
+            logging::warn("未找到配置程序，无法在启动时拉起");
+        }
+    }
 
     let Some(hwnd) = create_agent_window() else {
         eprintln!("创建代理窗口失败");

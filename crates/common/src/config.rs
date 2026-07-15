@@ -192,6 +192,10 @@ pub struct Setting {
     pub freeze_after_hide: bool,
     #[serde(default)]
     pub enhanced_freeze: bool,
+    /// 递归冻结命中程序的整棵子进程树（不同名子 exe / 渲染进程等），
+    /// 对普通与增强冻结均生效。
+    #[serde(default)]
+    pub freeze_whole_tree: bool,
     #[serde(default)]
     pub show_float_window: bool,
     /// 鼠标触发条件；缺这一节的老配置读进来是「全关」。
@@ -236,6 +240,7 @@ impl Default for Setting {
             hide_icon_after_hide: false,
             freeze_after_hide: false,
             enhanced_freeze: false,
+            freeze_whole_tree: false,
             show_float_window: false,
             mouse: MouseSetting::default(),
             middle_button_hide: false,
@@ -553,6 +558,7 @@ mod tests {
         assert!(c.setting.hide_current);
         assert!(c.setting.click_to_hide);
         assert!(!c.setting.freeze_after_hide);
+        assert!(!c.setting.freeze_whole_tree);
         assert_eq!(c.setting.auto_hide_time, 5);
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
     }

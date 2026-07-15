@@ -15,6 +15,7 @@ pub mod logging;
 pub mod mouse_hook;
 pub mod platform;
 pub mod recovery;
+pub mod shell;
 pub mod single_instance;
 pub mod tray;
 
