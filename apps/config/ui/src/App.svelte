@@ -9,11 +9,16 @@
   import AboutPanel from "./components/AboutPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import RestoreWindowsModal from "./components/RestoreWindowsModal.svelte";
+  import UpdateModal from "./components/UpdateModal.svelte";
+  import AnnouncementModal from "./components/AnnouncementModal.svelte";
+  import ErrorReportModal from "./components/ErrorReportModal.svelte";
   import Toast from "./components/Toast.svelte";
   import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
     app,
+    checkForUpdate,
     loadAll,
+    loadAnnouncements,
     openRestoreTool,
     refreshStatus,
     scheduleSave,
@@ -28,7 +33,7 @@
     { id: "hotkeys", label: "热键与鼠标" },
     { id: "notify", label: "通知设置" },
     { id: "options", label: "其他选项" },
-    { id: "about", label: "关于" },
+    { id: "about", label: "关于与反馈" },
   ];
 
   // 加载阶段不自动保存；loadAll 完成后才武装。普通 let 不参与响应式追踪。
@@ -54,6 +59,8 @@
     loadAll()
       .then(() => {
         autoSaveReady = true;
+        checkForUpdate();
+        loadAnnouncements({ popNew: true });
       })
       .finally(hideSplash);
     const stopPolling = startStatusPolling(2000);
@@ -120,6 +127,10 @@
   <StatusBar />
 
   <RestoreWindowsModal bind:open={app.restoreOpen} />
+  <AnnouncementModal />
+  <ErrorReportModal />
+  <!-- 放最后：强制更新的遮罩层级最高，压住其它一切弹窗 -->
+  <UpdateModal />
   <Toast />
   <ResizeHandles />
 </div>

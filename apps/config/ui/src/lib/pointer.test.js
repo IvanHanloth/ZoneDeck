@@ -60,7 +60,8 @@ describe("nextIndex", () => {
 });
 
 describe("buildTimeline", () => {
-  const tl = ($) => buildTimeline(enabledParts(CORNERS, $.setting), $.restore);
+  const tl = ($) =>
+    buildTimeline(enabledParts(CORNERS, $.setting), $.restore, $.fast ?? true);
 
   it("没有选中的角时时间轴为空", () => {
     expect(buildTimeline([], true)).toEqual([]);
@@ -79,6 +80,19 @@ describe("buildTimeline", () => {
     const frames = tl({ setting: { top_left_hide: true }, restore: false });
     expect(frames.map((f) => f.visible)).toEqual([true, false, true]);
     expect(frames[2].caption).toContain("热键");
+  });
+
+  it("「仅快速移动」时，冲向角落的帧标为 fast、配文也说快速甩", () => {
+    const frames = tl({ setting: { top_left_hide: true }, restore: true, fast: true });
+    expect(frames.map((f) => Boolean(f.fast))).toEqual([true, false, false, true, false]);
+    expect(frames[0].caption).toContain("快速移动");
+  });
+
+  it("关掉「仅快速移动」后没有 fast 帧，配文改成普通移动", () => {
+    const frames = tl({ setting: { top_left_hide: true }, restore: true, fast: false });
+    expect(frames.some((f) => f.fast)).toBe(false);
+    expect(frames[0].caption).toContain("移动到");
+    expect(frames[0].caption).not.toContain("快速");
   });
 
   it("多个角按左上→右上→左下→右下逐个演示完再演下一个", () => {

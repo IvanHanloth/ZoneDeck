@@ -2,6 +2,12 @@ use serde::{Deserialize, Serialize};
 
 pub const PIPE_NAME: &str = r"\\.\pipe\bosskey";
 
+/// 监控停用的看门狗时长：超过这么久没收到配置程序的心跳（重发 `SetHotkeys { enabled: false }`），
+/// 核心自动恢复监控。配置程序崩在“已停用”那一刻时，热键不至于一直失效。
+pub const SUSPEND_TIMEOUT_MS: u32 = 15_000;
+/// 配置程序重发停用心跳的建议间隔，须显著小于 `SUSPEND_TIMEOUT_MS`。
+pub const SUSPEND_HEARTBEAT_MS: u32 = 4_000;
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "cmd", rename_all = "snake_case")]
 pub enum Command {
@@ -16,8 +22,13 @@ pub enum Command {
     SetAutostart {
         enabled: bool,
     },
-    /// 临时停用 / 恢复全局热键。配置界面录制热键时必须先停用，
+    /// 临时停用 / 恢复全局热键与鼠标监控。配置界面录制热键时必须先停用，
     /// 否则按下的组合键会直接触发现有热键（比如把窗口藏了）。
+    ///
+    /// 停用是**有状态**的：核心会一直记着，直到收到 `enabled: true`，
+    /// 期间的 `ReloadConfig`（保存配置时发的）不会把监控复活。
+    /// 配置程序须在停用期间持续重发本命令做心跳，否则核心会在
+    /// `SUSPEND_TIMEOUT` 后自行恢复监控（防止配置程序崩溃导致热键永久失效）。
     SetHotkeys {
         enabled: bool,
     },
@@ -30,7 +41,13 @@ pub enum Response {
     Ok,
     State { hidden: bool },
     Elevated { elevated: bool },
-    Status { hidden: bool, elevated: bool },
+    /// `monitoring`：核心此刻是否真的在监听热键与鼠标（被 `SetHotkeys` 停用时为 false）。
+    /// 配置界面的状态栏据此显示真实状态，而不是自己猜。
+    Status {
+        hidden: bool,
+        elevated: bool,
+        monitoring: bool,
+    },
     Error { message: String },
 }
 
@@ -170,10 +187,12 @@ mod tests {
             Response::Status {
                 hidden: true,
                 elevated: false,
+                monitoring: true,
             },
             Response::Status {
                 hidden: false,
                 elevated: true,
+                monitoring: false,
             },
             Response::Error {
                 message: "出错了".to_string(),

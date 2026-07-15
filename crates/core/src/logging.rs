@@ -153,8 +153,6 @@ fn format_timestamp(
     format!("{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}")
 }
 
-// ---- 全局日志入口 ----
-
 static GLOBAL: OnceLock<Logger> = OnceLock::new();
 
 /// 初始化全局日志。`dir` 通常为 exe 同目录下的 `logs`。

@@ -42,7 +42,7 @@ pub fn resolve_targets(
     for rule in &mut config.window_rules {
         let outcome = match resolve_window_rule(rule, windows) {
             WindowResolution::Live(w) => {
-                rule.title = w.title.clone(); // 同步最新标题
+                rule.title = w.title.clone();
                 result.push(Target {
                     hwnd: w.hwnd,
                     pid: w.pid,
@@ -50,7 +50,7 @@ pub fn resolve_targets(
                 RuleOutcome::Live
             }
             WindowResolution::Reacquired(w) => {
-                rule.hwnd = w.hwnd; // 回填新句柄
+                rule.hwnd = w.hwnd;
                 rule.pid = w.pid;
                 rule.title = w.title.clone();
                 result.push(Target {
@@ -157,7 +157,6 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.wm.enumerate()
     }
 
-    /// 当前前台窗口句柄。
     pub fn foreground(&self) -> i64 {
         self.wm.foreground()
     }
@@ -383,8 +382,6 @@ mod tests {
     fn win_pid(title: &str, hwnd: i64, process: &str, pid: u32, path: &str) -> WindowInfo {
         WindowInfo::new(title, hwnd, process, pid, path)
     }
-
-    // ---- 冻结范围：只有进程的可见窗口全部被隐藏才可冻结 ----
 
     #[test]
     fn freeze_skipped_when_process_still_has_a_visible_window() {

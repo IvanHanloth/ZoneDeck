@@ -32,8 +32,6 @@ pub fn icon_data_uri(path: &str) -> Option<String> {
     Some(format!("data:image/png;base64,{}", base64(&png)))
 }
 
-// ---- Win32 图标提取 ----
-
 /// 通过 SHGetFileInfoW 取文件的大图标（32×32）并转为 RGBA。
 pub fn extract_icon_rgba(path: &str) -> Option<IconRgba> {
     if path.is_empty() {
@@ -170,8 +168,6 @@ fn bgra_to_rgba(bgra: &[u8], mask: Option<&[u8]>) -> Vec<u8> {
     rgba
 }
 
-// ---- 最小 PNG 编码器（未压缩 deflate stored 块） ----
-
 const PNG_SIGNATURE: [u8; 8] = [0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A];
 
 /// 将顶到底 RGBA 像素编码为 PNG。`rgba` 长度必须等于 `width*height*4`。
@@ -268,8 +264,6 @@ fn adler32(data: &[u8]) -> u32 {
     }
     (b << 16) | a
 }
-
-// ---- base64（标准字母表，带填充） ----
 
 pub fn base64(data: &[u8]) -> String {
     const TABLE: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";

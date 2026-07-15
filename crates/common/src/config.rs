@@ -11,7 +11,7 @@ pub const DEFAULT_AUTO_HIDE_TIME: u32 = 5;
 /// 日志默认保留天数（`0` 表示关闭日志）。
 pub const DEFAULT_LOG_RETENTION_DAYS: u32 = 7;
 /// 连击判定窗口默认值（毫秒）：两次点击间隔不超过它才算连击。
-pub const DEFAULT_MULTI_CLICK_MS: u32 = 400;
+pub const DEFAULT_MULTI_CLICK_MS: u32 = 350;
 pub const MIN_MULTI_CLICK_MS: u32 = 150;
 pub const MAX_MULTI_CLICK_MS: u32 = 1000;
 /// 最多支持三连击。
@@ -114,10 +114,30 @@ pub struct MouseSetting {
     /// 连击判定窗口（毫秒），[`MIN_MULTI_CLICK_MS`]..=[`MAX_MULTI_CLICK_MS`]。
     #[serde(default = "default_multi_click_ms")]
     pub multi_click_ms: u32,
+    /// 是否允许「再按一次同样的键」恢复窗口；关掉的话按键只负责隐藏，靠热键 / 托盘恢复。
+    #[serde(default = "default_true")]
+    pub allow_click_restore: bool,
 }
 
+/// 全新安装的默认：中键单击隐藏，允许再按一次恢复。
 impl Default for MouseSetting {
     fn default() -> Self {
+        Self {
+            middle: MouseButton {
+                enabled: true,
+                ..MouseButton::default()
+            },
+            ..Self::all_off()
+        }
+    }
+}
+
+impl MouseSetting {
+    /// 配置文件里没有 `mouse` 这一节时用的值：全部关闭。
+    ///
+    /// 不能直接用 [`MouseSetting::default`]——那是给全新安装准备的（中键默认开），
+    /// 老配置读进来时套上去会凭空给用户开一颗中键，还会让下面的旧开关迁移逻辑误判。
+    fn all_off() -> Self {
         Self {
             left: MouseButton::default(),
             middle: MouseButton::default(),
@@ -125,11 +145,10 @@ impl Default for MouseSetting {
             side1: MouseButton::default(),
             side2: MouseButton::default(),
             multi_click_ms: default_multi_click_ms(),
+            allow_click_restore: true,
         }
     }
-}
 
-impl MouseSetting {
     pub fn buttons(&self) -> [&MouseButton; 5] {
         [
             &self.left,
@@ -178,8 +197,9 @@ pub struct Setting {
     pub enhanced_freeze: bool,
     #[serde(default)]
     pub show_float_window: bool,
-    /// 鼠标触发：每颗键的连击 / 修饰键条件。
-    #[serde(default)]
+    /// 鼠标触发：每颗键的连击 / 修饰键条件。缺这一节的老配置读进来是「全关」，
+    /// 而不是 `MouseSetting::default()`（那是全新安装用的，中键默认开）。
+    #[serde(default = "MouseSetting::all_off")]
     pub mouse: MouseSetting,
     /// 旧版扁平鼠标开关，仅用于反序列化迁移；迁移后清零、不再写回文件。
     #[serde(default, skip_serializing)]
@@ -202,6 +222,9 @@ pub struct Setting {
     pub bottom_right_hide: bool,
     #[serde(default)]
     pub allow_move_restore: bool,
+    /// 只有「快速甩」到角落才触发；慢慢挪过去不算。默认开，免得贴边操作时误触发。
+    #[serde(default = "default_true")]
+    pub corner_fast_only: bool,
     /// 日志保留天数；`0` 表示关闭日志。
     #[serde(default = "default_log_retention_days")]
     pub log_retention_days: u32,
@@ -229,6 +252,7 @@ impl Default for Setting {
             bottom_left_hide: false,
             bottom_right_hide: false,
             allow_move_restore: false,
+            corner_fast_only: true,
             log_retention_days: DEFAULT_LOG_RETENTION_DAYS,
         }
     }
@@ -251,7 +275,7 @@ impl Setting {
     }
 }
 
-/// 通知开关：逐事件控制是否弹出托盘气泡。现有通知默认开启，隐藏/显示为新增项默认关闭。
+/// 通知开关：逐事件控制是否弹出托盘气泡。隐藏/显示默认关闭，其余默认开启。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Notifications {
     /// 核心启动运行时的气泡。
@@ -263,10 +287,10 @@ pub struct Notifications {
     /// 开机自启状态变更时的气泡。
     #[serde(default = "default_true")]
     pub on_autostart: bool,
-    /// 每次隐藏窗口时的气泡（新增，默认关闭）。
+    /// 每次隐藏窗口时的气泡（默认关闭）。
     #[serde(default)]
     pub on_hide: bool,
-    /// 每次显示窗口时的气泡（新增，默认关闭）。
+    /// 每次显示窗口时的气泡（默认关闭）。
     #[serde(default)]
     pub on_show: bool,
 }
@@ -279,6 +303,30 @@ impl Default for Notifications {
             on_autostart: true,
             on_hide: false,
             on_show: false,
+        }
+    }
+}
+
+/// Verhub（版本 / 公告 / 反馈 / 日志服务）相关的用户可见设置。
+///
+/// 「启动时检查更新」和「启动时接收公告」不做成开关：这俩是必须的一步——
+/// 强制更新要靠检查才能拦住用户，公告是唯一的下行通知渠道。用户能配的只有
+/// 「同一条公告不再提示」（记 [`seen_announcement_id`]）和「是否接收预览版」。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Verhub {
+    /// 把预览版也算进「有没有新版本」。默认只看稳定版。
+    #[serde(default)]
+    pub include_preview: bool,
+    /// 用户已读过的最新一条公告 id：只有比它新的公告才会在启动时弹出来。
+    #[serde(default)]
+    pub seen_announcement_id: String,
+}
+
+impl Default for Verhub {
+    fn default() -> Self {
+        Self {
+            include_preview: false,
+            seen_announcement_id: String::new(),
         }
     }
 }
@@ -297,9 +345,8 @@ pub struct Config {
     pub setting: Setting,
     #[serde(default)]
     pub notifications: Notifications,
-    /// 是否高级模式（暴露正则规则编辑）。默认初级模式。
     #[serde(default)]
-    pub advanced_mode: bool,
+    pub verhub: Verhub,
     /// 「窗口」规则（细粒度）。
     #[serde(default)]
     pub window_rules: Vec<WindowRule>,
@@ -320,7 +367,7 @@ impl Default for Config {
             hotkey: Hotkey::default(),
             setting: Setting::default(),
             notifications: Notifications::default(),
-            advanced_mode: false,
+            verhub: Verhub::default(),
             window_rules: Vec::new(),
             process_rules: Vec::new(),
             hide_binding: Vec::new(),
@@ -421,7 +468,6 @@ mod tests {
         assert_eq!(c.hotkey.hide_hotkey, "Ctrl+Shift+H");
         assert!(!c.setting.mute_after_hide);
         assert_eq!(c.setting.auto_hide_time, 15);
-        // 旧 hide_binding 已迁移为窗口规则，且原字段清空。
         assert!(c.hide_binding.is_empty(), "迁移后旧字段应清空");
         assert_eq!(c.window_rules.len(), 1);
         assert_eq!(c.window_rules[0].process, "WeChat.exe");
@@ -442,7 +488,6 @@ mod tests {
         assert!(c.setting.mouse.middle.modifiers.is_empty());
         assert!(!c.setting.middle_button_hide, "迁移后旧字段清零");
 
-        // 迁移后的配置写回文件时不应再出现旧字段。
         let json = c.to_json().unwrap();
         assert!(
             !json.contains("middle_button_hide"),
@@ -452,7 +497,6 @@ mod tests {
 
     #[test]
     fn explicit_mouse_block_wins_over_legacy_flags() {
-        // 新字段已经配过了，就别再被旧开关覆盖。
         let c = Config::from_json(
             r#"{"setting": {
                 "middle_button_hide": true,
@@ -482,15 +526,36 @@ mod tests {
     }
 
     #[test]
-    fn mouse_defaults_are_all_off_single_click() {
-        let m = MouseSetting::default();
-        assert!(!m.any_enabled());
+    fn fresh_install_enables_middle_button_single_click() {
+        let m = Config::default().setting.mouse;
+        assert!(m.middle.enabled, "全新安装默认开中键");
+        assert!(m.allow_click_restore, "默认允许再按一次恢复");
         assert_eq!(m.multi_click_ms, DEFAULT_MULTI_CLICK_MS);
+        assert_eq!(DEFAULT_MULTI_CLICK_MS, 350);
+        assert!(
+            !m.left.enabled && !m.right.enabled && !m.side1.enabled && !m.side2.enabled,
+            "其余四颗键默认关闭"
+        );
         assert!(
             m.buttons()
                 .iter()
                 .all(|b| b.clicks == 1 && b.modifiers.is_empty())
         );
+    }
+
+    #[test]
+    fn old_config_without_mouse_section_stays_all_off() {
+        // 老配置没有 mouse 这一节，不能因为「全新安装默认开中键」就凭空给用户开一颗键。
+        let c = Config::from_json(r#"{"setting": {"mute_after_hide": true}}"#).unwrap();
+        assert!(!c.setting.mouse.any_enabled(), "老配置不该被塞进默认的中键");
+        assert!(c.setting.mouse.allow_click_restore);
+    }
+
+    #[test]
+    fn corner_fast_only_defaults_on() {
+        assert!(Setting::default().corner_fast_only);
+        let c = Config::from_json(r#"{"setting": {"corner_fast_only": false}}"#).unwrap();
+        assert!(!c.setting.corner_fast_only);
     }
 
     #[test]
@@ -504,11 +569,19 @@ mod tests {
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
     }
 
+    /// 已存在的配置文件读出来的「什么都没配」：除 mouse 全关外，其余同默认值。
+    fn setting_from_old_file() -> Setting {
+        Setting {
+            mouse: MouseSetting::all_off(),
+            ..Setting::default()
+        }
+    }
+
     #[test]
     fn legacy_path_match_key_is_ignored() {
         // 旧配置里的 path_match 字段应被 serde 静默忽略、不影响其它默认值。
         let c = Config::from_json(r#"{"setting": {"path_match": true}}"#).unwrap();
-        assert_eq!(c.setting, Setting::default());
+        assert_eq!(c.setting, setting_from_old_file());
     }
 
     #[test]
@@ -530,11 +603,9 @@ mod tests {
             "process_rules": [
                 {"process": "game.exe", "path": "C:\\game.exe"},
                 {"regex": ".*\\\\WeChat\\.exe$"}
-            ],
-            "advanced_mode": true
+            ]
         }"#;
         let c = Config::from_json(json).unwrap();
-        assert!(c.advanced_mode);
         assert_eq!(c.process_rules.len(), 2);
         assert!(!c.process_rules[0].is_regex());
         assert!(c.process_rules[1].is_regex());
@@ -588,6 +659,6 @@ mod tests {
     #[test]
     fn unknown_fields_are_ignored() {
         let c = Config::from_json(r#"{"future_flag": true, "setting": {"brand_new": 1}}"#).unwrap();
-        assert_eq!(c.setting, Setting::default());
+        assert_eq!(c.setting, setting_from_old_file());
     }
 }

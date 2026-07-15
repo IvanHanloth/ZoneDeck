@@ -1,7 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  // 可勾选的窗口列表：先按可见/后台拆两段，各段内再按进程分组（含图标）。
-  // selected 双向绑定 hwnd 数组。标题栏样式对齐 WindowRuleList（隐藏窗口）。
+  // 标题栏样式对齐 WindowRuleList（隐藏窗口）。
   import IconAppWindow from "~icons/lucide/app-window";
   import IconSearch from "~icons/lucide/search";
   import IconX from "~icons/lucide/x";

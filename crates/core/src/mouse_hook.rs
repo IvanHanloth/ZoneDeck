@@ -25,9 +25,16 @@ const F_TL: u32 = 8;
 const F_TR: u32 = 16;
 const F_BL: u32 = 32;
 const F_BR: u32 = 64;
+const CORNER_MASK: u32 = F_TL | F_TR | F_BL | F_BR;
+/// 只认「快速移动」角落。
+const F_FAST: u32 = 128;
 
 const CORNER_THRESHOLD: i32 = 10;
 const CORNER_COOLDOWN_MS: u64 = 1000;
+/// 甩入角落的速度门槛（像素/毫秒）：约 1500 px/s，日常拖拽、贴边点任务栏都到不了这个速度。
+const FAST_SPEED_PX_PER_MS: f32 = 1.5;
+/// 两次 WM_MOUSEMOVE 间隔超过这个值就不算同一次「甩」，速度不予采信（比如刚从别的屏幕/静止状态挪进来）。
+const SPEED_SAMPLE_MAX_MS: u64 = 120;
 
 /// 五颗键在 [`Buttons`] 数组里的下标，和 `MouseSetting` 的字段一一对应。
 const BTN_LEFT: usize = 0;
@@ -42,10 +49,11 @@ static CORNER_FLAGS: AtomicU32 = AtomicU32::new(0);
 static SCREEN_W: AtomicI32 = AtomicI32::new(0);
 static SCREEN_H: AtomicI32 = AtomicI32::new(0);
 static LAST_CORNER: AtomicU64 = AtomicU64::new(0);
+/// 上一个鼠标位置与时刻，用来估算甩入角落的速度。
+static LAST_MOVE: Mutex<Option<MoveSample>> = Mutex::new(None);
 /// 钩子回调与配置刷新都跑在核心的消息循环线程上，这里的锁只是为了满足 `Sync`，不会真的争用。
 static BUTTONS: Mutex<Buttons> = Mutex::new(Buttons::new());
 
-/// 一颗键的触发条件 + 它的连击计数状态。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ButtonState {
     enabled: bool,
@@ -93,7 +101,6 @@ impl Buttons {
             window_ms: 400,
         }
     }
-
 }
 
 fn buttons_from(s: &Setting) -> Buttons {
@@ -112,8 +119,32 @@ fn buttons_from(s: &Setting) -> Buttons {
     b
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct MoveSample {
+    x: i32,
+    y: i32,
+    ms: u64,
+}
+
+/// 这一步移动算不算「甩」：位移 / 用时超过速度门槛。
+///
+/// 两次采样间隔太久（鼠标本来是静止的，或者事件被丢了）就不予采信——否则「静止很久后
+/// 轻轻挪一格」会被算成一次瞬时高速。同一时刻的两个采样（dt == 0）同理不算。
+fn is_fast_move(from: MoveSample, to: MoveSample) -> bool {
+    let dt = to.ms.saturating_sub(from.ms);
+    if dt == 0 || dt > SPEED_SAMPLE_MAX_MS {
+        return false;
+    }
+    let dx = (to.x - from.x) as f32;
+    let dy = (to.y - from.y) as f32;
+    (dx * dx + dy * dy).sqrt() / dt as f32 >= FAST_SPEED_PX_PER_MS
+}
+
 fn corner_flags_from(s: &Setting) -> u32 {
     let mut f = 0;
+    if s.corner_fast_only {
+        f |= F_FAST;
+    }
     if s.top_left_hide {
         f |= F_TL;
     }
@@ -130,7 +161,7 @@ fn corner_flags_from(s: &Setting) -> u32 {
 }
 
 pub fn wants_hook(s: &Setting) -> bool {
-    s.mouse.any_enabled() || corner_flags_from(s) != 0
+    s.mouse.any_enabled() || corner_flags_from(s) & CORNER_MASK != 0
 }
 
 pub fn set_flags(s: &Setting) {
@@ -157,7 +188,6 @@ fn register_click(state: &mut ButtonState, now: u64, window_ms: u64) -> bool {
     false
 }
 
-/// 当前按住的修饰键位掩码。
 fn pressed_modifiers() -> u32 {
     let down = |vk: u16| unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 };
     let mut m = 0;
@@ -217,18 +247,34 @@ fn post(source: usize) {
 fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
     if msg == WM_MOUSEMOVE {
         let flags = CORNER_FLAGS.load(Relaxed);
-        if flags == 0 {
+        if flags & CORNER_MASK == 0 {
             return;
         }
         let now = unsafe { GetTickCount64() };
+        let sample = MoveSample {
+            x: data.pt.x,
+            y: data.pt.y,
+            ms: now,
+        };
+        // 速度要拿上一次采样算，所以无论后面触不触发都得先记下这一次。
+        let previous = LAST_MOVE
+            .lock()
+            .ok()
+            .and_then(|mut last| last.replace(sample));
+
         if now.wrapping_sub(LAST_CORNER.load(Relaxed)) < CORNER_COOLDOWN_MS {
             return;
         }
         let (w, h) = (SCREEN_W.load(Relaxed), SCREEN_H.load(Relaxed));
-        if corner_hit(data.pt.x, data.pt.y, w, h, flags) {
-            LAST_CORNER.store(now, Relaxed);
-            post(TRIGGER_CORNER);
+        if !corner_hit(sample.x, sample.y, w, h, flags) {
+            return;
         }
+        // 开了「仅快速移动」时，慢慢挪到角落不算数——贴边点关闭按钮之类的操作不该触发隐藏。
+        if flags & F_FAST != 0 && !previous.is_some_and(|p| is_fast_move(p, sample)) {
+            return;
+        }
+        LAST_CORNER.store(now, Relaxed);
+        post(TRIGGER_CORNER);
         return;
     }
 
@@ -299,10 +345,10 @@ impl Drop for MouseHook {
 mod tests {
     use super::*;
 
-    const CORNER_MASK: u32 = F_TL | F_TR | F_BL | F_BR;
-
+    /// 默认配置是「中键单击隐藏」，这里要的是一张白纸，好逐项验证触发条件。
     fn setting_with(mutate: impl FnOnce(&mut Setting)) -> Setting {
         let mut s = Setting::default();
+        s.mouse.middle.enabled = false;
         mutate(&mut s);
         s
     }
@@ -318,7 +364,11 @@ mod tests {
 
     #[test]
     fn wants_hook_only_when_a_trigger_is_enabled() {
-        assert!(!wants_hook(&Setting::default()));
+        assert!(!wants_hook(&setting_with(|_| {})));
+        assert!(
+            wants_hook(&Setting::default()),
+            "默认开着中键，装钩子是应该的"
+        );
         assert!(wants_hook(&setting_with(|s| s.mouse.left.enabled = true)));
         assert!(wants_hook(&setting_with(|s| s.bottom_right_hide = true)));
         assert!(
@@ -386,6 +436,49 @@ mod tests {
         assert!(!register_click(&mut st, 2000, 400)); // 超时，重新计为第 1 下
         assert!(!register_click(&mut st, 2200, 400)); // 第 2 下
         assert!(register_click(&mut st, 2400, 400), "第 3 下才触发");
+    }
+
+    fn sample(x: i32, y: i32, ms: u64) -> MoveSample {
+        MoveSample { x, y, ms }
+    }
+
+    #[test]
+    fn fast_flick_is_recognised_slow_drift_is_not() {
+        // 20ms 走 200px ≈ 10 px/ms：一次利落的甩。
+        assert!(is_fast_move(
+            sample(1700, 900, 1000),
+            sample(1900, 1070, 1020)
+        ));
+        // 200ms 才走 30px：慢慢挪过去，不算。
+        assert!(!is_fast_move(
+            sample(1870, 1050, 1000),
+            sample(1900, 1070, 1200)
+        ));
+    }
+
+    #[test]
+    fn stale_or_zero_interval_samples_are_not_trusted() {
+        // 采样间隔超过上限：鼠标本来是静止的，这一格不能当成瞬时高速。
+        assert!(!is_fast_move(sample(0, 0, 1000), sample(1900, 1070, 1500)));
+        // 同一毫秒的两次采样：除零风险，直接不算。
+        assert!(!is_fast_move(sample(0, 0, 1000), sample(1900, 1070, 1000)));
+    }
+
+    #[test]
+    fn corner_flags_carry_the_fast_only_bit() {
+        let s = setting_with(|s| {
+            s.top_left_hide = true;
+            s.corner_fast_only = false;
+        });
+        assert_eq!(corner_flags_from(&s) & F_FAST, 0);
+        assert!(
+            corner_flags_from(&Setting::default()) & F_FAST != 0,
+            "默认只认快速移动"
+        );
+        assert!(
+            !wants_hook(&setting_with(|s| s.corner_fast_only = true)),
+            "只开「仅快速移动」而没选角落、也没开按键，不该装钩子"
+        );
     }
 
     #[test]

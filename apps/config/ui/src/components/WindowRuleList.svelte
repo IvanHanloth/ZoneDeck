@@ -1,6 +1,5 @@
 <script>
-  // 「隐藏窗口」规则列表（细粒度）：精确规则显示标题 + 进程 + 追溯状态；
-  // 高级模式下可添加 / 编辑标题正则规则。selected 为内部行索引集合。
+  // 「隐藏窗口」规则（细粒度）：精确规则显示标题 + 进程 + 追溯状态。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";
@@ -9,7 +8,7 @@
   import { isRegexRule, traceWindowRule } from "../lib/grouping.js";
   import { app } from "../lib/state.svelte.js";
 
-  let { rules = $bindable([]), advanced = false, onadd, onaddregex } = $props();
+  let { rules = $bindable([]), onadd, onaddregex } = $props();
   let selected = $state([]);
 
   const STATUS = {
@@ -32,11 +31,9 @@
       <button class="mini primary" title="把左侧选中窗口加入" onclick={() => onadd?.()}>
         <IconPlus width="14" height="14" /> 添加窗口
       </button>
-      {#if advanced}
-        <button class="mini" title="添加标题正则规则" onclick={() => onaddregex?.()}>
-          <IconRegex width="14" height="14" /> 正则
-        </button>
-      {/if}
+      <button class="mini" title="添加标题正则规则" onclick={() => onaddregex?.()}>
+        <IconRegex width="14" height="14" /> 正则
+      </button>
       <button class="mini" title="移除选中规则" onclick={remove} disabled={!selected.length}>
         <IconTrash width="14" height="14" /> 移除
       </button>
@@ -45,7 +42,7 @@
 
   <div class="rule-list" role="listbox" aria-label="隐藏窗口规则">
     {#if rules.length === 0}
-      <p class="hint empty">（空）勾选左侧窗口后点「添加窗口」</p>
+      <p class="hint empty">（空）</p>
     {:else}
       {#each rules as rule, i (i)}
         <div class="rule-row">
@@ -150,8 +147,12 @@
     background: var(--accent);
     border-color: var(--accent);
   }
-  .mini.primary:hover {
-    filter: brightness(1.05);
+  /* 选择器要压过 .mini:hover:not(:disabled)，否则主按钮悬浮时会退回半透明的 --hover 底色，
+     白字落在近白的底上直接糊掉。 */
+  .mini.primary:hover:not(:disabled) {
+    color: #fff;
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
   }
   .mini:disabled {
     opacity: 0.45;

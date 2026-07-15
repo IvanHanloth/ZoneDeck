@@ -20,7 +20,7 @@ fn main() {
     res.set("ProductName", "Boss Key");
     res.set("FileDescription", "Boss Key 核心服务");
     res.set("CompanyName", "Ivan Hanloth");
-    res.set("LegalCopyright", "Copyright © Ivan Hanloth");
+    res.set("LegalCopyright", "Copyright © 2022-2026 Ivan Hanloth All Rights Reserved.");
     res.set("OriginalFilename", "core.exe");
     res.compile().expect("嵌入 Windows 资源失败");
 }

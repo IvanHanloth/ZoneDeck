@@ -2,7 +2,6 @@
   import WindowList from "./WindowList.svelte";
   import WindowRuleList from "./WindowRuleList.svelte";
   import ProcessRuleList from "./ProcessRuleList.svelte";
-  import Toggle from "./Toggle.svelte";
   import {
     addProcessRules,
     addWindowRules,
@@ -67,15 +66,6 @@
 </script>
 
 <div class="binding">
-  <div class="topbar">
-    <div class="mode">
-      <Toggle bind:checked={app.config.advanced_mode} label="高级模式" />
-      <span class="mode-hint">
-        {app.config.advanced_mode ? "可用正则匹配窗口标题 / 进程路径" : "点亮以启用正则匹配规则"}
-      </span>
-    </div>
-  </div>
-
   <div class="grid">
     <div class="avail">
       <WindowList
@@ -92,13 +82,11 @@
     <div class="rules">
       <WindowRuleList
         bind:rules={app.config.window_rules}
-        advanced={app.config.advanced_mode}
         onadd={addWindows}
         onaddregex={addWindowRegex}
       />
       <ProcessRuleList
         bind:rules={app.config.process_rules}
-        advanced={app.config.advanced_mode}
         onadd={addProcesses}
         onaddregex={addProcessRegex}
       />
@@ -114,26 +102,6 @@
     height: 100%;
     min-height: 0;
   }
-  .topbar {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex: none;
-  }
-  .mode {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-  }
-  .mode-hint {
-    font-size: 12px;
-    color: var(--muted);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
   .grid {
     flex: 1;
     min-height: 0;

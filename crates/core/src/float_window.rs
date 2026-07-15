@@ -1,8 +1,8 @@
 //! 桌面悬浮窗：一个无边框、置顶、不占任务栏的小窗口，显示程序图标。
 //!
-//! 交互（迁移自旧版 `main/float_window.py`）：
+//! 交互：
 //! - 左键拖动移动位置（拖出屏幕自动夹回工作区内）；
-//! - 双击 = 触发老板键隐藏/显示（沿用 `click_to_hide` 开关，与旧版一致）；
+//! - 双击 = 触发老板键隐藏/显示；
 //! - 右键弹出菜单：设置 / 退出。
 //!
 //! 窗口通过 `WS_EX_LAYERED` + 颜色键让背景透明，看起来是一枚悬浮的图标。
@@ -29,8 +29,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, w};
 
-// ---- 悬浮窗 → 代理窗口的消息协议 ----
-
 /// 悬浮窗把用户意图转发给代理窗口（复用其隐藏/菜单逻辑）。
 pub(crate) const WM_APP_FLOAT: u32 = WM_APP + 4;
 /// 双击：切换隐藏/显示。
@@ -42,8 +40,6 @@ const FLOAT_SIZE: i32 = 64;
 const FLOAT_MARGIN: i32 = 24;
 /// 透明色键（洋红，图标几乎不会用到），背景填充此色后即变透明。
 const COLOR_KEY: COLORREF = COLORREF(0x00FF_00FF);
-
-// ---- 纯几何逻辑（可单测，无 Win32 依赖） ----
 
 /// 工作区（去掉任务栏后的可用屏幕区域），像素坐标。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,8 +64,6 @@ pub fn clamp_position(pos: (i32, i32), size: i32, work: WorkArea) -> (i32, i32) 
     let max_y = (work.bottom - size).max(work.top);
     (x.clamp(work.left, max_x), y.clamp(work.top, max_y))
 }
-
-// ---- Win32 胶水 ----
 
 struct FloatState {
     /// 代理窗口句柄，双击/右键的意图消息发往这里。

@@ -7,8 +7,6 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 export const IN_TAURI =
   typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
-// ---- mock（浏览器预览） ----
-
 const mockConfig = {
   version: "v3.0.0.0",
   history: [],
@@ -25,11 +23,12 @@ const mockConfig = {
     show_float_window: false,
     mouse: {
       left: { enabled: false, clicks: 1, modifiers: "" },
-      middle: { enabled: false, clicks: 1, modifiers: "" },
+      middle: { enabled: true, clicks: 1, modifiers: "" },
       right: { enabled: false, clicks: 1, modifiers: "" },
       side1: { enabled: false, clicks: 1, modifiers: "" },
       side2: { enabled: false, clicks: 1, modifiers: "" },
-      multi_click_ms: 400,
+      multi_click_ms: 350,
+      allow_click_restore: true,
     },
     auto_hide_enabled: false,
     auto_hide_time: 5,
@@ -38,6 +37,7 @@ const mockConfig = {
     bottom_left_hide: false,
     bottom_right_hide: false,
     allow_move_restore: false,
+    corner_fast_only: true,
     log_retention_days: 7,
   },
   notifications: {
@@ -47,7 +47,10 @@ const mockConfig = {
     on_hide: false,
     on_show: false,
   },
-  advanced_mode: false,
+  verhub: {
+    include_preview: false,
+    seen_announcement_id: "",
+  },
   window_rules: [
     {
       title: "微信",
@@ -77,7 +80,10 @@ const mockWindows = [
   { title: "记事本", hwnd: 301, process: "notepad.exe", PID: 4003, path: "C:\\Windows\\notepad.exe" },
 ];
 
-function mockInvoke(cmd) {
+/** mock 下的核心监控状态：让 set_hotkeys_enabled 真的影响 core_status 的回报。 */
+let mockMonitoring = true;
+
+function mockInvoke(cmd, args) {
   switch (cmd) {
     case "load_config":
       return structuredClone(mockConfig);
@@ -88,7 +94,10 @@ function mockInvoke(cmd) {
     case "autostart_status":
       return false;
     case "core_status":
-      return { running: true, hidden: false, elevated: false };
+      return { running: true, hidden: false, elevated: false, monitoring: mockMonitoring };
+    case "set_hotkeys_enabled":
+      mockMonitoring = !!args?.enabled;
+      return true;
     case "start_core":
     case "restart_core":
       return true;
@@ -100,22 +109,50 @@ function mockInvoke(cmd) {
     case "show_windows":
     case "show_all_windows":
     case "set_autostart":
-    case "set_hotkeys_enabled":
     case "open_log_dir":
       return null;
     case "app_info":
       return {
         name: "Boss Key",
-        version: "v3.0.0.0",
+        version: "3.0.0",
         website: "https://github.com/IvanHanloth/Boss-Key",
-        update_feed: "https://ivanhanloth.github.io/Boss-Key/releases.json",
+        author: "Ivan Hanloth",
+        email: "ivan@hanloth.com",
+        blog: "https://blog.ivan-hanloth.cn/",
+        license: "MIT",
       };
+    // Verhub：浏览器预览下不真的联网，给一份能把界面撑起来的假数据。
+    case "verhub_check_update":
+      return {
+        should_update: false,
+        required: false,
+        reason_codes: [],
+        current_version: "3.0.0",
+        latest_version: null,
+        target_version: null,
+      };
+    case "verhub_announcements":
+      return [
+        {
+          id: "mock-1",
+          title: "Boss Key 3.0 发布",
+          content: "全新界面与核心，鼠标按键触发、崩溃恢复、进程冻结。",
+          is_pinned: true,
+          is_hidden: false,
+          author: "Ivan Hanloth",
+          published_at: Date.now(),
+        },
+      ];
+    case "verhub_submit_feedback":
+    case "verhub_upload_log":
+    case "open_external":
+      return null;
+    case "recent_log_tail":
+      return "[mock] 2026-07-14 12:00:00 WARN 这是预览环境的假日志";
     default:
       return null;
   }
 }
-
-// ---- 统一入口 ----
 
 export async function invoke(cmd, args) {
   if (IN_TAURI) return tauriInvoke(cmd, args);

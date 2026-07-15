@@ -1,5 +1,4 @@
 // 热键录制：把键盘事件转换为核心可解析的热键字符串（如 "Ctrl+Alt+Q"）。
-// 纯函数，便于单元测试。
 
 const MODIFIER_KEYS = new Set(["Control", "Alt", "Shift", "Meta"]);
 

@@ -4,7 +4,9 @@
   let { setting } = $props();
 
   const picked = $derived(enabledParts(CORNERS, setting));
-  const frames = $derived(buildTimeline(picked, setting.allow_move_restore));
+  const frames = $derived(
+    buildTimeline(picked, setting.allow_move_restore, setting.corner_fast_only),
+  );
 
   let step = $state(0);
 
@@ -120,7 +122,6 @@
         </g>
       {/each}
 
-      <!-- 骨架屏窗口：演示中被隐藏时淡出并向下收起 -->
       <g class="win" class:gone={!frame.visible}>
         <rect class="win-body" x="120" y="54" width="80" height="76" rx="6" ry="6" />
         <rect class="win-bar" x="120" y="54" width="80" height="14" rx="6" ry="6" />
@@ -134,14 +135,14 @@
       </g>
     </g>
 
-    <!-- 显示器底座 -->
     <rect class="stand" x="140" y="176" width="40" height="16" />
     <rect class="stand" x="112" y="192" width="96" height="10" rx="5" ry="5" />
 
-    <!-- 演示光标 -->
+    <!-- fast 帧是「甩」，位移动画又快又冲 -->
     <g
       class="cursor"
       class:idle={picked.length === 0}
+      class:fast={frame.fast}
       style="--x: {frame.cursor[0]}px; --y: {frame.cursor[1]}px"
     >
       <path
@@ -153,7 +154,7 @@
 
   <p class="caption" class:dim={picked.length === 0}>
     {#if picked.length === 0}
-      还没有选中角落——点一下屏幕的任意一角即可启用。
+      点击屏幕的任意一角即可启用
     {:else}
       {frame.caption}
     {/if}
@@ -267,6 +268,13 @@
     pointer-events: none;
     translate: var(--x) var(--y);
     transition: translate 0.75s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* 「快速移动」：一记加速冲进角落，和核心那边的速度门槛对得上 */
+  .cursor.fast {
+    transition:
+      translate 0.22s cubic-bezier(0.7, 0, 0.9, 0.3),
+      filter 0.22s;
+    filter: blur(0.6px);
   }
   .cursor path {
     fill: var(--text);

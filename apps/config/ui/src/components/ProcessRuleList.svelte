@@ -1,6 +1,5 @@
 <script>
-  // 「隐藏进程」规则列表（粗粒度）：按可执行文件路径隐藏该程序的所有窗口。
-  // 只显示进程 / 路径，不显示任何窗口。高级模式下可添加 / 编辑路径正则规则。
+  // 「隐藏进程」规则（粗粒度）：按可执行文件路径隐藏该程序的所有窗口，而非单个窗口。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";
@@ -9,7 +8,7 @@
   import { isRegexRule } from "../lib/grouping.js";
   import { app } from "../lib/state.svelte.js";
 
-  let { rules = $bindable([]), advanced = false, onadd, onaddregex } = $props();
+  let { rules = $bindable([]), onadd, onaddregex } = $props();
   let selected = $state([]);
 
   function remove() {
@@ -27,11 +26,9 @@
       <button class="mini primary" title="把左侧选中窗口所属进程加入" onclick={() => onadd?.()}>
         <IconPlus width="14" height="14" /> 添加进程
       </button>
-      {#if advanced}
-        <button class="mini" title="添加进程正则规则" onclick={() => onaddregex?.()}>
-          <IconRegex width="14" height="14" /> 正则
-        </button>
-      {/if}
+      <button class="mini" title="添加进程正则规则" onclick={() => onaddregex?.()}>
+        <IconRegex width="14" height="14" /> 正则
+      </button>
       <button class="mini" title="移除选中规则" onclick={remove} disabled={!selected.length}>
         <IconTrash width="14" height="14" /> 移除
       </button>
@@ -40,7 +37,7 @@
 
   <div class="rule-list" role="listbox" aria-label="隐藏进程规则">
     {#if rules.length === 0}
-      <p class="hint empty">（空）勾选左侧窗口后点「添加进程」，隐藏该程序所有窗口</p>
+      <p class="hint empty">（空）</p>
     {:else}
       {#each rules as rule, i (i)}
         <div class="rule-row">
@@ -154,8 +151,12 @@
     background: var(--accent);
     border-color: var(--accent);
   }
-  .mini.primary:hover {
-    filter: brightness(1.05);
+  /* 选择器要压过 .mini:hover:not(:disabled)，否则主按钮悬浮时会退回半透明的 --hover 底色，
+     白字落在近白的底上直接糊掉。 */
+  .mini.primary:hover:not(:disabled) {
+    color: #fff;
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
   }
   .mini:disabled {
     opacity: 0.45;

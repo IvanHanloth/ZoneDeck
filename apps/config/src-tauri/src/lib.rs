@@ -4,6 +4,7 @@ use std::time::Duration;
 use bosskey_common::Config;
 use bosskey_common::ipc::{Command, PipeClient, Response};
 use bosskey_common::model::WindowInfo;
+use bosskey_common::verhub;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
@@ -65,7 +66,10 @@ struct AppInfo {
     name: &'static str,
     version: &'static str,
     website: &'static str,
-    update_feed: &'static str,
+    author: &'static str,
+    email: &'static str,
+    blog: &'static str,
+    license: &'static str,
 }
 
 #[tauri::command]
@@ -158,12 +162,15 @@ struct CoreStatus {
     running: bool,
     hidden: bool,
     elevated: bool,
+    /// 核心此刻是否真的在监听热键与鼠标（由核心回报，不是界面自己猜的）。
+    monitoring: bool,
 }
 
 const CORE_OFFLINE: CoreStatus = CoreStatus {
     running: false,
     hidden: false,
     elevated: false,
+    monitoring: false,
 };
 
 /// 核心状态：单次管道往返 + 快速失败（核心未运行时立即返回，不重试）。
@@ -174,10 +181,15 @@ async fn core_status() -> CoreStatus {
             .fast()
             .send(&Command::GetStatus)
         {
-            Ok(Response::Status { hidden, elevated }) => CoreStatus {
+            Ok(Response::Status {
+                hidden,
+                elevated,
+                monitoring,
+            }) => CoreStatus {
                 running: true,
                 hidden,
                 elevated,
+                monitoring,
             },
             _ => CORE_OFFLINE,
         }
@@ -216,7 +228,6 @@ async fn restart_core(elevated: bool) -> Result<bool, String> {
     .await
 }
 
-/// 请求核心退出。
 #[tauri::command]
 async fn quit_core() -> Result<(), String> {
     blocking(|| {
@@ -226,17 +237,23 @@ async fn quit_core() -> Result<(), String> {
     .await
 }
 
-/// 录制热键时停用全局热键，录完恢复——否则按下的组合键会直接触发现有热键。
+/// 停用 / 恢复核心的热键与鼠标监控（录制热键、在鼠标设置区里操作时用）。
+///
+/// 返回核心是否确实应答：界面据此显示真实状态，而不是一厢情愿地把状态灯改掉。
+/// 核心没运行时返回 false——本来就没有热键会被触发，不算错误。
+/// 停用期间界面须按 `SUSPEND_HEARTBEAT_MS` 重发本命令续期（核心侧有看门狗）。
 #[tauri::command]
-async fn set_hotkeys_enabled(enabled: bool) -> Result<(), String> {
-    blocking(
-        move || match notify_core(&Command::SetHotkeys { enabled }) {
+async fn set_hotkeys_enabled(enabled: bool) -> Result<bool, String> {
+    blocking(move || {
+        match PipeClient::connect_default()
+            .fast()
+            .send(&Command::SetHotkeys { enabled })
+        {
             Ok(Response::Error { message }) => Err(message),
-            Ok(_) => Ok(()),
-            // 核心没运行时无所谓：本来就没有热键会被触发。
-            Err(_) => Ok(()),
-        },
-    )
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    })
     .await
 }
 
@@ -277,7 +294,130 @@ fn app_info() -> AppInfo {
         // 不是配置文件的 schema 版本 APP_CONFIG_VERSION
         version: env!("CARGO_PKG_VERSION"),
         website: "https://github.com/IvanHanloth/Boss-Key",
-        update_feed: "https://ivanhanloth.github.io/Boss-Key/releases.json",
+        author: "Ivan Hanloth",
+        email: "ivan@hanloth.com",
+        blog: "https://blog.ivan-hanloth.cn/",
+        license: "MIT",
+    }
+}
+
+/// 用系统默认浏览器打开外部链接（关于页的博客 / 项目主页 / 版本下载页）。
+///
+/// WebView 里的 `target="_blank"` 在 Tauri 下不会打开浏览器，只能走这里。
+/// 只放行 http/https：`url` 来自界面，但别给「用 ShellExecute 执行任意东西」留口子。
+#[tauri::command]
+async fn open_external(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("只允许打开 http/https 链接".to_string());
+    }
+    blocking(move || {
+        // 交给 explorer 而不是 `cmd /c start`：不弹控制台窗口，也不会把 url 里的 & 当成命令分隔符。
+        std::process::Command::new("explorer")
+            .arg(&url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// 检查更新。`required=true` 即强制更新，界面须阻断使用。
+#[tauri::command]
+async fn verhub_check_update(include_preview: bool) -> Result<verhub::CheckUpdate, String> {
+    blocking(move || {
+        verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview).map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// 公告列表（本平台可见的，从新到旧）。
+#[tauri::command]
+async fn verhub_announcements(limit: u32) -> Result<Vec<verhub::Announcement>, String> {
+    blocking(move || verhub::announcements(limit.clamp(1, 50)).map_err(|e| e.to_string())).await
+}
+
+/// `contact` 可空——留了才好回复用户。
+#[tauri::command]
+async fn verhub_submit_feedback(
+    content: String,
+    rating: Option<u8>,
+    contact: String,
+) -> Result<(), String> {
+    if content.trim().is_empty() {
+        return Err("请先填写反馈内容".to_string());
+    }
+    blocking(move || {
+        let feedback = verhub::Feedback {
+            rating: rating.map(|r| r.clamp(1, 5)),
+            content,
+            platform: verhub::PLATFORM,
+            custom_data: serde_json::json!({
+                "app_version": env!("CARGO_PKG_VERSION"),
+                "os": os_description(),
+                "contact": contact.trim(),
+            }),
+        };
+        verhub::submit_feedback(&feedback).map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// 上报一段日志（出错弹框里由用户点了「上报」才会走到这里；本程序不自动上报）。
+#[tauri::command]
+async fn verhub_upload_log(content: String) -> Result<(), String> {
+    blocking(move || {
+        verhub::upload_log(
+            verhub::LogLevel::Error,
+            &content,
+            serde_json::json!({
+                "app_version": env!("CARGO_PKG_VERSION"),
+                "os": os_description(),
+            }),
+        )
+        .map_err(|e| e.to_string())
+    })
+    .await
+}
+
+/// 最近的本地日志（出错弹框把它展示给用户过目，同意后才上报）。
+/// 取最新一个日志文件的末尾若干行。
+#[tauri::command]
+async fn recent_log_tail(lines: usize) -> String {
+    blocking(move || {
+        let dir = exe_dir().join(bosskey_core::logging::LOG_DIR_NAME);
+        let latest = std::fs::read_dir(&dir)
+            .ok()
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.path().is_file())
+            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
+        let Some(entry) = latest else {
+            return String::new();
+        };
+        let content = std::fs::read_to_string(entry.path()).unwrap_or_default();
+        let tail: Vec<&str> = content.lines().rev().take(lines).collect();
+        tail.into_iter().rev().collect::<Vec<_>>().join("\n")
+    })
+    .await
+}
+
+/// 形如 `Microsoft Windows [版本 10.0.26200.1234]`，随反馈 / 日志一起上报，
+/// 方便定位环境相关的问题。CREATE_NO_WINDOW：否则每次上报都闪一下黑窗口。
+fn os_description() -> String {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let version = std::process::Command::new("cmd")
+        .args(["/C", "ver"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .ok()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+    if version.is_empty() {
+        "Windows".to_string()
+    } else {
+        version
     }
 }
 
@@ -314,6 +454,12 @@ pub fn run() {
             pssuspend_available,
             startup_action,
             app_info,
+            open_external,
+            verhub_check_update,
+            verhub_announcements,
+            verhub_submit_feedback,
+            verhub_upload_log,
+            recent_log_tail,
         ])
         // 窗口以 visible:false 启动，正常情况下由前端画出启动屏后自己 show（见 main.js）。
         // 这里兜底：万一前端起不来，5 秒后强制显示，别留一个永远看不见的窗口。

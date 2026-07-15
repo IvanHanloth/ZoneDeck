@@ -1,10 +1,13 @@
 <script>
-  // 修饰键录制：点击后按住想要的修饰键（Ctrl / Alt / Shift / Win），松手即写入。
   // 和 HotkeyRecorder 的区别是这里没有主键——主键是鼠标按钮本身。
   import { onDestroy } from "svelte";
   import { modifiersFromEvent } from "../lib/hotkey.js";
+  import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
 
   let { value = $bindable(""), compact = false } = $props();
+
+  // 每个录制器一个独立的停用理由（对象身份即标识）。
+  const REASON = { recorder: "modifier" };
 
   let recording = $state(false);
   let held = $state(""); // 录制过程中按住过的最大组合
@@ -22,7 +25,6 @@
 
   function onKeyup(e) {
     e.preventDefault();
-    // 修饰键全部松开 → 录制完成
     if (!e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && held) {
       value = held;
       stop();
@@ -33,6 +35,7 @@
     if (recording) return stop();
     recording = true;
     held = "";
+    suspendMonitoring(REASON);
     window.addEventListener("keydown", onKeydown, true);
     window.addEventListener("keyup", onKeyup, true);
     timer = setTimeout(stop, 10_000);
@@ -45,6 +48,7 @@
     clearTimeout(timer);
     window.removeEventListener("keydown", onKeydown, true);
     window.removeEventListener("keyup", onKeyup, true);
+    resumeMonitoring(REASON);
   }
 
   function clear() {

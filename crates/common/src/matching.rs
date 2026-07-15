@@ -106,7 +106,6 @@ pub fn match_process_rule<'a>(
     rule: &ProcessRule,
     windows: &'a [WindowInfo],
 ) -> Vec<&'a WindowInfo> {
-    // 匹配主体：文件名 或 完整路径。
     let subject = |w: &WindowInfo| -> String {
         if rule.by_name {
             w.process.clone()
@@ -145,8 +144,6 @@ mod tests {
     fn win(title: &str, hwnd: i64, process: &str, pid: u32, path: &str) -> WindowInfo {
         WindowInfo::new(title, hwnd, process, pid, path)
     }
-
-    // ---- 窗口规则：精确 + 追溯 ----
 
     #[test]
     fn window_rule_live_matches_by_hwnd() {
@@ -204,8 +201,6 @@ mod tests {
         );
     }
 
-    // ---- 窗口规则：正则 ----
-
     #[test]
     fn window_regex_matches_multiple_titles() {
         let rule = WindowRule::from_regex("^项目.*");
@@ -232,8 +227,6 @@ mod tests {
         );
     }
 
-    // ---- 进程规则 ----
-
     #[test]
     fn process_rule_exact_hides_all_windows_of_path() {
         let rule = ProcessRule::from_window(&win("窗口一", 1, "game.exe", 1, "C:\\game.exe"));
@@ -256,8 +249,6 @@ mod tests {
             "空路径规则不应命中任何窗口"
         );
     }
-
-    // ---- 匹配范围（scope） ----
 
     #[test]
     fn scope_excludes_background_and_untitled_by_default() {
@@ -314,8 +305,6 @@ mod tests {
         assert_eq!(hits.len(), 1, "默认不纳入后台窗口，避免恢复时误显示");
         assert_eq!(hits[0].hwnd, 1);
     }
-
-    // ---- 进程按文件名匹配 ----
 
     #[test]
     fn process_rule_by_name_ignores_install_path() {

@@ -1,5 +1,4 @@
 // 三态主题：auto（跟随系统）→ light → dark 循环。
-// 纯逻辑（cycle/resolve）与 DOM 应用分离，便于单元测试。
 
 export const THEMES = ["auto", "light", "dark"];
 const STORAGE_KEY = "bosskey-theme";
@@ -28,8 +27,6 @@ export function themeLabel(preference) {
     ] ?? "主题"
   );
 }
-
-// ---- DOM 侧（浏览器环境） ----
 
 export function loadPreference() {
   try {

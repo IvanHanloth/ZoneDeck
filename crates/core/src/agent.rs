@@ -42,6 +42,8 @@ const MENU_RESTORE: usize = 1005;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
 const AUTO_HIDE_TIMER_ID: usize = 11;
+/// 监控停用看门狗：配置程序停用监控后须持续心跳，超时未收到就恢复监控。
+const SUSPEND_GUARD_TIMER_ID: usize = 12;
 const AUTO_HIDE_INTERVAL_MS: u32 = 5000;
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
@@ -72,6 +74,12 @@ struct AgentState {
     ipc_rx: Receiver<(Command, Sender<Response>)>,
     mouse_hook: Option<MouseHook>,
     float_window: Option<FloatWindow>,
+    /// 是否正在监听热键与鼠标。配置程序录制热键 / 在鼠标设置区里操作时会把它按下去
+    /// （见 `Command::SetHotkeys`），此后一切重装监控的动作都必须尊重它——
+    /// 尤其是保存配置触发的 `ReloadConfig`，否则暂停会被自动保存悄悄复活。
+    monitoring: bool,
+    /// 热键当前是否已注册。重复 RegisterHotKey 会失败并刷出误导性的告警，故显式记账。
+    hotkeys_armed: bool,
 }
 
 impl AgentState {
@@ -98,8 +106,21 @@ impl AgentState {
         }
     }
 
+    /// 让热键与鼠标钩子对齐 `self.monitoring`。幂等：已是目标状态时什么都不做。
+    fn sync_monitoring(&mut self, hwnd: HWND) {
+        if self.monitoring && !self.hotkeys_armed {
+            self.register_hotkeys(hwnd);
+            self.hotkeys_armed = true;
+        } else if !self.monitoring && self.hotkeys_armed {
+            self.unregister_hotkeys(hwnd);
+            self.hotkeys_armed = false;
+        }
+        self.refresh_runtime(hwnd);
+    }
+
     fn refresh_runtime(&mut self, hwnd: HWND) {
-        if mouse_hook::wants_hook(&self.config.setting) {
+        // 监控停用期间一律不装鼠标钩子：用户正在设置界面里点鼠标，装上就是自找触发。
+        if self.monitoring && mouse_hook::wants_hook(&self.config.setting) {
             mouse_hook::set_flags(&self.config.setting);
             if self.mouse_hook.is_none() {
                 self.mouse_hook = MouseHook::install(hwnd, &self.config.setting);
@@ -115,7 +136,6 @@ impl AgentState {
             }
         }
 
-        // 悬浮窗：按需创建/销毁（与鼠标钩子同一惯用法）。
         if self.config.setting.show_float_window {
             if self.float_window.is_none() {
                 self.float_window = FloatWindow::create(hwnd);
@@ -192,10 +212,14 @@ impl AgentState {
         match cmd {
             Command::ReloadConfig => match Config::load(&self.config_path) {
                 Ok(config) => {
-                    self.unregister_hotkeys(hwnd);
+                    // 热键内容可能变了，先摘掉旧的；能不能装回去由 sync_monitoring 说了算
+                    // （监控被配置界面停用时，这里绝不能把它复活）。
+                    if self.hotkeys_armed {
+                        self.unregister_hotkeys(hwnd);
+                        self.hotkeys_armed = false;
+                    }
                     self.config = config;
-                    self.register_hotkeys(hwnd);
-                    self.refresh_runtime(hwnd);
+                    self.sync_monitoring(hwnd);
                     (Response::Ok, false)
                 }
                 Err(e) => (
@@ -221,6 +245,7 @@ impl AgentState {
                 Response::Status {
                     hidden: self.controller.is_hidden(),
                     elevated: crate::elevation::is_elevated(),
+                    monitoring: self.monitoring,
                 },
                 false,
             ),
@@ -237,15 +262,34 @@ impl AgentState {
                 (Response::Ok, false)
             }
             Command::SetAutostart { enabled } => (set_autostart(enabled), false),
-            // 录制热键期间停用全局热键，录完再恢复。ReloadConfig（保存配置时触发）
-            // 也会重注册热键，作为“配置程序中途崩溃”的兜底。
+            // 配置界面录制热键 / 在鼠标设置区里操作时，整套监控都得停：热键会被录制的组合键
+            // 直接触发，鼠标钩子则会把用户在设置界面里的点击当成触发（比如刚设好左键双击，
+            // 一双击就把设置窗口藏了）。
+            //
+            // 停用是有状态的，期间的 ReloadConfig 不会复活它——自动保存每改一下就发一次
+            // ReloadConfig。代价是配置程序若在停用期间崩溃，热键就再也回不来，故用看门狗
+            // 兜底：配置程序须持续重发停用心跳（幂等），超时未收到就自行恢复。
             Command::SetHotkeys { enabled } => {
-                if enabled {
-                    self.register_hotkeys(hwnd);
-                    logging::debug("已恢复全局热键");
-                } else {
-                    self.unregister_hotkeys(hwnd);
-                    logging::debug("录制中：已临时停用全局热键");
+                let changed = self.monitoring != enabled;
+                self.monitoring = enabled;
+                self.sync_monitoring(hwnd);
+                unsafe {
+                    let _ = KillTimer(Some(hwnd), SUSPEND_GUARD_TIMER_ID);
+                    if !enabled {
+                        SetTimer(
+                            Some(hwnd),
+                            SUSPEND_GUARD_TIMER_ID,
+                            bosskey_common::ipc::SUSPEND_TIMEOUT_MS,
+                            None,
+                        );
+                    }
+                }
+                if changed {
+                    logging::debug(if enabled {
+                        "已恢复热键与鼠标监控"
+                    } else {
+                        "配置中：已临时停用热键与鼠标监控"
+                    });
                 }
                 (Response::Ok, false)
             }
@@ -507,7 +551,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_APP_FLOAT => {
             match wparam.0 {
-                // 双击悬浮窗 = 触发老板键（沿用旧版：受 click_to_hide 约束）。
+                // 双击悬浮窗 = 触发老板键（受 click_to_hide 约束）。
                 FLOAT_TOGGLE => {
                     if state.config.setting.click_to_hide {
                         state.apply_toggle();
@@ -533,16 +577,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_MOUSE_TRIGGER => {
-            if wparam.0 == TRIGGER_CORNER {
-                if state.controller.is_hidden() {
-                    if state.config.setting.allow_move_restore {
-                        state.apply_show();
-                    }
-                } else {
-                    state.apply_hide();
+            // 角落和按键都是「隐藏一律生效，恢复看各自的开关」。
+            let allow_restore = if wparam.0 == TRIGGER_CORNER {
+                state.config.setting.allow_move_restore
+            } else {
+                state.config.setting.mouse.allow_click_restore
+            };
+            if state.controller.is_hidden() {
+                if allow_restore {
+                    state.apply_show();
                 }
             } else {
-                state.apply_toggle();
+                state.apply_hide();
             }
             LRESULT(0)
         }
@@ -553,6 +599,17 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         let _ = KillTimer(Some(hwnd), AUTO_QUIT_TIMER_ID);
                     }
                     quit(state, hwnd);
+                }
+                // 配置程序在“监控已停用”期间崩了（心跳断了），把热键还给用户。
+                SUSPEND_GUARD_TIMER_ID => {
+                    unsafe {
+                        let _ = KillTimer(Some(hwnd), SUSPEND_GUARD_TIMER_ID);
+                    }
+                    if !state.monitoring {
+                        logging::warn("配置程序长时间未续期监控停用，已自动恢复热键与鼠标监控");
+                        state.monitoring = true;
+                        state.sync_monitoring(hwnd);
+                    }
                 }
                 AUTO_HIDE_TIMER_ID => {
                     if state.config.setting.auto_hide_enabled {
@@ -644,6 +701,8 @@ pub fn run(options: AgentOptions) {
         ipc_rx,
         mouse_hook: None,
         float_window: None,
+        monitoring: true,
+        hotkeys_armed: false,
     });
 
     // 恢复文件存在 = 上次异常退出时仍有窗口被隐藏，先把它们找回来。
@@ -656,13 +715,11 @@ pub fn run(options: AgentOptions) {
         recovery::clear(&state.recovery_path);
     }
 
-    state.register_hotkeys(hwnd);
-
     unsafe {
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, &mut *state as *mut AgentState as isize);
     }
 
-    state.refresh_runtime(hwnd);
+    state.sync_monitoring(hwnd);
 
     let hwnd_value = hwnd.0 as isize;
     ipc_server::spawn(options.pipe_name.clone(), move |cmd| {

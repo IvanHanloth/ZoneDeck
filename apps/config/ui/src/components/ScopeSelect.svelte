@@ -1,5 +1,4 @@
 <script>
-  // 匹配范围下拉多选：可同时勾选「包含无标题窗口」「包含后台窗口」。
   // 默认（都不勾）＝只在当前可见且有标题的窗口中匹配，与左侧「现有窗口」的默认筛选一致。
   import IconFilter from "~icons/lucide/list-filter";
   import IconChevron from "~icons/lucide/chevron-down";
@@ -51,15 +50,13 @@
       <label class="opt">
         <input type="checkbox" bind:checked={includeUntitled} />
         <span>
-          包含无标题窗口
-          <em>把没有标题的窗口也纳入匹配</em>
+          匹配无标题窗口
         </span>
       </label>
       <label class="opt">
         <input type="checkbox" bind:checked={includeBackground} />
         <span>
-          包含后台窗口
-          <em>把当前不可见的窗口也纳入匹配</em>
+          匹配后台窗口
         </span>
       </label>
     </div>

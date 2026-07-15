@@ -1,4 +1,4 @@
-// 窗口列表分组与集合运算。纯函数，便于单元测试。
+// 窗口列表分组与集合运算。
 
 /** 两个 WindowInfo 是否指同一窗口（枚举快照内 hwnd + 进程名唯一）。 */
 export function sameWindow(a, b) {
@@ -65,7 +65,7 @@ export function splitByVisibility(windows) {
 /** 与核心 NO_TITLE 常量一致，用于识别无标题窗口。 */
 export const NO_TITLE = "无标题窗口";
 
-// ---- 规则构造与追溯（与核心 matching.rs 语义同构） ----
+// 规则构造与追溯：与核心 matching.rs 语义同构。
 
 /** 转义正则元字符，把任意字面量安全地嵌进正则里。 */
 export function escapeRegex(text) {
@@ -103,7 +103,7 @@ export function processRuleFromWindow(w) {
 }
 
 /**
- * 新的「窗口」正则规则（高级模式：标题正则）。
+ * 新的「窗口」正则规则（标题正则）。
  * 默认值是一条「包含式」正则——优先用左侧选中窗口的标题作为种子。
  */
 export function newWindowRegexRule(seedTitle) {
@@ -121,7 +121,7 @@ export function newWindowRegexRule(seedTitle) {
 }
 
 /**
- * 新的「进程」正则规则（高级模式）。默认作用于完整路径，种子取选中窗口的进程名——
+ * 新的「进程」正则规则。默认作用于完整路径，种子取选中窗口的进程名——
  * 「包含式」正则对路径和文件名两种模式都成立。
  */
 export function newProcessRegexRule(seedProcess) {
@@ -135,7 +135,6 @@ export function newProcessRegexRule(seedProcess) {
   };
 }
 
-/** 是否为正则（高级）规则。 */
 export function isRegexRule(rule) {
   return rule && rule.regex != null;
 }

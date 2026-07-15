@@ -1,14 +1,11 @@
 <script>
-  // 鼠标示意图：点亮哪颗键，哪颗键就能触发隐藏。五颗键都可用（左 / 中 / 右 / 两颗侧键），
-  // 每颗键各自配「连击几次」和「要不要按住修饰键」，连击判定窗口全局共用一个。
+  // 连击判定窗口全局共用一个（那一项在 HotkeysPanel 的 SettingRow 里，与「按键恢复」并排）。
   // 图形几何取自根目录 mouse_icon.svg。
+  //
+  // 「鼠标进了设置区就让核心停手」的热区在 HotkeysPanel 上（整张卡片），
+  // 不在这里——否则卡片里的其它设置行不在热区内，在那儿双击照样会把窗口藏掉。
   import ModifierRecorder from "./ModifierRecorder.svelte";
-  import {
-    MAX_MULTI_CLICK_MS,
-    MIN_MULTI_CLICK_MS,
-    MOUSE_PARTS,
-    describeTrigger,
-  } from "../lib/pointer.js";
+  import { MOUSE_PARTS, describeTrigger } from "../lib/pointer.js";
 
   let { mouse } = $props();
 
@@ -28,10 +25,8 @@
 
 <div class="picker">
   <svg class="mouse" viewBox="0 0 607 924" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <!-- 外壳 -->
     <rect class="shell" x="16" y="16" width="575" height="892" rx="287.5" ry="287.5" />
 
-    <!-- 左键 -->
     <g
       class="part"
       class:on={mouse.left.enabled}
@@ -45,7 +40,6 @@
       <path d="M 16 418 L 16 303.5 A 287.5 287.5 0 0 1 303.5 16 L 303.5 418 Z" />
     </g>
 
-    <!-- 右键 -->
     <g
       class="part"
       class:on={mouse.right.enabled}
@@ -59,7 +53,7 @@
       <path d="M 591 418 L 591 303.5 A 287.5 287.5 0 0 0 303.5 16 L 303.5 418 Z" />
     </g>
 
-    <!-- 侧键 1（前进键）：靠前的那半。侧键画得很窄，用透明矩形把点击区扩到壳体外侧 -->
+    <!-- 侧键画得很窄，用透明矩形把点击区扩到壳体外侧 -->
     <g
       class="part"
       class:on={mouse.side1.enabled}
@@ -74,7 +68,6 @@
       <path d="M 16 355 C 64 355, 64 355, 64 400 L 64 510 L 16 510 Z" />
     </g>
 
-    <!-- 侧键 2（后退键）：靠后的那半 -->
     <g
       class="part"
       class:on={mouse.side2.enabled}
@@ -89,7 +82,7 @@
       <path d="M 16 510 L 64 510 L 64 615 C 64 665, 64 665, 16 665 Z" />
     </g>
 
-    <!-- 中键（滚轮）：画在左右键之上，压住它们的分界线 -->
+    <!-- 画在左右键之上，压住它们的分界线 -->
     <g
       class="part"
       class:on={mouse.middle.enabled}
@@ -142,22 +135,6 @@
     {/each}
   </ul>
 </div>
-
-<div class="window">
-  <label class="win-label" for="multi-click-ms">连击判定窗口</label>
-  <div class="win-ctl">
-    <input
-      id="multi-click-ms"
-      type="number"
-      min={MIN_MULTI_CLICK_MS}
-      max={MAX_MULTI_CLICK_MS}
-      step="50"
-      bind:value={mouse.multi_click_ms}
-    />
-    <span class="muted">毫秒</span>
-  </div>
-</div>
-
 
 <style>
   .picker {
@@ -307,31 +284,6 @@
   .seg.sel {
     background: var(--accent);
     color: var(--on-accent);
-  }
-
-  .window {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    flex-wrap: wrap;
-    padding-top: 4px;
-    border-top: 1px solid var(--border);
-    margin-top: 4px;
-  }
-  .win-label {
-    font-size: 13px;
-  }
-  .win-ctl {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-  .win-ctl input {
-    width: 84px;
-  }
-  .win-ctl .muted {
-    font-size: 12px;
   }
 
   @media (max-width: 560px) {

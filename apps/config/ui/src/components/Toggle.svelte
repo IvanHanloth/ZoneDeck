@@ -1,5 +1,4 @@
 <script>
-  // 开关控件：双向绑定 checked；大点击区、支持键盘操作。
   let {
     checked = $bindable(false),
     label = "",

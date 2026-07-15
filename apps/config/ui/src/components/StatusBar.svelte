@@ -25,7 +25,6 @@
     applyTheme(themePref);
   }
 
-
   async function openLog() {
     try {
       await invoke("open_log_dir");
@@ -34,13 +33,18 @@
     }
   }
 
-  function toggleMenu() {
-    menuOpen = !menuOpen;
-  }
-
-  function closeMenu() {
-    menuOpen = false;
-  }
+  // 录制热键 / 鼠标停在鼠标设置区时，核心会临时停掉监控（见 state.svelte.js）。
+  // 这里显示的是**核心回报的真实状态**（core_status.monitoring），不是界面的一厢情愿：
+  // 状态灯变了，就意味着核心那边确实已经停手了。
+  const monitoring = $derived(app.status.monitoring);
+  const monitorText = $derived(
+    app.monitorPending ? "切换中…" : monitoring ? "热键生效" : "热键暂停",
+  );
+  const monitorTitle = $derived(
+    monitoring
+      ? "核心正在监听热键与鼠标触发"
+      : "核心已停止监听：录制热键或调整鼠标设置时自动暂停，避免误触发",
+  );
 
   const statusText = $derived(
     running === null ? "检测中…" : running ? "核心运行中" : "核心未运行",
@@ -112,6 +116,12 @@
       {themeIcon(themePref)}
     </button>
 
+    {#if running}
+      <span class="monitor" class:paused={!monitoring} title={monitorTitle}>
+        <i class="dot"></i>
+        {monitorText}
+      </span>
+    {/if}
     <span class="save" class:saving={app.saving}>
       {#if app.saving}保存中…{:else}<IconCheck width="12" height="12" /> 已保存{/if}
     </span>
@@ -185,7 +195,6 @@
     border-color: var(--accent);
   }
 
-  /* 纯图标按钮：正方形点击区 */
   .act.icon {
     padding: 3px;
     width: 24px;
@@ -242,6 +251,29 @@
     background: rgba(229, 72, 77, 0.1);
   }
 
+  .monitor {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .monitor .dot {
+    background: var(--ok);
+  }
+  .monitor.paused {
+    color: var(--warn);
+  }
+  .monitor.paused .dot {
+    background: var(--warn);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  @keyframes blink {
+    50% {
+      opacity: 0.3;
+    }
+  }
+
   .save {
     display: inline-flex;
     align-items: center;
@@ -254,7 +286,8 @@
   }
 
   @media (max-width: 560px) {
-    .save {
+    .save,
+    .monitor {
       display: none;
     }
   }

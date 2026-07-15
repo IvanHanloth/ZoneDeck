@@ -50,17 +50,24 @@ export function cursorTarget(corners, index) {
 
 /**
  * 四角演示的时间轴：按 CORNERS 的顺序（左上→右上→左下→右下）逐个角落演示，
- * 每个角先演一遍「甩过去 → 窗口隐藏」，再按 allowRestore 演恢复的方式。
+ * 每个角先演一遍「移动过去 → 窗口隐藏」，再按 allowRestore 演恢复的方式。
  * 每帧描述某一瞬间的画面：光标停在哪、骨架屏窗口是否可见、往哪个角收起、配文是什么。
+ *
+ * fastOnly 对应核心的「仅快速移动才触发」：为真时冲向角落的那两帧会标 fast，
+ * 界面据此把光标的位移动画改成一记快甩，配文也说「快速甩到」。
  */
-export function buildTimeline(corners, allowRestore) {
+export function buildTimeline(corners, allowRestore, fastOnly = true) {
   const frames = [];
+  const reach = fastOnly ? "快速移动到" : "把鼠标移动到";
+  const again = fastOnly ? "再快速移动一次" : "再移动一次";
+
   for (const c of corners) {
     frames.push({
       corner: c.key,
       cursor: c.cursor,
       visible: true,
-      caption: `把鼠标移动至${c.label}`,
+      fast: fastOnly,
+      caption: `${reach}${c.label}`,
       ms: 1100,
     });
     frames.push({
@@ -82,7 +89,8 @@ export function buildTimeline(corners, allowRestore) {
         corner: c.key,
         cursor: c.cursor,
         visible: false,
-        caption: `再次移动至${c.label}`,
+        fast: fastOnly,
+        caption: `${again}`,
         ms: 1100,
       });
       frames.push({

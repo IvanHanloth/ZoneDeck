@@ -255,7 +255,6 @@ fn write_task_xml(path: &Path, xml: &str) -> std::io::Result<()> {
     std::fs::write(path, bytes)
 }
 
-/// 通过 XML 注册计划任务，成功返回 true。
 fn task_create_from_xml(task_name: &str, xml: &str) -> bool {
     let path = std::env::temp_dir().join(format!("{task_name}.xml"));
     if write_task_xml(&path, xml).is_err() {
