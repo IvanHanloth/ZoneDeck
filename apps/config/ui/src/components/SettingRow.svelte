@@ -1,8 +1,8 @@
 <script>
-  let { label, description = "", control } = $props();
+  let { label, description = "", control, disabled = false } = $props();
 </script>
 
-<div class="row">
+<div class="row" class:disabled>
   <div class="text">
     <div class="label">{label}</div>
     {#if description}<div class="desc">{description}</div>{/if}
@@ -21,6 +21,11 @@
   }
   .row:last-child {
     border-bottom: none;
+  }
+  /* 置灰：淡化标题与描述，交由控件自身处理禁用态。 */
+  .row.disabled .label,
+  .row.disabled .desc {
+    opacity: 0.45;
   }
   .text {
     min-width: 0;

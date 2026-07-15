@@ -8,7 +8,7 @@ use bosskey_common::verhub;
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
-const CORE_EXE: &str = "core.exe";
+const CORE_EXE: &str = "Boss Key.exe";
 
 fn exe_dir() -> PathBuf {
     std::env::current_exe()

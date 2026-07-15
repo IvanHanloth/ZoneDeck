@@ -27,30 +27,39 @@ impl Effects for WinEffects {
     }
 
     fn suspend(&self, pid: u32, enhanced: bool) {
+        // 每一次冻结调用（含增强/普通、成功/失败）都以 info 写日志，便于定位。
         if enhanced && freeze::pssuspend_available(&self.exe_dir) {
             match freeze::suspend_enhanced(&self.exe_dir, pid) {
-                Ok(()) => return,
+                Ok(()) => {
+                    logging::info(&format!("增强冻结成功 (pid={pid})"));
+                    return;
+                }
                 Err(e) => logging::warn(&format!(
                     "增强冻结失败，回退普通冻结 (pid={pid}): {e}"
                 )),
             }
         }
-        if let Err(e) = freeze::suspend_process(pid) {
-            logging::warn(&format!("冻结进程失败 (pid={pid}): {e}"));
+        match freeze::suspend_process(pid) {
+            Ok(()) => logging::info(&format!("普通冻结成功 (pid={pid})")),
+            Err(e) => logging::warn(&format!("冻结进程失败 (pid={pid}): {e}")),
         }
     }
 
     fn resume(&self, pid: u32, enhanced: bool) {
         if enhanced && freeze::pssuspend_available(&self.exe_dir) {
             match freeze::resume_enhanced(&self.exe_dir, pid) {
-                Ok(()) => return,
+                Ok(()) => {
+                    logging::info(&format!("增强解冻成功 (pid={pid})"));
+                    return;
+                }
                 Err(e) => logging::warn(&format!(
                     "增强解冻失败，回退普通解冻 (pid={pid}): {e}"
                 )),
             }
         }
-        if let Err(e) = freeze::resume_process(pid) {
-            logging::warn(&format!("解冻进程失败 (pid={pid}): {e}"));
+        match freeze::resume_process(pid) {
+            Ok(()) => logging::info(&format!("普通解冻成功 (pid={pid})")),
+            Err(e) => logging::warn(&format!("解冻进程失败 (pid={pid}): {e}")),
         }
     }
 

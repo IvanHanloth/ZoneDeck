@@ -96,6 +96,42 @@ pub fn process_tree() -> Vec<(u32, u32)> {
     edges
 }
 
+/// 枚举系统全部进程，返回 `pid → 映像名`（如 `cloudmusic.exe`）的映射。
+/// 供日志把冻结目标的进程名一并写出，便于定位。快照打不开时返回空表。
+pub fn process_names() -> std::collections::HashMap<u32, String> {
+    use windows::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
+        TH32CS_SNAPPROCESS,
+    };
+
+    let mut names = std::collections::HashMap::new();
+    unsafe {
+        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
+            return names;
+        };
+        let mut entry = PROCESSENTRY32W {
+            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        if Process32FirstW(snapshot, &mut entry).is_ok() {
+            loop {
+                let end = entry
+                    .szExeFile
+                    .iter()
+                    .position(|&c| c == 0)
+                    .unwrap_or(entry.szExeFile.len());
+                let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
+                names.insert(entry.th32ProcessID, name);
+                if Process32NextW(snapshot, &mut entry).is_err() {
+                    break;
+                }
+            }
+        }
+        let _ = CloseHandle(snapshot);
+    }
+    names
+}
+
 fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -118,8 +154,20 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if output.status.success() {
         Ok(())
     } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let detail = stderr.trim();
+        // pssuspend 把失败原因（如「拒绝访问」「进程不存在」）打到 stdout，
+        // 而非 stderr；两路都收进来，否则日志只剩一个退出码、无从排查。
+        // 它按系统本地代码页（中文系统 GBK）输出，须按 ANSI 解码，否则中文乱码。
+        let mut detail = crate::util::from_ansi(&output.stdout).trim().to_string();
+        let stderr = crate::util::from_ansi(&output.stderr);
+        let stderr = stderr.trim();
+        if !stderr.is_empty() {
+            if detail.is_empty() {
+                detail = stderr.to_string();
+            } else {
+                detail.push('；');
+                detail.push_str(stderr);
+            }
+        }
         let detail = if detail.is_empty() {
             format!("退出码 {}", output.status)
         } else {
