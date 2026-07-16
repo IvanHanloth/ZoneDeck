@@ -21,7 +21,7 @@
 #define SourceDir "..\..\dist\Boss-Key"
 
 [Setup]
-AppId={{C993A2A8-0714-46E7-A393-DF3F19C43537}
+AppId={{BA8E9784-B92D-48EE-B447-99709232260B}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 VersionInfoVersion={#MyAppVersion4}
@@ -51,6 +51,11 @@ Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.i
 Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
+[CustomMessages]
+chinesesimplified.KeepConfigPrompt=是否保留配置文件（config.json）？%n%n选择“是”将保留你的设置，重新安装后可继续使用；%n选择“否”将删除包括配置文件在内的整个安装目录。
+chinesetraditional.KeepConfigPrompt=是否保留設定檔（config.json）？%n%n選擇「是」將保留你的設定，重新安裝後可繼續使用；%n選擇「否」將刪除包括設定檔在內的整個安裝目錄。
+english.KeepConfigPrompt=Do you want to keep your settings file (config.json)?%n%nChoose "Yes" to keep your settings for a future reinstall;%nchoose "No" to delete the entire installation folder, including the settings file.
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
@@ -68,19 +73,72 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; Tasks: desktop
 [Run]
 Filename: "{app}\{#CoreExe}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
-[UninstallRun]
-; 卸载前结束常驻核心，避免文件占用
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /IM {#CoreExe}"; Flags: runhidden; RunOnceId: "KillCore"
-
 [Code]
-// 安装前结束正在运行的核心（无窗口进程，CloseApplications 无法关闭它）
-function PrepareToInstall(var NeedsRestart: Boolean): String;
+// 自启残留项，须与 crates/core/src/autostart.rs 中的常量保持一致。
+const
+  AutostartTaskName = 'BossKeyAutostart';
+  RunSubkey = 'Software\Microsoft\Windows\CurrentVersion\Run';
+  RunValueName = 'Boss Key Application';
+
+// 强制结束核心与配置进程。核心是无窗口常驻进程，CloseApplications 关不掉它；
+// 且映像名 "Boss Key.exe" 含空格，taskkill 的 /IM 值必须加引号，否则参数被拆断而失败。
+procedure KillRunningApps;
 var
   ResultCode: Integer;
 begin
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#CoreExe}', '',
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM "{#CoreExe}"', '',
     SW_HIDE, ewWaitUntilTerminated, ResultCode);
-  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM {#ConfigExe}', '',
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM "{#ConfigExe}"', '',
     SW_HIDE, ewWaitUntilTerminated, ResultCode);
+end;
+
+// 清理自启残留：先删计划任务，否则任务里的失败自动重启（看门狗）会在卸载途中
+// 把核心重新拉起、重新占用文件；再删注册表启动项。
+procedure RemoveAutostart;
+var
+  ResultCode: Integer;
+begin
+  Exec(ExpandConstant('{sys}\schtasks.exe'),
+    '/Delete /F /TN "' + AutostartTaskName + '"', '',
+    SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  RegDeleteValue(HKEY_CURRENT_USER, RunSubkey, RunValueName);
+end;
+
+// 安装前结束正在运行的核心（无窗口进程，CloseApplications 无法关闭它）
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  KillRunningApps;
   Result := '';
+end;
+
+// 卸载时清理：
+// - usUninstall（删文件前）：摘掉自启看门狗并结束进程，确保核心不会被重新拉起、文件不被占用。
+// - usPostUninstall（删文件后）：清理运行时产物（日志、恢复文件），并询问是否保留配置文件；
+//   保留则只留下 config.json，不保留则连同整个安装目录一起删除。静默卸载不弹窗，默认保留配置。
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  AppDir: string;
+  KeepConfig: Boolean;
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    RemoveAutostart;
+    KillRunningApps;
+    Exit;
+  end;
+
+  if CurUninstallStep <> usPostUninstall then
+    Exit;
+  AppDir := ExpandConstant('{app}');
+  DelTree(AppDir + '\logs', True, True, True);
+  DeleteFile(AppDir + '\recovery.json');
+  if FileExists(AppDir + '\config.json') then
+  begin
+    KeepConfig := UninstallSilent or
+      (MsgBox(CustomMessage('KeepConfigPrompt'), mbConfirmation, MB_YESNO) = IDYES);
+    if not KeepConfig then
+      DelTree(AppDir, True, True, True);
+  end
+  else
+    RemoveDir(AppDir);
 end;
