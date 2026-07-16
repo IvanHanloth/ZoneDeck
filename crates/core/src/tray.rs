@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::{
@@ -6,12 +8,28 @@ use windows::Win32::UI::Shell::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     HICON, IDI_APPLICATION, IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, LoadIconW, LoadImageW,
+    RegisterWindowMessageW,
 };
-use windows::core::PCWSTR;
+use windows::core::{PCWSTR, w};
 
+use crate::logging;
 use crate::util::to_wide_null;
 
 const TRAY_ID: u32 = 1;
+
+/// 定时重试挂载的上限：仅作为 TaskbarCreated 广播的兜底，超限后靠广播补挂。
+const MAX_TRAY_RETRY: u32 = 30;
+
+/// TaskbarCreated 广播消息 ID：explorer（重）建任务栏时向所有顶层窗口广播。
+pub(crate) fn taskbar_created_msg() -> u32 {
+    static MSG: OnceLock<u32> = OnceLock::new();
+    *MSG.get_or_init(|| unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) })
+}
+
+/// 决定是否继续定时重试挂载托盘图标。
+fn should_retry(desired: bool, visible: bool, attempts: u32) -> bool {
+    desired && !visible && attempts < MAX_TRAY_RETRY
+}
 
 /// 嵌入 exe 的主图标资源 ID（tauri-winres 默认，即 IDI_APPLICATION）。
 const APP_ICON_RESOURCE_ID: u16 = 32512;
@@ -83,7 +101,12 @@ fn load_icon_from_file() -> Option<HICON> {
 
 pub struct TrayIcon {
     hwnd: HWND,
+    /// 业务层期望的可见性（如「隐藏后同时隐藏图标」时为 false）。
+    desired: bool,
+    /// 图标是否实际已挂到任务栏（NIM_ADD 成功）。
     visible: bool,
+    /// 定时兜底重试的已尝试次数，挂载成功后清零。
+    retry_attempts: u32,
     icon: HICON,
     tip: String,
     callback_msg: u32,
@@ -93,12 +116,16 @@ impl TrayIcon {
     pub fn new(hwnd: HWND, callback_msg: u32, tip: &str) -> Self {
         let mut tray = TrayIcon {
             hwnd,
+            desired: true,
             visible: false,
+            retry_attempts: 0,
             icon: load_app_icon(),
             tip: tip.to_string(),
             callback_msg,
         };
-        tray.show();
+        if !tray.try_add() {
+            logging::warn("托盘图标初始挂载失败（任务栏可能尚未就绪），将在任务栏就绪后自动补挂");
+        }
         tray
     }
 
@@ -117,18 +144,12 @@ impl TrayIcon {
     }
 
     pub fn show(&mut self) {
-        if self.visible {
-            return;
-        }
-        let data = self.base_data();
-        unsafe {
-            if Shell_NotifyIconW(NIM_ADD, &data).as_bool() {
-                self.visible = true;
-            }
-        }
+        self.desired = true;
+        self.try_add();
     }
 
     pub fn hide(&mut self) {
+        self.desired = false;
         if !self.visible {
             return;
         }
@@ -137,6 +158,46 @@ impl TrayIcon {
             let _ = Shell_NotifyIconW(NIM_DELETE, &data);
         }
         self.visible = false;
+    }
+
+    /// 尝试把图标挂到任务栏，返回挂载后是否可见。已可见时直接成功。
+    fn try_add(&mut self) -> bool {
+        if self.visible {
+            return true;
+        }
+        let data = self.base_data();
+        if unsafe { Shell_NotifyIconW(NIM_ADD, &data).as_bool() } {
+            self.visible = true;
+            self.retry_attempts = 0;
+        }
+        self.visible
+    }
+
+    /// 任务栏（重）建后重挂图标：覆盖 explorer 重启，以及开机计划任务先于任务栏启动的场景。
+    pub fn on_taskbar_created(&mut self) {
+        // 旧图标已随任务栏一起消失，重置实际状态后按期望重挂。
+        self.visible = false;
+        self.retry_attempts = 0;
+        if self.desired && self.try_add() {
+            logging::info("任务栏已就绪，托盘图标已重新挂载");
+        }
+    }
+
+    /// 定时兜底重试：图标应显示但尚未挂上时再试一次。返回是否仍需继续重试。
+    pub fn retry_pending(&mut self) -> bool {
+        if !should_retry(self.desired, self.visible, self.retry_attempts) {
+            return false;
+        }
+        self.retry_attempts += 1;
+        if self.try_add() {
+            logging::info("托盘图标重试挂载成功");
+            return false;
+        }
+        if self.retry_attempts >= MAX_TRAY_RETRY {
+            logging::warn("托盘图标多次挂载失败，停止定时重试（任务栏就绪后仍会自动补挂）");
+            return false;
+        }
+        true
     }
 
     pub fn is_visible(&self) -> bool {
@@ -174,6 +235,24 @@ mod tests {
         fill_wide(&mut buf, "ABCDEFGHIJ");
         assert_eq!(&buf[..7], &[0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47]);
         assert_eq!(buf[7], 0, "最后一位必须是 null 终止符");
+    }
+
+    #[test]
+    fn should_retry_only_when_desired_and_not_visible() {
+        assert!(should_retry(true, false, 0), "期望显示且未挂上时应重试");
+        assert!(!should_retry(true, true, 0), "已挂上则无需重试");
+        assert!(!should_retry(false, false, 0), "业务层不希望显示时不重试");
+        assert!(!should_retry(false, true, 0));
+    }
+
+    #[test]
+    fn should_retry_stops_after_max_attempts() {
+        assert!(should_retry(true, false, MAX_TRAY_RETRY - 1));
+        assert!(
+            !should_retry(true, false, MAX_TRAY_RETRY),
+            "达到上限后停止定时重试"
+        );
+        assert!(!should_retry(true, false, MAX_TRAY_RETRY + 1));
     }
 
     #[test]

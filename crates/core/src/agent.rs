@@ -10,12 +10,13 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CW_USEDEFAULT, CreatePopupMenu, CreateWindowExW, DefWindowProcW, DestroyMenu,
-    DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos, GetMessageW, GetWindowLongPtrW,
-    KillTimer, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG, PostMessageW, PostQuitMessage,
-    RegisterClassW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, TPM_BOTTOMALIGN,
-    TPM_LEFTALIGN, TrackPopupMenu, TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_COMMAND,
-    WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    AppendMenuW, CW_USEDEFAULT, ChangeWindowMessageFilterEx, CreatePopupMenu, CreateWindowExW,
+    DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos,
+    GetMessageW, GetWindowLongPtrW, KillTimer, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG,
+    MSGFLT_ALLOW, PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow, SetTimer,
+    SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TrackPopupMenu, TranslateMessage,
+    WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP,
+    WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
 
@@ -47,7 +48,10 @@ const AUTO_QUIT_TIMER_ID: usize = 10;
 const AUTO_HIDE_TIMER_ID: usize = 11;
 /// 监控停用看门狗：配置程序停用监控后须持续心跳，超时未收到就恢复监控。
 const SUSPEND_GUARD_TIMER_ID: usize = 12;
+/// 托盘图标挂载重试：开机计划任务常早于任务栏启动，首挂会失败，须兜底重试。
+const TRAY_RETRY_TIMER_ID: usize = 13;
 const AUTO_HIDE_INTERVAL_MS: u32 = 5000;
+const TRAY_RETRY_INTERVAL_MS: u32 = 2000;
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
 pub struct AgentOptions {
@@ -539,6 +543,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     };
 
+    // TaskbarCreated 是运行时注册的消息号，无法进 match 常量分支。
+    // explorer（重）建任务栏时广播，此时旧托盘图标已消失，须按期望状态重挂。
+    if msg != 0 && msg == crate::tray::taskbar_created_msg() {
+        if let Some(tray) = &mut state.tray {
+            tray.on_taskbar_created();
+        }
+        return LRESULT(0);
+    }
+
     match msg {
         WM_HOTKEY => {
             match wparam.0 as i32 {
@@ -637,6 +650,19 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         state.sync_monitoring(hwnd);
                     }
                 }
+                // 托盘首挂失败后的兜底重试；挂载成功或超限后停表。
+                TRAY_RETRY_TIMER_ID => {
+                    let pending = state
+                        .tray
+                        .as_mut()
+                        .map(TrayIcon::retry_pending)
+                        .unwrap_or(false);
+                    if !pending {
+                        unsafe {
+                            let _ = KillTimer(Some(hwnd), TRAY_RETRY_TIMER_ID);
+                        }
+                    }
+                }
                 AUTO_HIDE_TIMER_ID if state.config.setting.auto_hide_enabled => {
                     let idle_ms = idle::idle_millis().unwrap_or(0);
                     if idle::should_auto_hide(
@@ -725,7 +751,29 @@ pub fn run(options: AgentOptions) {
     };
 
     let tray = if options.enable_tray {
-        Some(TrayIcon::new(hwnd, WM_APP_TRAY, "Boss Key"))
+        unsafe {
+            // 管理员进程默认收不到中等完整性 explorer 的 TaskbarCreated 广播（UIPI），
+            // 须显式放行，否则计划任务开机启动时托盘图标永远补挂不上。
+            let _ = ChangeWindowMessageFilterEx(
+                hwnd,
+                crate::tray::taskbar_created_msg(),
+                MSGFLT_ALLOW,
+                None,
+            );
+        }
+        let tray = TrayIcon::new(hwnd, WM_APP_TRAY, "Boss Key");
+        if !tray.is_visible() {
+            // 首挂失败（任务栏尚未就绪）时定时重试兜底，TaskbarCreated 广播为主要恢复路径。
+            unsafe {
+                SetTimer(
+                    Some(hwnd),
+                    TRAY_RETRY_TIMER_ID,
+                    TRAY_RETRY_INTERVAL_MS,
+                    None,
+                );
+            }
+        }
+        Some(tray)
     } else {
         None
     };

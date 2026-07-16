@@ -2,6 +2,9 @@
 ; 由 scripts/package.ps1 -Installer 或 CI 调用：
 ; MyAppVersion  展示用版本号，可含预发布后缀（3.1.0-rc.1）
 ; MyAppVersion4 文件资源用四段数字号，必须纯数字（3.1.0.0）
+;
+; 依赖 package.ps1 先组装好便携文件夹 dist\Boss-Key，安装包的文件与许可协议都取自那里。
+; 需要 Inno Setup 7+：简繁中文语言包自 7.0 起才随官方安装包分发（见 scripts/install-inno.ps1）。
 
 #ifndef MyAppVersion
   #define MyAppVersion "3.0.0"
@@ -15,7 +18,7 @@
 #define MyAppURL "https://github.com/IvanHanloth/Boss-Key"
 #define CoreExe "Boss Key.exe"
 #define ConfigExe "config.exe"
-#define SourceDir "..\..\dist"
+#define SourceDir "..\..\dist\Boss-Key"
 
 [Setup]
 AppId={{C993A2A8-0714-46E7-A393-DF3F19C43537}
@@ -29,7 +32,8 @@ AppUpdatesURL={#MyAppURL}
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
-LicenseFile=static\LICENSE.txt
+; 复用便携版里的那份，避免和仓库根 LICENSE 各自漂移
+LicenseFile={#SourceDir}\LICENSE.txt
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\..\dist\installer
 OutputBaseFilename=Boss-Key-{#MyAppVersion}-Setup
@@ -43,7 +47,6 @@ CloseApplications=yes
 CloseApplicationsFilter=*.exe
 
 [Languages]
-; 中文语言包不随 Inno Setup 安装包分发，由 scripts/install-inno.ps1 下载到 Languages 目录
 Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -54,7 +57,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#SourceDir}\{#CoreExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#ConfigExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SourceDir}\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "static\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"

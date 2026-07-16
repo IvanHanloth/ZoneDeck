@@ -1,14 +1,20 @@
-﻿# 确保本机/CI 具备编译安装包所需的 Inno Setup 环境。
+# 确保本机/CI 具备编译安装包所需的 Inno Setup 环境。
 #
 # 为什么需要这个脚本：
-#   1. Inno Setup 的官方安装包里没有中文语言包，而 Boss-Key.iss 声明了简繁中文，
-#      缺了 .isl 文件 ISCC 会直接编译失败（GitHub runner 预装的 Inno 同样没有）；
-#   2. 顺带保证本地和 CI 用的是同一套 Inno 环境，不随 runner 镜像漂移。
+#   Boss-Key.iss 声明了简繁中文，而这两个语言包从 Inno Setup 7.0 起才随官方安装包分发
+#   （7.0 更新日志：“Added official Lithuanian, Simplified Chinese and Traditional
+#   Chinese translations.”）。GitHub runner 预装的却是 Inno Setup 6.x，编译会因缺少 .isl
+#   失败，所以这里统一装 7.x，顺带保证本地和 CI 用的是同一套环境，不随 runner 镜像漂移。
 #
-# 两件事都是幂等的：装好了就跳过，只补缺的部分。
+# 装法：优先 winget，装不了就回退到直接下载官方安装包。
+#   两条路取到的是同一个文件 —— winget 清单里 JRSoftware.InnoSetup.7 的 InstallerUrl
+#   就是下面这个 GitHub release 链接。回退分支是为 CI 准备的：runner 镜像里没有 winget
+#   （actions/runner-images#8584 至今未合），只有 winget 一条路的话发布流程会直接挂掉。
+#
+# 幂等：已装好可用的 Inno 就跳过。
 #
 # 用法：
-#   powershell -File scripts/install-inno.ps1          # 安装 / 补齐
+#   powershell -File scripts/install-inno.ps1          # 安装 / 校验
 #   powershell -File scripts/install-inno.ps1 -Quiet   # 静默，只输出 ISCC 路径
 #
 # 脚本最后一行输出 ISCC.exe 的完整路径，供调用方（scripts/package.ps1）取用。
@@ -20,76 +26,99 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue" # 进度条会让 Invoke-WebRequest 在 CI 里慢一个数量级
 
-# 钉死版本：6 系最新稳定版。注意别升到 7.x —— Boss-Key.iss 用的是 IS6 语法。
-$innoVersion = "6.7.3"
-$innoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-6_7_3/innosetup-$innoVersion.exe"
+# 钉死版本：7 系最新稳定版
+$innoVersion = "7.0.2"
+$wingetId = "JRSoftware.InnoSetup.7"
+$innoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-$innoVersion-x64.exe"
+$minVersion = [version]"7.0"
 
-# 中文 .isl 不随安装包分发，从源码仓库取。两个文件都声明兼容 Inno Setup 6.5.0+，
-# 因此可以配 6.7.3 使用；这里固定到一个不可变 tag，避免 main 分支改动影响构建。
-$langRef = "is-7_0_2"
-$langBaseUrl = "https://raw.githubusercontent.com/jrsoftware/issrc/$langRef/Files/Languages"
-$languages = @("ChineseSimplified.isl", "ChineseTraditional.isl")
-
-# 低于这个版本的 Inno 认不了上面的 .isl，得换成钉死的版本
-$minVersion = [version]"6.5.0"
+# 与 Boss-Key.iss 的 [Languages] 保持一致
+$requiredLanguages = @("ChineseSimplified.isl", "ChineseTraditional.isl")
 
 function Write-Info([string]$Message) {
     if (-not $Quiet) { Write-Host $Message -ForegroundColor Cyan }
 }
 
-function Find-Iscc {
-    $cmd = Get-Command iscc.exe -ErrorAction SilentlyContinue
-    if ($cmd) { return $cmd.Source }
-
-    $candidates = @(
-        "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-        "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-    )
-    return $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-}
-
-function Get-IsccVersion([string]$Path) {
-    $raw = (Get-Item $Path).VersionInfo.ProductVersion
-    if ($raw -match '(\d+\.\d+(\.\d+)?)') { return [version]$Matches[1] }
+function Get-VersionOrZero($Raw) {
+    if ("$Raw" -match '(\d+(\.\d+)+)') { return [version]$Matches[1] }
     return [version]"0.0"
 }
-
-# 1. Inno Setup 本体
-$iscc = Find-Iscc
-if ($iscc) {
-    $existing = Get-IsccVersion $iscc
-    if ($existing -lt $minVersion) {
-        Write-Info "==> 已装的 Inno Setup $existing 过旧（中文语言包要求 $minVersion+），改装 $innoVersion"
-        $iscc = $null
-    } else {
-        Write-Info "==> 已有 Inno Setup $existing：$iscc"
+function Test-IsccUsable([string]$Path) {
+    if (-not (Test-Path $Path)) { return $false }
+    $langDir = Join-Path (Split-Path -Parent $Path) "Languages"
+    foreach ($lang in $requiredLanguages) {
+        if (-not (Test-Path (Join-Path $langDir $lang))) { return $false }
     }
+    return $true
 }
 
-if (-not $iscc) {
-    Write-Info "==> 下载并安装 Inno Setup $innoVersion..."
+# 只认注册表里 >= 7.0 的安装。不扫 PATH、不认低版本目录里手工补的 .isl：
+function Find-Iscc {
+    $uninstallKeys = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+
+    $candidates = @(
+        Get-ItemProperty $uninstallKeys -ErrorAction SilentlyContinue |
+            Where-Object {
+                $_.DisplayName -like "Inno Setup*" -and $_.InstallLocation -and
+                (Get-VersionOrZero $_.DisplayVersion) -ge $minVersion
+            } |
+            Sort-Object -Descending { Get-VersionOrZero $_.DisplayVersion } |
+            ForEach-Object { Join-Path $_.InstallLocation "ISCC.exe" }
+    )
+    $candidates += "$env:ProgramFiles\Inno Setup 7\ISCC.exe"
+    $candidates += "${env:ProgramFiles(x86)}\Inno Setup 7\ISCC.exe"
+
+    foreach ($path in $candidates) {
+        if (Test-IsccUsable $path) { return $path }
+    }
+    return $null
+}
+
+function Install-ViaWinget {
+    if (-not (Get-Command winget.exe -ErrorAction SilentlyContinue)) {
+        Write-Info "    没有 winget，改用直接下载"
+        return $false
+    }
+    Write-Info "    winget install --id $wingetId ..."
+    # winget 失败只当作“这条路走不通”
+    $ErrorActionPreference = "Continue"
+
+    $log = winget install --id $wingetId -e -s winget -h `
+        --accept-package-agreements --accept-source-agreements 2>&1
+    $code = $LASTEXITCODE
+    $ErrorActionPreference = "Stop"
+    if ($code -ne 0) {
+        Write-Info "    winget 退出码 $code，改用直接下载："
+        if (-not $Quiet) { $log | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray } }
+        return $false
+    }
+    return $true
+}
+
+function Install-ViaDownload {
+    Write-Info "    下载 $innoUrl ..."
     $installer = Join-Path ([System.IO.Path]::GetTempPath()) "innosetup-$innoVersion.exe"
     Invoke-WebRequest -Uri $innoUrl -OutFile $installer
     Start-Process $installer -Wait -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-"
     Remove-Item $installer -Force -ErrorAction SilentlyContinue
-
-    $iscc = Find-Iscc
-    if (-not $iscc) { throw "Inno Setup 安装完成后仍找不到 ISCC.exe" }
-    Write-Info "    已安装：$iscc"
 }
 
-# 2. 中文语言包
-$langDir = Join-Path (Split-Path -Parent $iscc) "Languages"
-if (-not (Test-Path $langDir)) { New-Item -ItemType Directory -Force -Path $langDir | Out-Null }
+$iscc = Find-Iscc
+if ($iscc) {
+    Write-Info "==> 已有可用的 Inno Setup：$iscc"
+} else {
+    Write-Info "==> 安装 Inno Setup $innoVersion..."
+    if (-not (Install-ViaWinget)) { Install-ViaDownload }
 
-foreach ($lang in $languages) {
-    $target = Join-Path $langDir $lang
-    if (Test-Path $target) {
-        Write-Info "    语言包已就位：$lang"
-        continue
+    $iscc = Find-Iscc
+    if (-not $iscc) {
+        throw "Inno Setup $innoVersion 安装完成后仍找不到带简繁中文语言包的 ISCC.exe"
     }
-    Write-Info "    下载语言包：$lang"
-    Invoke-WebRequest -Uri "$langBaseUrl/$lang" -OutFile $target
+    Write-Info "    已安装：$iscc"
 }
 
 Write-Output $iscc

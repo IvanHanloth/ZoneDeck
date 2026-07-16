@@ -49,7 +49,7 @@ jobs:
           npm --prefix apps/config/ui test
           npm --prefix apps/config/ui run build
 
-      # ---- Rust：格式 / 静态检查 / 测试 / 生产编译 ----
+      # ---- Rust：格式 / 静态检查 / 测试----
       - name: Format check
         run: cargo fmt --all -- --check
 
@@ -59,14 +59,3 @@ jobs:
       - name: Tests
         run: cargo test --workspace
 
-      - name: Release build
-        run: cargo build --release
-
-      - name: Upload binaries (for inspection)
-        uses: actions/upload-artifact@v4
-        with:
-          name: bosskey-binaries
-          path: |
-            target/release/core.exe
-            target/release/bosskey-config.exe
-          retention-days: 7

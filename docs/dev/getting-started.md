@@ -84,10 +84,10 @@ cargo fmt --all -- --check
 # 生产编译（体积最小化）
 cargo build --release
 
-# 一键生产打包（前端 + Rust + 便携文件夹）
+# 一键生产打包（前端 + Rust + 便携文件夹 dist/Boss-Key）
 powershell -File scripts/package.ps1
 
-# 一键打包 + 安装包（需 Inno Setup）
+# 一键打包 + 安装包（dist/installer，首次会自动装 Inno Setup 7）
 powershell -File scripts/package.ps1 -Installer
 ```
 
