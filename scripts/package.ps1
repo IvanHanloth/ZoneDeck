@@ -1,6 +1,6 @@
 ﻿# Boss Key 一键生产打包脚本
-# 流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace → 组装便携文件夹
-#      → 可选生成 InnoSetup 安装包（-Installer）
+# 流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace → 组装便携文件夹 dist\Boss-Key
+#      → 可选生成 InnoSetup 安装包 dist\installer（-Installer）
 #
 # 用法：
 #   powershell -File scripts/package.ps1               # 便携文件夹
@@ -49,28 +49,33 @@ Write-Host "==> 生产编译（cargo build --release）..." -ForegroundColor Cya
 cargo build --release
 if ($LASTEXITCODE -ne 0) { throw "cargo 编译失败" }
 
-# 3. 组装便携文件夹（仓库根 dist/）
-$outDir = Join-Path $root "dist"
-if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+# 3. 组装便携文件夹（dist\Boss-Key）
+# 发布时整个文件夹直接压成 zip，所以解压后就是一个 Boss-Key 目录，不会散落到当前目录。
+$portableDir = Join-Path $root "dist\Boss-Key"
+if (Test-Path $portableDir) { Remove-Item $portableDir -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
 
-Copy-Item "target\release\core.exe" (Join-Path $outDir "Boss Key.exe")
-Copy-Item "target\release\bosskey-config.exe" (Join-Path $outDir "config.exe")
-Copy-Item "LICENSE" (Join-Path $outDir "LICENSE")
-Copy-Item "README.md" (Join-Path $outDir "README.md")
+Copy-Item "target\release\core.exe" (Join-Path $portableDir "Boss Key.exe")
+Copy-Item "target\release\bosskey-config.exe" (Join-Path $portableDir "config.exe")
+# LICENSE 带上 .txt 后缀：Windows 上双击才有默认打开方式；安装包的许可协议页也复用这份
+Copy-Item "LICENSE" (Join-Path $portableDir "LICENSE.txt")
+Copy-Item "README.md" (Join-Path $portableDir "README.md")
 
-Write-Host "==> 便携版组装完成：$outDir" -ForegroundColor Green
-Get-ChildItem $outDir | Select-Object Name, @{Name = "Size"; Expression = { "{0:N0} KB" -f ($_.Length / 1KB) } } | Format-Table -AutoSize
+Write-Host "==> 便携版组装完成：$portableDir" -ForegroundColor Green
+Get-ChildItem $portableDir | Select-Object Name, @{Name = "Size"; Expression = { "{0:N0} KB" -f ($_.Length / 1KB) } } | Format-Table -AutoSize
 
-# 4. 安装包（可选）
+# 4. 安装包（可选，输出到 dist\installer，与便携版分开）
 if ($Installer) {
     Write-Host "==> 生成 InnoSetup 安装包..." -ForegroundColor Cyan
-    # 按需安装 Inno Setup 并补齐中文语言包（官方安装包不带），返回 ISCC.exe 路径
+    # 按需安装 Inno Setup 7（简繁中文语言包自 7.0 起随官方安装包分发），返回 ISCC.exe 路径
     $iscc = & (Join-Path $PSScriptRoot "install-inno.ps1") | Select-Object -Last 1
     if (-not $iscc) { throw "Inno Setup 环境准备失败" }
 
+    $installerDir = Join-Path $root "dist\installer"
+    if (Test-Path $installerDir) { Remove-Item $installerDir -Recurse -Force }
+
     & $iscc "/DMyAppVersion=$Version" "/DMyAppVersion4=$Version4" ".github\inno-script\Boss-Key.iss"
     if ($LASTEXITCODE -ne 0) { throw "InnoSetup 编译失败" }
-    Write-Host "==> 安装包输出：dist\installer" -ForegroundColor Green
-    Get-ChildItem (Join-Path $root "dist\installer")
+    Write-Host "==> 安装包输出：$installerDir" -ForegroundColor Green
+    Get-ChildItem $installerDir
 }

@@ -23,14 +23,17 @@ powershell -File scripts/package.ps1 -SkipFrontend
 
 ### 产物结构
 
+便携版与安装包各占 `dist/` 下的一个子目录，互不干扰：
+
 ```
-dist/                            便携版（拷走即用）
-├── Boss Key.exe                   常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
-├── config.exe                     配置界面（前端已内嵌，自包含）
-├── LICENSE
-└── README.md
-dist/installer/                  安装包（-Installer 时生成）
-└── Boss-Key-<版本>-Setup.exe      InnoSetup（安装前自动结束运行中的核心）
+dist/
+├── Boss-Key/                    便携版（拷走即用，发布时整个文件夹压成 zip）
+│   ├── Boss Key.exe               常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
+│   ├── config.exe                 配置界面（前端已内嵌，自包含）
+│   ├── LICENSE.txt
+│   └── README.md
+└── installer/                   安装包（-Installer 时生成）
+    └── Boss-Key-<版本>-Setup.exe  InnoSetup（安装前自动结束运行中的核心）
 ```
 
 便携版**无需安装、无外部依赖**（除系统自带的 WebView2）。两个程序通过同目录的 `config.json` 与命名管道协作。
@@ -84,7 +87,7 @@ powershell -File scripts/version.ps1 show
 
 **触发**：推送 `v*` tag，或被 `tag.yml` 通过 `workflow_call` 调用。
 
-**做什么**：校验 tag 与代码版本一致 → 前端 / Rust 测试 → `package.ps1 -Installer` 打包便携 zip + 安装包 → 生成**构建来源证明**（Sigstore attestation）→ 创建 GitHub Release 并上传产物。
+**做什么**：校验 tag 与代码版本一致 → 前端 / Rust 测试 → `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip → 生成**构建来源证明**（Sigstore attestation）→ 创建 GitHub Release 并上传 zip 与安装包。
 
 ### 发布一个新版本
 
