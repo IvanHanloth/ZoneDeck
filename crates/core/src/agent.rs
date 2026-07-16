@@ -25,7 +25,7 @@ use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
 use crate::hide::{
     HideController, RuleOutcome, expand_descendants, freezable_pids, resolve_targets,
 };
-use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, parse_hotkey};
+use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
@@ -93,6 +93,10 @@ impl AgentState {
             (HK_HIDE, "隐藏", &self.config.hotkey.hide_hotkey),
             (HK_CLOSE, "关闭", &self.config.hotkey.close_hotkey),
         ] {
+            if is_disabled(raw) {
+                logging::info(&format!("{label}热键已置空，不注册"));
+                continue;
+            }
             match parse_hotkey(raw) {
                 Ok(hk) => unsafe {
                     if !register(hwnd, id, &hk) {
