@@ -1,109 +1,72 @@
-name: Buildup Test
+name: Build & Test
 
 on:
   pull_request:
-    branches:
-      - main
-  workflow_dispatch:  # 允许手动触发工作流
+    branches: ["**"]
+    paths-ignore: ["**/docs/**", "**/.github/workflows/deploy-docs.yml"] # 文档部署不需要跑测试
+  push:
+    tags-ignore: ["**"] # tag 由 release.yml 负责，别重复跑
+    paths-ignore: ["**/docs/**", "**/.github/workflows/deploy-docs.yml"] # 文档部署不需要跑测试
+  workflow_dispatch:
+
+# 同一分支上有新推送时，取消还在跑的旧任务
+concurrency:
+  group: build-test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-main-files:
-    runs-on: windows-latest  # 使用最新的 Windows 运行器
+  build-and-test:
+    runs-on: windows-latest
 
     steps:
-      # 检出仓库代码
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      # 设置 Python 3.11 环境
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
-          python-version: '3.11'
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/config/ui/package-lock.json
 
-      # 安装依赖和 Nuitka
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          python --version
-        shell: cmd
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      # 进行编译
-      - name: Run Compile
-        run: |
-            python -m nuitka --windows-file-version=0.0.0.0 --show-progress --mingw64 --assume-yes-for-downloads --output-dir=out main/Boss-Key.py
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
 
-      # 添加版本信息到可执行文件并重命名
-      - name: Add version information and rename executable
+      # ---- 版本号：四处文件是否一致（手改 Cargo.toml 后忘了同步的话在这里挡下）----
+      - name: Version consistency check
         shell: pwsh
+        run: ./scripts/version.ps1 check
+
+      # ---- 前端：依赖 / 单元测试 / 构建 ----
+      - name: Frontend install, test & build
         run: |
-          # 获取标签名作为版本号，去除前缀 refs/tags/
-          $tag = 'Build-Test'
-          # 定义新的文件名
-          $newExeName = "Boss-Key-$tag-onefile.exe"
-          
-          # 重命名可执行文件
-          Rename-Item "out/Boss-Key.exe" $newExeName
+          npm --prefix apps/config/ui ci
+          npm --prefix apps/config/ui test
+          npm --prefix apps/config/ui run build
 
-          # 压缩out/Boss-Key.dist/文件夹
-          Compress-Archive -Path "out/Boss-Key.dist" -DestinationPath "out/Boss-Key-$tag-multifile.zip"
+      # ---- Rust：格式 / 静态检查 / 测试 / 生产编译 ----
+      - name: Format check
+        run: cargo fmt --all -- --check
 
-          ls out
-          
-      - name: Upload Artifacts
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Release build
+        run: cargo build --release
+
+      - name: Upload binaries (for inspection)
         uses: actions/upload-artifact@v4
         with:
-          name: Build-Test-Build
+          name: bosskey-binaries
           path: |
-            out/Boss-Key.dist
-
-  deploy-test:
-    environment:
-      name: buildup-test
-    runs-on: windows-2022
-    needs: build-main-files
-    steps:
-      - name: Download artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: Build-Test-Build
-          path: ./test
-
-      - name: Test Main Files
-        run: |
-          cd ./test
-          dir
-          ./Boss-Key.exe
-        
-  compile-to-installer:
-    runs-on: windows-latest
-    needs: deploy-test
-    steps:
-    - name: Checkout code 
-      uses: actions/checkout@v2
-      
-    - name: Clone Repo
-      run: |
-        cd ./.github/inno-script
-        git clone https://github.com/IvanHanloth/innosetup-action.git
-        cp -r innosetup-action/* .
-        dir
-
-    - name: Download artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: Build-Test-Build
-        path: ./.github/inno-script/software
-
-    - name: Compile Installer
-      run: |
-        dir
-        .\ISCC.exe /DMyAppVersion='Build-Test' Boss-Key.iss
-      working-directory: .github/inno-script
-
-    - name: Upload Installer
-      uses: actions/upload-artifact@v4
-      with:
-        name: Boss-Key-Installer
-        path: .github/inno-script/output/Boss-Key-Build-Test-Installer.exe
+            target/release/core.exe
+            target/release/bosskey-config.exe
+          retention-days: 7

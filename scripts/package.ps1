@@ -1,0 +1,76 @@
+﻿# Boss Key 一键生产打包脚本
+# 流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace → 组装便携文件夹
+#      → 可选生成 InnoSetup 安装包（-Installer）
+#
+# 用法：
+#   powershell -File scripts/package.ps1               # 便携文件夹
+#   powershell -File scripts/package.ps1 -Installer    # 便携文件夹 + 安装包
+#   powershell -File scripts/package.ps1 -SkipFrontend # 复用已有 dist（前端没改时提速）
+#
+# 版本号默认取自 Cargo.toml（唯一真源，见 scripts/version.ps1），无需手动传 -Version。
+param(
+    [switch]$Installer,
+    [switch]$SkipFrontend,
+    [string]$Version
+)
+
+$ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $PSScriptRoot
+Set-Location $root
+
+if (-not $Version) {
+    $cargoToml = Get-Content (Join-Path $root "Cargo.toml") -Raw
+    if ($cargoToml -notmatch '(?ms)^\[workspace\.package\].*?^version\s*=\s*"([^"]+)"') {
+        throw "无法从 Cargo.toml 读取版本号，请显式传入 -Version"
+    }
+    $Version = $Matches[1]
+}
+# 安装包资源信息要求纯数字四段号：3.1.0-rc.1 → 3.1.0.0
+$Version4 = "$(($Version -split '-')[0]).0"
+
+# 1. 前端
+$uiDir = Join-Path $root "apps\config\ui"
+if (-not $SkipFrontend) {
+    Write-Host "==> 编译前端（Vite + Svelte）..." -ForegroundColor Cyan
+    if (-not (Test-Path (Join-Path $uiDir "node_modules"))) {
+        Write-Host "    首次构建，安装依赖（npm install）..."
+        npm --prefix $uiDir install --no-audit --no-fund
+        if ($LASTEXITCODE -ne 0) { throw "npm install 失败" }
+    }
+    npm --prefix $uiDir run build
+    if ($LASTEXITCODE -ne 0) { throw "前端构建失败" }
+}
+if (-not (Test-Path (Join-Path $root "apps\config\dist\index.html"))) {
+    throw "缺少前端产物 apps/config/dist（可去掉 -SkipFrontend 重新构建）"
+}
+
+# 2. Rust 生产编译（bosskey-config 的 tauri 构建脚本会内嵌 dist）
+Write-Host "==> 生产编译（cargo build --release）..." -ForegroundColor Cyan
+cargo build --release
+if ($LASTEXITCODE -ne 0) { throw "cargo 编译失败" }
+
+# 3. 组装便携文件夹（仓库根 dist/）
+$outDir = Join-Path $root "dist"
+if (Test-Path $outDir) { Remove-Item $outDir -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+
+Copy-Item "target\release\core.exe" (Join-Path $outDir "Boss Key.exe")
+Copy-Item "target\release\bosskey-config.exe" (Join-Path $outDir "config.exe")
+Copy-Item "LICENSE" (Join-Path $outDir "LICENSE")
+Copy-Item "README.md" (Join-Path $outDir "README.md")
+
+Write-Host "==> 便携版组装完成：$outDir" -ForegroundColor Green
+Get-ChildItem $outDir | Select-Object Name, @{Name = "Size"; Expression = { "{0:N0} KB" -f ($_.Length / 1KB) } } | Format-Table -AutoSize
+
+# 4. 安装包（可选）
+if ($Installer) {
+    Write-Host "==> 生成 InnoSetup 安装包..." -ForegroundColor Cyan
+    # 按需安装 Inno Setup 并补齐中文语言包（官方安装包不带），返回 ISCC.exe 路径
+    $iscc = & (Join-Path $PSScriptRoot "install-inno.ps1") | Select-Object -Last 1
+    if (-not $iscc) { throw "Inno Setup 环境准备失败" }
+
+    & $iscc "/DMyAppVersion=$Version" "/DMyAppVersion4=$Version4" ".github\inno-script\Boss-Key.iss"
+    if ($LASTEXITCODE -ne 0) { throw "InnoSetup 编译失败" }
+    Write-Host "==> 安装包输出：dist\installer" -ForegroundColor Green
+    Get-ChildItem (Join-Path $root "dist\installer")
+}

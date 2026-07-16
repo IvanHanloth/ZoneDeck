@@ -8,3 +8,27 @@ out/
 test.py
 pssuspend64.exe
 .bosskey_state
+.idea
+node_modules/
+
+# Rust
+/target/
+**/target/
+!Cargo.lock
+
+# 打包产物
+/dist/
+/package/
+
+# Tauri / 前端
+# apps/config/dist/ 自前端工程化（Vite + Svelte）后是构建产物；源码在 apps/config/ui/
+apps/config/dist/
+apps/config/src-tauri/gen/
+
+# 运行时产物
+bosskey.log
+bosskey.log.old
+recovery.json
+
+docs/.vitepress/dist
+docs/.vitepress/cache

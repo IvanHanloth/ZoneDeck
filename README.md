@@ -1,33 +1,61 @@
-# Boss-Key
+<p align="center">
 
-![Boss-Key logo bannar](/src/static/bannar.jpg)
+![Boss-Key logo bannar](/docs/public/static/bannar.jpg)
 
-![Github Release Version](https://img.shields.io/github/v/release/IvanHanloth/Boss-Key)
-![Github Repo License](https://img.shields.io/github/license/IvanHanloth/Boss-Key)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/tag-release.yml)
-![Supported Platform](https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue)
-![Python Version](https://img.shields.io/badge/Python-3.11.9-coral)
+</p>
 
-老板来了？快用Boss-Key老板键一键隐藏窗口！上班摸鱼必备神器。
+<h1 align="center">Boss-Key</h1>
 
-支持多窗口隐藏、多进程隐藏、自定义热键、隐藏活动窗口、静音窗口、暂停视频播放等超多功能，完全免费、开源，无强制弹窗等
+<p align="center">
+
+<img src="https://img.shields.io/github/v/release/IvanHanloth/Boss-Key?style=flat-square" alt="Github Release Version">
+<img src="https://img.shields.io/github/license/IvanHanloth/Boss-Key?style=flat-square" alt="Github Repo License">
+<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/tag-release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
+<img src="https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue?style=flat-square" alt="Supported Platform">
+
+</p>
+
+<div align="center">
+    <h3>
+        <a href="https://boss-key.ivan-hanloth.cn/">项目官网</a>
+        <span> • </span>
+        <a href="https://boss-key.ivan-hanloth.cn/guide/">使用文档</a>
+        <span> • </span>
+        <a href="https://boss-key.ivan-hanloth.cn/dev/">开发文档</a>
+        <span> • </span>
+        <a href="https://github.com/IvanHanloth/Boss-Key/releases">下载地址</a>
+    </h3>
+</div>
+
+<div align="center">
+    <strong>老板来了？快用Boss-Key老板键一键隐藏窗口！上班摸鱼必备神器。</strong><br>
+
+支持多窗口隐藏、多进程隐藏、自定义热键、隐藏活动窗口、静音窗口、暂停视频播放、进程冻结等超多功能。
+
+超高自定义度，满足你的不同隐藏需求。极简内存，后台常驻仅1M内存占用，
+
+</div><br>
 
 ## 应用截图
-![Boss-Key设置窗口绑定页](/src/static/screenshot-1.png)
 
-![Boss-Key设置热键设置页](/src/static/screenshot-5.png)
+![Boss-Key设置窗口绑定页](/docs/public/static/screenshot-1.png)
 
-![Boss-Key设置窗口其他选项页](/src/static/screenshot-3.png)
+![Boss-Key设置鼠标热键设置页-1](/docs/public/static/screenshot-2.png)
 
-![Boss-Key运行提示](/src/static/screenshot-4.png)
+![Boss-Key设置鼠标热键设置页-2](/docs/public/static/screenshot-3.png)
+
+![Boss-Key设置窗口其他选项页](/docs/public/static/screenshot-4.png)
 
 ## 使用说明
-从v2.0.0版本开始，每个版本都会提供三种类型的程序，可以从[Release页面](https://github.com/IvanHanloth/Boss-Key/releases)下载
-- onefile - 单文件版，只有一个可执行程序，相对简洁、方便。由于每次启动都需要解压依赖，启动较慢、可能会被报毒
-- multifile - 多文件版，标准的程序版本，所有依赖文件被压缩到一个压缩包里，解压后可用
-- installer - 安装程序（推荐），完整封装的Boss-Key程序安装程序，提供一键安装、更新、卸载，可以更高效的管理Boss-Key程序
+
+从v3.0.0版本开始，每个版本都会提供两种类型的程序，可以从[Release页面](https://github.com/IvanHanloth/Boss-Key/releases)下载
+
+- installer - 安装程序（推荐），完整封装的Boss-Key程序安装程序，提供一键安装、更新、卸载，可以更高效安全的管理Boss-Key程序
+- portable - 便携版，包含Boss-Key的核心程序和配置程序的压缩包，解压后可以运行
 
 部分版本会提供win7系统的软件包，带有win7标识的可以在Windows 7系统上运行
+
+完整的图文使用说明，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
 ### 基础使用
 
@@ -39,8 +67,6 @@
 
 按下隐藏/显示窗口热键可以一键隐藏所绑定的窗口。按下一键关闭程序热键可以一键关闭Boss-Key程序
 
-完成设置后，**记得点击下方的“保存设置”按钮保存并启用设置**
-
 ### 绑定窗口
 
 通过绑定窗口，可以同时隐藏多个窗口，摸鱼更安全~
@@ -51,217 +77,30 @@
 
 如果发现新打开的窗口没有在列表中显示，可以点击“刷新进程”按钮，刷新左边的列表。
 
-完成所有选择后，**记得点击下方的“保存设置”按钮保存并启用设置**
-
 ### 修改热键
 
 修改热键有两种方式，可以通过直接编辑文本框中的内容来修改绑定的热键，或者点击“录制热键”按钮，打开热键录制窗口进行录制。
 
 打开热键录制窗口后，按下的组合键将被记录，并显示在窗口中，如果确认无误，点击确认，将自动填写至热键文本框中。
 
-完成所有热键修改后，**记得点击下方的“保存设置”按钮保存并启用设置**
-
 ### 鼠标隐藏
+
 v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键、侧键1、侧键2切换串口隐藏状态。
 
 可以勾选快速移动鼠标至四角隐藏窗口（启用允许移动恢复功能以允许通过快速移动鼠标至四角恢复窗口）
 
-### 检查更新
+### 更多功能
 
-右键点击托盘打开托盘菜单，选择“检查更新”即可打开当前检查更新窗口。
+完整功能介绍及使用指南，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
-检查更新窗口会自动尝试从Github获取最新版本更新信息以及更新地址，点击需要的版本可以跳转下载。
+## 开发及贡献指南
 
-### 其他功能
-#### 隐藏窗口后静音
-启用该功能后，如果需要隐藏的窗口正在播放音频，则该窗口将被静音。恢复显示后静音将被取消
-
-#### 隐藏前发送暂停键
-启用该功能后，隐藏窗口前会向窗口发送暂停键尝试暂停其中的媒体播放。
-
-注意！此功能仍在测试，启用后会导致窗口隐藏出现延时
-
-#### 文件路径匹配功能
-Boss Key默认使用窗口标题等多因素进行窗口匹配以确保精确隐藏窗口，但是有时可能出现希望根据可执行文件路径来进行匹配：
-
-即只要是由同一个程序启动的窗口都隐藏，此时就可以启用“文件路径匹配”选项进行模糊匹配
-
-#### 同时隐藏当前活动窗口
-启用该功能后，按下隐藏窗口热键时，除了会隐藏绑定的窗口，还会隐藏当前被激活的窗口。
-
-#### 点击托盘图标切换隐藏状态
-启用该功能后，可以通过单击托盘图标来显示或隐藏窗口
-
-### 设置和关闭开机自启
-如果需要让Boss-Key程序开机自启，可以右键点击托盘图标，在弹出的菜单中选择“开机自启”来切换开机自启状态，或从窗口菜单->工具->开机自启选项进行切换。
-
-### 进程冻结相关功能
-自v2.1.0版本开始，Boss-Key加入了隐藏窗口后冻结进程功能。启用此功能将在隐藏窗口后将对应的进程“冻结”，减轻CPU和内存压力。
-启用此功能需要**以管理员身份运行**。冻结加强功能则额外需要下载pssuspend64.exe文件置于程序目录下以供调用。
-
-**如何下载和使用加强冻结功能：**
-
-您需要手动访问[https://download.sysinternals.com/files/PSTools.zip](https://download.sysinternals.com/files/PSTools.zip)页面，下载由Microsoft提供的PSTools工具包。解压下载得到`PSTools.zip`文件，可以找到`pssuspend64.exe`文件，直接复制该文件，放置于Boss-Key程序的安装根目录即可。
-
-## 常见问题
-**为什么我的电脑运行不了编译后的程序**
-
-编译版由于使用的Python3.11版本进行的封装，Windows10以下的版本可能无法正常使用，可参考[https://blog.ivan-hanloth.cn/archives/664/](https://blog.ivan-hanloth.cn/archives/664/)尝试解决
-
-如果你安装了python环境，也可以尝试克隆仓库后，运行Boss-Key.py文件来启动窗口
-
-如果你是windows7系统，部分版本会提供win7系统的软件包，可以下载带有win7标识的软件使用
-
-**为什么我一直没办法检查更新**
-检查更新的服务依赖Github提供的Github Page，如果你的电脑无法访问[https://ivanhanloth.github.io/Boss-Key](https://ivanhanloth.github.io/Boss-Key)，则无法检查更新
-
-## 项目结构
-仓库项目结构及解释如下：
-
-```
-Boss-Key
-├── .github     Github配置文件、工作流文件
-│   ├── inno-script     InnoSetup配置文件夹
-│   └── workflows       Github Action工作流文件
-│       ├── build-test.yml      构建测试工作流
-│       ├── jekyll-gh-pages.yml     GithubPage构建工作流
-│       └── tag-release.yml     推送tag自动构建发布Release工作流
-├── main     程序所在目录
-│   ├── core    核心文件目录
-│   │   ├── __init__.py     初始化包
-│   │   ├── config.py     配置文件相关
-│   │   ├── icon.py     图标信息
-│   │   ├── listener.py     热键监听进程
-│   │   ├── tools.py     工具函数
-│   │   └── vkMap.py     vk映射表
-│   ├── GUI     GUI界面目录
-│   │   ├── __init__.py     初始化包
-│   │   ├── about.py     关于页面
-│   │   ├── record.py     录制热键页面
-│   │   ├── setting    设置页面相关子类
-│   │   │   ├── __init__.py 初始化包
-│   │   │   ├── base.py  设置页面基础类
-│   │   │   ├── binding_page.py  窗口绑定页面  
-│   │   │   ├── hotkeys_page.py  热键绑定页面
-│   │   │   └── options_page.py  其他选项页面
-│   │   ├── taskbar.py     托盘图标
-│   │   └── window_restore.py   窗口恢复工具页面
-│   └── Boss-Key.py     项目入口文件
-├── src     网站相关目录
-│   └── static     静态文件目录
-├── .gitignore     git忽略文件列表
-├── icon.ico     Boss-Key logo文件
-├── LICENSE     开源协议
-├── README.md     README文件
-└── requirements.txt     项目依赖文件
-
-```
-## 分支说明及规范
-为了高效、安全的完成开发，我们对分支、合并等有一定限制。
-
-仓库有两个主要分支`main`和`dev`分支：
-- `main`包含正式发布版本的源代码，此分支不能直接提交，原则上只能已完成版本功能开发且决定发布新版本并通过测试后，从`dev`分支合并
-- `dev`用于存储所有正在开发的功能的源代码，此分支不能直接提交，原则上只能包含已经完成开发并通过测试的功能
-
-其他分支则用于正常功能开发、提交等。
-
-新功能、Bug修复等操作应该通过PR提交至`dev`分支，经过代码审查后合并。最后经过测试后，统一通过PR合并至`main`分支。
-
-分支命名没有强制规范，但是为了方便维护，我们推荐使用类似`类型/功能`的命名方式，例如`feat/checkUpdate`、`fix/hideWindow`等。
-
-## Project规范
-我们通常使用github提供的Project功能进行统一项目规划管理。
-
-应该尽量将Issue-PullRequest-Project三者相互关联，以便实现统一管理。
-
-## 已知问题
-- 无法隐藏部分游戏窗口，可能由于游戏窗口加密导致
+有关开发和贡献的详细信息，请参阅 Boss-Key [开发文档](https://boss-key.ivan-hanloth.cn/dev)
 
 ## 鸣谢
+
 感谢雪藏HsFreezer提供的进程冻结实现思路
 
 ## 更新日志
-**V2.1.0 （更新于2025/4/21）**
-- 新增鼠标中键、侧键隐藏功能
-- 新增鼠标移动至四角隐藏功能
-- 新增进程冻结功能
-- 新增自动隐藏功能
-- 优化界面UI设计
-- 优化窗口恢复工具
 
-**V2.0.4 （更新于2025/4/9）**
-- 修复无法正确禁音应用的问题
-- 优化选项提示
-- 优化禁音匹配规则
-
-**V2.0.3 （更新于2025/4/5）**
-- 新增文件路径匹配选项
-- 新增窗口恢复工具
-- 修复状态列表问题
-- 优化运行速度和占用
-
-**V2.0.2 （更新于2025/2/2）**
-- 新增全选窗口选项
-- 新增隐藏窗口后同时隐藏程序托盘图标选项
-- 修复无法使用热键关闭程序的问题
-- 优化界面UI设计
-- 优化配置文件读取
-
-**V2.0.1 （更新于2025/1/17）**
-- 修改已在运行时的提醒
-- 修复窗口销毁后再打开隐藏失败的问题
-- 优化同时运行检测
-- 保存新窗口绑定时自动显示已隐藏的窗口
-
-**V2.0.0 （更新于2025/1/5）**
-- 重构设置页面
-- 新增支持多窗口、多进程隐藏
-- 新增检查更新功能
-- 新增点击托盘图标切换窗口隐藏功能
-- 新增是否同时隐藏当前窗口的选项
-- 完全移除启动切换热键
-- 优化配置文件存储
-- 优化窗口通知功能
-- 优化窗口隐藏相关功能
-- 优化热键监听稳定性
-
-**V1.4.3 （更新于2024/12/19）**
-- 新增隐藏前发送暂停功能
-- 新增热键录制窗口
-- 新增关于页面
-- 新增托盘开机自启设置菜单项
-- 修复部分热键录制时出错问题
-- 修复单文件版提示无图标的问题
-
-**V1.4.2（更新于2024/11/16）**
-- 新增允许2个以上按键的热键
-- 新增录制热键功能
-- 优化后台适配
-
-**V1.4.0（更新于2024/10/11）**
-- 新增窗口隐藏后静音功能
-- 修改默认关闭程序键位
-- 修复每次弹窗的问题
-- 修复重复启动导致的绑定出错问题
-- 优化退出速度
-
-**V1.3.0（更新于2023/9/17）**
-- 使用面向对象重写
-- 新增设置GUI页面
-- 新增托盘图标菜单
-- 新增一键安装程序
-- 优化使用体验
-- 优化适配Windows11系统
-- 修复自启动失败问题
-- 取消单文件版程序
-
-**v1.2.0（更新于2023/5/21）**
-- 修复自启动修改出错问题
-
-**V1.1.0（更新于2023/5/21）**
-- 修复部分电脑报毒问题
-
-**V1.0.0（更新于2023/5/12）**
-- Boss-Key发布
-
-![](/src/static/icon.png)
+完整的更新日志请参阅 Boss-Key [更新日志](https://boss-key.ivan-hanloth.cn/changelog)

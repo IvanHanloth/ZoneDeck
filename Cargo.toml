@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["crates/common", "crates/core", "apps/config/src-tauri"]
+
+[workspace.package]
+version = "3.0.0"
+edition = "2024"
+authors = ["IvanHanloth"]
+license = "MIT"
+repository = "https://github.com/IvanHanloth/Boss-Key"
+
+[workspace.dependencies]
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+thiserror = "2.0.18"
+regex = "1.11.1"
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
+windows = "0.62.2"
+tempfile = "3.27.0"
+ureq = { version = "3.1.2", default-features = false, features = ["json", "rustls", "gzip"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true
+panic = "abort"
