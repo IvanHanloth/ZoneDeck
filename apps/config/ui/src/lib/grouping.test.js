@@ -184,14 +184,14 @@ describe("正则规则默认值", () => {
     const p = newProcessRegexRule("game.exe");
     expect(p.regex).toBe(".*game\\.exe.*");
     expect(p.by_name).toBe(false);
-    expect(p.include_untitled).toBe(true, "隐藏整个程序默认连无标题窗口一起藏");
+    expect(p.include_untitled).toBe(false);
     expect(p.include_background).toBe(false);
   });
 
-  it("进程精确规则默认按路径、含无标题窗口", () => {
+  it("进程精确规则默认按路径、不含无标题窗口", () => {
     const r = processRuleFromWindow(win("窗口", 1, "game.exe", "C:\\game.exe"));
     expect(r.by_name).toBe(false);
-    expect(r.include_untitled).toBe(true);
+    expect(r.include_untitled).toBe(false);
     expect(r.include_background).toBe(false);
   });
 });
