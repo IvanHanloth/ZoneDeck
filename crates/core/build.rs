@@ -2,7 +2,7 @@
 
 fn main() {
     println!("cargo:rerun-if-changed=manifest.xml");
-    println!("cargo:rerun-if-changed=../../icon.ico");
+    println!("cargo:rerun-if-changed=icon.ico");
 
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {
         return;
@@ -11,7 +11,7 @@ fn main() {
     let manifest = std::fs::read_to_string("manifest.xml").expect("读取 manifest.xml 失败");
 
     let mut res = tauri_winres::WindowsResource::new();
-    res.set_icon("../../icon.ico");
+    res.set_icon("icon.ico");
     res.set_manifest(&manifest);
     res.set("ProductName", "Boss Key");
     res.set("FileDescription", "Boss Key 核心服务");

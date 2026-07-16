@@ -19,6 +19,8 @@ export const app = $state({
   /** 核心状态；running 为 null 表示首次检测尚未返回。monitoring 由核心回报。 */
   status: { running: null, hidden: false, elevated: false, monitoring: true },
   autostart: false,
+  /** 当前自启注册方式："task"｜"registry"｜null（未注册）。 */
+  autostartMethod: null,
   info: null,
   maximized: false,
   saving: false,
@@ -128,7 +130,7 @@ export async function loadAll() {
       app.config = c;
       return refreshWindows();
     }),
-    invoke("autostart_status").then((v) => (app.autostart = !!v)),
+    refreshAutostart(),
     invoke("app_info").then((info) => {
       app.info = info;
     }),
@@ -137,6 +139,13 @@ export async function loadAll() {
   const results = await Promise.allSettled(tasks);
   const failed = results.find((r) => r.status === "rejected");
   if (failed) toast("部分数据加载失败：" + failed.reason, true);
+}
+
+/** 回读开机自启真实状态（是否已注册 + 注册方式）。 */
+async function refreshAutostart() {
+  const v = await invoke("autostart_status");
+  app.autostart = !!v?.enabled;
+  app.autostartMethod = v?.method ?? null;
 }
 
 export async function refreshWindows() {
@@ -214,10 +223,12 @@ export async function quitCore() {
   }
 }
 
-export async function setAutostart(enabled) {
+export async function setAutostart(enabled, admin) {
   try {
-    await invoke("set_autostart", { enabled });
+    await invoke("set_autostart", { enabled, admin });
     app.autostart = enabled;
+    // 计划任务可能回退到注册表，回读真实注册方式。
+    await refreshAutostart();
     toast(enabled ? "已开启开机自启" : "已关闭开机自启");
   } catch (err) {
     app.autostart = !enabled; // 失败回滚
@@ -286,7 +297,7 @@ export async function refreshStatus() {
   }
   // 回读开机自启真实状态，与托盘保持一致。
   try {
-    app.autostart = !!(await invoke("autostart_status"));
+    await refreshAutostart();
   } catch {
     /* 忽略 */
   }

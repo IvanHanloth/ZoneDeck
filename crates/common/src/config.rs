@@ -228,6 +228,10 @@ pub struct Setting {
     /// 日志保留天数；`0` 表示关闭日志。
     #[serde(default = "default_log_retention_days")]
     pub log_retention_days: u32,
+    /// 开机自启是否以管理员身份启动：`true` 注册最高权限计划任务，`false` 用普通权限。
+    /// 仅影响计划任务方式；注册表回退始终以普通权限运行。
+    #[serde(default)]
+    pub autostart_admin: bool,
 }
 
 impl Default for Setting {
@@ -255,6 +259,7 @@ impl Default for Setting {
             allow_move_restore: false,
             corner_fast_only: true,
             log_retention_days: DEFAULT_LOG_RETENTION_DAYS,
+            autostart_admin: false,
         }
     }
 }
@@ -307,7 +312,7 @@ impl Default for Notifications {
 }
 
 /// Verhub 相关的用户可见设置。
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Verhub {
     /// 是否把预览版也算进更新检查；默认只看稳定版。
     #[serde(default)]
@@ -315,15 +320,6 @@ pub struct Verhub {
     /// 用户已读过的最新一条公告 id。
     #[serde(default)]
     pub seen_announcement_id: String,
-}
-
-impl Default for Verhub {
-    fn default() -> Self {
-        Self {
-            include_preview: false,
-            seen_announcement_id: String::new(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -561,6 +557,16 @@ mod tests {
         assert!(!c.setting.freeze_whole_tree);
         assert_eq!(c.setting.auto_hide_time, 5);
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
+        assert!(!c.setting.autostart_admin, "自启默认普通权限");
+    }
+
+    #[test]
+    fn autostart_admin_round_trips() {
+        assert!(!Setting::default().autostart_admin, "默认关（普通权限）");
+        let c = Config::from_json(r#"{"setting": {"autostart_admin": true}}"#).unwrap();
+        assert!(c.setting.autostart_admin);
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert!(back.setting.autostart_admin, "写回后应保留");
     }
 
     /// 已存在的配置文件读出来的「什么都没配」：除 mouse 全关外，其余同默认值。

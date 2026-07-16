@@ -1,5 +1,5 @@
 <script>
-  // 「隐藏窗口」规则（细粒度）：精确规则显示标题 + 进程 + 追溯状态。
+  // 「窗口隐藏」规则（细粒度）：精确规则显示标题 + 进程 + 追溯状态。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";
@@ -25,7 +25,7 @@
 
 <div class="list-box">
   <div class="list-title">
-    <span class="title-text"><IconAppWindow width="15" height="15" /> 隐藏窗口</span>
+    <span class="title-text"><IconAppWindow width="15" height="15" /> 窗口隐藏</span>
     <span class="count">{rules.length}</span>
     <div class="tools">
       <button class="mini primary" title="把左侧选中窗口加入" onclick={() => onadd?.()}>
@@ -40,7 +40,7 @@
     </div>
   </div>
 
-  <div class="rule-list" role="listbox" aria-label="隐藏窗口规则">
+  <div class="rule-list" role="listbox" aria-label="窗口隐藏规则">
     {#if rules.length === 0}
       <p class="hint empty">（空）</p>
     {:else}

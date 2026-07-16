@@ -26,6 +26,25 @@
 
   const s = $derived(app.config.setting);
 
+  // 自启注册方式的中文标注；仅在已开启自启时显示。
+  const autostartMethodText = $derived(
+    !app.autostart
+      ? ""
+      : app.autostartMethod === "task"
+        ? "计划任务"
+        : app.autostartMethod === "registry"
+          ? "注册表"
+          : "",
+  );
+
+  // 权限开关变更：绑定已更新 s.autostart_admin（自动保存）；若自启已开，按新权限重注册。
+  async function onAutostartAdminChange(admin) {
+    if (app.autostart) await setAutostart(true, admin);
+  }
+
+  // 「以管理员身份自启」的前置条件：必须先开启开机自启。
+  const autostartOff = $derived(!app.autostart);
+
   // 未开启「隐藏窗口时冻结进程」时，冻结区下方的子选项一律置灰禁用。
   const freezeOff = $derived(!s.freeze_after_hide);
 
@@ -106,7 +125,26 @@
     <h3>启动与权限</h3>
     <SettingRow label="开机自启" description="随系统登录自动启动核心服务">
       {#snippet control()}
-        <Toggle bind:checked={app.autostart} onchange={(e) => setAutostart(e.target.checked)} />
+        <div class="autostart-ctl">
+          {#if autostartMethodText}
+            <span class="method">当前方式：{autostartMethodText}</span>
+          {/if}
+          <Toggle bind:checked={app.autostart} onchange={(e) => setAutostart(e.target.checked, s.autostart_admin)} />
+        </div>
+      {/snippet}
+    </SettingRow>
+    <SettingRow
+      label="以管理员身份自启"
+      disabled={autostartOff}
+      description="以最高权限的计划任务注册自启，供开机即用增强冻结等需管理员的功能；关闭则以普通权限自启。仅计划任务方式下生效。"
+    >
+      {#snippet control()}
+        <Toggle
+          bind:checked={s.autostart_admin}
+          disabled={autostartOff}
+          title={autostartOff ? "需先开启「开机自启」" : ""}
+          onchange={(e) => onAutostartAdminChange(e.target.checked)}
+        />
       {/snippet}
     </SettingRow>
     <SettingRow
@@ -198,6 +236,16 @@
     display: flex;
     align-items: center;
     gap: 12px;
+  }
+  .autostart-ctl {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .autostart-ctl .method {
+    font-size: 12px;
+    color: var(--muted);
+    white-space: nowrap;
   }
   .sel {
     padding: 5px 10px;

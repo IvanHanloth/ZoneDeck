@@ -201,9 +201,9 @@ async fn run_freeze(
 }
 
 #[tauri::command]
-async fn set_autostart(enabled: bool) -> Result<(), String> {
+async fn set_autostart(enabled: bool, admin: bool) -> Result<(), String> {
     blocking(
-        move || match notify_core(&Command::SetAutostart { enabled }) {
+        move || match notify_core(&Command::SetAutostart { enabled, admin }) {
             Ok(Response::Error { message }) => Err(message),
             Ok(_) => Ok(()),
             Err(e) => Err(e),
@@ -212,13 +212,29 @@ async fn set_autostart(enabled: bool) -> Result<(), String> {
     .await
 }
 
+/// 开机自启当前状态：是否已注册，以及注册方式（计划任务 / 注册表）。
+#[derive(Serialize, Clone, Copy)]
+struct AutostartStatus {
+    enabled: bool,
+    /// `"task"` = 计划任务，`"registry"` = 注册表，`None` = 未注册。
+    method: Option<&'static str>,
+}
+
 #[tauri::command]
-async fn autostart_status() -> bool {
+async fn autostart_status() -> AutostartStatus {
     blocking(|| {
+        use bosskey_core::autostart::Method;
         // 用核心 exe 路径查询，与核心写入的自启项一致。
-        bosskey_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE))
-            .status()
-            .is_some()
+        let status = bosskey_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE)).status();
+        let method = match status {
+            Some(Method::TaskScheduler) => Some("task"),
+            Some(Method::Registry) => Some("registry"),
+            None => None,
+        };
+        AutostartStatus {
+            enabled: status.is_some(),
+            method,
+        }
     })
     .await
 }

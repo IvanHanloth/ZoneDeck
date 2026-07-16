@@ -77,9 +77,13 @@
     <SettingRow label="启用自动隐藏" description="长时间无键鼠操作后，自动隐藏已绑定窗口。">
       {#snippet control()}<Toggle bind:checked={s.auto_hide_enabled} />{/snippet}
     </SettingRow>
-    <SettingRow label="空闲时长" description="无操作达到该时长后触发自动隐藏。">
+    <SettingRow
+      label="空闲时长"
+      description="无操作达到该时长后触发自动隐藏。"
+      disabled={!s.auto_hide_enabled}
+    >
       {#snippet control()}
-        <div class="num-ctl" class:dim={!s.auto_hide_enabled}>
+        <div class="num-ctl">
           <input
             type="number"
             min="1"
@@ -101,9 +105,6 @@
     gap: 8px;
     font-size: 12px;
     color: var(--muted);
-  }
-  .num-ctl.dim {
-    opacity: 0.55;
   }
   .num-ctl input {
     width: 76px;

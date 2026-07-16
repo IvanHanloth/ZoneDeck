@@ -80,9 +80,18 @@
     <p class="muted">版本 {info?.version ?? "…"}</p>
     <p>老板来了？一键隐藏窗口，上班摸鱼必备神器。</p>
     <p>
-      <button class="val link" onclick={() => open(info?.website ?? "https://github.com/IvanHanloth/Boss-Key")}>
+      <button class="val link" onclick={() => open(info?.website ?? "https://boss-key.ivan-hanloth.cn/")}>
         项目主页
       </button>
+      <span> • </span>
+      <button class="val link" onclick={() => open("https://github.com/IvanHanloth/Boss-Key")}>
+       仓库地址
+      </button>
+      <span> • </span>
+      <button class="val link" onclick={() => open("https://boss-key.ivan-hanloth.cn/guide/")}>
+        使用文档
+      </button>
+      
     </p>
     <p>Copyright © 2022-{year}
       <button class="val link" onclick={() => open(info?.blog ?? "https://www.ivan-hanloth.cn/")}>
