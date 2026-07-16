@@ -37,13 +37,23 @@
     resumeMonitoring(REASON);
   }
 
+  function clear() {
+    stop();
+    value = "";
+  }
+
   onDestroy(stop);
 </script>
 
 <div class="row">
   <span class="label">{label}</span>
-  <kbd class="combo" class:recording>{recording ? "请按下组合键…" : value || "未设置"}</kbd>
-  <button class="btn ghost" onclick={start}>{recording ? "取消" : "录制"}</button>
+  <kbd class="combo" class:recording class:off={!recording && !value}>
+    {recording ? "请按下组合键…" : value || "已关闭"}
+  </kbd>
+  <button class="btn ghost" type="button" onclick={start}>{recording ? "取消" : "录制"}</button>
+  {#if value && !recording}
+    <button class="btn ghost" type="button" onclick={clear}>清除</button>
+  {/if}
 </div>
 
 <style>
@@ -73,6 +83,9 @@
     border-color: var(--accent);
     color: var(--accent);
     animation: pulse 1.2s ease-in-out infinite;
+  }
+  .combo.off {
+    color: var(--muted);
   }
   @keyframes pulse {
     50% {

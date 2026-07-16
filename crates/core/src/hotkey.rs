@@ -77,6 +77,11 @@ fn key_to_vk(token: &str) -> Option<u16> {
     Some(vk)
 }
 
+/// 热键是否置空。置空表示关闭该热键，而非配置错误。
+pub fn is_disabled(s: &str) -> bool {
+    s.trim().is_empty()
+}
+
 /// 只解析修饰键组合（如 `"Ctrl+Shift"`）为位掩码，忽略无法识别的片段。
 pub fn parse_modifiers(s: &str) -> u32 {
     s.split('+')
@@ -188,6 +193,14 @@ mod tests {
         assert_eq!(parse_hotkey("Ctrl+PageUp").unwrap().vk, 0x21);
         assert_eq!(parse_hotkey("Alt+Space").unwrap().vk, 0x20);
         assert_eq!(parse_hotkey("Shift+Print Screen").unwrap().vk, 0x2C);
+    }
+
+    #[test]
+    fn blank_hotkey_counts_as_disabled() {
+        assert!(is_disabled(""));
+        assert!(is_disabled("   "));
+        assert!(!is_disabled("Ctrl+Q"));
+        assert!(!is_disabled("Ctrl+Shift"), "缺主键是错误配置，不算置空");
     }
 
     #[test]
