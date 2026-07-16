@@ -637,16 +637,14 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         state.sync_monitoring(hwnd);
                     }
                 }
-                AUTO_HIDE_TIMER_ID => {
-                    if state.config.setting.auto_hide_enabled {
-                        let idle_ms = idle::idle_millis().unwrap_or(0);
-                        if idle::should_auto_hide(
-                            idle_ms,
-                            state.config.setting.auto_hide_time,
-                            state.controller.is_hidden(),
-                        ) {
-                            state.apply_hide();
-                        }
+                AUTO_HIDE_TIMER_ID if state.config.setting.auto_hide_enabled => {
+                    let idle_ms = idle::idle_millis().unwrap_or(0);
+                    if idle::should_auto_hide(
+                        idle_ms,
+                        state.config.setting.auto_hide_time,
+                        state.controller.is_hidden(),
+                    ) {
+                        state.apply_hide();
                     }
                 }
                 _ => {}

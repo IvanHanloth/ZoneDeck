@@ -336,8 +336,10 @@ mod tests {
 
     #[test]
     fn resolves_window_rule_to_its_target() {
-        let mut config = Config::default();
-        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+        let mut config = Config {
+            window_rules: vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")],
+            ..Default::default()
+        };
         let windows = vec![
             win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
             win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
@@ -349,8 +351,10 @@ mod tests {
 
     #[test]
     fn window_rule_syncs_title_on_hide() {
-        let mut config = Config::default();
-        config.window_rules = vec![wrule("旧标题", 10, "app.exe", "C:\\app.exe")];
+        let mut config = Config {
+            window_rules: vec![wrule("旧标题", 10, "app.exe", "C:\\app.exe")],
+            ..Default::default()
+        };
         let windows = vec![win("新标题", 10, "app.exe", "C:\\app.exe")];
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         assert_eq!(targets, vec![Target { hwnd: 10, pid: 10 }]);
@@ -362,8 +366,10 @@ mod tests {
 
     #[test]
     fn window_rule_reacquires_and_backfills_hwnd() {
-        let mut config = Config::default();
-        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+        let mut config = Config {
+            window_rules: vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")],
+            ..Default::default()
+        };
         let windows = vec![win("微信", 99, "WeChat.exe", "C:\\WeChat.exe")];
         let (targets, outcomes) = resolve_targets(&mut config, &windows, 0);
         assert_eq!(targets, vec![Target { hwnd: 99, pid: 99 }]);
@@ -373,8 +379,10 @@ mod tests {
 
     #[test]
     fn window_rule_missing_when_window_gone() {
-        let mut config = Config::default();
-        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+        let mut config = Config {
+            window_rules: vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")],
+            ..Default::default()
+        };
         let windows = vec![win("记事本", 20, "notepad.exe", "C:\\notepad.exe")];
         let (targets, outcomes) = resolve_targets(&mut config, &windows, 0);
         assert!(targets.is_empty());
@@ -383,13 +391,15 @@ mod tests {
 
     #[test]
     fn process_rule_hides_all_windows_of_same_executable() {
-        let mut config = Config::default();
-        config.process_rules = vec![ProcessRule::from_window(&win(
-            "窗口一",
-            10,
-            "game.exe",
-            "C:\\game.exe",
-        ))];
+        let mut config = Config {
+            process_rules: vec![ProcessRule::from_window(&win(
+                "窗口一",
+                10,
+                "game.exe",
+                "C:\\game.exe",
+            ))],
+            ..Default::default()
+        };
         let windows = vec![
             win("窗口一", 10, "game.exe", "C:\\game.exe"),
             win("窗口二", 11, "game.exe", "C:\\game.exe"),
