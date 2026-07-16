@@ -1,38 +1,61 @@
-# Boss-Key
+<p align="center">
 
-![Boss-Key logo bannar](/static/bannar.jpg)
+![Boss-Key logo bannar](/docs/public/static/bannar.jpg)
 
-![Github Release Version](https://img.shields.io/github/v/release/IvanHanloth/Boss-Key)
-![Github Repo License](https://img.shields.io/github/license/IvanHanloth/Boss-Key)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/tag-release.yml)
-![Supported Platform](https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue)
+</p>
 
-老板来了？快用Boss-Key老板键一键隐藏窗口！上班摸鱼必备神器。
+<h1 align="center">Boss-Key</h1>
+
+<p align="center">
+
+<img src="https://img.shields.io/github/v/release/IvanHanloth/Boss-Key?style=flat-square" alt="Github Release Version">
+<img src="https://img.shields.io/github/license/IvanHanloth/Boss-Key?style=flat-square" alt="Github Repo License">
+<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/tag-release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
+<img src="https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue?style=flat-square" alt="Supported Platform">
+
+</p>
+
+<div align="center">
+    <h3>
+        <a href="https://boss-key.ivan-hanloth.cn/">项目官网</a>
+        <span> • </span>
+        <a href="https://boss-key.ivan-hanloth.cn/guide/">使用文档</a>
+        <span> • </span>
+        <a href="https://boss-key.ivan-hanloth.cn/dev/">开发文档</a>
+        <span> • </span>
+        <a href="https://github.com/IvanHanloth/Boss-Key/releases">下载地址</a>
+    </h3>
+</div>
+
+<div align="center">
+    <strong>老板来了？快用Boss-Key老板键一键隐藏窗口！上班摸鱼必备神器。</strong><br>
 
 支持多窗口隐藏、多进程隐藏、自定义热键、隐藏活动窗口、静音窗口、暂停视频播放、进程冻结等超多功能。
 
 超高自定义度，满足你的不同隐藏需求。极简内存，后台常驻仅1M内存占用，
 
+</div><br>
+
 ## 应用截图
 
-![Boss-Key设置窗口绑定页](/static/screenshot-1.png)
+![Boss-Key设置窗口绑定页](/docs/public/static/screenshot-1.png)
 
-![Boss-Key设置鼠标热键设置页-1](/static/screenshot-2.png)
+![Boss-Key设置鼠标热键设置页-1](/docs/public/static/screenshot-2.png)
 
-![Boss-Key设置鼠标热键设置页-2](/static/screenshot-3.png)
+![Boss-Key设置鼠标热键设置页-2](/docs/public/static/screenshot-3.png)
 
-![Boss-Key设置窗口其他选项页](/static/screenshot-4.png)
-
-![Boss-Key核心托盘菜单](/static/screenshot-5.png)
+![Boss-Key设置窗口其他选项页](/docs/public/static/screenshot-4.png)
 
 ## 使用说明
 
 从v3.0.0版本开始，每个版本都会提供两种类型的程序，可以从[Release页面](https://github.com/IvanHanloth/Boss-Key/releases)下载
 
 - installer - 安装程序（推荐），完整封装的Boss-Key程序安装程序，提供一键安装、更新、卸载，可以更高效安全的管理Boss-Key程序
-- portable - 免安装版，包含Boss-Key的核心程序和配置程序的压缩包，解压后可以运行
+- portable - 便携版，包含Boss-Key的核心程序和配置程序的压缩包，解压后可以运行
 
 部分版本会提供win7系统的软件包，带有win7标识的可以在Windows 7系统上运行
+
+完整的图文使用说明，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
 ### 基础使用
 
@@ -66,81 +89,13 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 
 可以勾选快速移动鼠标至四角隐藏窗口（启用允许移动恢复功能以允许通过快速移动鼠标至四角恢复窗口）
 
-### 检查更新
+### 更多功能
 
-右键点击托盘打开托盘菜单，选择“检查更新”即可打开当前检查更新窗口。
+完整功能介绍及使用指南，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
-检查更新窗口会自动尝试从Github获取最新版本更新信息以及更新地址，点击需要的版本可以跳转下载。
+## 开发及贡献指南
 
-### 其他功能
-
-完整功能介绍请查看Boss-Key使用文档
-
-#### 隐藏窗口后静音
-
-启用该功能后，如果需要隐藏的窗口正在播放音频，则该窗口将被静音。恢复显示后静音将被取消
-
-#### 隐藏前发送暂停键
-
-启用该功能后，隐藏窗口前会向窗口发送暂停键尝试暂停其中的媒体播放。
-
-注意！此功能仍在测试，启用后会导致窗口隐藏出现延时
-
-#### 同时隐藏当前活动窗口
-
-启用该功能后，按下隐藏窗口热键时，除了会隐藏绑定的窗口，还会隐藏当前被激活的窗口。
-
-#### 点击托盘图标切换隐藏状态
-
-启用该功能后，可以通过单击托盘图标来显示或隐藏窗口
-
-### 设置和关闭开机自启
-
-如果需要让Boss-Key程序开机自启，可以右键点击托盘图标，在弹出的菜单中选择“开机自启”来切换开机自启状态，或从窗口菜单->工具->
-开机自启选项进行切换。
-
-### 进程冻结相关功能
-
-自v2.1.0版本开始，Boss-Key加入了隐藏窗口后冻结进程功能。启用此功能将在隐藏窗口后将对应的进程“冻结”，减轻CPU和内存压力。
-启用此功能需要**以管理员身份运行**。冻结加强功能则额外需要下载pssuspend64.exe文件置于程序目录下以供调用。
-
-**如何下载和使用加强冻结功能：**
-
-您需要手动访问[https://download.sysinternals.com/files/PSTools.zip](https://download.sysinternals.com/files/PSTools.zip)
-页面，下载由Microsoft提供的PSTools工具包。解压下载得到`PSTools.zip`文件，可以找到`pssuspend64.exe`
-文件，直接复制该文件，放置于Boss-Key程序的安装根目录即可。
-
-## 常见问题
-
-**为什么我的电脑运行不了编译后的程序**
-
-为了更好的用户体验，V3.0版本的配置程序使用Tauri进行编写，其运行依赖系统Webview。
-
-部分精简版系统及较低版本系统（Win7及以下）可能默认不包含webview，因此无法打开配置程序。可以通过手动安装微软edge webview2
-解决，参考 [https://developer.microsoft.com/zh-cn/microsoft-edge/webview2](https://developer.microsoft.com/zh-cn/microsoft-edge/webview2)
-
-部分版本会提供win7系统的软件包，可以下载带有win7标识的软件使用
-
-## 分支说明及规范
-
-为了高效、安全的完成开发，我们对分支、合并等有一定要求。
-
-仓库有两个主要分支`main`和`dev`分支：
-
-- `main`包含正式发布版本的源代码，此分支不能直接提交，原则上只能已完成版本功能开发且决定发布新版本并通过测试后，从`dev`分支合并
-- `dev`用于存储所有正在开发的功能的源代码，此分支不能直接提交，原则上只能包含已经完成开发并通过测试的功能
-
-其他分支则用于正常功能开发、提交等。
-
-新功能、Bug修复等操作应该通过PR提交至`dev`分支，经过代码审查后合并。最后经过测试后，统一通过PR合并至`main`分支。
-
-分支命名没有强制规范，但是为了方便维护，我们推荐使用类似`类型/功能`的命名方式，例如`feat/checkUpdate`、`fix/hideWindow`等。
-
-## Project规范
-
-我们通常使用github提供的Project功能进行统一项目规划管理。
-
-应该尽量将Issue-PullRequest-Project三者相互关联，以便实现统一管理。
+有关开发和贡献的详细信息，请参阅 Boss-Key [开发文档](https://boss-key.ivan-hanloth.cn/dev)
 
 ## 鸣谢
 
@@ -148,129 +103,4 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 
 ## 更新日志
 
-**V3.0.0 （更新于2026/7/15）**
-全新V3版本正式发布！底层全面重构，大幅提高程序稳定性，降低90%内存占用，采用全新视觉设计
-
-- 【重构】使用Rust重构整个项目
-- 【新增】新增鼠标连击隐藏、搭配修饰键隐藏功能
-- 【新增】新增显示所有窗口、筛选现有窗口功能
-- 【新增】新增进程隐藏功能
-- 【新增】新增正则窗口匹配功能
-- 【新增】新增移动隐藏控制功能
-- 【新增】新增所有通知控制功能
-- 【新增】新增冻结完整进程功能
-- 【新增】新增核心状态显示
-- 【新增】新增日志及日志切割功能
-- 【新增】窗口工具新增进程冻结相关配置
-- 【新增】新增配置自动保存
-- 【新增】新增配置页深色主题
-- 【新增】新增内置公告、反馈、上报功能
-- 【新增】新增核心独立控制
-- 【新增】新增鼠标按键隐藏演示图像
-- 【新增】新增屏幕四角隐藏演示动画
-- 【优化】优化隐藏前发送暂停键功能
-- 【优化】优化开机自启功能
-- 【优化】配置自动保存
-- 【优化】优化UI设计
-- 【优化】大幅优化后台内存占用
-- 【优化】缩小编译后体积
-- 【优化】大幅提高后台稳定性
-- 【优化】使用全新的检查更新端点
-
-**V2.1.0 （更新于2025/4/21）**
-
-- 新增鼠标中键、侧键隐藏功能
-- 新增鼠标移动至四角隐藏功能
-- 新增进程冻结功能
-- 新增自动隐藏功能
-- 优化界面UI设计
-- 优化窗口恢复工具
-
-**V2.0.4 （更新于2025/4/9）**
-
-- 修复无法正确禁音应用的问题
-- 优化选项提示
-- 优化禁音匹配规则
-
-**V2.0.3 （更新于2025/4/5）**
-
-- 新增文件路径匹配选项
-- 新增窗口恢复工具
-- 修复状态列表问题
-- 优化运行速度和占用
-
-**V2.0.2 （更新于2025/2/2）**
-
-- 新增全选窗口选项
-- 新增隐藏窗口后同时隐藏程序托盘图标选项
-- 修复无法使用热键关闭程序的问题
-- 优化界面UI设计
-- 优化配置文件读取
-
-**V2.0.1 （更新于2025/1/17）**
-
-- 修改已在运行时的提醒
-- 修复窗口销毁后再打开隐藏失败的问题
-- 优化同时运行检测
-- 保存新窗口绑定时自动显示已隐藏的窗口
-
-**V2.0.0 （更新于2025/1/5）**
-
-- 重构设置页面
-- 新增支持多窗口、多进程隐藏
-- 新增检查更新功能
-- 新增点击托盘图标切换窗口隐藏功能
-- 新增是否同时隐藏当前窗口的选项
-- 完全移除启动切换热键
-- 优化配置文件存储
-- 优化窗口通知功能
-- 优化窗口隐藏相关功能
-- 优化热键监听稳定性
-
-**V1.4.3 （更新于2024/12/19）**
-
-- 新增隐藏前发送暂停功能
-- 新增热键录制窗口
-- 新增关于页面
-- 新增托盘开机自启设置菜单项
-- 修复部分热键录制时出错问题
-- 修复单文件版提示无图标的问题
-
-**V1.4.2（更新于2024/11/16）**
-
-- 新增允许2个以上按键的热键
-- 新增录制热键功能
-- 优化后台适配
-
-**V1.4.0（更新于2024/10/11）**
-
-- 新增窗口隐藏后静音功能
-- 修改默认关闭程序键位
-- 修复每次弹窗的问题
-- 修复重复启动导致的绑定出错问题
-- 优化退出速度
-
-**V1.3.0（更新于2023/9/17）**
-
-- 使用面向对象重写
-- 新增设置GUI页面
-- 新增托盘图标菜单
-- 新增一键安装程序
-- 优化使用体验
-- 优化适配Windows11系统
-- 修复自启动失败问题
-- 取消单文件版程序
-
-**v1.2.0（更新于2023/5/21）**
-
-- 修复自启动修改出错问题
-
-**V1.1.0（更新于2023/5/21）**
-
-- 修复部分电脑报毒问题
-
-**V1.0.0（更新于2023/5/12）**
-
-- Boss-Key发布
-
-![](/static/icon.png)
+完整的更新日志请参阅 Boss-Key [更新日志](https://boss-key.ivan-hanloth.cn/changelog)
