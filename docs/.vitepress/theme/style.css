@@ -160,3 +160,10 @@
   background: currentColor;
   vertical-align: 0.05em;
 }
+
+/* 更新日志的发布时间行：changelog/[version].md（ReleaseMeta 组件）与
+   changelog/legacy.md（纯 Markdown，无下载链接的历史版本）共用同一样式。 */
+.vp-doc .release-meta {
+  color: var(--vp-c-text-2);
+  font-size: 14px;
+}
