@@ -1,5 +1,5 @@
 <script>
-  // 「隐藏进程」规则（粗粒度）：按可执行文件路径隐藏该程序的所有窗口，而非单个窗口。
+  // 「进程隐藏」规则（粗粒度）：按可执行文件路径隐藏该程序的所有窗口，而非单个窗口。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";
@@ -20,7 +20,7 @@
 
 <div class="list-box">
   <div class="list-title">
-    <span class="title-text"><IconBox width="15" height="15" /> 隐藏进程</span>
+    <span class="title-text"><IconBox width="15" height="15" /> 进程隐藏</span>
     <span class="count">{rules.length}</span>
     <div class="tools">
       <button class="mini primary" title="把左侧选中窗口所属进程加入" onclick={() => onadd?.()}>
@@ -35,7 +35,7 @@
     </div>
   </div>
 
-  <div class="rule-list" role="listbox" aria-label="隐藏进程规则">
+  <div class="rule-list" role="listbox" aria-label="进程隐藏规则">
     {#if rules.length === 0}
       <p class="hint empty">（空）</p>
     {:else}

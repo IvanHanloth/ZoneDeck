@@ -20,6 +20,7 @@ const mockConfig = {
     hide_icon_after_hide: false,
     freeze_after_hide: false,
     enhanced_freeze: false,
+    freeze_whole_tree: false,
     show_float_window: false,
     mouse: {
       left: { enabled: false, clicks: 1, modifiers: "" },
@@ -39,6 +40,7 @@ const mockConfig = {
     allow_move_restore: false,
     corner_fast_only: true,
     log_retention_days: 7,
+    autostart_admin: false,
   },
   notifications: {
     on_start: true,
@@ -82,6 +84,8 @@ const mockWindows = [
 
 /** mock 下的核心监控状态。 */
 let mockMonitoring = true;
+/** mock 下的开机自启状态（有状态，供预览联动 UI）。 */
+let mockAutostart = false;
 
 function mockInvoke(cmd, args) {
   switch (cmd) {
@@ -92,7 +96,7 @@ function mockInvoke(cmd, args) {
     case "window_icons":
       return {};
     case "autostart_status":
-      return false;
+      return { enabled: mockAutostart, method: mockAutostart ? "task" : null };
     case "core_status":
       return { running: true, hidden: false, elevated: false, monitoring: mockMonitoring };
     case "set_hotkeys_enabled":
@@ -105,10 +109,12 @@ function mockInvoke(cmd, args) {
       return false;
     case "startup_action":
       return null;
+    case "set_autostart":
+      mockAutostart = !!args?.enabled;
+      return null;
     case "quit_core":
     case "show_windows":
     case "show_all_windows":
-    case "set_autostart":
     case "open_log_dir":
       return null;
     case "app_info":

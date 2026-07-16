@@ -62,14 +62,21 @@ impl Autostart {
         None
     }
 
-    pub fn enable(&self) -> Result<Method, AutostartError> {
+    /// 开启自启：`admin=true` 注册最高权限计划任务，`false` 用普通权限。
+    /// 计划任务失败时回退注册表启动项（始终普通权限）。
+    pub fn enable(&self, admin: bool) -> Result<Method, AutostartError> {
         let exe = self
             .exe_path
             .to_str()
             .ok_or(AutostartError::NoExePath)?
             .to_string();
 
-        if task_create_highest(&self.task_name, &exe) {
+        let level = if admin {
+            RunLevel::Highest
+        } else {
+            RunLevel::Least
+        };
+        if task_create(&self.task_name, &exe, level) {
             registry_delete(&self.run_subkey, &self.reg_value_name);
             return Ok(Method::TaskScheduler);
         }
@@ -163,8 +170,6 @@ fn task_exists(task_name: &str) -> bool {
 #[derive(Debug, Clone, Copy)]
 enum RunLevel {
     Highest,
-    /// 仅测试使用：非管理员环境下验证 XML 能被 schtasks 接受。
-    #[cfg_attr(not(test), allow(dead_code))]
     Least,
 }
 
@@ -173,6 +178,14 @@ impl RunLevel {
         match self {
             RunLevel::Highest => "HighestAvailable",
             RunLevel::Least => "LeastPrivilege",
+        }
+    }
+
+    /// 命令行回退时 `schtasks /RL` 的取值。
+    fn as_schtasks(self) -> &'static str {
+        match self {
+            RunLevel::Highest => "HIGHEST",
+            RunLevel::Least => "LIMITED",
         }
     }
 }
@@ -262,17 +275,26 @@ fn task_create_from_xml(task_name: &str, xml: &str) -> bool {
     created
 }
 
-fn task_create_highest(task_name: &str, exe: &str) -> bool {
+fn task_create(task_name: &str, exe: &str, level: RunLevel) -> bool {
     // 优先 XML 方式（带失败自动重启）。
     if let Some(user) = current_user()
-        && task_create_from_xml(task_name, &task_xml(exe, &user, RunLevel::Highest))
+        && task_create_from_xml(task_name, &task_xml(exe, &user, level))
     {
         return true;
     }
     // 回退：老式命令行注册。
     let tr = format!("\"{exe}\"");
     schtasks(&[
-        "/Create", "/F", "/TN", task_name, "/TR", &tr, "/SC", "ONLOGON", "/RL", "HIGHEST",
+        "/Create",
+        "/F",
+        "/TN",
+        task_name,
+        "/TR",
+        &tr,
+        "/SC",
+        "ONLOGON",
+        "/RL",
+        level.as_schtasks(),
     ])
 }
 
@@ -358,7 +380,7 @@ mod tests {
         };
 
         let method = auto
-            .enable()
+            .enable(false)
             .expect("指向普通键时 enable 应至少通过注册表方式成功");
         assert_eq!(
             auto.status(),
@@ -405,6 +427,25 @@ mod tests {
         );
         assert!(xml.contains("<UserId>DESKTOP\\ivan</UserId>"));
         assert!(xml.contains("<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>"));
+    }
+
+    #[test]
+    fn task_xml_least_privilege_uses_least_run_level() {
+        let xml = task_xml("C:\\app.exe", "DESKTOP\\ivan", RunLevel::Least);
+        assert!(
+            xml.contains("<RunLevel>LeastPrivilege</RunLevel>"),
+            "普通权限应写 LeastPrivilege"
+        );
+        assert!(
+            !xml.contains("HighestAvailable"),
+            "普通权限不应出现最高权限标记"
+        );
+    }
+
+    #[test]
+    fn run_level_maps_to_schtasks_flags() {
+        assert_eq!(RunLevel::Highest.as_schtasks(), "HIGHEST");
+        assert_eq!(RunLevel::Least.as_schtasks(), "LIMITED");
     }
 
     #[test]

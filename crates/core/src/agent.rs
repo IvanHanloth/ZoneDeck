@@ -279,7 +279,7 @@ impl AgentState {
                 self.apply_toggle();
                 (Response::Ok, false)
             }
-            Command::SetAutostart { enabled } => (set_autostart(enabled), false),
+            Command::SetAutostart { enabled, admin } => (set_autostart(enabled, admin), false),
             // 停用有状态，期间的 ReloadConfig 不会复活它；看门狗定时器兜底超时恢复。
             Command::SetHotkeys { enabled } => {
                 let changed = self.monitoring != enabled;
@@ -358,7 +358,7 @@ unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> bool {
     }
 }
 
-fn set_autostart(enabled: bool) -> Response {
+fn set_autostart(enabled: bool, admin: bool) -> Response {
     let auto = match crate::autostart::Autostart::standard() {
         Ok(a) => a,
         Err(e) => {
@@ -368,7 +368,7 @@ fn set_autostart(enabled: bool) -> Response {
         }
     };
     if enabled {
-        match auto.enable() {
+        match auto.enable(admin) {
             Ok(_) => Response::Ok,
             Err(e) => Response::Error {
                 message: e.to_string(),
@@ -384,13 +384,17 @@ fn toggle_autostart(state: &AgentState) {
     let Ok(auto) = crate::autostart::Autostart::standard() else {
         return;
     };
+    let admin = state.config.setting.autostart_admin;
     let (title, message) = if auto.status().is_some() {
         auto.disable();
         ("开机自启已关闭", "Boss Key 将不再随系统启动")
     } else {
-        match auto.enable() {
+        match auto.enable(admin) {
+            Ok(crate::autostart::Method::TaskScheduler) if admin => {
+                ("开机自启已开启", "已注册计划任务（管理员权限）")
+            }
             Ok(crate::autostart::Method::TaskScheduler) => {
-                ("开机自启已开启", "已注册计划任务（最高权限）")
+                ("开机自启已开启", "已注册计划任务（普通权限）")
             }
             Ok(crate::autostart::Method::Registry) => ("开机自启已开启", "已写入注册表启动项"),
             Err(_) => ("开机自启设置失败", "计划任务与注册表方式均失败"),

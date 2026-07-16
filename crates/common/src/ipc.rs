@@ -20,6 +20,8 @@ pub enum Command {
     Toggle,
     SetAutostart {
         enabled: bool,
+        /// `true` 注册最高权限计划任务，`false` 用普通权限。仅在 `enabled=true` 时有意义。
+        admin: bool,
     },
     /// 临时停用 / 恢复全局热键与鼠标监控。停用有状态，须持续心跳续期。
     SetHotkeys {
@@ -149,7 +151,14 @@ mod tests {
             Command::Hide,
             Command::Show,
             Command::Toggle,
-            Command::SetAutostart { enabled: true },
+            Command::SetAutostart {
+                enabled: true,
+                admin: true,
+            },
+            Command::SetAutostart {
+                enabled: false,
+                admin: false,
+            },
             Command::SetHotkeys { enabled: true },
             Command::SetHotkeys { enabled: false },
             Command::Quit,
@@ -167,8 +176,13 @@ mod tests {
             r#"{"cmd":"reload_config"}"#
         );
         assert_eq!(
-            Command::SetAutostart { enabled: false }.to_line().unwrap(),
-            r#"{"cmd":"set_autostart","enabled":false}"#
+            Command::SetAutostart {
+                enabled: false,
+                admin: false
+            }
+            .to_line()
+            .unwrap(),
+            r#"{"cmd":"set_autostart","enabled":false,"admin":false}"#
         );
     }
 
