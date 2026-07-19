@@ -14,10 +14,12 @@ type NtProc = unsafe extern "system" fn(HANDLE) -> i32;
 pub enum FreezeError {
     #[error("ntdll 中未找到 {0}")]
     NtdllUnavailable(&'static str),
-    #[error("无法打开进程 PID {0}")]
-    OpenFailed(u32),
-    #[error("Nt 调用失败，状态码: {0:#x}")]
-    NtFailed(i32),
+    /// `OpenProcess` 失败。多为权限不足（目标为管理员进程 / 受保护进程），
+    /// 或进程已退出，故须带上系统错误码，仅说「无法打开进程」无从排查。
+    #[error("OpenProcess 失败（需要 PROCESS_SUSPEND_RESUME 权限）: {0}")]
+    OpenFailed(String),
+    #[error("{call} 失败，NTSTATUS=0x{status:08X}")]
+    NtFailed { call: &'static str, status: i32 },
     #[error("未找到 pssuspend64.exe")]
     PssuspendMissing,
     #[error("pssuspend64 执行失败: {0}")]
@@ -35,14 +37,14 @@ fn resolve(name: PCSTR) -> Option<NtProc> {
     }
 }
 
-fn call_nt(pid: u32, proc: NtProc) -> Result<(), FreezeError> {
+fn call_nt(pid: u32, proc: NtProc, call: &'static str) -> Result<(), FreezeError> {
     unsafe {
         let handle = OpenProcess(PROCESS_SUSPEND_RESUME, false, pid)
-            .map_err(|_| FreezeError::OpenFailed(pid))?;
+            .map_err(|e| FreezeError::OpenFailed(crate::util::win_err(&e)))?;
         let status = proc(handle);
         let _ = CloseHandle(handle);
         if status < 0 {
-            return Err(FreezeError::NtFailed(status));
+            return Err(FreezeError::NtFailed { call, status });
         }
         Ok(())
     }
@@ -52,14 +54,14 @@ pub fn suspend_process(pid: u32) -> Result<(), FreezeError> {
     static SUSPEND: OnceLock<Option<NtProc>> = OnceLock::new();
     let proc = (*SUSPEND.get_or_init(|| resolve(s!("NtSuspendProcess"))))
         .ok_or(FreezeError::NtdllUnavailable("NtSuspendProcess"))?;
-    call_nt(pid, proc)
+    call_nt(pid, proc, "NtSuspendProcess")
 }
 
 pub fn resume_process(pid: u32) -> Result<(), FreezeError> {
     static RESUME: OnceLock<Option<NtProc>> = OnceLock::new();
     let proc = (*RESUME.get_or_init(|| resolve(s!("NtResumeProcess"))))
         .ok_or(FreezeError::NtdllUnavailable("NtResumeProcess"))?;
-    call_nt(pid, proc)
+    call_nt(pid, proc, "NtResumeProcess")
 }
 
 pub fn pssuspend_available(exe_dir: &Path) -> bool {
@@ -212,6 +214,26 @@ mod tests {
     fn suspend_invalid_pid_fails_gracefully() {
         let result = suspend_process(0xFFFF_FFF0);
         assert!(matches!(result, Err(FreezeError::OpenFailed(_))));
+    }
+
+    #[test]
+    fn open_failure_reports_system_error_code() {
+        // 排查冻结问题时必须能分辨「权限不足」与「进程已退出」，故错误须带系统错误码。
+        let Err(e) = suspend_process(0xFFFF_FFF0) else {
+            panic!("无效 PID 应失败");
+        };
+        let text = e.to_string();
+        assert!(text.contains("OpenProcess"), "应指明失败的调用: {text}");
+        assert!(text.contains("0x"), "应带系统错误码: {text}");
+    }
+
+    #[test]
+    fn nt_failure_names_the_failing_call() {
+        let e = FreezeError::NtFailed {
+            call: "NtSuspendProcess",
+            status: 0xC000_0022u32 as i32,
+        };
+        assert_eq!(e.to_string(), "NtSuspendProcess 失败，NTSTATUS=0xC0000022");
     }
 
     #[test]

@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   import IconX from "~icons/lucide/x";
 
   let { title = "", open = $bindable(false), children, footer } = $props();
@@ -22,7 +23,7 @@
     <div class="dialog" role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
       <header class="dhead">
         <h3>{title}</h3>
-        <button class="x" title="关闭" aria-label="关闭" onclick={close}>
+        <button class="x" title={t("common.close")} aria-label={t("common.close")} onclick={close}>
           <IconX width="15" height="15" />
         </button>
       </header>

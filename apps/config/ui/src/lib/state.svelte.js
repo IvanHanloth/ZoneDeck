@@ -1,6 +1,7 @@
 // 全局应用状态（Svelte 5 runes）：配置双向绑定的单一数据源 + 核心状态轮询。
 
 import { invoke } from "./ipc.js";
+import { setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
 import * as verhub from "./verhub.js";
 
@@ -75,7 +76,7 @@ async function applyMonitoring(enabled) {
   try {
     await invoke("set_hotkeys_enabled", { enabled });
   } catch (err) {
-    toast("暂停热键监控失败：" + err, true);
+    toast(t("state.suspendFailed", { err }), true);
   }
   if (seq !== monitorSeq) return;
   app.monitorPending = false;
@@ -101,9 +102,9 @@ export function openRestoreTool() {
 export async function refreshPssuspend() {
   try {
     app.pssuspend = !!(await invoke("pssuspend_available"));
-    toast(app.pssuspend ? "已检测到 pssuspend64.exe" : "未检测到 pssuspend64.exe", !app.pssuspend);
+    toast(t(app.pssuspend ? "state.pssuspendFound" : "state.pssuspendMissing"), !app.pssuspend);
   } catch (err) {
-    toast("检测失败：" + err, true);
+    toast(t("state.detectFailed", { err }), true);
   }
 }
 
@@ -128,6 +129,8 @@ export async function loadAll() {
   const tasks = [
     invoke("load_config").then((c) => {
       app.config = c;
+      // 界面语言先于首帧生效，避免加载后文案跳变。
+      setLangPref(c?.setting?.language);
       return refreshWindows();
     }),
     refreshAutostart(),
@@ -138,7 +141,7 @@ export async function loadAll() {
   ];
   const results = await Promise.allSettled(tasks);
   const failed = results.find((r) => r.status === "rejected");
-  if (failed) toast("部分数据加载失败：" + failed.reason, true);
+  if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);
 }
 
 /** 回读开机自启真实状态（是否已注册 + 注册方式）。 */
@@ -185,7 +188,7 @@ async function saveConfig() {
   try {
     await invoke("save_config", { config: $state.snapshot(app.config) });
   } catch (err) {
-    reportError("保存配置失败，你的改动可能没有写入磁盘。", err);
+    reportError(t("state.saveFailed"), err);
   } finally {
     app.saving = false;
   }
@@ -194,32 +197,32 @@ async function saveConfig() {
 export async function startCore(elevated) {
   try {
     const accepted = await invoke("start_core", { elevated });
-    if (accepted === false) return toast("已取消提权", true);
-    toast(elevated ? "核心正在以管理员身份启动…" : "核心正在启动…");
+    if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    toast(t(elevated ? "state.coreStartingAdmin" : "state.coreStarting"));
     setTimeout(refreshStatus, 1200);
   } catch (err) {
-    reportError("核心启动失败，热键与鼠标触发都不会生效。", err);
+    reportError(t("state.coreStartFailed"), err);
   }
 }
 
 export async function restartCore(elevated) {
   try {
     const accepted = await invoke("restart_core", { elevated });
-    if (accepted === false) return toast("已取消提权", true);
-    toast(elevated ? "核心正在以管理员身份重启…" : "核心正在重启…");
+    if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    toast(t(elevated ? "state.coreRestartingAdmin" : "state.coreRestarting"));
     setTimeout(refreshStatus, 1500);
   } catch (err) {
-    reportError("核心重启失败。", err);
+    reportError(t("state.coreRestartFailed"), err);
   }
 }
 
 export async function quitCore() {
   try {
     await invoke("quit_core");
-    toast("已请求核心退出");
+    toast(t("state.coreQuitRequested"));
     setTimeout(refreshStatus, 800);
   } catch (err) {
-    toast("退出核心失败：" + err, true);
+    toast(t("state.coreQuitFailed", { err }), true);
   }
 }
 
@@ -229,10 +232,10 @@ export async function setAutostart(enabled, admin) {
     app.autostart = enabled;
     // 计划任务可能回退到注册表，回读真实注册方式。
     await refreshAutostart();
-    toast(enabled ? "已开启开机自启" : "已关闭开机自启");
+    toast(t(enabled ? "state.autostartOn" : "state.autostartOff"));
   } catch (err) {
     app.autostart = !enabled; // 失败回滚
-    toast("设置开机自启失败：" + err, true);
+    toast(t("state.autostartFailed", { err }), true);
   }
 }
 
@@ -247,10 +250,10 @@ export async function checkForUpdate(manual = false) {
     const result = await verhub.checkUpdate(app.config?.verhub?.include_preview ?? false);
     app.update = result;
     if (result.should_update) app.updateOpen = true;
-    else if (manual) toast("已是最新版本");
+    else if (manual) toast(t("state.upToDate"));
   } catch (err) {
     app.update = null;
-    if (manual) toast("检查更新失败，请稍后重试", true);
+    if (manual) toast(t("state.checkUpdateFailed"), true);
   } finally {
     app.updateChecking = false;
   }

@@ -27,7 +27,7 @@ impl Effects for WinEffects {
     }
 
     fn suspend(&self, pid: u32, enhanced: bool) {
-        // 每一次冻结调用（含增强/普通、成功/失败）都以 info 写日志，便于定位。
+        // 每一次冻结调用都写日志：成功记 info，失败记 warn，便于事后按 pid 追溯。
         if enhanced && freeze::pssuspend_available(&self.exe_dir) {
             match freeze::suspend_enhanced(&self.exe_dir, pid) {
                 Ok(()) => {
@@ -39,7 +39,7 @@ impl Effects for WinEffects {
         }
         match freeze::suspend_process(pid) {
             Ok(()) => logging::info(&format!("普通冻结成功 (pid={pid})")),
-            Err(e) => logging::warn(&format!("冻结进程失败 (pid={pid}): {e}")),
+            Err(e) => logging::warn(&format!("普通冻结失败，该进程未被冻结 (pid={pid}): {e}")),
         }
     }
 
@@ -55,7 +55,9 @@ impl Effects for WinEffects {
         }
         match freeze::resume_process(pid) {
             Ok(()) => logging::info(&format!("普通解冻成功 (pid={pid})")),
-            Err(e) => logging::warn(&format!("解冻进程失败 (pid={pid}): {e}")),
+            // 不升级为 error：进程在隐藏期间正常退出时同样会走到这里（OpenProcess 失败），
+            // 那是常态而非故障。具体是「已退出」还是「权限不足」由错误码分辨。
+            Err(e) => logging::warn(&format!("普通解冻失败 (pid={pid}): {e}")),
         }
     }
 

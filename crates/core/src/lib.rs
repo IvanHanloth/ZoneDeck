@@ -7,6 +7,7 @@ pub mod float_window;
 pub mod freeze;
 pub mod hide;
 pub mod hotkey;
+pub mod i18n;
 pub mod icon;
 pub mod idle;
 pub mod input;

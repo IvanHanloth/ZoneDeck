@@ -67,12 +67,13 @@ Boss-Key/
 ├── Cargo.toml                      workspace（含 release profile 调优）
 ├── crates/
 │   ├── common/                     共享库（无平台依赖，可跨平台编译）
-│   │   └── src/{model,config,matching,ipc,verhub}.rs
+│   │   └── src/{model,config,matching,ipc,verhub,i18n}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule（serde 兼容旧 config.json，PID 大写）
 │   │       config    Config/Setting/Hotkey（兼容读取旧配置 + 迁移）
 │   │       matching  窗口匹配逻辑
 │   │       ipc       Command/Response 协议 + PipeClient 客户端
 │   │       verhub    版本 / 公告 / 更新检查相关模型
+│   │       i18n      界面语言标签（Lang）与语言偏好解析，核心与配置程序共用
 │   └── core/                       常驻核心（lib + bin）
 │       └── src/
 │           platform/win32.rs  窗口枚举/隐藏/显示（WindowManager trait）
@@ -88,7 +89,8 @@ Boss-Key/
 │           ipc_server.rs 命名管道服务端
 │           autostart.rs  开机自启（计划任务 XML 含失败自动重启 + 注册表回退）
 │           elevation.rs  管理员检测 + UAC 提权重启
-│           logging.rs    崩溃日志（bosskey.log 大小轮转 + panic 钩子）
+│           i18n.rs       核心用户可见文案 catalog（托盘菜单 / 气泡 / IPC 错误；日志不走它）
+│           logging.rs    分级文件日志（logs/BossKey-YYYY-MM-DD.log 按天切割 + panic 钩子）
 │           recovery.rs   崩溃恢复（隐藏状态落盘，异常退出后找回窗口）
 │           icon.rs       进程图标提取（HICON → 手写 PNG/base64 编码）
 │           single_instance.rs  命名互斥单实例
@@ -96,6 +98,7 @@ Boss-Key/
     ├── src-tauri/  Rust 后端命令 + tauri.conf.json + capabilities
     ├── ui/         前端源码（Vite + Svelte 5）
     │   └── src/    lib/（纯逻辑 + vitest 测试）+ components/（Svelte 组件）
+    │                + locales/（三语文案 catalog，以 zh-CN.js 为基准）
     └── dist/       前端构建产物（gitignore；由 ui/ 经 vite build 生成）
 ```
 
@@ -121,11 +124,25 @@ Boss-Key/
 
 ## 稳定性设计（崩溃自愈三层防线）
 
-1. **崩溃日志**：关键事件与 panic 写入 `bosskey.log`（超 512 KB 轮转）。
+1. **崩溃日志**：关键事件与 panic 写入 exe 同目录的 `logs/BossKey-YYYY-MM-DD.log`（按天切割，按 `log_retention_days` 保留，0 表示关闭日志；release 构建丢弃 DEBUG 级）。
 2. **崩溃恢复**：隐藏时把"隐藏 / 冻结 / 静音了什么"写入 `recovery.json`，异常退出后重启自动找回。
 3. **看门狗**：计划任务 `RestartOnFailure`（崩溃后 1 分钟内重启，最多 3 次）。release 构建 `panic = "abort"`，panic 钩子写完日志后以非零码退出，正好触发计划任务重启。
 
 用户视角的说明见 [窗口恢复与崩溃自愈](/guide/recovery)。
+
+## 界面语言
+
+核心与配置程序共用 `crates/common` 的 `Lang`（`zh-CN` / `en` / `zh-TW`）与语言偏好解析，文案则各自维护：
+
+| 位置 | 文案载体 | 说明 |
+| --- | --- | --- |
+| `crates/core/src/i18n.rs` | `Msg` 枚举 + 三语 `match` | 托盘菜单、气泡通知、IPC 错误；`tf()` 负责 `{名字}` 占位符替换 |
+| `apps/config/ui/src/locales/*.js` | 扁平键值表 | 配置界面全部文案；`t(key, params)` 查表并替换占位符 |
+
+- 生效语言由 `setting.language` 决定：`auto` 时按系统显示语言推断（核心用 `GetUserDefaultLocaleName`，前端用 `navigator.language`），推断不出回落到简体中文。
+- 配置界面保存配置后会发 `reload_config`，核心据此同步语言，因此切换语言无需重启任一进程。
+- **日志不参与 i18n**，一律使用简体中文，以便跨语言排查问题。
+- `NO_TITLE`（`"无标题窗口"`）是跨进程、写进 `config.json` 的哨兵值，**不随语言变化**，仅在展示时翻译。
 
 ## 前端架构
 

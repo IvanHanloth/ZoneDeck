@@ -29,7 +29,9 @@ apps/config/ui/
 │       ├── pointer.js       鼠标连击/连击窗口常量（配 pointer.test.js）
 │       ├── grouping.js      窗口/进程规则的增删与过滤（配 grouping.test.js）
 │       ├── theme.js         主题切换（配 theme.test.js）
+│       ├── i18n.svelte.js   界面语言：catalog 查表 + 语言解析（配 i18n.test.js）
 │       └── verhub.js        检查更新/公告/打开外链
+├── locales/                 三语文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
 └── svelte.config.js
 ```
@@ -58,6 +60,27 @@ Tauri 配置 `decorations: false`，标题栏由前端自绘：
 `App.svelte` 中用 `$effect` 深度追踪配置对象（含 `window_rules` / `process_rules`）的任何变化，停顿后经 `scheduleSave`（内部 debounce）自动写盘。加载阶段不触发保存，`loadAll` 完成后才"武装"自动保存。
 
 保存后前端通过 IPC 通知核心 `reload_config`，核心热重载配置。
+
+## 界面语言
+
+文案集中在 `src/locales/`，每个语言一个扁平键值表；`lib/i18n.svelte.js` 负责查表与语言解析。
+
+```js
+import { t } from "../lib/i18n.svelte.js";
+
+t("common.close");                    // → 关闭
+t("restore.frozen", { n: 3 });        // → 已冻结 3 个进程
+```
+
+- `t()` 读取 `$state` 里的当前语言，因此模板中调用它即可在切换语言时自动重渲染，无需手动订阅。
+- **`zh-CN.js` 是文案基准**：新增文案先写它，再同步 `en.js` 与 `zh-TW.js`。`i18n.test.js` 会校验三份 catalog 的键集与占位符完全一致，漏译即测试失败。
+- 缺失的键回落到简体中文，仍缺失则返回键本身，便于开发期发现漏译。
+- 当前语言取自 `setting.language`；`auto` 时按 `navigator.language` 推断。`App.svelte` 用 `$effect` 追踪该字段，改动即时换文案，并同步写 `<html lang>`（影响字体回退与断行）。
+- `lib/` 里的纯逻辑模块（`pointer.js`、`grouping.js`、`theme.js`）也经由 `t()` 取文案；因默认语言为简体中文，它们的既有单测无需改动。
+
+::: warning NO_TITLE 不是文案
+`grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）与核心 `bosskey_common::NO_TITLE` 一致，是写进 `config.json` 的跨进程哨兵值，**不可翻译**；仅在展示时用 `t("common.noTitleWindow")` 换成当前语言。
+:::
 
 ## 状态轮询不卡界面
 

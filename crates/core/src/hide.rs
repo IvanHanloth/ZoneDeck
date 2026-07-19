@@ -179,6 +179,11 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         !self.hidden.is_empty()
     }
 
+    /// 当前被隐藏的窗口数（供日志如实记录恢复了多少个窗口）。
+    pub fn hidden_count(&self) -> usize {
+        self.hidden.len()
+    }
+
     /// 枚举当前窗口（供上层解析目标；封装 wm 依赖）。
     pub fn enumerate(&self) -> Vec<WindowInfo> {
         self.wm.enumerate()

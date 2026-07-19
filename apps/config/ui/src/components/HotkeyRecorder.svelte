@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   // 录制热键期间暂停核心的全局热键监控，结束后恢复。
   import { onDestroy } from "svelte";
   import { comboFromEvent } from "../lib/hotkey.js";
@@ -48,11 +49,11 @@
 <div class="row">
   <span class="label">{label}</span>
   <kbd class="combo" class:recording class:off={!recording && !value}>
-    {recording ? "请按下组合键…" : value || "已关闭"}
+    {recording ? t("recorder.pressCombo") : value || t("recorder.disabled")}
   </kbd>
-  <button class="btn ghost" type="button" onclick={start}>{recording ? "取消" : "录制"}</button>
+  <button class="btn ghost" type="button" onclick={start}>{recording ? t("common.cancel") : t("common.record")}</button>
   {#if value && !recording}
-    <button class="btn ghost" type="button" onclick={clear}>清除</button>
+    <button class="btn ghost" type="button" onclick={clear}>{t("common.clear")}</button>
   {/if}
 </div>
 

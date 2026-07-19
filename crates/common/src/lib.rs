@@ -1,4 +1,5 @@
 pub mod config;
+pub mod i18n;
 pub mod ipc;
 pub mod matching;
 pub mod model;
@@ -7,6 +8,7 @@ pub mod verhub;
 pub use config::{
     Config, ConfigError, Hotkey, MouseButton, MouseSetting, Notifications, Setting, Verhub,
 };
+pub use i18n::{LANG_AUTO, Lang};
 pub use ipc::{Command, Response};
 pub use matching::{WindowResolution, match_process_rule, regex_is_valid, resolve_window_rule};
 pub use model::{ProcessRule, WindowInfo, WindowRule};

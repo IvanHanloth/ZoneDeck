@@ -3,6 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::APP_CONFIG_VERSION;
+use crate::i18n::LANG_AUTO;
 use crate::model::{ProcessRule, WindowInfo, WindowRule};
 
 pub const DEFAULT_HIDE_HOTKEY: &str = "Ctrl+Q";
@@ -40,6 +41,9 @@ fn default_clicks() -> u8 {
 }
 fn default_multi_click_ms() -> u32 {
     DEFAULT_MULTI_CLICK_MS
+}
+fn default_language() -> String {
+    LANG_AUTO.to_string()
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -232,6 +236,9 @@ pub struct Setting {
     /// 仅影响计划任务方式；注册表回退始终以普通权限运行。
     #[serde(default)]
     pub autostart_admin: bool,
+    /// 界面语言：`auto` 跟随系统，或 `zh-CN`／`en`／`zh-TW`。核心与配置程序共用。
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for Setting {
@@ -260,6 +267,7 @@ impl Default for Setting {
             corner_fast_only: true,
             log_retention_days: DEFAULT_LOG_RETENTION_DAYS,
             autostart_admin: false,
+            language: default_language(),
         }
     }
 }
@@ -276,6 +284,7 @@ impl Setting {
         self.side_button1_hide = false;
         self.side_button2_hide = false;
         self.mouse.normalize();
+        self.language = crate::i18n::normalize_pref(&self.language);
     }
 }
 
@@ -378,13 +387,25 @@ impl Config {
     }
 
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
+        Self::load_reporting(path).map(|(config, _)| config)
+    }
+
+    /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
+    ///
+    /// 损坏文件回退默认值是刻意行为（保证核心总能启动），代价是用户的规则会「凭空消失」。
+    /// 调用方据第二个返回值把解析错误写进日志，否则这一幕无迹可循。
+    /// 返回 `(配置, 解析错误)`；解析成功或文件不存在时第二项为 `None`。
+    pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
         match std::fs::read_to_string(path) {
             Ok(s) => {
-                let mut config: Config = serde_json::from_str(&s).unwrap_or_default();
+                let (mut config, parse_error) = match serde_json::from_str::<Config>(&s) {
+                    Ok(config) => (config, None),
+                    Err(e) => (Config::default(), Some(e.to_string())),
+                };
                 config.normalize();
-                Ok(config)
+                Ok((config, parse_error))
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Config::default(), None)),
             Err(e) => Err(ConfigError::Io(e)),
         }
     }

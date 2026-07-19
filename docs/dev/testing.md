@@ -33,7 +33,8 @@ cargo test -p bosskey-core -- --test-threads=1
 - 配置解析与默认值、旧配置迁移（扁平绑定 → 窗口规则、旧鼠标开关 → 连击触发）；
 - `PID` 大写字段兼容、正则规则往返序列化；
 - 连击次数 / 连击窗口的范围钳制；
-- 协议 `Command` / `Response` 的 round-trip 与 snake_case 标签。
+- 协议 `Command` / `Response` 的 round-trip 与 snake_case 标签；
+- 语言标签解析与偏好归一化（`zh-Hant` → `zh-TW`、无翻译的语言回落 `auto` 等）。
 
 ### `bosskey-core`
 
@@ -53,6 +54,7 @@ cargo test -p bosskey-core -- --test-threads=1
 | 崩溃恢复 | 快照落盘往返 + mock 恢复编排 |
 | 图标编码 | CRC32 / Adler-32 / base64 已知向量 + PNG 结构解析 + 真实 explorer.exe 提取 |
 | 端到端 IPC | 经 `PipeClient` 驱动真实 agent 的 IPC / 崩溃恢复测试 |
+| 文案 catalog | 三种语言逐条非空、英文与中文不重复、占位符跨语言一致 |
 
 ::: info 受限环境说明
 `schtasks` 相关的开机自启集成测试在受限 / 无权限的 CI 或沙盒环境中可能失败，这属于环境限制而非功能回归。本地具备权限时应能通过。
@@ -65,7 +67,8 @@ cargo test -p bosskey-core -- --test-threads=1
 - `hotkey.test.js` —— 热键解析 / 格式化；
 - `pointer.test.js` —— 鼠标连击 / 连击窗口；
 - `grouping.test.js` —— 窗口 / 进程规则增删与过滤；
-- `theme.test.js` —— 主题偏好逻辑。
+- `theme.test.js` —— 主题偏好逻辑；
+- `i18n.test.js` —— 语言解析，以及三份 catalog 的键集 / 占位符对齐。
 
 UI 组件（`components/`）保持薄逻辑，主要复杂度都下沉到可测试的 `lib/`。
 

@@ -5,6 +5,7 @@ use bosskey_common::Config;
 use bosskey_common::ipc::{Command, PipeClient, Response};
 use bosskey_common::model::WindowInfo;
 use bosskey_common::verhub;
+use bosskey_core::i18n::{self, Msg};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
@@ -27,7 +28,7 @@ fn core_exe_path() -> Result<PathBuf, String> {
     if exe.exists() {
         Ok(exe)
     } else {
-        Err(format!("未找到核心程序 {CORE_EXE}"))
+        Err(i18n::tf(Msg::ErrCoreExeMissing, &[("exe", CORE_EXE)]))
     }
 }
 
@@ -72,14 +73,17 @@ struct AppInfo {
 
 #[tauri::command]
 fn load_config() -> Result<Config, String> {
-    Config::load(&config_path()).map_err(|e| e.to_string())
+    let config = Config::load(&config_path()).map_err(|e| e.to_string())?;
+    i18n::set_from_pref(&config.setting.language);
+    Ok(config)
 }
 
 #[tauri::command]
 async fn save_config(config: Config) -> Result<(), String> {
     blocking(move || {
+        i18n::set_from_pref(&config.setting.language);
         config.save(&config_path()).map_err(|e| e.to_string())?;
-        // 通知核心热重载；核心未运行时忽略错误。
+        // 通知核心热重载；核心据此同步语言。核心未运行时忽略错误。
         let _ = notify_core(&Command::ReloadConfig);
         Ok(())
     })
@@ -193,8 +197,18 @@ async fn run_freeze(
         if failed == 0 {
             Ok(())
         } else {
-            let action = if suspend { "冻结" } else { "解冻" };
-            Err(format!("{failed}/{} 个进程{action}失败", targets.len()))
+            let msg = if suspend {
+                Msg::ErrFreezePartial
+            } else {
+                Msg::ErrResumePartial
+            };
+            Err(i18n::tf(
+                msg,
+                &[
+                    ("failed", &failed.to_string()),
+                    ("total", &targets.len().to_string()),
+                ],
+            ))
         }
     })
     .await
@@ -377,7 +391,7 @@ fn app_info() -> AppInfo {
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err("只允许打开 http/https 链接".to_string());
+        return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
     blocking(move || bosskey_core::shell::open(&url)).await
 }
@@ -405,7 +419,7 @@ async fn verhub_submit_feedback(
     contact: String,
 ) -> Result<(), String> {
     if content.trim().is_empty() {
-        return Err("请先填写反馈内容".to_string());
+        return Err(i18n::t(Msg::ErrFeedbackEmpty).to_string());
     }
     blocking(move || {
         let feedback = verhub::Feedback {

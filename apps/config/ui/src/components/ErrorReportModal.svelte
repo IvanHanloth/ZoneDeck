@@ -4,6 +4,7 @@
   import Modal from "./Modal.svelte";
   import { app, toast } from "../lib/state.svelte.js";
   import { recentLogTail, uploadLog } from "../lib/verhub.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   const report = $derived(app.errorReport);
 
@@ -23,9 +24,9 @@
 
   const payload = $derived(
     [
-      `错误：${report?.message ?? ""}`,
-      report?.detail ? `详情：${report.detail}` : "",
-      logTail ? `\n最近日志：\n${logTail}` : "",
+      t("error.payloadError", { message: report?.message ?? "" }),
+      report?.detail ? t("error.payloadDetail", { detail: report.detail }) : "",
+      logTail ? `\n${t("error.payloadLog")}\n${logTail}` : "",
     ]
       .filter(Boolean)
       .join("\n"),
@@ -45,10 +46,10 @@
     try {
       await uploadLog(payload);
       sent = true;
-      toast("已上报，谢谢！");
+      toast(t("error.reportThanks"));
       setTimeout(() => (app.errorReport = null), 700);
     } catch (err) {
-      toast("上报失败：" + err, true);
+      toast(t("error.reportFailed", { err }), true);
     } finally {
       sending = false;
     }
@@ -56,22 +57,22 @@
 </script>
 
 {#if report}
-  <Modal title="出错了" bind:open={() => open, onOpenChange}>
+  <Modal title={t("error.title")} bind:open={() => open, onOpenChange}>
     <div class="body">
       <p class="msg"><IconTriangleAlert width="15" height="15" /> {report.message}</p>
       {#if report.detail}<p class="detail">{report.detail}</p>{/if}
 
       <details>
-        <summary>展开查看将要发送的内容（日志里可能含窗口标题与程序路径，请先检查）</summary>
+        <summary>{t("error.summary")}</summary>
         <pre class="payload">{payload}</pre>
       </details>
-      <p class="hint">日志仅在点击上报后发送，不会自动上报。</p>
+      <p class="hint">{t("error.hint")}</p>
     </div>
 
     {#snippet footer()}
-      <button class="btn ghost" onclick={() => (app.errorReport = null)}>不上报</button>
+      <button class="btn ghost" onclick={() => (app.errorReport = null)}>{t("error.dontReport")}</button>
       <button class="btn primary" onclick={send} disabled={sending || sent}>
-        {sending ? "上报中…" : sent ? "已上报" : "上报给开发者"}
+        {sending ? t("error.reporting") : sent ? t("error.reported") : t("error.report")}
       </button>
     {/snippet}
   </Modal>

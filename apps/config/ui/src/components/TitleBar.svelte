@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   import { win } from "../lib/ipc.js";
   import { app } from "../lib/state.svelte.js";
 </script>
@@ -15,10 +16,10 @@
   </div>
 
   <div class="controls">
-    <button class="tb-btn" title="最小化" aria-label="最小化" onclick={() => win.minimize()}>
+    <button class="tb-btn" title={t("titlebar.minimize")} aria-label={t("titlebar.minimize")} onclick={() => win.minimize()}>
       <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 5h10" stroke="currentColor" stroke-width="1.2" /></svg>
     </button>
-    <button class="tb-btn" title={app.maximized ? "还原" : "最大化"} aria-label={app.maximized ? "还原" : "最大化"} onclick={() => win.toggleMaximize()}>
+    <button class="tb-btn" title={app.maximized ? t("titlebar.restore") : t("titlebar.maximize")} aria-label={app.maximized ? t("titlebar.restore") : t("titlebar.maximize")} onclick={() => win.toggleMaximize()}>
       {#if app.maximized}
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.2">
           <rect x="0.6" y="2.6" width="6.8" height="6.8" rx="1" />
@@ -30,7 +31,7 @@
         </svg>
       {/if}
     </button>
-    <button class="tb-btn close" title="关闭" aria-label="关闭" onclick={() => win.close()}>
+    <button class="tb-btn close" title={t("titlebar.close")} aria-label={t("titlebar.close")} onclick={() => win.close()}>
       <svg width="10" height="10" viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" stroke="currentColor" stroke-width="1.2" /></svg>
     </button>
   </div>
