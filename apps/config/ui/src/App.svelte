@@ -27,15 +27,22 @@
     startStatusPolling,
   } from "./lib/state.svelte.js";
   import { hideSplash } from "./lib/splash.js";
+  import { setLangPref, t } from "./lib/i18n.svelte.js";
   import { applyTheme, loadPreference } from "./lib/theme.js";
 
   const TABS = [
-    { id: "binding", label: "窗口绑定" },
-    { id: "hotkeys", label: "热键与鼠标" },
-    { id: "notify", label: "通知设置" },
-    { id: "options", label: "其他选项" },
-    { id: "about", label: "关于与反馈" },
+    { id: "binding", labelKey: "tab.binding" },
+    { id: "hotkeys", labelKey: "tab.hotkeys" },
+    { id: "notify", labelKey: "tab.notify" },
+    { id: "options", labelKey: "tab.options" },
+    { id: "about", labelKey: "tab.about" },
   ];
+
+  // 语言偏好改动后立即换文案；核心侧由 save_config 触发的重载配置跟进。
+  $effect(() => {
+    const pref = app.config?.setting?.language;
+    if (pref) setLangPref(pref);
+  });
 
   // 加载阶段不自动保存；loadAll 完成后才武装。普通 let 不参与响应式追踪。
   let autoSaveReady = false;
@@ -100,7 +107,7 @@
 <div class="window" class:maximized={app.maximized}>
   <TitleBar />
 
-  <div class="tabs" role="tablist" aria-label="设置分类">
+  <div class="tabs" role="tablist" aria-label={t("app.tabsAria")}>
     {#each TABS as tab (tab.id)}
       <button
         class="tab"
@@ -109,14 +116,14 @@
         aria-selected={app.tab === tab.id}
         onclick={() => (app.tab = tab.id)}
       >
-        {tab.label}
+        {t(tab.labelKey)}
       </button>
     {/each}
   </div>
 
   <main class="content">
     {#if !app.config}
-      <p class="hint loading">正在加载配置…</p>
+      <p class="hint loading">{t("app.loadingConfig")}</p>
     {:else if app.tab === "binding"}
       <BindingPanel />
     {:else if app.tab === "hotkeys"}

@@ -1,12 +1,14 @@
 // 鼠标 / 屏幕四角图示的元数据。
 
+import { t } from "./i18n.svelte.js";
+
 // 五颗键，对应 setting.mouse 的同名字段。
 export const MOUSE_PARTS = [
-  { key: "left", label: "左键" },
-  { key: "middle", label: "中键（滚轮）" },
-  { key: "right", label: "右键" },
-  { key: "side1", label: "侧键 1（前进键）" },
-  { key: "side2", label: "侧键 2（后退键）" },
+  { key: "left", labelKey: "mouse.left" },
+  { key: "middle", labelKey: "mouse.middle" },
+  { key: "right", labelKey: "mouse.right" },
+  { key: "side1", labelKey: "mouse.side1" },
+  { key: "side2", labelKey: "mouse.side2" },
 ];
 
 export const MAX_CLICKS = 3;
@@ -15,17 +17,21 @@ export const MAX_MULTI_CLICK_MS = 1000;
 
 /** 把一颗键的触发条件写成人话，如「Ctrl + 三击」。 */
 export function describeTrigger(button) {
-  if (!button?.enabled) return "未启用";
-  const clicks = ["单击", "双击", "三击"][Math.min(Math.max(button.clicks, 1), MAX_CLICKS) - 1];
+  if (!button?.enabled) return t("mouse.notEnabled");
+  const clicks = t(
+    ["mouse.singleClick", "mouse.doubleClick", "mouse.tripleClick"][
+      Math.min(Math.max(button.clicks, 1), MAX_CLICKS) - 1
+    ],
+  );
   return button.modifiers ? `${button.modifiers} + ${clicks}` : clicks;
 }
 
 // cursor：该角在四角图示 viewBox(0 0 320 210) 中的光标停靠点。
 export const CORNERS = [
-  { key: "top_left_hide", label: "左上角", cursor: [26, 26] },
-  { key: "top_right_hide", label: "右上角", cursor: [294, 26] },
-  { key: "bottom_left_hide", label: "左下角", cursor: [26, 158] },
-  { key: "bottom_right_hide", label: "右下角", cursor: [294, 158] },
+  { key: "top_left_hide", labelKey: "corner.topLeft", cursor: [26, 26] },
+  { key: "top_right_hide", labelKey: "corner.topRight", cursor: [294, 26] },
+  { key: "bottom_left_hide", labelKey: "corner.bottomLeft", cursor: [26, 158] },
+  { key: "bottom_right_hide", labelKey: "corner.bottomRight", cursor: [294, 158] },
 ];
 
 export const CORNER_CENTER = [160, 92];
@@ -38,8 +44,8 @@ export function enabledParts(items, setting) {
 /** 构造四角演示的时间轴帧序列。 */
 export function buildTimeline(corners, allowRestore, fastOnly = true) {
   const frames = [];
-  const reach = fastOnly ? "快速移动到" : "把鼠标移动到";
-  const again = fastOnly ? "再快速移动一次" : "再移动一次";
+  const reachKey = fastOnly ? "corner.reachFast" : "corner.reachNormal";
+  const again = t(fastOnly ? "corner.againFast" : "corner.againNormal");
 
   for (const c of corners) {
     frames.push({
@@ -47,14 +53,14 @@ export function buildTimeline(corners, allowRestore, fastOnly = true) {
       cursor: c.cursor,
       visible: true,
       fast: fastOnly,
-      caption: `${reach}${c.label}`,
+      caption: t(reachKey, { corner: t(c.labelKey) }),
       ms: 1100,
     });
     frames.push({
       corner: c.key,
       cursor: c.cursor,
       visible: false,
-      caption: "窗口已隐藏",
+      caption: t("corner.windowHidden"),
       ms: 1000,
     });
     if (allowRestore) {
@@ -62,7 +68,7 @@ export function buildTimeline(corners, allowRestore, fastOnly = true) {
         corner: c.key,
         cursor: CORNER_CENTER,
         visible: false,
-        caption: "鼠标离开角落",
+        caption: t("corner.cursorLeft"),
         ms: 800,
       });
       frames.push({
@@ -70,14 +76,14 @@ export function buildTimeline(corners, allowRestore, fastOnly = true) {
         cursor: c.cursor,
         visible: false,
         fast: fastOnly,
-        caption: `${again}`,
+        caption: again,
         ms: 1100,
       });
       frames.push({
         corner: c.key,
         cursor: c.cursor,
         visible: true,
-        caption: "窗口已恢复",
+        caption: t("corner.windowRestored"),
         ms: 1000,
       });
     } else {
@@ -85,7 +91,7 @@ export function buildTimeline(corners, allowRestore, fastOnly = true) {
         corner: c.key,
         cursor: CORNER_CENTER,
         visible: true,
-        caption: "用热键或托盘菜单恢复窗口",
+        caption: t("corner.restoreByHotkey"),
         ms: 1100,
       });
     }

@@ -5,15 +5,16 @@
   import IconRegex from "~icons/lucide/regex";
   import IconAppWindow from "~icons/lucide/app-window";
   import ScopeSelect from "./ScopeSelect.svelte";
-  import { isRegexRule, traceWindowRule } from "../lib/grouping.js";
+  import { NO_TITLE, isRegexRule, traceWindowRule } from "../lib/grouping.js";
+  import { t } from "../lib/i18n.svelte.js";
   import { app } from "../lib/state.svelte.js";
 
   let { rules = $bindable([]), onadd, onaddregex } = $props();
   let selected = $state([]);
 
   const STATUS = {
-    reacquired: { text: "已重启·已追溯", cls: "warn" },
-    missing: { text: "未找到 / 已关闭", cls: "danger" },
+    reacquired: { key: "windowRules.statusReacquired", cls: "warn" },
+    missing: { key: "windowRules.statusMissing", cls: "danger" },
   };
 
   function remove() {
@@ -25,24 +26,24 @@
 
 <div class="list-box">
   <div class="list-title">
-    <span class="title-text"><IconAppWindow width="15" height="15" /> 窗口隐藏</span>
+    <span class="title-text"><IconAppWindow width="15" height="15" /> {t("windowRules.title")}</span>
     <span class="count">{rules.length}</span>
     <div class="tools">
-      <button class="mini primary" title="把左侧选中窗口加入" onclick={() => onadd?.()}>
-        <IconPlus width="14" height="14" /> 添加窗口
+      <button class="mini primary" title={t("windowRules.addTitle")} onclick={() => onadd?.()}>
+        <IconPlus width="14" height="14" /> {t("windowRules.add")}
       </button>
-      <button class="mini" title="添加标题正则规则" onclick={() => onaddregex?.()}>
-        <IconRegex width="14" height="14" /> 正则
+      <button class="mini" title={t("windowRules.addRegexTitle")} onclick={() => onaddregex?.()}>
+        <IconRegex width="14" height="14" /> {t("windowRules.regex")}
       </button>
-      <button class="mini" title="移除选中规则" onclick={remove} disabled={!selected.length}>
-        <IconTrash width="14" height="14" /> 移除
+      <button class="mini" title={t("windowRules.removeTitle")} onclick={remove} disabled={!selected.length}>
+        <IconTrash width="14" height="14" /> {t("windowRules.remove")}
       </button>
     </div>
   </div>
 
-  <div class="rule-list" role="listbox" aria-label="窗口隐藏规则">
+  <div class="rule-list" role="listbox" aria-label={t("windowRules.aria")}>
     {#if rules.length === 0}
-      <p class="hint empty">（空）</p>
+      <p class="hint empty">{t("common.empty")}</p>
     {:else}
       {#each rules as rule, i (i)}
         <div class="rule-row">
@@ -50,13 +51,13 @@
             type="checkbox"
             bind:group={selected}
             value={i}
-            aria-label="选中该规则"
+            aria-label={t("windowRules.selectRule")}
           />
           {#if isRegexRule(rule)}
-            <span class="regex-tag"><IconRegex width="12" height="12" /> 标题正则</span>
+            <span class="regex-tag"><IconRegex width="12" height="12" /> {t("windowRules.titleRegexTag")}</span>
             <input
               class="regex-input"
-              placeholder="标题正则，如 .*微信.*"
+              placeholder={t("windowRules.titleRegexPlaceholder")}
               bind:value={rule.regex}
               spellcheck="false"
             />
@@ -71,12 +72,12 @@
             {:else}
               <span class="ic fallback"><IconAppWindow width="14" height="14" /></span>
             {/if}
-            <span class="rtitle" title={rule.path}>{rule.title}</span>
+            <span class="rtitle" title={rule.path}>{rule.title === NO_TITLE ? t("common.noTitleWindow") : rule.title}</span>
             <span class="rproc">{rule.process}</span>
             {#if STATUS[st]}
-              <span class="badge {STATUS[st].cls}">{STATUS[st].text}</span>
+              <span class="badge {STATUS[st].cls}">{t(STATUS[st].key)}</span>
             {:else}
-              <span class="dot live" title="运行中"></span>
+              <span class="dot live" title={t("windowRules.live")}></span>
             {/if}
           {/if}
         </div>

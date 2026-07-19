@@ -1,10 +1,12 @@
 // 窗口列表分组与集合运算。
 
+import { t } from "./i18n.svelte.js";
+
 /** 按进程名分组并排序，返回 [{ process, path, windows }]。 */
 export function groupByProcess(windows) {
   const groups = new Map();
   for (const w of windows) {
-    const key = w.process || "（未知进程）";
+    const key = w.process || t("common.unknownProcess");
     if (!groups.has(key)) {
       groups.set(key, { process: key, path: w.path || "", windows: [] });
     }
@@ -43,7 +45,12 @@ export function splitByVisibility(windows) {
   return { visible, hidden };
 }
 
-/** 与核心 NO_TITLE 常量一致，用于识别无标题窗口。 */
+/**
+ * 与核心 `bosskey_common::NO_TITLE` 一致的占位标题。
+ *
+ * 它是跨进程、写进配置文件的哨兵值，不随界面语言变化；展示时用
+ * `t("common.noTitleWindow")` 翻译。
+ */
 export const NO_TITLE = "无标题窗口";
 
 /** 转义正则元字符。 */
@@ -82,7 +89,7 @@ export function processRuleFromWindow(w) {
 
 /** 新的「窗口」正则规则（标题正则）。 */
 export function newWindowRegexRule(seedTitle) {
-  const seed = seedTitle && seedTitle !== NO_TITLE ? seedTitle : "关键词";
+  const seed = seedTitle && seedTitle !== NO_TITLE ? seedTitle : t("binding.regexSeedKeyword");
   return {
     title: NO_TITLE,
     hwnd: 0,
@@ -100,7 +107,7 @@ export function newProcessRegexRule(seedProcess) {
   return {
     process: "",
     path: "",
-    regex: containsPattern(seedProcess || "程序名.exe"),
+    regex: containsPattern(seedProcess || t("binding.regexSeedProcess")),
     by_name: false,
     include_untitled: false,
     include_background: false,

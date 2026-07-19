@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   import IconShield from "~icons/lucide/shield";
   import IconCheck from "~icons/lucide/check";
   import IconScrollText from "~icons/lucide/scroll-text";
@@ -29,23 +30,25 @@
     try {
       await invoke("open_log_dir");
     } catch (err) {
-      toast("打开日志失败：" + err, true);
+      toast(t("status.openLogFailed", { err }), true);
     }
   }
 
   // 显示核心回报的真实监控状态（core_status.monitoring）。
   const monitoring = $derived(app.status.monitoring);
   const monitorText = $derived(
-    app.monitorPending ? "切换中…" : monitoring ? "热键生效" : "热键暂停",
+    app.monitorPending
+      ? t("status.monitorSwitching")
+      : t(monitoring ? "status.monitorOn" : "status.monitorOff"),
   );
   const monitorTitle = $derived(
-    monitoring
-      ? "核心正在监听热键与鼠标触发"
-      : "核心已停止监听：录制热键或调整鼠标设置时自动暂停，避免误触发",
+    t(monitoring ? "status.monitorOnTitle" : "status.monitorOffTitle"),
   );
 
   const statusText = $derived(
-    running === null ? "检测中…" : running ? "核心运行中" : "核心未运行",
+    running === null
+      ? t("status.detecting")
+      : t(running ? "status.coreRunning" : "status.coreStopped"),
   );
   const statusClass = $derived(
     running === null ? "pending" : running ? "online" : "offline",
@@ -67,16 +70,16 @@
       <button
         class="act icon-only ok"
         onclick={() => startCore(false)}
-        title="启动核心"
-        aria-label="启动核心"
+        title={t("status.startCore")}
+        aria-label={t("status.startCore")}
       >
         <IconPlay width="14" height="14" />
       </button>
       <button
         class="act icon-only blue"
         onclick={() => startCore(true)}
-        title="管理员启动"
-        aria-label="管理员启动"
+        title={t("status.startAdmin")}
+        aria-label={t("status.startAdmin")}
       >
         <IconShield width="14" height="14" />
       </button>
@@ -85,8 +88,8 @@
         <button
           class="act icon-only blue"
           onclick={() => restartCore(true)}
-          title="管理员身份重启"
-          aria-label="管理员身份重启"
+          title={t("status.restartAdmin")}
+          aria-label={t("status.restartAdmin")}
         >
           <IconShield width="14" height="14" />
         </button>
@@ -94,19 +97,19 @@
       <button
         class="act icon-only warn"
         onclick={() => restartCore(app.status.elevated)}
-        title="重启核心"
-        aria-label="重启核心"
+        title={t("status.restartCore")}
+        aria-label={t("status.restartCore")}
       >
         <IconRotateCw width="14" height="14" />
       </button>
-      <button class="act icon-only danger" onclick={quitCore} title="退出核心" aria-label="退出核心">
+      <button class="act icon-only danger" onclick={quitCore} title={t("status.quitCore")} aria-label={t("status.quitCore")}>
         <IconPower width="14" height="14" />
       </button>
     {/if}
   </div>
 
   <div class="right">
-    <button class="act icon" onclick={openLog} title="打开日志目录" aria-label="打开日志目录">
+    <button class="act icon" onclick={openLog} title={t("status.openLogDir")} aria-label={t("status.openLogDir")}>
       <IconScrollText width="14" height="14" />
     </button>
 
@@ -121,7 +124,7 @@
       </span>
     {/if}
     <span class="save" class:saving={app.saving}>
-      {#if app.saving}保存中…{:else}<IconCheck width="12" height="12" /> 已保存{/if}
+      {#if app.saving}{t("status.saving")}{:else}<IconCheck width="12" height="12" /> {t("status.saved")}{/if}
     </span>
   </div>
 </footer>

@@ -4,6 +4,7 @@
   import Modal from "./Modal.svelte";
   import { app, markAnnouncementSeen } from "../lib/state.svelte.js";
   import { formatTime } from "../lib/verhub.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   const item = $derived(app.pendingAnnouncement);
 
@@ -19,12 +20,12 @@
 </script>
 
 {#if item}
-  <Modal title="公告" bind:open={() => open, onOpenChange}>
+  <Modal title={t("announce.title")} bind:open={() => open, onOpenChange}>
     <div class="ann">
       <h4>
         <IconMegaphone width="15" height="15" />
         {item.title}
-        {#if item.is_pinned}<span class="pin">置顶</span>{/if}
+        {#if item.is_pinned}<span class="pin">{t("announce.pinned")}</span>{/if}
       </h4>
       <p class="meta">
         {#if item.author}{item.author} ·{/if}
@@ -34,7 +35,7 @@
     </div>
 
     {#snippet footer()}
-      <button class="btn primary" onclick={() => markAnnouncementSeen(item.id)}>知道了</button>
+      <button class="btn primary" onclick={() => markAnnouncementSeen(item.id)}>{t("announce.gotIt")}</button>
     {/snippet}
   </Modal>
 {/if}

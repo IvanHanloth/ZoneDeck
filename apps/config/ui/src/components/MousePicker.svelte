@@ -2,10 +2,11 @@
   // 鼠标按键选择器；图形几何取自根目录 mouse_icon.svg。
   import ModifierRecorder from "./ModifierRecorder.svelte";
   import { MOUSE_PARTS, describeTrigger } from "../lib/pointer.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   let { mouse } = $props();
 
-  const CLICK_LABELS = ["单击", "双击", "三击"];
+  const CLICK_KEYS = ["mouse.singleClick", "mouse.doubleClick", "mouse.tripleClick"];
 
   function toggle(key) {
     mouse[key].enabled = !mouse[key].enabled;
@@ -29,7 +30,7 @@
       role="checkbox"
       tabindex="0"
       aria-checked={mouse.left.enabled}
-      aria-label="左键"
+      aria-label={t("mouse.left")}
       onclick={() => toggle("left")}
       onkeydown={(e) => onkey(e, "left")}
     >
@@ -42,7 +43,7 @@
       role="checkbox"
       tabindex="0"
       aria-checked={mouse.right.enabled}
-      aria-label="右键"
+      aria-label={t("mouse.right")}
       onclick={() => toggle("right")}
       onkeydown={(e) => onkey(e, "right")}
     >
@@ -56,7 +57,7 @@
       role="checkbox"
       tabindex="0"
       aria-checked={mouse.side1.enabled}
-      aria-label="侧键 1（前进键）"
+      aria-label={t("mouse.side1")}
       onclick={() => toggle("side1")}
       onkeydown={(e) => onkey(e, "side1")}
     >
@@ -70,7 +71,7 @@
       role="checkbox"
       tabindex="0"
       aria-checked={mouse.side2.enabled}
-      aria-label="侧键 2（后退键）"
+      aria-label={t("mouse.side2")}
       onclick={() => toggle("side2")}
       onkeydown={(e) => onkey(e, "side2")}
     >
@@ -85,7 +86,7 @@
       role="checkbox"
       tabindex="0"
       aria-checked={mouse.middle.enabled}
-      aria-label="中键（滚轮）"
+      aria-label={t("mouse.middle")}
       onclick={() => toggle("middle")}
       onkeydown={(e) => onkey(e, "middle")}
     >
@@ -104,14 +105,14 @@
           onclick={() => toggle(part.key)}
         >
           <span class="dot"></span>
-          <span class="text">{part.label}</span>
+          <span class="text">{t(part.labelKey)}</span>
           <span class="state">{describeTrigger(btn)}</span>
         </button>
 
         {#if btn.enabled}
           <div class="cfg">
-            <div class="clicks" role="radiogroup" aria-label="{part.label}连击次数">
-              {#each CLICK_LABELS as label, i (label)}
+            <div class="clicks" role="radiogroup" aria-label={t("mouse.clicksAria", { part: t(part.labelKey) })}>
+              {#each CLICK_KEYS as key, i (key)}
                 <button
                   type="button"
                   class="seg"
@@ -120,7 +121,7 @@
                   aria-checked={btn.clicks === i + 1}
                   onclick={() => (btn.clicks = i + 1)}
                 >
-                  {label}
+                  {t(key)}
                 </button>
               {/each}
             </div>

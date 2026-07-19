@@ -293,9 +293,9 @@ pub(crate) fn show_float_menu(agent_hwnd: HWND, id_settings: usize, id_quit: usi
         let Ok(menu) = CreatePopupMenu() else {
             return false;
         };
-        let _ = AppendMenuW(menu, MF_STRING, id_settings, w!("设置"));
+        crate::util::append_menu_item(menu, MF_STRING, id_settings, crate::i18n::Msg::MenuSettings);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-        let _ = AppendMenuW(menu, MF_STRING, id_quit, w!("退出"));
+        crate::util::append_menu_item(menu, MF_STRING, id_quit, crate::i18n::Msg::MenuQuit);
 
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);

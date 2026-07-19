@@ -45,6 +45,33 @@ fn loading_a_corrupt_file_falls_back_to_defaults() {
 }
 
 #[test]
+fn load_reporting_surfaces_the_parse_error_behind_a_corrupt_fallback() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("corrupt.json");
+    std::fs::write(&path, "{ not valid json at all ").unwrap();
+
+    let (loaded, parse_error) = Config::load_reporting(&path).unwrap();
+    assert_eq!(loaded, Config::default(), "损坏文件仍应回退默认值");
+    assert!(
+        parse_error.is_some(),
+        "回退默认值这一事实必须能被调用方记录，否则用户规则丢失后无迹可循"
+    );
+}
+
+#[test]
+fn load_reporting_is_quiet_for_healthy_and_missing_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+
+    let (_, parse_error) = Config::load_reporting(&path).unwrap();
+    assert_eq!(parse_error, None, "文件不存在不是解析失败");
+
+    Config::default().save(&path).unwrap();
+    let (_, parse_error) = Config::load_reporting(&path).unwrap();
+    assert_eq!(parse_error, None, "正常文件不应报告解析失败");
+}
+
+#[test]
 fn save_creates_missing_parent_directories() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("nested").join("deeper").join("config.json");

@@ -6,6 +6,7 @@
   import IconBox from "~icons/lucide/box";
   import ScopeSelect from "./ScopeSelect.svelte";
   import { isRegexRule } from "../lib/grouping.js";
+  import { t } from "../lib/i18n.svelte.js";
   import { app } from "../lib/state.svelte.js";
 
   let { rules = $bindable([]), onadd, onaddregex } = $props();
@@ -20,24 +21,24 @@
 
 <div class="list-box">
   <div class="list-title">
-    <span class="title-text"><IconBox width="15" height="15" /> 进程隐藏</span>
+    <span class="title-text"><IconBox width="15" height="15" /> {t("processRules.title")}</span>
     <span class="count">{rules.length}</span>
     <div class="tools">
-      <button class="mini primary" title="把左侧选中窗口所属进程加入" onclick={() => onadd?.()}>
-        <IconPlus width="14" height="14" /> 添加进程
+      <button class="mini primary" title={t("processRules.addTitle")} onclick={() => onadd?.()}>
+        <IconPlus width="14" height="14" /> {t("processRules.add")}
       </button>
-      <button class="mini" title="添加进程正则规则" onclick={() => onaddregex?.()}>
-        <IconRegex width="14" height="14" /> 正则
+      <button class="mini" title={t("processRules.addRegexTitle")} onclick={() => onaddregex?.()}>
+        <IconRegex width="14" height="14" /> {t("windowRules.regex")}
       </button>
-      <button class="mini" title="移除选中规则" onclick={remove} disabled={!selected.length}>
-        <IconTrash width="14" height="14" /> 移除
+      <button class="mini" title={t("windowRules.removeTitle")} onclick={remove} disabled={!selected.length}>
+        <IconTrash width="14" height="14" /> {t("windowRules.remove")}
       </button>
     </div>
   </div>
 
-  <div class="rule-list" role="listbox" aria-label="进程隐藏规则">
+  <div class="rule-list" role="listbox" aria-label={t("processRules.aria")}>
     {#if rules.length === 0}
-      <p class="hint empty">（空）</p>
+      <p class="hint empty">{t("common.empty")}</p>
     {:else}
       {#each rules as rule, i (i)}
         <div class="rule-row">
@@ -45,16 +46,20 @@
             type="checkbox"
             bind:group={selected}
             value={i}
-            aria-label="选中该规则"
+            aria-label={t("windowRules.selectRule")}
           />
           {#if isRegexRule(rule)}
             <span class="regex-tag">
               <IconRegex width="12" height="12" />
-              {rule.by_name ? "文件名正则" : "路径正则"}
+              {t(rule.by_name ? "processRules.nameRegexTag" : "processRules.pathRegexTag")}
             </span>
             <input
               class="regex-input"
-              placeholder={rule.by_name ? "文件名正则，如 .*WeChat\\.exe" : "路径正则，如 .*WeChat.*"}
+              placeholder={t(
+                rule.by_name
+                  ? "processRules.nameRegexPlaceholder"
+                  : "processRules.pathRegexPlaceholder",
+              )}
               bind:value={rule.regex}
               spellcheck="false"
             />
@@ -64,20 +69,20 @@
             {:else}
               <span class="ic fallback"><IconBox width="14" height="14" /></span>
             {/if}
-            <span class="rproc">{rule.process || "（未知进程）"}</span>
+            <span class="rproc">{rule.process || t("common.unknownProcess")}</span>
             <span class="rpath" title={rule.path}>
-              {rule.by_name ? "（任意目录下的同名程序）" : rule.path}
+              {rule.by_name ? t("processRules.anyDirectory") : rule.path}
             </span>
           {/if}
 
           <select
             class="by"
             bind:value={rule.by_name}
-            title="匹配依据：完整路径，或只看可执行文件名（同名程序在任意目录都命中）"
-            aria-label="匹配依据"
+            title={t("processRules.byTitle")}
+            aria-label={t("processRules.byAria")}
           >
-            <option value={false}>路径</option>
-            <option value={true}>文件名</option>
+            <option value={false}>{t("processRules.byPath")}</option>
+            <option value={true}>{t("processRules.byName")}</option>
           </select>
           <ScopeSelect
             bind:includeUntitled={rule.include_untitled}

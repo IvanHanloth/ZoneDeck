@@ -41,6 +41,7 @@ const mockConfig = {
     corner_fast_only: true,
     log_retention_days: 7,
     autostart_admin: false,
+    language: "auto",
   },
   notifications: {
     on_start: true,

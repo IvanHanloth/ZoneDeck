@@ -3,8 +3,8 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
 use bosskey_common::ipc::{Command, Response};
-use bosskey_common::{ARG_ABOUT, ARG_RESTORE, Config};
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use bosskey_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config};
+use windows::Win32::Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
@@ -26,9 +26,11 @@ use crate::hide::{
     HideController, RuleOutcome, expand_descendants, freezable_pids, resolve_targets,
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
+use crate::i18n::{self, Msg};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
+use crate::util::append_menu_item;
 use crate::{idle, ipc_server, logging, recovery};
 
 const HK_HIDE: i32 = 1;
@@ -99,11 +101,12 @@ impl AgentState {
             }
             match parse_hotkey(raw) {
                 Ok(hk) => unsafe {
-                    if !register(hwnd, id, &hk) {
-                        logging::warn(&format!("{label}热键注册失败（可能已被占用）: {raw}"));
+                    match register(hwnd, id, &hk) {
+                        Ok(()) => logging::info(&format!("{label}热键已注册: {raw}")),
+                        Err(e) => logging::warn(&hotkey_failure_message(label, raw, &e)),
                     }
                 },
-                Err(e) => logging::warn(&format!("{label}热键解析失败: {e}")),
+                Err(e) => logging::warn(&format!("{label}热键解析失败，该热键不生效: {raw} — {e}")),
             }
         }
     }
@@ -171,7 +174,11 @@ impl AgentState {
     /// 隐藏状态落盘：崩溃后下次启动据此找回窗口。快照为空时清除文件。
     fn persist_recovery(&self) {
         if let Err(e) = recovery::save(&self.recovery_path, &self.controller.snapshot()) {
-            logging::warn(&format!("写入崩溃恢复文件失败: {e}"));
+            // 落盘失败不影响本次隐藏，但核心若随后崩溃，这些窗口将无法自动找回。
+            logging::warn(&format!(
+                "写入崩溃恢复文件失败，核心若异常退出将无法自动找回窗口: {} — {e}",
+                self.recovery_path.display()
+            ));
         }
     }
 
@@ -206,17 +213,20 @@ impl AgentState {
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_hide {
-            self.balloon("Boss Key", "已隐藏窗口");
+            self.balloon(APP_NAME, i18n::t(Msg::HiddenBody));
         }
     }
 
     fn apply_show(&mut self) {
+        // 计数须在 show() 清空隐藏集之前取，且不能假定必有窗口：
+        // 未隐藏任何窗口时触发恢复也会走到这里。
+        let count = self.controller.hidden_count();
         self.controller.show();
-        logging::info("已显示先前隐藏的窗口");
+        logging::info(&format!("已恢复显示 {count} 个窗口"));
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_show {
-            self.balloon("Boss Key", "已恢复显示窗口");
+            self.balloon(APP_NAME, i18n::t(Msg::ShownBody));
         }
     }
 
@@ -245,12 +255,13 @@ impl AgentState {
                         self.hotkeys_armed = false;
                     }
                     self.config = config;
+                    i18n::set_from_pref(&self.config.setting.language);
                     self.sync_monitoring(hwnd);
                     (Response::Ok, false)
                 }
                 Err(e) => (
                     Response::Error {
-                        message: format!("重载配置失败: {e}"),
+                        message: i18n::tf(Msg::ErrReloadConfig, &[("err", &e.to_string())]),
                     },
                     false,
                 ),
@@ -333,12 +344,15 @@ fn log_resolution(
     ));
     for (rule, outcome) in config.window_rules.iter().zip(outcomes) {
         match outcome {
-            RuleOutcome::Reacquired => {
-                logging::info(&format!("窗口「{}」句柄已变化，已追溯回填", rule.title))
-            }
-            RuleOutcome::Missing => {
-                logging::warn(&format!("窗口「{}」已关闭或重启，未能追溯", rule.title))
-            }
+            RuleOutcome::Reacquired => logging::info(&format!(
+                "窗口规则「{}」的句柄已失效（目标程序重启过），已重新匹配到当前窗口并更新规则",
+                rule.title
+            )),
+            // 「未能追溯」只说明当前没有匹配的窗口，看不出是关闭了还是标题变了，故不臆断原因。
+            RuleOutcome::Missing => logging::warn(&format!(
+                "窗口规则「{}」未匹配到任何窗口（可能已关闭或标题已变），本次不隐藏它",
+                rule.title
+            )),
             _ => {}
         }
     }
@@ -354,7 +368,7 @@ fn log_resolution(
     }
 }
 
-unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> bool {
+unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> windows::core::Result<()> {
     unsafe {
         RegisterHotKey(
             Some(hwnd),
@@ -362,7 +376,21 @@ unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> bool {
             HOT_KEY_MODIFIERS(hk.modifiers | MOD_NOREPEAT),
             hk.vk as u32,
         )
-        .is_ok()
+    }
+}
+
+/// 热键注册失败的日志文案。
+///
+/// 「已被占用」（1409）是最常见的原因，但并非唯一，故按系统错误码区分：
+/// 命中 1409 才断言被占用，其余情况如实报告错误码，不作猜测。
+fn hotkey_failure_message(label: &str, raw: &str, e: &windows::core::Error) -> String {
+    if e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult() {
+        format!("{label}热键注册失败，已被其他程序占用，该热键不生效: {raw}")
+    } else {
+        format!(
+            "{label}热键注册失败，该热键不生效: {raw} — {}",
+            crate::util::win_err(e)
+        )
     }
 }
 
@@ -395,23 +423,25 @@ fn toggle_autostart(state: &AgentState) {
     let admin = state.config.setting.autostart_admin;
     let (title, message) = if auto.status().is_some() {
         auto.disable();
-        ("开机自启已关闭", "Boss Key 将不再随系统启动")
+        (Msg::AutostartOffTitle, Msg::AutostartOffBody)
     } else {
         match auto.enable(admin) {
             Ok(crate::autostart::Method::TaskScheduler) if admin => {
-                ("开机自启已开启", "已注册计划任务（管理员权限）")
+                (Msg::AutostartOnTitle, Msg::AutostartOnTaskAdmin)
             }
             Ok(crate::autostart::Method::TaskScheduler) => {
-                ("开机自启已开启", "已注册计划任务（普通权限）")
+                (Msg::AutostartOnTitle, Msg::AutostartOnTaskUser)
             }
-            Ok(crate::autostart::Method::Registry) => ("开机自启已开启", "已写入注册表启动项"),
-            Err(_) => ("开机自启设置失败", "计划任务与注册表方式均失败"),
+            Ok(crate::autostart::Method::Registry) => {
+                (Msg::AutostartOnTitle, Msg::AutostartOnRegistry)
+            }
+            Err(_) => (Msg::AutostartFailTitle, Msg::AutostartFailBody),
         }
     };
     if state.config.notifications.on_autostart
         && let Some(tray) = &state.tray
     {
-        tray.balloon(title, message);
+        tray.balloon(i18n::t(title), i18n::t(message));
     }
 }
 
@@ -431,22 +461,22 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
             return false;
         };
         let toggle_label = if hidden {
-            w!("显示窗口")
+            Msg::MenuShowWindows
         } else {
-            w!("隐藏窗口")
+            Msg::MenuHideWindows
         };
         let autostart_flags = if autostart_on {
             MF_STRING | MF_CHECKED
         } else {
             MF_STRING
         };
-        let _ = AppendMenuW(menu, MF_STRING, MENU_SETTINGS, w!("设置"));
-        let _ = AppendMenuW(menu, MF_STRING, MENU_TOGGLE, toggle_label);
-        let _ = AppendMenuW(menu, MF_STRING, MENU_RESTORE, w!("窗口恢复工具"));
-        let _ = AppendMenuW(menu, autostart_flags, MENU_AUTOSTART, w!("开机自启"));
-        let _ = AppendMenuW(menu, MF_STRING, MENU_ABOUT, w!("关于"));
+        append_menu_item(menu, MF_STRING, MENU_SETTINGS, Msg::MenuSettings);
+        append_menu_item(menu, MF_STRING, MENU_TOGGLE, toggle_label);
+        append_menu_item(menu, MF_STRING, MENU_RESTORE, Msg::MenuRestoreTool);
+        append_menu_item(menu, autostart_flags, MENU_AUTOSTART, Msg::MenuAutostart);
+        append_menu_item(menu, MF_STRING, MENU_ABOUT, Msg::MenuAbout);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-        let _ = AppendMenuW(menu, MF_STRING, MENU_QUIT, w!("退出"));
+        append_menu_item(menu, MF_STRING, MENU_QUIT, Msg::MenuQuit);
 
         let mut pt = windows::Win32::Foundation::POINT::default();
         let _ = GetCursorPos(&mut pt);
@@ -509,7 +539,7 @@ fn find_config_exe() -> Option<PathBuf> {
 fn launch_settings(state: &mut AgentState, action: Option<&str>) {
     let Some(path) = find_config_exe() else {
         if let Some(tray) = &state.tray {
-            tray.balloon("Boss Key", "未找到配置程序");
+            tray.balloon(APP_NAME, i18n::t(Msg::ConfigExeMissing));
         }
         return;
     };
@@ -533,7 +563,7 @@ fn quit(state: &mut AgentState, hwnd: HWND) {
     let notify_quit = state.config.notifications.on_quit;
     if let Some(tray) = &mut state.tray {
         if notify_quit {
-            tray.balloon("Boss Key已停止服务", "Boss Key已成功退出");
+            tray.balloon(i18n::t(Msg::QuitTitle), i18n::t(Msg::QuitBody));
         }
         tray.hide();
     }
@@ -691,9 +721,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     }
 }
 
-fn create_agent_window() -> Option<HWND> {
+fn create_agent_window() -> windows::core::Result<HWND> {
     unsafe {
-        let hinstance = GetModuleHandleW(PCWSTR::null()).ok()?;
+        let hinstance = GetModuleHandleW(PCWSTR::null())?;
         let class_name = w!("BossKeyAgentWindow");
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
@@ -717,7 +747,31 @@ fn create_agent_window() -> Option<HWND> {
             Some(hinstance.into()),
             None,
         )
-        .ok()
+    }
+}
+
+/// 加载配置；无论损坏还是读取失败都回退默认配置以保证核心可用，但必须留下记录。
+///
+/// 静默回退会让用户的热键与规则「凭空失效」，且日志里毫无痕迹，故此处按 error 记录，
+/// 并写出配置路径与具体原因。
+fn load_config_logging_fallback(path: &Path) -> Config {
+    const FALLBACK: &str = "已按默认配置启动，原有热键与规则本次不生效";
+    match Config::load_reporting(path) {
+        Ok((config, None)) => config,
+        Ok((config, Some(parse_error))) => {
+            logging::error(&format!(
+                "配置文件解析失败，{FALLBACK}: {} — {parse_error}",
+                path.display()
+            ));
+            config
+        }
+        Err(e) => {
+            logging::error(&format!(
+                "配置文件读取失败，{FALLBACK}: {} — {e}",
+                path.display()
+            ));
+            Config::default()
+        }
     }
 }
 
@@ -725,7 +779,8 @@ pub fn run(options: AgentOptions) {
     // 是否首次启动（尚无配置文件）/ 更新后首次启动（配置里记录的版本与当前不一致）。
     // load() 在文件缺失时也返回默认值，故须先按文件是否存在判断「首次」。
     let config_missing = !options.config_path.exists();
-    let mut config = Config::load(&options.config_path).unwrap_or_default();
+    let mut config = load_config_logging_fallback(&options.config_path);
+    i18n::set_from_pref(&config.setting.language);
     let version_changed = !config_missing && config.version != bosskey_common::APP_CONFIG_VERSION;
 
     // 仅正常运行时（非冒烟测试）在这两种情况下默认拉起配置程序。
@@ -749,9 +804,16 @@ pub fn run(options: AgentOptions) {
         }
     }
 
-    let Some(hwnd) = create_agent_window() else {
-        eprintln!("创建代理窗口失败");
-        return;
+    // 代理窗口是热键与 IPC 的唯一收口，创建失败即核心无法工作，须留下记录再退出。
+    let hwnd = match create_agent_window() {
+        Ok(hwnd) => hwnd,
+        Err(e) => {
+            logging::error(&format!(
+                "创建代理窗口失败，核心无法启动: {}",
+                crate::util::win_err(&e)
+            ));
+            return;
+        }
     };
 
     let tray = if options.enable_tray {
@@ -809,11 +871,16 @@ pub fn run(options: AgentOptions) {
     // 恢复文件存在即上次异常退出仍有窗口被隐藏，先找回。
     if let Some(snapshot) = recovery::load(&state.recovery_path) {
         logging::warn(&format!(
-            "检测到上次异常退出，正在恢复 {} 个被隐藏的窗口",
-            snapshot.hidden.len()
+            "检测到上次异常退出，开始找回 {} 个被隐藏的窗口（另需解冻 {} 个进程、取消静音 {} 个进程）",
+            snapshot.hidden.len(),
+            snapshot.frozen.len(),
+            snapshot.muted.len()
         ));
         state.controller.restore_from(snapshot);
         recovery::clear(&state.recovery_path);
+        // 解冻/取消静音的失败由 effects 各自记录；窗口显示无可靠的失败信号
+        // （ShowWindow 的返回值是「先前是否可见」而非成败），故此处只标记流程走完。
+        logging::info("崩溃恢复流程已完成");
     }
 
     unsafe {
@@ -827,31 +894,28 @@ pub fn run(options: AgentOptions) {
         let (reply_tx, reply_rx) = channel::<Response>();
         if ipc_tx.send((cmd, reply_tx)).is_err() {
             return Response::Error {
-                message: "核心已退出".to_string(),
+                message: i18n::t(Msg::ErrCoreExited).to_string(),
             };
         }
         unsafe {
             let hwnd = HWND(hwnd_value as *mut std::ffi::c_void);
             if PostMessageW(Some(hwnd), WM_APP_IPC, WPARAM(0), LPARAM(0)).is_err() {
                 return Response::Error {
-                    message: "无法通知核心".to_string(),
+                    message: i18n::t(Msg::ErrNotifyCore).to_string(),
                 };
             }
         }
         reply_rx
             .recv_timeout(IPC_REPLY_TIMEOUT)
             .unwrap_or(Response::Error {
-                message: "核心响应超时".to_string(),
+                message: i18n::t(Msg::ErrCoreTimeout).to_string(),
             })
     });
 
     if state.config.notifications.on_start
         && let Some(tray) = &state.tray
     {
-        tray.balloon(
-            "Boss Key正在运行！",
-            "Boss Key正在为您服务，您可通过托盘图标看到我",
-        );
+        tray.balloon(i18n::t(Msg::StartTitle), i18n::t(Msg::StartBody));
     }
 
     if let Some(ms) = options.auto_quit_ms {
@@ -876,4 +940,71 @@ pub fn run(options: AgentOptions) {
     }
 
     drop(state);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hotkey_occupied_is_named_explicitly() {
+        let e = windows::core::Error::from_hresult(ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult());
+        assert_eq!(
+            hotkey_failure_message("隐藏", "Ctrl+Q", &e),
+            "隐藏热键注册失败，已被其他程序占用，该热键不生效: Ctrl+Q"
+        );
+    }
+
+    /// 验证「被占用」的判定与真实 API 一致：`hotkey_failure_message` 依赖
+    /// RegisterHotKey 失败时确实报出 1409，此处用重复注册制造真实的占用冲突。
+    #[test]
+    fn duplicate_registration_really_yields_the_occupied_message() {
+        unsafe {
+            let hwnd = CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("Static"),
+                w!("BossKeyHotkeyTestWindow"),
+                WS_OVERLAPPED,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                0,
+                0,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("创建测试窗口失败");
+
+            // F24 + 三修饰键，避免与开发机上的真实热键冲突。
+            let hk = ParsedHotkey {
+                modifiers: crate::hotkey::MOD_CONTROL
+                    | crate::hotkey::MOD_ALT
+                    | crate::hotkey::MOD_SHIFT,
+                vk: 0x87,
+            };
+            register(hwnd, HK_HIDE, &hk).expect("首次注册应成功");
+            let e = register(hwnd, HK_CLOSE, &hk).expect_err("重复注册同一组合应失败");
+
+            assert!(
+                hotkey_failure_message("隐藏", "Ctrl+Alt+Shift+F24", &e)
+                    .contains("已被其他程序占用"),
+                "真实的占用冲突应被识别为占用，而非退化成裸错误码: {}",
+                crate::util::win_err(&e)
+            );
+
+            let _ = UnregisterHotKey(Some(hwnd), HK_HIDE);
+            let _ = DestroyWindow(hwnd);
+        }
+    }
+
+    #[test]
+    fn other_hotkey_failures_report_the_error_code_instead_of_guessing() {
+        // 非 1409 的失败不应谎称「已被占用」，而应带出真实错误码。
+        let e = windows::core::Error::from_hresult(windows::core::HRESULT(0x8007_0005u32 as i32));
+        let text = hotkey_failure_message("关闭", "Win+Esc", &e);
+        assert!(!text.contains("已被其他程序占用"), "不应猜测原因: {text}");
+        assert!(text.contains("Win+Esc"), "应带出热键: {text}");
+        assert!(text.contains("0x80070005"), "应带出系统错误码: {text}");
+    }
 }

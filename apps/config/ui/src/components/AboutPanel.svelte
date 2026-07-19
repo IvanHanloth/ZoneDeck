@@ -17,6 +17,7 @@
   } from "../lib/state.svelte.js";
   import { MIT_LICENSE } from "../lib/license.js";
   import { formatTime, openExternal, submitFeedback } from "../lib/verhub.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   const info = $derived(app.info);
   const v = $derived(app.config.verhub);
@@ -34,12 +35,12 @@
     try {
       await openExternal(url);
     } catch (err) {
-      toast("打开链接失败：" + err, true);
+      toast(t("options.openLinkFailed", { err }), true);
     }
   }
 
   async function sendFeedback() {
-    if (!content.trim()) return toast("请先写点什么", true);
+    if (!content.trim()) return toast(t("about.writeSomething"), true);
     sending = true;
     try {
       await submitFeedback({
@@ -49,9 +50,9 @@
       });
       content = "";
       rating = 0;
-      toast("反馈已提交，谢谢！");
+      toast(t("about.feedbackThanks"));
     } catch (err) {
-      toast("提交反馈失败：" + err, true);
+      toast(t("about.feedbackFailed", { err }), true);
     } finally {
       sending = false;
     }
@@ -63,12 +64,11 @@
   });
 
   const updateText = $derived.by(() => {
-    if (app.updateChecking) return "检查中…";
+    if (app.updateChecking) return t("about.checking");
     if (!app.update) return "";
-    const t = app.update.target_version;
-    return app.update.should_update
-      ? `发现新版本 ${t?.version ?? ""}${app.update.required ? "（强制更新）" : ""}`
-      : "已是最新版本";
+    if (!app.update.should_update) return t("about.upToDate");
+    const found = t("about.updateFound", { version: app.update.target_version?.version ?? "" });
+    return app.update.required ? found + t("about.updateForcedSuffix") : found;
   });
 
 </script>
@@ -77,19 +77,19 @@
   <div class="hero">
     <img class="logo" src="/icon.ico" alt="Boss Key" />
     <h2>{info?.name ?? "Boss Key"}</h2>
-    <p class="muted">版本 {info?.version ?? "…"}</p>
-    <p>老板来了？一键隐藏窗口，上班摸鱼必备神器。</p>
+    <p class="muted">{t("about.version", { version: info?.version ?? "…" })}</p>
+    <p>{t("about.tagline")}</p>
     <p>
       <button class="val link" onclick={() => open(info?.website ?? "https://boss-key.ivan-hanloth.cn/")}>
-        项目主页
+        {t("about.homepage")}
       </button>
       <span> • </span>
       <button class="val link" onclick={() => open("https://github.com/IvanHanloth/Boss-Key")}>
-       仓库地址
+        {t("about.repository")}
       </button>
       <span> • </span>
       <button class="val link" onclick={() => open("https://boss-key.ivan-hanloth.cn/guide/")}>
-        使用文档
+        {t("about.docs")}
       </button>
       
     </p>
@@ -99,26 +99,26 @@
       </button> All Rights Reserved.</p>
   </div>
 
-  <Card title="更新">
-    <SettingRow label="检查更新" description="手动检查是否有新版本。">
+  <Card title={t("about.updateCard")}>
+    <SettingRow label={t("about.checkUpdate")} description={t("about.checkUpdateDesc")}>
       {#snippet control()}
       <button class="btn" onclick={() => checkForUpdate(true)} disabled={app.updateChecking}>
-        <IconRefreshCw width="14" height="14" /> 检查更新
+        <IconRefreshCw width="14" height="14" /> {t("about.checkUpdate")}
       </button>
       <span class="muted result">{updateText}</span>
       {#if app.update?.should_update}
-        <button class="btn primary" onclick={() => (app.updateOpen = true)}>查看详情</button>
+        <button class="btn primary" onclick={() => (app.updateOpen = true)}>{t("about.viewDetails")}</button>
       {/if}{/snippet}
     </SettingRow>
 
-    <SettingRow label="接收预览版" description="接收预览版更新（可能不稳定）。">
+    <SettingRow label={t("about.includePreview")} description={t("about.includePreviewDesc")}>
       {#snippet control()}<Toggle bind:checked={v.include_preview} />{/snippet}
     </SettingRow>
   </Card>
 
-  <Card title="公告">
+  <Card title={t("about.announceCard")}>
     {#if app.announcements.length === 0}
-      <p class="empty">暂无公告</p>
+      <p class="empty">{t("about.noAnnouncements")}</p>
     {:else}
       <ul class="anns">
         {#each app.announcements as a (a.id)}
@@ -126,7 +126,7 @@
             <div class="ahead">
               <IconMegaphone width="13" height="13" />
               <span class="atitle">{a.title}</span>
-              {#if a.is_pinned}<span class="pin">置顶</span>{/if}
+              {#if a.is_pinned}<span class="pin">{t("about.pinned")}</span>{/if}
               <span class="adate">{formatTime(a.published_at)}</span>
             </div>
             <pre class="acontent">{a.content}</pre>
@@ -136,11 +136,11 @@
     {/if}
   </Card>
 
-  <Card title="反馈">
+  <Card title={t("about.feedbackCard")}>
     <div
       class="stars"
       role="radiogroup"
-      aria-label="评分"
+      aria-label={t("about.ratingAria")}
       onpointerleave={() => (hoverRating = 0)}
     >
       {#each [1, 2, 3, 4, 5] as n (n)}
@@ -150,7 +150,7 @@
           class:on={litStars >= n}
           role="radio"
           aria-checked={rating === n}
-          aria-label="{n} 星"
+          aria-label={t("about.starAria", { n })}
           onpointerenter={() => (hoverRating = n)}
           onfocus={() => (hoverRating = n)}
           onblur={() => (hoverRating = 0)}
@@ -159,33 +159,33 @@
           <IconStar width="20" height="20" fill={litStars >= n ? "currentColor" : "none"} />
         </button>
       {/each}
-      <span class="muted">{rating ? `${rating} 星` : "评分（可选）"}</span>
+      <span class="muted">{rating ? t("about.stars", { n: rating }) : t("about.ratingOptional")}</span>
     </div>
 
     <textarea
       class="fb"
       rows="4"
       maxlength="4000"
-      placeholder="说说遇到的问题、想要的功能…"
+      placeholder={t("about.feedbackPlaceholder")}
       bind:value={content}
     ></textarea>
     <input
       type="text"
       maxlength="120"
-      placeholder="联系方式（可选，邮箱 / QQ 等）"
+      placeholder={t("about.contactPlaceholder")}
       bind:value={contact}
     />
 
     <div class="fb-foot">
       <span class="muted">{content.length} / 4000</span>
       <button class="btn primary" onclick={sendFeedback} disabled={sending || !content.trim()}>
-        {sending ? "提交中…" : "提交反馈"}
+        {t(sending ? "about.submitting" : "about.submitFeedback")}
       </button>
     </div>
   </Card>
 
-  <Card title="开源协议">
-    <p class="card-hint">本项目基于 MIT 协议开源：</p>
+  <Card title={t("about.licenseCard")}>
+    <p class="card-hint">{t("about.licenseHint")}</p>
     <pre class="license">{MIT_LICENSE}</pre>
   </Card>
 </div>
