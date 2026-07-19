@@ -1,7 +1,9 @@
 <script setup>
 // 忠实复刻配置界面底部状态栏（apps/config/ui/src/components/StatusBar.svelte）。
 // 图标直接取自 Lucide（与应用同源），因此显示效果与实际界面完全一致。
+// 文案跟随文档站语言，与应用内 locales/ 下的同名文案保持一致。
 import { computed } from 'vue'
+import { useData } from 'vitepress'
 import { Shield, Play, RotateCw, Power, ScrollText, Check } from 'lucide-vue-next'
 
 const props = defineProps({
@@ -9,15 +11,44 @@ const props = defineProps({
   variant: { type: String, default: 'user' },
 })
 
+const { lang } = useData()
+
+const TEXT = {
+  'zh-CN': {
+    coreRunning: '核心运行中', coreStopped: '核心未运行', startCore: '启动核心',
+    startAdmin: '管理员启动', restartAdmin: '管理员身份重启', restartCore: '重启核心',
+    quitCore: '退出核心', openLogDir: '打开日志目录', theme: '主题：跟随系统',
+    monitorOnTitle: '核心正在监听热键与鼠标触发', monitorOn: '热键生效', saved: '已保存',
+    example: '状态栏示例',
+  },
+  en: {
+    coreRunning: 'Core running', coreStopped: 'Core stopped', startCore: 'Start core',
+    startAdmin: 'Start as administrator', restartAdmin: 'Restart as administrator',
+    restartCore: 'Restart core', quitCore: 'Stop core', openLogDir: 'Open log folder',
+    theme: 'Theme: follow system',
+    monitorOnTitle: 'The core is listening for hotkey and mouse triggers',
+    monitorOn: 'Hotkeys active', saved: 'Saved', example: 'Status bar example',
+  },
+  'zh-TW': {
+    coreRunning: '核心執行中', coreStopped: '核心未執行', startCore: '啟動核心',
+    startAdmin: '以系統管理員啟動', restartAdmin: '以系統管理員身分重新啟動',
+    restartCore: '重新啟動核心', quitCore: '結束核心', openLogDir: '開啟記錄檔資料夾',
+    theme: '佈景主題：跟隨系統', monitorOnTitle: '核心正在監聽快速鍵與滑鼠觸發',
+    monitorOn: '快速鍵生效', saved: '已儲存', example: '狀態列範例',
+  },
+}
+
+const t = computed(() => TEXT[lang.value] ?? TEXT['zh-CN'])
+
 const running = computed(() => props.variant !== 'offline')
 const elevated = computed(() => props.variant === 'admin')
 
-const statusText = computed(() => (running.value ? '核心运行中' : '核心未运行'))
+const statusText = computed(() => (running.value ? t.value.coreRunning : t.value.coreStopped))
 const statusClass = computed(() => (running.value ? 'online' : 'offline'))
 </script>
 
 <template>
-  <footer class="sb-statusbar" :aria-label="`状态栏示例：${statusText}`">
+  <footer class="sb-statusbar" :aria-label="`${t.example}: ${statusText}`">
     <div class="sb-left">
       <span class="sb-status" :class="statusClass">
         <Shield v-if="running && elevated" :size="10" :stroke-width="2" class="sb-shield-dot" />
@@ -26,38 +57,38 @@ const statusClass = computed(() => (running.value ? 'online' : 'offline'))
       </span>
 
       <template v-if="!running">
-        <button class="sb-act sb-icon-only sb-ok" title="启动核心" type="button">
+        <button class="sb-act sb-icon-only sb-ok" :title="t.startCore" type="button">
           <Play :size="14" :stroke-width="2" />
         </button>
-        <button class="sb-act sb-icon-only sb-blue" title="管理员启动" type="button">
+        <button class="sb-act sb-icon-only sb-blue" :title="t.startAdmin" type="button">
           <Shield :size="14" :stroke-width="2" />
         </button>
       </template>
       <template v-else>
-        <button v-if="!elevated" class="sb-act sb-icon-only sb-blue" title="管理员身份重启" type="button">
+        <button v-if="!elevated" class="sb-act sb-icon-only sb-blue" :title="t.restartAdmin" type="button">
           <Shield :size="14" :stroke-width="2" />
         </button>
-        <button class="sb-act sb-icon-only sb-warn" title="重启核心" type="button">
+        <button class="sb-act sb-icon-only sb-warn" :title="t.restartCore" type="button">
           <RotateCw :size="14" :stroke-width="2" />
         </button>
-        <button class="sb-act sb-icon-only sb-danger" title="退出核心" type="button">
+        <button class="sb-act sb-icon-only sb-danger" :title="t.quitCore" type="button">
           <Power :size="14" :stroke-width="2" />
         </button>
       </template>
     </div>
 
     <div class="sb-right">
-      <button class="sb-act sb-icon" title="打开日志目录" type="button">
+      <button class="sb-act sb-icon" :title="t.openLogDir" type="button">
         <ScrollText :size="14" :stroke-width="2" />
       </button>
-      <button class="sb-act sb-icon" title="主题：跟随系统" type="button">◐</button>
+      <button class="sb-act sb-icon" :title="t.theme" type="button">◐</button>
 
-      <span v-if="running" class="sb-monitor" title="核心正在监听热键与鼠标触发">
+      <span v-if="running" class="sb-monitor" :title="t.monitorOnTitle">
         <i class="sb-dot sb-dot-ok"></i>
-        热键生效
+        {{ t.monitorOn }}
       </span>
       <span class="sb-save">
-        <Check :size="12" :stroke-width="2" /> 已保存
+        <Check :size="12" :stroke-width="2" /> {{ t.saved }}
       </span>
     </div>
   </footer>

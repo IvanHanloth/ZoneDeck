@@ -43,6 +43,10 @@ title: IPC 协议
 
 `Status.monitoring`：核心是否正在监听热键与鼠标（被 `SetHotkeys` 停用时为 `false`）。
 
+::: info 错误信息随界面语言变化
+`Error.message` 的文案取自核心的文案 catalog，随 `setting.language` 变化。它是展示给用户的文本，**不要**当作稳定标识去做条件判断。
+:::
+
 ## 监控停用与心跳
 
 `SetHotkeys { enabled: false }` 用于配置界面在**录制 / 调试热键**时临时停用核心监控，避免误触发。该停用**有状态**，需持续心跳续期：
