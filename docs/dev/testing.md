@@ -46,7 +46,7 @@ cargo test -p bosskey-core -- --test-threads=1
 | 热键解析 | 字符串 → RegisterHotKey 参数 |
 | 热键拦截 | 键盘钩子判定的纯逻辑：修饰键完全吻合、长按只触发一次、按下被吞则抬起也吞 |
 | 单实例互斥 | 命名互斥体 |
-| 命名管道 | 服务端收发 |
+| 命名管道 | 服务端收发；连开连关的重连竞态（客户端抢在 `ConnectNamedPipe` 之前连上仍须正常应答） |
 | 进程冻结 | 真实子进程挂起 / 恢复 |
 | 静音 | Core Audio COM 链路 |
 | HideController | mock 注入验证静音 / 冻结 / 暂停键编排 |

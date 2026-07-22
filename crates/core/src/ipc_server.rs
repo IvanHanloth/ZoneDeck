@@ -3,7 +3,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::windows::io::FromRawHandle;
 
 use bosskey_common::ipc::{Command, Response};
-use windows::Win32::Foundation::{HLOCAL, INVALID_HANDLE_VALUE, LocalFree};
+use windows::Win32::Foundation::{ERROR_PIPE_CONNECTED, HLOCAL, INVALID_HANDLE_VALUE, LocalFree};
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
 };
@@ -12,7 +12,7 @@ use windows::Win32::Storage::FileSystem::PIPE_ACCESS_DUPLEX;
 use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT,
 };
-use windows::core::PCWSTR;
+use windows::core::{HRESULT, PCWSTR};
 
 use crate::util::to_wide_null;
 
@@ -67,6 +67,13 @@ impl Drop for PipeSecurity {
     }
 }
 
+fn is_client_connected(result: windows::core::Result<()>) -> bool {
+    match result {
+        Ok(()) => true,
+        Err(e) => e.code() == HRESULT::from_win32(ERROR_PIPE_CONNECTED.0),
+    }
+}
+
 pub fn spawn<F>(pipe_name: String, executor: F)
 where
     F: Fn(Command) -> Response + Send + 'static,
@@ -106,8 +113,7 @@ where
             return;
         }
 
-        let connected = unsafe { ConnectNamedPipe(handle, None) };
-        if connected.is_err() {
+        if !is_client_connected(unsafe { ConnectNamedPipe(handle, None) }) {
             unsafe {
                 let _ = windows::Win32::Foundation::CloseHandle(handle);
             }
@@ -157,6 +163,7 @@ where
 mod tests {
     use super::*;
     use std::time::Duration;
+    use windows::Win32::Foundation::{ERROR_BROKEN_PIPE, WIN32_ERROR};
 
     fn connect_with_retry(pipe_name: &str) -> File {
         for _ in 0..50 {
@@ -193,6 +200,36 @@ mod tests {
             sec.sa.nLength as usize,
             std::mem::size_of::<SECURITY_ATTRIBUTES>()
         );
+    }
+
+    #[test]
+    fn a_client_winning_the_connect_race_counts_as_connected() {
+        let err =
+            |code: WIN32_ERROR| windows::core::Error::from_hresult(HRESULT::from_win32(code.0));
+
+        assert!(is_client_connected(Ok(())), "常规连接");
+        assert!(
+            is_client_connected(Err(err(ERROR_PIPE_CONNECTED))),
+            "客户端抢在 ConnectNamedPipe 之前 open，属于连接已建立"
+        );
+        assert!(
+            !is_client_connected(Err(err(ERROR_BROKEN_PIPE))),
+            "其他错误仍应视为连接失败"
+        );
+    }
+
+    #[test]
+    fn back_to_back_reconnects_all_get_served() {
+        let pipe = r"\\.\pipe\bosskey_test_reconnect_race";
+        spawn(pipe.to_string(), |_| Response::Ok);
+
+        let mut client = connect_with_retry(pipe);
+        for i in 0..200 {
+            let reply = request(&mut client, r#"{"cmd":"hide"}"#);
+            assert_eq!(reply, r#"{"type":"ok"}"#, "第 {i} 轮应答异常");
+            drop(client);
+            client = connect_with_retry(pipe);
+        }
     }
 
     #[test]

@@ -46,7 +46,7 @@ cargo test -p bosskey-core -- --test-threads=1
 | 快速鍵解析 | 字串 → RegisterHotKey 參數 |
 | 快速鍵攔截 | 鍵盤掛鉤判定的純邏輯：修飾鍵完全吻合、長按只觸發一次、按下被吞則放開也吞 |
 | 單一執行個體互斥鎖 | 具名互斥鎖 |
-| 具名管道 | 伺服端收發 |
+| 具名管道 | 伺服端收發；連開連關的重連競態（用戶端搶在 `ConnectNamedPipe` 之前連上仍須正常應答） |
 | 程序凍結 | 真實子程序暫停／復原 |
 | 靜音 | Core Audio COM 鏈路 |
 | HideController | mock 注入驗證靜音／凍結／暫停鍵編排 |
