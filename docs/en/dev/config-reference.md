@@ -30,7 +30,9 @@ The settings window reads and writes the configuration automatically. This page 
 | Field | Default | Description |
 | --- | --- | --- |
 | `hide_hotkey` | `"Ctrl+Q"` | Hide / show windows |
-| `close_hotkey` | `"Win+Esc"` | Close programs |
+| `close_hotkey` | `"Win+Esc"` | Close the core |
+| `hide_intercept` | `false` | [Don't pass the hide hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
+| `close_intercept` | `false` | [Don't pass the close hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
 
 ## `setting`
 

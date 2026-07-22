@@ -5,9 +5,6 @@ use bosskey_common::{MouseButton as MouseButtonCfg, Setting};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::SystemInformation::GetTickCount64;
-use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
-};
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, GetSystemMetrics, HHOOK, MSLLHOOKSTRUCT, PostMessageW, SM_CXSCREEN,
     SM_CYSCREEN, SetWindowsHookExW, UnhookWindowsHookEx, WH_MOUSE_LL, WM_APP, WM_LBUTTONDOWN,
@@ -15,7 +12,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::PCWSTR;
 
-use crate::hotkey::{MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, parse_modifiers};
+use crate::hotkey::parse_modifiers;
+use crate::util::pressed_modifiers;
 
 pub const WM_MOUSE_TRIGGER: u32 = WM_APP + 3;
 pub const TRIGGER_BUTTON: usize = 0;
@@ -182,24 +180,6 @@ fn register_click(state: &mut ButtonState, now: u64, window_ms: u64) -> bool {
     false
 }
 
-fn pressed_modifiers() -> u32 {
-    let down = |vk: u16| unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 };
-    let mut m = 0;
-    if down(VK_CONTROL.0) {
-        m |= MOD_CONTROL;
-    }
-    if down(VK_MENU.0) {
-        m |= MOD_ALT;
-    }
-    if down(VK_SHIFT.0) {
-        m |= MOD_SHIFT;
-    }
-    if down(VK_LWIN.0) || down(VK_RWIN.0) {
-        m |= MOD_WIN;
-    }
-    m
-}
-
 /// 鼠标消息 → 按键下标；不关心的消息返回 None。
 fn button_index(msg: u32, mouse_data: u32) -> Option<usize> {
     match msg {
@@ -338,6 +318,7 @@ impl Drop for MouseHook {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hotkey::{MOD_CONTROL, MOD_SHIFT};
 
     /// 默认配置是「中键单击隐藏」，这里要的是一张白纸，好逐项验证触发条件。
     fn setting_with(mutate: impl FnOnce(&mut Setting)) -> Setting {

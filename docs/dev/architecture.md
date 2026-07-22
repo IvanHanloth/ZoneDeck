@@ -48,6 +48,7 @@ Boss Key v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通�
 | 能力 | 使用的 API | 说明 |
 | --- | --- | --- |
 | 全局热键 | `RegisterHotKey` | 最规范、完善的触发方式 |
+| 热键不传递 | `WH_KEYBOARD_LL` | 仅在有热键开启「不传递」时才安装 |
 | 鼠标 / 四角 | `WH_MOUSE_LL` | 仅在启用鼠标 / 四角时才安装 |
 | 空闲检测 | `GetLastInputInfo` | 无需常驻监听键盘 |
 
@@ -84,6 +85,7 @@ Boss-Key/
 │           audio.rs      Core Audio 会话静音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增强冻结
 │           mouse_hook.rs WH_MOUSE_LL（中键/侧键/四角）
+│           keyboard_hook.rs WH_KEYBOARD_LL（「不传递」热键拦截）
 │           idle.rs       GetLastInputInfo 空闲 + 自动隐藏判定
 │           tray.rs       Shell_NotifyIcon 托盘 + 气泡
 │           ipc_server.rs 命名管道服务端

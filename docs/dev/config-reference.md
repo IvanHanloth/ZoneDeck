@@ -30,7 +30,9 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `hide_hotkey` | `"Ctrl+Q"` | 隐藏 / 显示窗口 |
-| `close_hotkey` | `"Win+Esc"` | 一键关闭程序 |
+| `close_hotkey` | `"Win+Esc"` | 关闭核心 |
+| `hide_intercept` | `false` | [隐藏热键不传递](/guide/hotkeys#热键不传递)（键盘钩子拦截） |
+| `close_intercept` | `false` | [关闭热键不传递](/guide/hotkeys#热键不传递)（键盘钩子拦截） |
 
 ## `setting`
 

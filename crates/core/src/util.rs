@@ -26,6 +26,31 @@ pub unsafe fn append_menu_item(
     }
 }
 
+/// 当前按下的修饰键位掩码（[`crate::hotkey::MOD_CONTROL`] 等的组合）。
+/// 键盘 / 鼠标底层钩子共用，用来判定触发条件里的修饰键是否吻合。
+pub fn pressed_modifiers() -> u32 {
+    use crate::hotkey::{MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+    };
+
+    let down = |vk: u16| unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 };
+    let mut m = 0;
+    if down(VK_CONTROL.0) {
+        m |= MOD_CONTROL;
+    }
+    if down(VK_MENU.0) {
+        m |= MOD_ALT;
+    }
+    if down(VK_SHIFT.0) {
+        m |= MOD_SHIFT;
+    }
+    if down(VK_LWIN.0) || down(VK_RWIN.0) {
+        m |= MOD_WIN;
+    }
+    m
+}
+
 /// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」，供日志同时记录可读原因与可检索的码值。
 ///
 /// 只有消息文本时无法区分「拒绝访问」的来源，只有码值又难以直接判读，故两者都写出。

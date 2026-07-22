@@ -19,14 +19,20 @@ There are two customisable global hotkeys:
 | Function | Default |
 | --- | --- |
 | **Hide / show windows** | `Ctrl + Q` |
-| **Close programs** | `Win + Esc` |
+| **Close the core** | `Win + Esc` |
 
 Click **Record**, then press the combination you want; it is recognised and filled in automatically.
 
 Click **Clear** to unset the hotkey. Once unset it reads "Disabled", the core no longer registers it, and that function cannot be triggered from the keyboard. The two hotkeys are independent and can be unset separately.
 
+### Keeping hotkeys from other apps
+
+Each hotkey has its own **don't pass through** switch (off by default), at the right end of that hotkey's row. When enabled, both the key press and release of the triggering combination never reach the foreground app, so games or chat input boxes won't receive the keys.
+
 ::: info About global hotkeys
-Boss Key registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one.
+By default Boss Key registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one.
+
+A hotkey with "don't pass through" enabled is handled by a low-level keyboard hook (`WH_KEYBOARD_LL`) instead of `RegisterHotKey`, so it is not affected by hotkey-occupancy conflicts. If installing the hook fails, the hotkey falls back to normal registration: it still works, but the keys can no longer be withheld from other apps. A few programs that read Raw Input directly bypass keyboard hooks and may still observe the keys.
 :::
 
 ## Hiding with mouse buttons

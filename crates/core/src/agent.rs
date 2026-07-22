@@ -27,6 +27,7 @@ use crate::hide::{
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
+use crate::keyboard_hook::{self, KeyboardHook, WM_KEY_TRIGGER};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
@@ -87,19 +88,33 @@ struct AgentState {
     monitoring: bool,
     /// 热键当前是否已注册（避免重复 RegisterHotKey）。
     hotkeys_armed: bool,
+    /// 承载「不传递」热键的键盘钩子；没有热键开启「不传递」时不安装。
+    keyboard_hook: Option<KeyboardHook>,
 }
 
 impl AgentState {
-    fn register_hotkeys(&self, hwnd: HWND) {
-        for (id, label, raw) in [
-            (HK_HIDE, "隐藏", &self.config.hotkey.hide_hotkey),
-            (HK_CLOSE, "关闭", &self.config.hotkey.close_hotkey),
+    fn register_hotkeys(&mut self, hwnd: HWND) {
+        let mut intercepts: Vec<(i32, &'static str, String, ParsedHotkey)> = Vec::new();
+        for (id, label, raw, intercept) in [
+            (
+                HK_HIDE,
+                "隐藏",
+                &self.config.hotkey.hide_hotkey,
+                self.config.hotkey.hide_intercept,
+            ),
+            (
+                HK_CLOSE,
+                "关闭",
+                &self.config.hotkey.close_hotkey,
+                self.config.hotkey.close_intercept,
+            ),
         ] {
             if is_disabled(raw) {
                 logging::info(&format!("{label}热键已置空，不注册"));
                 continue;
             }
             match parse_hotkey(raw) {
+                Ok(hk) if intercept => intercepts.push((id, label, raw.clone(), hk)),
                 Ok(hk) => unsafe {
                     match register(hwnd, id, &hk) {
                         Ok(()) => logging::info(&format!("{label}热键已注册: {raw}")),
@@ -109,13 +124,53 @@ impl AgentState {
                 Err(e) => logging::warn(&format!("{label}热键解析失败，该热键不生效: {raw} — {e}")),
             }
         }
+        self.arm_intercepts(hwnd, intercepts);
     }
 
-    fn unregister_hotkeys(&self, hwnd: HWND) {
+    /// 把开启「不传递」的热键装载进键盘钩子。
+    ///
+    /// 钩子安装失败时回退 `RegisterHotKey`：热键仍可用，只是无法阻止按键传递。
+    fn arm_intercepts(
+        &mut self,
+        hwnd: HWND,
+        intercepts: Vec<(i32, &'static str, String, ParsedHotkey)>,
+    ) {
+        if intercepts.is_empty() {
+            keyboard_hook::set_hotkeys(&[]);
+            self.keyboard_hook = None;
+            return;
+        }
+        let parsed: Vec<(i32, ParsedHotkey)> =
+            intercepts.iter().map(|(id, _, _, hk)| (*id, *hk)).collect();
+        keyboard_hook::set_hotkeys(&parsed);
+        if self.keyboard_hook.is_none() {
+            self.keyboard_hook = KeyboardHook::install(hwnd);
+        }
+        if self.keyboard_hook.is_some() {
+            for (_, label, raw, _) in &intercepts {
+                logging::info(&format!("{label}热键已由键盘钩子拦截（不传递）: {raw}"));
+            }
+            return;
+        }
+        keyboard_hook::set_hotkeys(&[]);
+        logging::warn("键盘钩子安装失败，「不传递」不生效，相关热键回退为普通注册");
+        for (id, label, raw, hk) in &intercepts {
+            unsafe {
+                match register(hwnd, *id, hk) {
+                    Ok(()) => logging::info(&format!("{label}热键已注册: {raw}")),
+                    Err(e) => logging::warn(&hotkey_failure_message(label, raw, &e)),
+                }
+            }
+        }
+    }
+
+    fn unregister_hotkeys(&mut self, hwnd: HWND) {
         unsafe {
             let _ = UnregisterHotKey(Some(hwnd), HK_HIDE);
             let _ = UnregisterHotKey(Some(hwnd), HK_CLOSE);
         }
+        keyboard_hook::set_hotkeys(&[]);
+        self.keyboard_hook = None;
     }
 
     /// 让热键与鼠标钩子对齐 `self.monitoring`。幂等：已是目标状态时什么都不做。
@@ -587,7 +642,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     }
 
     match msg {
-        WM_HOTKEY => {
+        // WM_KEY_TRIGGER 是「不传递」热键经键盘钩子转发的等价触发。
+        WM_HOTKEY | WM_KEY_TRIGGER => {
             match wparam.0 as i32 {
                 HK_HIDE => state.apply_toggle(),
                 HK_CLOSE => quit(state, hwnd),
@@ -866,6 +922,7 @@ pub fn run(options: AgentOptions) {
         float_window: None,
         monitoring: true,
         hotkeys_armed: false,
+        keyboard_hook: None,
     });
 
     // 恢复文件存在即上次异常退出仍有窗口被隐藏，先找回。

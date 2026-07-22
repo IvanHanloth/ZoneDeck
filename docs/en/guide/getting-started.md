@@ -86,7 +86,7 @@ Boss Key ships with two keyboard hotkeys, both customisable under [Hotkeys & mou
 | Function | Default hotkey | Description |
 | --- | --- | --- |
 | **Hide / show windows** | `Ctrl + Q` | Press once to hide the bound windows, again to restore them |
-| **Close programs** | `Win + Esc` | Immediately ends the Boss Key core process |
+| **Close the core** | `Win + Esc` | Immediately ends the Boss Key core process |
 
 A fresh installation also enables **hide on middle mouse button click** by default; you can adjust or disable it in the settings.
 

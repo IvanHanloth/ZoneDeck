@@ -11,7 +11,12 @@ const mockConfig = {
   version: "v3.0.0.0",
   history: [],
   frozen_pids: [],
-  hotkey: { hide_hotkey: "Ctrl+Q", close_hotkey: "Win+Esc" },
+  hotkey: {
+    hide_hotkey: "Ctrl+Q",
+    close_hotkey: "Win+Esc",
+    hide_intercept: false,
+    close_intercept: false,
+  },
   setting: {
     mute_after_hide: true,
     send_before_hide: false,

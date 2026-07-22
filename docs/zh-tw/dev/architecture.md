@@ -48,6 +48,7 @@ Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 | 能力 | 使用的 API | 說明 |
 | --- | --- | --- |
 | 全域快速鍵 | `RegisterHotKey` | 最規範、完善的觸發方式 |
+| 快速鍵不傳遞 | `WH_KEYBOARD_LL` | 僅在有快速鍵開啟「不傳遞」時才安裝 |
 | 滑鼠／四角 | `WH_MOUSE_LL` | 僅在啟用滑鼠／四角時才安裝 |
 | 閒置偵測 | `GetLastInputInfo` | 不需常駐監聽鍵盤 |
 
@@ -84,6 +85,7 @@ Boss-Key/
 │           audio.rs      Core Audio 工作階段靜音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增強凍結
 │           mouse_hook.rs WH_MOUSE_LL（中鍵/側鍵/四角）
+│           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
 │           tray.rs       Shell_NotifyIcon 通知區域 + 通知
 │           ipc_server.rs 具名管道伺服端
