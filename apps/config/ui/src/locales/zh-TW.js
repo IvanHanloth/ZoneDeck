@@ -60,7 +60,6 @@ export default {
   "windowList.backgroundProcesses": "背景程序",
   "windowList.untitledWindows": "無標題視窗",
   "windowList.searchPlaceholder": "搜尋{title}…",
-  "windowList.clear": "清除",
   "windowList.hiddenSection": "背景 / 已隱藏視窗",
 
   "scope.untitled": "無標題",
@@ -104,7 +103,9 @@ export default {
 
   "hotkeys.keyboardCard": "鍵盤快速鍵",
   "hotkeys.hideShow": "隱藏 / 顯示視窗",
-  "hotkeys.closeApp": "一鍵關閉程式",
+  "hotkeys.closeApp": "關閉核心",
+  "hotkeys.interceptShort": "不傳遞",
+  "hotkeys.interceptDesc": "開啟「不傳遞」後，觸發該快速鍵時按鍵不會傳給前景程式，避免遊戲或輸入框誤收按鍵。",
   "hotkeys.mouseCard": "滑鼠按鍵隱藏",
   "hotkeys.clickRestore": "按鍵復原",
   "hotkeys.clickRestoreDesc": "開啟後，再按一次同樣的按鍵即可復原已隱藏的視窗。",

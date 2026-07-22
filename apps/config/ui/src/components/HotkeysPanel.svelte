@@ -31,8 +31,21 @@
   onpointerleave={() => resumeMonitoring(REASON)}
 >
   <Card title={t("hotkeys.keyboardCard")}>
-    <HotkeyRecorder label={t("hotkeys.hideShow")} bind:value={app.config.hotkey.hide_hotkey} />
-    <HotkeyRecorder label={t("hotkeys.closeApp")} bind:value={app.config.hotkey.close_hotkey} />
+    <HotkeyRecorder
+      label={t("hotkeys.hideShow")}
+      bind:value={app.config.hotkey.hide_hotkey}
+      bind:intercept={app.config.hotkey.hide_intercept}
+      interceptLabel={t("hotkeys.interceptShort")}
+      interceptTitle={t("hotkeys.interceptDesc")}
+    />
+    <HotkeyRecorder
+      label={t("hotkeys.closeApp")}
+      bind:value={app.config.hotkey.close_hotkey}
+      bind:intercept={app.config.hotkey.close_intercept}
+      interceptLabel={t("hotkeys.interceptShort")}
+      interceptTitle={t("hotkeys.interceptDesc")}
+    />
+    <p class="card-hint">{t("hotkeys.interceptDesc")}</p>
   </Card>
 
   <Card title={t("hotkeys.mouseCard")}>
@@ -100,6 +113,11 @@
 </div>
 
 <style>
+  .card-hint {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
   .num-ctl {
     display: flex;
     align-items: center;

@@ -30,7 +30,9 @@ Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。*
 | 欄位 | 預設 | 說明 |
 | --- | --- | --- |
 | `hide_hotkey` | `"Ctrl+Q"` | 隱藏／顯示視窗 |
-| `close_hotkey` | `"Win+Esc"` | 一鍵關閉程式 |
+| `close_hotkey` | `"Win+Esc"` | 關閉核心 |
+| `hide_intercept` | `false` | [隱藏快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
+| `close_intercept` | `false` | [關閉快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
 
 ## `setting`
 

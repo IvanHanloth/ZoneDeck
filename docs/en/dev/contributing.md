@@ -79,6 +79,31 @@ Any new user-visible string must be added to all three languages, otherwise the 
 - Traditional Chinese uses Taiwanese terminology (視窗, 程式, 檔案, 滑鼠, 快速鍵); do not simply convert Simplified characters to Traditional ones.
 - **Logs are not translated** and stay in Simplified Chinese.
 
+### i18n consistency check
+
+Unit tests can only validate a catalog from the inside (key sets, empty values, placeholders). Cross-file slips are caught by `scripts/i18n-check.ps1`:
+
+| Check | What slips through otherwise |
+| --- | --- |
+| The three doc trees hold the same pages | A language is missing a page and readers hit a 404 |
+| Internal links stay within one language | An English page linking to `/guide/…` drops the reader into Chinese; VitePress's dead-link check cannot see this |
+| Every key used in `t("key")` exists | The UI renders the raw key name |
+| No orphaned catalog keys | Strings left behind by removed features pile up |
+| Every `Msg` variant is listed in `ALL_MSGS` | That message skips the cross-language check, so a missing translation goes unnoticed |
+
+```bash
+# Run the full check manually
+pwsh -File scripts/i18n-check.ps1
+```
+
+The repository ships a `pre-commit` hook that runs it (limited to the parts your staged changes touch). **Enable it once per clone:**
+
+```bash
+git config core.hooksPath .githooks
+```
+
+Use `git commit --no-verify` to skip it when you really need to.
+
 ## Opening an issue
 
 The repository provides issue templates:

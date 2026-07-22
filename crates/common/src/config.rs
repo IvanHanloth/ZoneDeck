@@ -60,6 +60,12 @@ pub struct Hotkey {
     pub hide_hotkey: String,
     #[serde(default = "default_close_hotkey")]
     pub close_hotkey: String,
+    /// 隐藏热键是否不传递给其他程序（核心改用键盘钩子拦截）。
+    #[serde(default)]
+    pub hide_intercept: bool,
+    /// 关闭热键是否不传递给其他程序（核心改用键盘钩子拦截）。
+    #[serde(default)]
+    pub close_intercept: bool,
 }
 
 impl Default for Hotkey {
@@ -67,6 +73,8 @@ impl Default for Hotkey {
         Self {
             hide_hotkey: default_hide_hotkey(),
             close_hotkey: default_close_hotkey(),
+            hide_intercept: false,
+            close_intercept: false,
         }
     }
 }
@@ -484,6 +492,28 @@ mod tests {
         assert_eq!(c.window_rules[0].process, "WeChat.exe");
         assert_eq!(c.window_rules[0].pid, 8888);
         assert!(!c.window_rules[0].is_regex(), "迁移出的规则应为精确规则");
+    }
+
+    #[test]
+    fn intercept_flags_default_off_for_old_configs() {
+        let c = Config::from_json(
+            r#"{"hotkey": {"hide_hotkey": "Ctrl+Q", "close_hotkey": "Win+Esc"}}"#,
+        )
+        .unwrap();
+        assert!(!c.hotkey.hide_intercept, "旧配置无此字段应默认关闭");
+        assert!(!c.hotkey.close_intercept);
+        assert!(!Hotkey::default().hide_intercept, "全新配置也默认关闭");
+        assert!(!Hotkey::default().close_intercept);
+    }
+
+    #[test]
+    fn intercept_flags_round_trip_independently() {
+        let c = Config::from_json(r#"{"hotkey": {"hide_intercept": true}}"#).unwrap();
+        assert!(c.hotkey.hide_intercept);
+        assert!(!c.hotkey.close_intercept, "两个开关相互独立");
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert!(back.hotkey.hide_intercept, "写回后应保留");
+        assert!(!back.hotkey.close_intercept);
     }
 
     #[test]

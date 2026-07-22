@@ -61,7 +61,6 @@ export default {
   "windowList.backgroundProcesses": "Background processes",
   "windowList.untitledWindows": "Untitled windows",
   "windowList.searchPlaceholder": "Search {title}…",
-  "windowList.clear": "Clear",
   "windowList.hiddenSection": "Background / hidden windows",
 
   "scope.untitled": "untitled",
@@ -106,7 +105,9 @@ export default {
 
   "hotkeys.keyboardCard": "Keyboard hotkeys",
   "hotkeys.hideShow": "Hide / show windows",
-  "hotkeys.closeApp": "Close programs",
+  "hotkeys.closeApp": "Close the core",
+  "hotkeys.interceptShort": "Don't pass through",
+  "hotkeys.interceptDesc": "With \"Don't pass through\" enabled, the key press never reaches the foreground app, so games or input boxes won't receive it.",
   "hotkeys.mouseCard": "Hide with mouse buttons",
   "hotkeys.clickRestore": "Restore with the same button",
   "hotkeys.clickRestoreDesc": "Press the same button again to restore the hidden windows.",

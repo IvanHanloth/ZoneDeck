@@ -61,7 +61,6 @@ export default {
   "windowList.backgroundProcesses": "后台进程",
   "windowList.untitledWindows": "无标题窗口",
   "windowList.searchPlaceholder": "搜索{title}…",
-  "windowList.clear": "清除",
   "windowList.hiddenSection": "后台 / 已隐藏窗口",
 
   "scope.untitled": "无标题",
@@ -105,7 +104,9 @@ export default {
 
   "hotkeys.keyboardCard": "键盘热键",
   "hotkeys.hideShow": "隐藏 / 显示窗口",
-  "hotkeys.closeApp": "一键关闭程序",
+  "hotkeys.closeApp": "关闭核心",
+  "hotkeys.interceptShort": "不传递",
+  "hotkeys.interceptDesc": "开启「不传递」后，触发该热键时按键不会传给前台程序，避免游戏或输入框误收按键。",
   "hotkeys.mouseCard": "鼠标按键隐藏",
   "hotkeys.clickRestore": "按键恢复",
   "hotkeys.clickRestoreDesc": "开启后，再按一次同样的键即可恢复已隐藏的窗口。",

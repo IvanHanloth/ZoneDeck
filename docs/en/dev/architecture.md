@@ -48,6 +48,7 @@ The core **cannot** be a Session 0 Windows service, or it could not enumerate an
 | Capability | API used | Notes |
 | --- | --- | --- |
 | Global hotkeys | `RegisterHotKey` | The most standard and complete trigger mechanism |
+| Hotkey interception | `WH_KEYBOARD_LL` | Installed only when a hotkey has "don't pass through" enabled |
 | Mouse / corners | `WH_MOUSE_LL` | Installed only when mouse or corner triggers are enabled |
 | Idle detection | `GetLastInputInfo` | No need to monitor the keyboard continuously |
 
@@ -84,6 +85,7 @@ Boss-Key/
 │           audio.rs      Core Audio session muting
 │           freeze.rs     NtSuspend/Resume + pssuspend64 enhanced freezing
 │           mouse_hook.rs WH_MOUSE_LL (middle/side buttons, corners)
+│           keyboard_hook.rs WH_KEYBOARD_LL ("don't pass through" hotkey interception)
 │           idle.rs       GetLastInputInfo idle detection + auto-hide decision
 │           tray.rs       Shell_NotifyIcon tray + balloons
 │           ipc_server.rs Named-pipe server

@@ -44,8 +44,9 @@ Integration tests of system behaviour (mostly creating real resources and verify
 | --- | --- |
 | Window enumeration / hiding / showing | Round trip against a real window |
 | Hotkey parsing | String → RegisterHotKey parameters |
+| Hotkey interception | Pure keyboard-hook decision logic: modifiers must match exactly, holding fires once, a swallowed press also swallows its release |
 | Single-instance mutex | Named mutex |
-| Named pipe | Server send/receive |
+| Named pipe | Server send/receive; the back-to-back reconnect race (a client that connects before `ConnectNamedPipe` must still be served) |
 | Process freezing | Suspending / resuming a real child process |
 | Muting | The Core Audio COM path |
 | HideController | Mock injection verifying the muting / freezing / pause-key orchestration |
