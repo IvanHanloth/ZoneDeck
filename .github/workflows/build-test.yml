@@ -42,6 +42,12 @@ jobs:
         shell: pwsh
         run: ./scripts/version.ps1 check
 
+      # ---- 文案：引用的键是否存在、有无死键、Msg 是否登记进 ALL_MSGS ----
+      # catalog 内部的键集 / 占位符由下面的 npm test 覆盖，这里跳过免得跑两遍。
+      - name: i18n consistency check
+        shell: pwsh
+        run: ./scripts/i18n-check.ps1 -SkipVitest
+
       # ---- 前端：依赖 / 单元测试 / 构建 ----
       - name: Frontend install, test & build
         run: |
