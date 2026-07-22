@@ -164,7 +164,7 @@
 
     <textarea
       class="fb"
-      rows="4"
+      rows="5"
       maxlength="4000"
       placeholder={t("about.feedbackPlaceholder")}
       bind:value={content}
@@ -326,7 +326,7 @@
 
   .fb {
     resize: vertical;
-    min-height: 84px;
+    min-height: 112px;
     font-family: inherit;
     line-height: 1.6;
   }

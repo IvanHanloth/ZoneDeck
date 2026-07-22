@@ -10,7 +10,7 @@
 
 <img src="https://img.shields.io/github/v/release/IvanHanloth/Boss-Key?style=flat-square" alt="Github Release Version">
 <img src="https://img.shields.io/github/license/IvanHanloth/Boss-Key?style=flat-square" alt="Github Repo License">
-<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/tag-release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
+<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
 <img src="https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue?style=flat-square" alt="Supported Platform">
 
 </p>

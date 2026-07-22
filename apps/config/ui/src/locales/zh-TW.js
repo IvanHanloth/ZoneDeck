@@ -258,7 +258,7 @@ export default {
   "about.starAria": "{n} 顆星",
   "about.stars": "{n} 顆星",
   "about.ratingOptional": "評分（選填）",
-  "about.feedbackPlaceholder": "說說遇到的問題、想要的功能…",
+  "about.feedbackPlaceholder": "開發者會認真閱讀這裡的每一則意見，歡迎說說想要的功能、遇到的問題或者誇一誇開發者ヾ(≧▽≦*)o~\n不過，如果可以的話，推薦將 bug 和功能建議提交到 GitHub 的 Issue 區，方便開發者及時統一追蹤（所以，這裡只接受對開發者的誇獎( •̀ ω •́ )✧（開個玩笑））",
   "about.contactPlaceholder": "聯絡方式（選填，電子郵件／通訊軟體等）",
   "about.submitting": "送出中…",
   "about.submitFeedback": "送出意見回饋",

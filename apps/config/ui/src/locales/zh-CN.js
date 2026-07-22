@@ -254,7 +254,7 @@ export default {
   "about.starAria": "{n} 星",
   "about.stars": "{n} 星",
   "about.ratingOptional": "评分（可选）",
-  "about.feedbackPlaceholder": "说说遇到的问题、想要的功能…",
+  "about.feedbackPlaceholder": "开发者会认真阅读这里的每一条反馈，欢迎说说想要的功能、遇到的问题或者夸一夸开发者ヾ(≧▽≦*)o~\n不过，如果可以的话，推荐将 bug 和功能建议提交到 GitHub 的 Issue 区，方便开发者及时统一跟进（所以，这里只接受对开发者的夸奖( •̀ ω •́ )✧（开个玩笑））",
   "about.contactPlaceholder": "联系方式（可选，邮箱 / QQ 等）",
   "about.submitting": "提交中…",
   "about.submitFeedback": "提交反馈",
