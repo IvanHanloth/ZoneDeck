@@ -5,6 +5,7 @@
   import IconDownload from "~icons/lucide/download";
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import IconX from "~icons/lucide/x";
+  import Markdown from "./Markdown.svelte";
   import { win } from "../lib/ipc.js";
   import { app, toast } from "../lib/state.svelte.js";
   import { downloadUrl, formatTime, openExternal } from "../lib/verhub.js";
@@ -61,7 +62,7 @@
         </div>
 
         {#if target.title}<p class="title">{target.title}</p>{/if}
-        {#if target.content}<pre class="notes">{target.content}</pre>{/if}
+        {#if target.content}<div class="notes"><Markdown source={target.content} /></div>{/if}
 
         {#if forced}
           <p class="warn">{t("update.forcedNote")}</p>
@@ -164,16 +165,11 @@
     font-weight: 600;
   }
   .notes {
-    margin: 0;
     padding: 10px 12px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-family: inherit;
     font-size: 12.5px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
     max-height: 240px;
     overflow-y: auto;
   }

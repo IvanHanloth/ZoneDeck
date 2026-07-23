@@ -7,6 +7,7 @@
   import IconRefreshCw from "~icons/lucide/refresh-cw";
   import IconStar from "~icons/lucide/star";
   import Card from "./Card.svelte";
+  import Markdown from "./Markdown.svelte";
   import SettingRow from "./SettingRow.svelte";
   import Toggle from "./Toggle.svelte";
   import {
@@ -129,7 +130,7 @@
               {#if a.is_pinned}<span class="pin">{t("about.pinned")}</span>{/if}
               <span class="adate">{formatTime(a.published_at)}</span>
             </div>
-            <pre class="acontent">{a.content}</pre>
+            <div class="acontent"><Markdown source={a.content} /></div>
           </li>
         {/each}
       </ul>
@@ -274,13 +275,9 @@
     color: var(--muted);
   }
   .acontent {
-    margin: 6px 0 0;
-    font-family: inherit;
+    margin-top: 6px;
     font-size: 12.5px;
-    line-height: 1.6;
     color: var(--muted);
-    white-space: pre-wrap;
-    word-break: break-word;
   }
   .empty,
   .card-hint {

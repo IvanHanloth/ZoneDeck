@@ -30,6 +30,7 @@ apps/config/ui/
 │       ├── grouping.js      窗口/进程规则的增删与过滤（配 grouping.test.js）
 │       ├── theme.js         主题切换（配 theme.test.js）
 │       ├── i18n.svelte.js   界面语言：catalog 查表 + 语言解析（配 i18n.test.js）
+│       ├── markdown.js      公告/更新日志的 Markdown 渲染（配 markdown.test.js）
 │       └── verhub.js        检查更新/公告/打开外链
 ├── locales/                 三语文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
@@ -81,6 +82,21 @@ t("restore.frozen", { n: 3 });        // → 已冻结 3 个进程
 ::: warning NO_TITLE 不是文案
 `grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）与核心 `bosskey_common::NO_TITLE` 一致，是写进 `config.json` 的跨进程哨兵值，**不可翻译**；仅在展示时用 `t("common.noTitleWindow")` 换成当前语言。
 :::
+
+## 公告与更新日志的 Markdown 渲染
+
+公告（列表与启动弹窗）与更新日志的正文按 Markdown 渲染，由 `lib/markdown.js`（纯函数，配 `markdown.test.js`）与 `components/Markdown.svelte`（样式 + 链接拦截）承担，不引入第三方依赖。
+
+支持 GitHub 风格的常用子集：标题、粗体 / 斜体 / 删除线、行内代码与围栏代码块、有序 / 无序 / 任务列表（含缩进嵌套）、引用、分割线、链接与裸链接。段落内的软换行渲染成 `<br>`，与 GitHub 评论一致。**不支持**表格、脚注、行内 HTML 与语法高亮。
+
+::: warning 正文来自远端，渲染前必须转义
+Verhub 返回的内容不可信。`renderMarkdown()` 先整体转义 `& < > "` 再拼标签，输出里出现的标签全部由渲染器自己生成，源文本中的 HTML 只会作为字面量显示；链接目标仅放行 `http(s)` 与 `mailto`，其余（`javascript:`、`data:` 等）按纯文本保留。改动该模块时勿绕过这两条。
+:::
+
+另有两处与运行环境相关的取舍：
+
+- **图片退化成链接**：Tauri 的 CSP 中 `img-src` 只允许 `self` 与 `data:`，远端图片加载不出来，因此 `![]()` 一律渲染为链接。
+- **链接不走 webview 导航**：`Markdown.svelte` 拦截点击并转交 `open_external`，由系统浏览器打开——webview 真导航走了就回不到配置界面。
 
 ## 状态轮询不卡界面
 

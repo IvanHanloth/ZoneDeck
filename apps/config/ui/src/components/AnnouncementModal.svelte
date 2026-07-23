@@ -1,6 +1,7 @@
 <script>
   // 启动时弹出的未读公告。
   import IconMegaphone from "~icons/lucide/megaphone";
+  import Markdown from "./Markdown.svelte";
   import Modal from "./Modal.svelte";
   import { app, markAnnouncementSeen } from "../lib/state.svelte.js";
   import { formatTime } from "../lib/verhub.js";
@@ -31,7 +32,7 @@
         {#if item.author}{item.author} ·{/if}
         {formatTime(item.published_at)}
       </p>
-      <pre class="content">{item.content}</pre>
+      <Markdown source={item.content} />
     </div>
 
     {#snippet footer()}
@@ -64,13 +65,5 @@
   .meta {
     font-size: 12px;
     color: var(--muted);
-  }
-  .content {
-    margin: 0;
-    font-family: inherit;
-    font-size: 13px;
-    line-height: 1.65;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 </style>

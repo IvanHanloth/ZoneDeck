@@ -30,6 +30,7 @@ apps/config/ui/
 │       ├── grouping.js      視窗/程序規則的增刪與篩選（配 grouping.test.js）
 │       ├── theme.js         佈景主題切換（配 theme.test.js）
 │       ├── i18n.svelte.js   介面語言：catalog 查表 + 語言解析（配 i18n.test.js）
+│       ├── markdown.js      公告/更新記錄的 Markdown 算繪（配 markdown.test.js）
 │       └── verhub.js        檢查更新/公告/開啟外部連結
 ├── locales/                 三語文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
@@ -81,6 +82,21 @@ t("restore.frozen", { n: 3 });        // → 已凍結 3 個程序
 ::: warning NO_TITLE 不是文案
 `grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）與核心 `bosskey_common::NO_TITLE` 一致，是寫進 `config.json` 的跨程序哨兵值，**不可翻譯**；僅在顯示時用 `t("common.noTitleWindow")` 換成目前語言。
 :::
+
+## 公告與更新記錄的 Markdown 算繪
+
+公告（清單與啟動對話方塊）與更新記錄的內文按 Markdown 算繪，由 `lib/markdown.js`（純函式，配 `markdown.test.js`）與 `components/Markdown.svelte`（樣式 + 連結攔截）承擔，不引入第三方相依套件。
+
+支援 GitHub 風格的常用子集：標題、粗體／斜體／刪除線、行內程式碼與圍籬程式碼區塊、有序／無序／工作清單（含縮排巢狀）、引用、分隔線、連結與裸連結。段落內的軟換行算繪成 `<br>`，與 GitHub 留言一致。**不支援**表格、註腳、行內 HTML 與語法醒目提示。
+
+::: warning 內文來自遠端，算繪前必須逸出
+Verhub 回傳的內容不可信。`renderMarkdown()` 先整體逸出 `& < > "` 再組標籤，輸出裡出現的標籤全部由算繪器自己產生，原始文字中的 HTML 只會作為字面值顯示；連結目標僅放行 `http(s)` 與 `mailto`，其餘（`javascript:`、`data:` 等）按純文字保留。改動該模組時勿繞過這兩條。
+:::
+
+另有兩處與執行環境相關的取捨：
+
+- **圖片退化成連結**：Tauri 的 CSP 中 `img-src` 只允許 `self` 與 `data:`，遠端圖片載入不了，因此 `![]()` 一律算繪為連結。
+- **連結不走 webview 導覽**：`Markdown.svelte` 攔截點擊並轉交 `open_external`，由系統瀏覽器開啟——webview 真的導覽走了就回不到設定介面。
 
 ## 狀態輪詢不卡介面
 
