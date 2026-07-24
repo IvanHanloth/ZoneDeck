@@ -68,12 +68,11 @@ Boss-Key/
 ├── Cargo.toml                      workspace（含 release profile 调优）
 ├── crates/
 │   ├── common/                     共享库（无平台依赖，可跨平台编译）
-│   │   └── src/{model,config,matching,ipc,verhub,i18n}.rs
+│   │   └── src/{model,config,matching,ipc,i18n}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule（serde 兼容旧 config.json，PID 大写）
 │   │       config    Config/Setting/Hotkey（兼容读取旧配置 + 迁移）
 │   │       matching  窗口匹配逻辑
 │   │       ipc       Command/Response 协议 + PipeClient 客户端
-│   │       verhub    版本 / 公告 / 更新检查相关模型
 │   │       i18n      界面语言标签（Lang）与语言偏好解析，核心与配置程序共用
 │   └── core/                       常驻核心（lib + bin）
 │       └── src/
@@ -98,6 +97,7 @@ Boss-Key/
 │           single_instance.rs  命名互斥单实例
 └── apps/config/                    配置界面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 后端命令 + tauri.conf.json + capabilities
+    │   └── src/verhub.rs  Verhub 客户端（版本/公告/反馈/日志，基于 verhub-sdk）
     ├── ui/         前端源码（Vite + Svelte 5）
     │   └── src/    lib/（纯逻辑 + vitest 测试）+ components/（Svelte 组件）
     │                + locales/（三语文案 catalog，以 zh-CN.js 为基准）

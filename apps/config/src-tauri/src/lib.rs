@@ -4,10 +4,11 @@ use std::time::Duration;
 use bosskey_common::Config;
 use bosskey_common::ipc::{Command, PipeClient, Response};
 use bosskey_common::model::WindowInfo;
-use bosskey_common::verhub;
 use bosskey_core::i18n::{self, Msg};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
+
+mod verhub;
 
 const CORE_EXE: &str = "Boss Key.exe";
 
@@ -387,10 +388,10 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接。仅放行 http/https。
+/// 用系统默认浏览器打开外部链接。仅放行 http/https/mailto（与前端 markdown 白名单一致）。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
+    if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("mailto:") {
         return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
     blocking(move || bosskey_core::shell::open(&url)).await
@@ -399,16 +400,17 @@ async fn open_external(url: String) -> Result<(), String> {
 /// 检查更新。`required=true` 即强制更新，界面须阻断使用。
 #[tauri::command]
 async fn verhub_check_update(include_preview: bool) -> Result<verhub::CheckUpdate, String> {
-    blocking(move || {
-        verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview).map_err(|e| e.to_string())
-    })
-    .await
+    verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 公告列表（本平台可见的，从新到旧）。
 #[tauri::command]
 async fn verhub_announcements(limit: u32) -> Result<Vec<verhub::Announcement>, String> {
-    blocking(move || verhub::announcements(limit.clamp(1, 50)).map_err(|e| e.to_string())).await
+    verhub::announcements(limit.clamp(1, 50))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// `contact` 可空——留了才好回复用户。
@@ -421,38 +423,26 @@ async fn verhub_submit_feedback(
     if content.trim().is_empty() {
         return Err(i18n::t(Msg::ErrFeedbackEmpty).to_string());
     }
-    blocking(move || {
-        let feedback = verhub::Feedback {
-            rating: rating.map(|r| r.clamp(1, 5)),
-            content,
-            platform: verhub::PLATFORM,
-            custom_data: serde_json::json!({
-                "app_version": env!("CARGO_PKG_VERSION"),
-                "os": os_description(),
-                "contact": contact.trim(),
-            }),
-        };
-        verhub::submit_feedback(&feedback).map_err(|e| e.to_string())
-    })
-    .await
+    let custom_data = serde_json::json!({
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os": os_description(),
+        "contact": contact.trim(),
+    });
+    verhub::submit_feedback(content, rating.map(|r| r.clamp(1, 5)), custom_data)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 上报一段日志
 #[tauri::command]
 async fn verhub_upload_log(content: String) -> Result<(), String> {
-    blocking(move || {
-        verhub::upload_log(
-            verhub::LogLevel::Error,
-            &content,
-            serde_json::json!({
-                "app_version": env!("CARGO_PKG_VERSION"),
-                "os": os_description(),
-
-            }),
-        )
+    let device_info = serde_json::json!({
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os": os_description(),
+    });
+    verhub::upload_log(&content, device_info)
+        .await
         .map_err(|e| e.to_string())
-    })
-    .await
 }
 
 /// 最新日志文件的末尾若干行。

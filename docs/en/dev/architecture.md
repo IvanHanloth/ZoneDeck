@@ -68,12 +68,11 @@ Boss-Key/
 ├── Cargo.toml                      workspace (including release profile tuning)
 ├── crates/
 │   ├── common/                     Shared library (no platform dependency; builds cross-platform)
-│   │   └── src/{model,config,matching,ipc,verhub,i18n}.rs
+│   │   └── src/{model,config,matching,ipc,i18n}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule (serde-compatible with the old config.json; PID uppercase)
 │   │       config    Config/Setting/Hotkey (reads old configurations + migration)
 │   │       matching  Window matching logic
 │   │       ipc       Command/Response protocol + PipeClient
-│   │       verhub    Models for versions / announcements / update checks
 │   │       i18n      Language tags (Lang) and preference resolution, shared by core and settings
 │   └── core/                       Resident core (lib + bin)
 │       └── src/
@@ -98,6 +97,7 @@ Boss-Key/
 │           single_instance.rs  Named-mutex single instance
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
     ├── src-tauri/  Rust backend commands + tauri.conf.json + capabilities
+    │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs, built on verhub-sdk)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)
