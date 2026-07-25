@@ -96,6 +96,23 @@ pub fn resolve_targets(
     (result, outcomes)
 }
 
+/// 前台窗口对应的隐藏目标。
+///
+/// 只接受出现在枚举结果里且当前可见的顶层窗口：工具窗口不在枚举结果内，
+/// 已被隐藏的窗口 `visible` 为假，二者都不该再次成为隐藏目标。
+pub fn foreground_target(windows: &[WindowInfo], foreground: i64) -> Option<Target> {
+    if foreground == 0 {
+        return None;
+    }
+    windows
+        .iter()
+        .find(|w| w.hwnd == foreground && w.visible)
+        .map(|w| Target {
+            hwnd: w.hwnd,
+            pid: w.pid,
+        })
+}
+
 /// 可以安全冻结的进程 PID 集合：仅当某进程的全部可见窗口都在隐藏目标里时才纳入。
 pub fn freezable_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
     let hidden: HashSet<i64> = targets.iter().map(|t| t.hwnd).collect();
@@ -196,43 +213,51 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 隐藏已解析出的目标：隐藏窗口并按设置应用静音 / 冻结 / 发送暂停键。
     /// `freeze_pids` 为最终要冻结的 PID 集（调用方算好，可能已含递归展开的子进程树，
     /// 见 [`freezable_pids`] 与 [`expand_descendants`]）；仅在 `freeze_after_hide` 开启时生效。
+    ///
+    /// 隐藏是累加的：先前隐藏的窗口留在隐藏集内，`show` 时一并恢复。已在隐藏集 /
+    /// 静音集 / 冻结集里的目标会被跳过——静音与挂起若重复施加，挂起尤其是计数式的，
+    /// 需要同样次数的解冻才能恢复。
     pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
+        let known: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
+        let fresh: Vec<Target> = targets
+            .iter()
+            .copied()
+            .filter(|t| !known.contains(&t.hwnd))
+            .collect();
+
         // 隐藏前先发一次媒体「播放/暂停」键，暂停正在播放的音视频。
         // 只发一次：多目标时重复发送会把「播放/暂停」这个切换键又切回播放。
         // 仅当确有音视频在播放时才真正发键（由 effects 判断），此时才需等待其生效。
-        if setting.send_before_hide && !targets.is_empty() && self.effects.send_pause() {
+        if setting.send_before_hide && !fresh.is_empty() && self.effects.send_pause() {
             std::thread::sleep(SEND_PAUSE_DELAY);
         }
 
-        let mut muted = Vec::new();
-
-        for t in targets {
+        for t in &fresh {
             self.wm.hide(t.hwnd);
-            if setting.mute_after_hide && t.pid != 0 {
+            if setting.mute_after_hide && t.pid != 0 && !self.muted.contains(&t.pid) {
                 self.effects.mute(t.pid, true);
-                muted.push(t.pid);
+                self.muted.push(t.pid);
             }
         }
-        muted.sort_unstable();
-        muted.dedup();
 
         // 冻结与目标窗口解耦：freeze_pids 已是最终集合（含子进程树），逐个挂起。
-        let mut frozen = Vec::new();
         if setting.freeze_after_hide {
-            frozen = freeze_pids.to_vec();
-            frozen.retain(|pid| *pid != 0);
-            // 挂起是计数式的，去重以匹配解冻次数。
-            frozen.sort_unstable();
-            frozen.dedup();
-            self.used_enhanced = setting.enhanced_freeze;
-            for pid in &frozen {
-                self.effects.suspend(*pid, self.used_enhanced);
+            // 冻结方式在解冻时必须与冻结时一致，故只有冻结集为空（本轮是第一次冻结）
+            // 时才跟随当前设置，之后沿用同一方式。
+            if self.frozen.is_empty() {
+                self.used_enhanced = setting.enhanced_freeze;
             }
+            for pid in freeze_pids {
+                if *pid != 0 && !self.frozen.contains(pid) {
+                    self.effects.suspend(*pid, self.used_enhanced);
+                    self.frozen.push(*pid);
+                }
+            }
+            self.frozen.sort_unstable();
         }
 
-        self.frozen = frozen;
-        self.muted = muted;
-        self.hidden = targets.to_vec();
+        self.muted.sort_unstable();
+        self.hidden.extend(fresh);
     }
 
     pub fn show(&mut self) {
@@ -642,6 +667,102 @@ mod tests {
             *controller.effects.mutes.borrow(),
             vec![(10, true), (10, false)],
             "恢复后应取消静音"
+        );
+    }
+
+    #[test]
+    fn successive_hides_accumulate_and_restore_together() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: false,
+            ..Setting::default()
+        };
+
+        let wm = MockWm::new(
+            vec![
+                win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+                win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+            ],
+            10,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(&setting, &[Target { hwnd: 10, pid: 10 }], &[]);
+        controller.apply_hide(&setting, &[Target { hwnd: 20, pid: 20 }], &[]);
+
+        assert_eq!(
+            controller.hidden_count(),
+            2,
+            "第二次隐藏不应挤掉第一次的窗口"
+        );
+        assert!(!controller.wm.is_visible(10) && !controller.wm.is_visible(20));
+
+        controller.show();
+        assert!(
+            controller.wm.is_visible(10) && controller.wm.is_visible(20),
+            "恢复应把累计隐藏的窗口一并放出来"
+        );
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(10, true), (20, true), (10, false), (20, false)],
+            "两个进程都应取消静音"
+        );
+    }
+
+    #[test]
+    fn re_hiding_the_same_window_does_not_repeat_effects() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let targets = [Target { hwnd: 10, pid: 10 }];
+        controller.apply_hide(&setting, &targets, &[10]);
+        controller.apply_hide(&setting, &targets, &[10]);
+
+        assert_eq!(controller.hidden_count(), 1, "同一窗口不应重复入集");
+        assert_eq!(
+            *controller.effects.suspends.borrow(),
+            vec![10],
+            "重复挂起会让解冻次数对不上，须跳过"
+        );
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.resumes.borrow(),
+            vec![10],
+            "一次解冻即可"
+        );
+        assert!(controller.wm.is_visible(10));
+    }
+
+    #[test]
+    fn foreground_target_takes_the_visible_foreground_window() {
+        let windows = vec![
+            win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
+            win_pid("已隐藏", 11, "app.exe", 600, "C:\\app.exe").with_visibility(false),
+        ];
+        assert_eq!(
+            foreground_target(&windows, 10),
+            Some(Target { hwnd: 10, pid: 500 })
+        );
+        assert_eq!(foreground_target(&windows, 0), None, "无前台窗口");
+        assert_eq!(
+            foreground_target(&windows, 11),
+            None,
+            "已隐藏的窗口不该再次成为目标"
+        );
+        assert_eq!(
+            foreground_target(&windows, 99),
+            None,
+            "枚举不到的窗口（如工具窗口）不作为目标"
         );
     }
 

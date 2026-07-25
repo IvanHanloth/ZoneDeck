@@ -30,6 +30,7 @@ apps/config/ui/
 │       ├── grouping.js      Adding, removing and filtering window/process rules (with grouping.test.js)
 │       ├── theme.js         Theme switching (with theme.test.js)
 │       ├── i18n.svelte.js   Display language: catalog lookup + language resolution (with i18n.test.js)
+│       ├── markdown.js      Markdown rendering for announcements/release notes (with markdown.test.js)
 │       └── verhub.js        Update checks / announcements / opening external links
 ├── locales/                 Three-language catalogs (zh-CN.js / en.js / zh-TW.js)
 ├── vite.config.js
@@ -81,6 +82,21 @@ t("restore.frozen", { n: 3 });        // → Froze 3 processes
 ::: warning NO_TITLE is not a translatable string
 `grouping.js`'s `NO_TITLE` (`"无标题窗口"`) matches the core's `bosskey_common::NO_TITLE`. It is a cross-process sentinel written into `config.json` and **must not be translated**; only the display swaps it for the current language via `t("common.noTitleWindow")`.
 :::
+
+## Markdown in announcements and release notes
+
+The body text of announcements (both the list and the startup dialog) and of release notes is rendered as Markdown by `lib/markdown.js` (a pure function, with `markdown.test.js`) and `components/Markdown.svelte` (styling + link interception). No third-party dependency is involved.
+
+The supported subset covers the common GitHub-flavoured constructs: headings, bold / italic / strikethrough, inline code and fenced code blocks, ordered / unordered / task lists (nesting by indentation), blockquotes, horizontal rules, links and bare URLs. Soft line breaks inside a paragraph become `<br>`, as they do in GitHub comments. Tables, footnotes, inline HTML and syntax highlighting are **not** supported.
+
+::: warning The body comes from a remote server and must be escaped first
+Content returned by Verhub is untrusted. `renderMarkdown()` escapes `& < > "` across the whole input before assembling any tags, so every tag in the output is produced by the renderer itself and HTML in the source is only ever displayed literally; link targets are restricted to `http(s)` and `mailto`, and anything else (`javascript:`, `data:`, …) is kept as plain text. Do not work around either rule when changing this module.
+:::
+
+Two further trade-offs follow from the runtime environment:
+
+- **Images degrade to links.** Tauri's CSP allows only `self` and `data:` for `img-src`, so remote images cannot load and `![]()` is always rendered as a link.
+- **Links do not navigate the webview.** `Markdown.svelte` intercepts the click and hands the URL to `open_external` for the system browser — once the webview really navigates away, there is no way back to the settings window.
 
 ## Status polling without blocking the UI
 

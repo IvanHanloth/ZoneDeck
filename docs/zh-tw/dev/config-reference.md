@@ -31,8 +31,14 @@ Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。*
 | --- | --- | --- |
 | `hide_hotkey` | `"Ctrl+Q"` | 隱藏／顯示視窗 |
 | `close_hotkey` | `"Win+Esc"` | 關閉核心 |
+| `hide_only_hotkey` | `""` | [僅隱藏視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
+| `show_only_hotkey` | `""` | [僅顯示視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
+| `hide_foreground_hotkey` | `""` | [隱藏前景視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
 | `hide_intercept` | `false` | [隱藏快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
 | `close_intercept` | `false` | [關閉快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
+| `hide_only_intercept` | `false` | 僅隱藏快速鍵不傳遞 |
+| `show_only_intercept` | `false` | 僅顯示快速鍵不傳遞 |
+| `hide_foreground_intercept` | `false` | 隱藏前景視窗快速鍵不傳遞 |
 
 ## `setting`
 

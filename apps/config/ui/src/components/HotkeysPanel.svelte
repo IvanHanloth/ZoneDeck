@@ -39,6 +39,27 @@
       interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
+      label={t("hotkeys.hideOnly")}
+      bind:value={app.config.hotkey.hide_only_hotkey}
+      bind:intercept={app.config.hotkey.hide_only_intercept}
+      interceptLabel={t("hotkeys.interceptShort")}
+      interceptTitle={t("hotkeys.interceptDesc")}
+    />
+    <HotkeyRecorder
+      label={t("hotkeys.showOnly")}
+      bind:value={app.config.hotkey.show_only_hotkey}
+      bind:intercept={app.config.hotkey.show_only_intercept}
+      interceptLabel={t("hotkeys.interceptShort")}
+      interceptTitle={t("hotkeys.interceptDesc")}
+    />
+    <HotkeyRecorder
+      label={t("hotkeys.hideForeground")}
+      bind:value={app.config.hotkey.hide_foreground_hotkey}
+      bind:intercept={app.config.hotkey.hide_foreground_intercept}
+      interceptLabel={t("hotkeys.interceptShort")}
+      interceptTitle={t("hotkeys.interceptDesc")}
+    />
+    <HotkeyRecorder
       label={t("hotkeys.closeApp")}
       bind:value={app.config.hotkey.close_hotkey}
       bind:intercept={app.config.hotkey.close_intercept}

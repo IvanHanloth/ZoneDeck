@@ -14,8 +14,14 @@ const mockConfig = {
   hotkey: {
     hide_hotkey: "Ctrl+Q",
     close_hotkey: "Win+Esc",
+    hide_only_hotkey: "",
+    show_only_hotkey: "",
+    hide_foreground_hotkey: "",
     hide_intercept: false,
     close_intercept: false,
+    hide_only_intercept: false,
+    show_only_intercept: false,
+    hide_foreground_intercept: false,
   },
   setting: {
     mute_after_hide: true,
@@ -147,7 +153,7 @@ function mockInvoke(cmd, args) {
         {
           id: "mock-1",
           title: "Boss Key 3.0 发布",
-          content: "全新界面与核心，鼠标按键触发、崩溃恢复、进程冻结。",
+          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://boss-key.ivan-hanloth.cn/changelog/)。",
           is_pinned: true,
           is_hidden: false,
           author: "Ivan Hanloth",

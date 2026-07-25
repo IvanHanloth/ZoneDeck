@@ -84,7 +84,7 @@ impl Msg {
             Msg::ErrCoreExeMissing => "未找到核心程序 {exe}",
             Msg::ErrFreezePartial => "{failed}/{total} 个进程冻结失败",
             Msg::ErrResumePartial => "{failed}/{total} 个进程解冻失败",
-            Msg::ErrUrlSchemeNotAllowed => "只允许打开 http/https 链接",
+            Msg::ErrUrlSchemeNotAllowed => "只允许打开 http/https/mailto 链接",
             Msg::ErrFeedbackEmpty => "请先填写反馈内容",
         }
     }
@@ -120,7 +120,7 @@ impl Msg {
             Msg::ErrCoreExeMissing => "Core program {exe} not found",
             Msg::ErrFreezePartial => "Failed to freeze {failed} of {total} processes",
             Msg::ErrResumePartial => "Failed to resume {failed} of {total} processes",
-            Msg::ErrUrlSchemeNotAllowed => "Only http/https links may be opened",
+            Msg::ErrUrlSchemeNotAllowed => "Only http/https/mailto links may be opened",
             Msg::ErrFeedbackEmpty => "Please write your feedback first",
         }
     }
@@ -156,7 +156,7 @@ impl Msg {
             Msg::ErrCoreExeMissing => "找不到核心程式 {exe}",
             Msg::ErrFreezePartial => "{failed}/{total} 個程序凍結失敗",
             Msg::ErrResumePartial => "{failed}/{total} 個程序解除凍結失敗",
-            Msg::ErrUrlSchemeNotAllowed => "僅允許開啟 http/https 連結",
+            Msg::ErrUrlSchemeNotAllowed => "僅允許開啟 http/https/mailto 連結",
             Msg::ErrFeedbackEmpty => "請先填寫意見回饋內容",
         }
     }

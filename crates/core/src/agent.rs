@@ -23,7 +23,8 @@ use windows::core::{PCWSTR, w};
 use crate::effects::WinEffects;
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
 use crate::hide::{
-    HideController, RuleOutcome, expand_descendants, freezable_pids, resolve_targets,
+    HideController, RuleOutcome, expand_descendants, foreground_target, freezable_pids,
+    resolve_targets,
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
@@ -36,6 +37,9 @@ use crate::{idle, ipc_server, logging, recovery};
 
 const HK_HIDE: i32 = 1;
 const HK_CLOSE: i32 = 2;
+const HK_HIDE_ONLY: i32 = 3;
+const HK_SHOW_ONLY: i32 = 4;
+const HK_HIDE_FOREGROUND: i32 = 5;
 
 const WM_APP_IPC: u32 = WM_APP + 1;
 const WM_APP_TRAY: u32 = WM_APP + 2;
@@ -108,6 +112,24 @@ impl AgentState {
                 &self.config.hotkey.close_hotkey,
                 self.config.hotkey.close_intercept,
             ),
+            (
+                HK_HIDE_ONLY,
+                "仅隐藏",
+                &self.config.hotkey.hide_only_hotkey,
+                self.config.hotkey.hide_only_intercept,
+            ),
+            (
+                HK_SHOW_ONLY,
+                "仅显示",
+                &self.config.hotkey.show_only_hotkey,
+                self.config.hotkey.show_only_intercept,
+            ),
+            (
+                HK_HIDE_FOREGROUND,
+                "隐藏前台窗口",
+                &self.config.hotkey.hide_foreground_hotkey,
+                self.config.hotkey.hide_foreground_intercept,
+            ),
         ] {
             if is_disabled(raw) {
                 logging::info(&format!("{label}热键已置空，不注册"));
@@ -166,8 +188,15 @@ impl AgentState {
 
     fn unregister_hotkeys(&mut self, hwnd: HWND) {
         unsafe {
-            let _ = UnregisterHotKey(Some(hwnd), HK_HIDE);
-            let _ = UnregisterHotKey(Some(hwnd), HK_CLOSE);
+            for id in [
+                HK_HIDE,
+                HK_CLOSE,
+                HK_HIDE_ONLY,
+                HK_SHOW_ONLY,
+                HK_HIDE_FOREGROUND,
+            ] {
+                let _ = UnregisterHotKey(Some(hwnd), id);
+            }
         }
         keyboard_hook::set_hotkeys(&[]);
         self.keyboard_hook = None;
@@ -271,10 +300,41 @@ impl AgentState {
             self.balloon(APP_NAME, i18n::t(Msg::HiddenBody));
         }
     }
+    fn apply_hide_foreground(&mut self) {
+        let windows = self.controller.enumerate();
+        let foreground = self.controller.foreground();
+        let Some(target) = foreground_target(&windows, foreground) else {
+            logging::info("触发隐藏前台窗口：当前没有可隐藏的前台窗口，本次不隐藏");
+            return;
+        };
+
+        let targets = [target];
+        let freezable = freezable_pids(&targets, &windows);
+        let freeze_set = if self.config.setting.freeze_whole_tree {
+            expand_descendants(&freezable, &crate::freeze::process_tree())
+        } else {
+            freezable
+        };
+
+        let w = windows.iter().find(|w| w.hwnd == target.hwnd);
+        logging::info(&format!(
+            "触发隐藏前台窗口 hwnd={} pid={} process={} title=「{}」",
+            target.hwnd,
+            target.pid,
+            w.map(|w| w.process.as_str()).unwrap_or("未知进程"),
+            w.map(|w| w.title.as_str()).unwrap_or(""),
+        ));
+
+        self.controller
+            .apply_hide(&self.config.setting, &targets, &freeze_set);
+        self.persist_recovery();
+        self.sync_tray();
+        if self.config.notifications.on_hide {
+            self.balloon(APP_NAME, i18n::t(Msg::HiddenBody));
+        }
+    }
 
     fn apply_show(&mut self) {
-        // 计数须在 show() 清空隐藏集之前取，且不能假定必有窗口：
-        // 未隐藏任何窗口时触发恢复也会走到这里。
         let count = self.controller.hidden_count();
         self.controller.show();
         logging::info(&format!("已恢复显示 {count} 个窗口"));
@@ -631,9 +691,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     let Some(state) = state_mut(hwnd) else {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     };
-
-    // TaskbarCreated 是运行时注册的消息号，无法进 match 常量分支。
-    // explorer（重）建任务栏时广播，此时旧托盘图标已消失，须按期望状态重挂。
     if msg != 0 && msg == crate::tray::taskbar_created_msg() {
         if let Some(tray) = &mut state.tray {
             tray.on_taskbar_created();
@@ -647,6 +704,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             match wparam.0 as i32 {
                 HK_HIDE => state.apply_toggle(),
                 HK_CLOSE => quit(state, hwnd),
+                HK_HIDE_ONLY => state.apply_hide(),
+                HK_SHOW_ONLY => state.apply_show(),
+                HK_HIDE_FOREGROUND => state.apply_hide_foreground(),
                 _ => {}
             }
             LRESULT(0)
