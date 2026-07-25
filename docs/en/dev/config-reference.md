@@ -31,8 +31,14 @@ The settings window reads and writes the configuration automatically. This page 
 | --- | --- | --- |
 | `hide_hotkey` | `"Ctrl+Q"` | Hide / show windows |
 | `close_hotkey` | `"Win+Esc"` | Close the core |
+| `hide_only_hotkey` | `""` | [Hide windows only](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
+| `show_only_hotkey` | `""` | [Show windows only](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
+| `hide_foreground_hotkey` | `""` | [Hide foreground window](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
 | `hide_intercept` | `false` | [Don't pass the hide hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
 | `close_intercept` | `false` | [Don't pass the close hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
+| `hide_only_intercept` | `false` | Don't pass the hide-only hotkey through |
+| `show_only_intercept` | `false` | Don't pass the show-only hotkey through |
+| `hide_foreground_intercept` | `false` | Don't pass the hide-foreground hotkey through |
 
 ## `setting`
 

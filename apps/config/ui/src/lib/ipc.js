@@ -14,8 +14,14 @@ const mockConfig = {
   hotkey: {
     hide_hotkey: "Ctrl+Q",
     close_hotkey: "Win+Esc",
+    hide_only_hotkey: "",
+    show_only_hotkey: "",
+    hide_foreground_hotkey: "",
     hide_intercept: false,
     close_intercept: false,
+    hide_only_intercept: false,
+    show_only_intercept: false,
+    hide_foreground_intercept: false,
   },
   setting: {
     mute_after_hide: true,

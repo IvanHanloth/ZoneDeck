@@ -14,16 +14,33 @@ When the pointer enters the "Hotkeys & Mouse" settings area, the core **temporar
 
 ## Keyboard hotkeys
 
-There are two customisable global hotkeys:
+There are five customisable global hotkeys:
 
-| Function | Default |
-| --- | --- |
-| **Hide / show windows** | `Ctrl + Q` |
-| **Close the core** | `Win + Esc` |
+| Function | Default | What it does |
+| --- | --- | --- |
+| **Hide / show windows** | `Ctrl + Q` | Restores when hidden, hides otherwise |
+| **Hide windows only** | Disabled | Hides, never restores |
+| **Show windows only** | Disabled | Restores, never hides |
+| **Hide foreground window** | Disabled | Hides just the currently active window |
+| **Close the core** | `Win + Esc` | Quits the core (restoring every window first) |
 
 Click **Record**, then press the combination you want; it is recognised and filled in automatically.
 
-Click **Clear** to unset the hotkey. Once unset it reads "Disabled", the core no longer registers it, and that function cannot be triggered from the keyboard. The two hotkeys are independent and can be unset separately.
+Click **Clear** to unset the hotkey. Once unset it reads "Disabled", the core no longer registers it, and that function cannot be triggered from the keyboard. The five hotkeys are independent and can be unset separately.
+
+### One-way hotkeys and hiding the foreground window
+
+The last three are unset by default; record them when you need them:
+
+- **Hide windows only**: hides according to your rules, and never restores. Useful for splitting hide and restore across two keys so a stray press can't reveal what you just hid.
+- **Show windows only**: restores hidden windows, and never hides.
+- **Hide foreground window**: ignores your [window / process rules](/en/guide/binding) and hides just the currently active window. Press it repeatedly to hide one more window each time.
+
+Hiding is **cumulative**: no matter how a window was hidden, it goes into the same list and comes back with everything else. So windows hidden by these three hotkeys can only be brought back by **Show windows only**, **Hide / show windows** (which restores in that state), or another restore method such as the tray menu or a mouse gesture.
+
+::: tip
+**Hide foreground window** targets the ordinary top-level window that currently has focus. If focus is elsewhere — on the desktop or on certain tool windows — the press does nothing and says so in the log.
+:::
 
 ### Keeping hotkeys from other apps
 

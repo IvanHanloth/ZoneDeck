@@ -60,12 +60,30 @@ pub struct Hotkey {
     pub hide_hotkey: String,
     #[serde(default = "default_close_hotkey")]
     pub close_hotkey: String,
+    /// 只隐藏、不恢复的热键；默认置空（关闭）。
+    #[serde(default)]
+    pub hide_only_hotkey: String,
+    /// 只恢复、不隐藏的热键；默认置空（关闭）。
+    #[serde(default)]
+    pub show_only_hotkey: String,
+    /// 只隐藏当前前台窗口的热键，可连续触发逐个隐藏；默认置空（关闭）。
+    #[serde(default)]
+    pub hide_foreground_hotkey: String,
     /// 隐藏热键是否不传递给其他程序（核心改用键盘钩子拦截）。
     #[serde(default)]
     pub hide_intercept: bool,
     /// 关闭热键是否不传递给其他程序（核心改用键盘钩子拦截）。
     #[serde(default)]
     pub close_intercept: bool,
+    /// 仅隐藏热键是否不传递给其他程序。
+    #[serde(default)]
+    pub hide_only_intercept: bool,
+    /// 仅显示热键是否不传递给其他程序。
+    #[serde(default)]
+    pub show_only_intercept: bool,
+    /// 隐藏前台窗口热键是否不传递给其他程序。
+    #[serde(default)]
+    pub hide_foreground_intercept: bool,
 }
 
 impl Default for Hotkey {
@@ -73,8 +91,14 @@ impl Default for Hotkey {
         Self {
             hide_hotkey: default_hide_hotkey(),
             close_hotkey: default_close_hotkey(),
+            hide_only_hotkey: String::new(),
+            show_only_hotkey: String::new(),
+            hide_foreground_hotkey: String::new(),
             hide_intercept: false,
             close_intercept: false,
+            hide_only_intercept: false,
+            show_only_intercept: false,
+            hide_foreground_intercept: false,
         }
     }
 }
@@ -504,6 +528,43 @@ mod tests {
         assert!(!c.hotkey.close_intercept);
         assert!(!Hotkey::default().hide_intercept, "全新配置也默认关闭");
         assert!(!Hotkey::default().close_intercept);
+    }
+
+    #[test]
+    fn separate_hide_show_hotkeys_default_to_disabled() {
+        let h = Hotkey::default();
+        assert!(h.hide_only_hotkey.is_empty(), "仅隐藏热键默认置空");
+        assert!(h.show_only_hotkey.is_empty(), "仅显示热键默认置空");
+        assert!(h.hide_foreground_hotkey.is_empty(), "隐藏前台热键默认置空");
+        assert!(!h.hide_only_intercept);
+        assert!(!h.show_only_intercept);
+        assert!(!h.hide_foreground_intercept);
+
+        let c = Config::from_json(r#"{"hotkey": {"hide_hotkey": "Ctrl+Q"}}"#).unwrap();
+        assert!(c.hotkey.hide_only_hotkey.is_empty(), "旧配置无此字段应置空");
+        assert!(c.hotkey.show_only_hotkey.is_empty());
+        assert!(c.hotkey.hide_foreground_hotkey.is_empty());
+    }
+
+    #[test]
+    fn separate_hide_show_hotkeys_round_trip() {
+        let c = Config::from_json(
+            r#"{"hotkey": {
+                "hide_only_hotkey": "Ctrl+Alt+H",
+                "show_only_hotkey": "Ctrl+Alt+S",
+                "hide_foreground_hotkey": "Ctrl+Alt+F",
+                "hide_foreground_intercept": true
+            }}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hotkey.hide_only_hotkey, "Ctrl+Alt+H");
+        assert_eq!(c.hotkey.show_only_hotkey, "Ctrl+Alt+S");
+        assert_eq!(c.hotkey.hide_foreground_hotkey, "Ctrl+Alt+F");
+        assert!(c.hotkey.hide_foreground_intercept);
+        assert!(!c.hotkey.hide_only_intercept, "各热键的开关相互独立");
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.hotkey, c.hotkey, "写回后应保留");
     }
 
     #[test]
