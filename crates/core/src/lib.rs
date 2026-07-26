@@ -22,5 +22,6 @@ pub mod shell;
 pub mod single_instance;
 pub mod tray;
 pub mod tray_badge;
+pub mod win_event;
 
 mod util;

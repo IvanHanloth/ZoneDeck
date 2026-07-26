@@ -88,6 +88,7 @@ Boss-Key/
 │           mouse_hook.rs WH_MOUSE_LL（中键/侧键/四角）
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不传递」热键拦截）
 │           idle.rs       GetLastInputInfo 空闲 + 自动隐藏判定
+│           win_event.rs  SetWinEventHook 窗口事件追踪（销毁/显示/改标题 → 实时维护记录）
 │           tray.rs       Shell_NotifyIcon 托盘 + 气泡
 │           ipc_server.rs 命名管道服务端（创建失败退避重试，不退出）
 │           autostart.rs  开机自启（计划任务 XML 含失败自动重启 + 注册表回退）
@@ -120,9 +121,12 @@ Boss-Key/
 - 鼠标钩子（中键 / 侧键 / 四角）；
 - 命名管道服务端（来自配置界面的命令）；
 - 定时器（空闲检测、状态维护等）；
+- 窗口事件（`SetWinEventHook`：顶层窗口销毁 / 显示 / 改标题）；
 - 托盘图标交互。
 
 消息循环状态由 `RefCell` 承载：托盘 / 悬浮窗菜单的模态循环（`TrackPopupMenu`）会重入 `wndproc`，重入期间的事件借用失败即被安全丢弃，避免出现两个可变引用的别名。IPC 线程创建命名管道失败时按退避（1s → 5s → 30s）重试，不会退出。
+
+窗口事件驱动隐藏记录的实时维护：被隐藏的窗口自行销毁或被外部恢复显示时，记录即刻移除并落盘；标题变化同步进隐藏记录与精确窗口规则（仅内存，随下次正常落盘写出），使「标题 + 进程路径」的追溯与找回始终基于最新信息。恢复时若句柄已失效，还会按「进程路径 + 标题」在当前不可见窗口中尝试重新找回。
 
 当触发隐藏 / 显示时，交由 `HideController` 编排，流程为「意图先行」两段式：`plan_hide` 算出执行计划（剪掉失效记录、补齐 PID）→ 把计划后的快照写入 `recovery.json`（先落盘再动手，隐藏中途崩溃不丢记录）→ `commit_hide` 同步隐藏窗口（`SW_HIDE`），并把静音 / 冻结 / 暂停键交给副作用专职线程（`effects_worker.rs`）按 FIFO 异步执行——消息循环不被慢操作（音频枚举、pssuspend 等待）阻塞，热键与界面保持响应。
 
