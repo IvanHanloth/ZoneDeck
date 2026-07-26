@@ -367,7 +367,10 @@ mod tests {
         let dir = temp_dir();
         let logger = Logger::new(dir.clone(), 7);
         // 直接验证格式化结果（warn_at 走全局 logger，测试里用本地实例复刻其格式）。
-        logger.log(Level::Warn, &format!("{} ({}:{})", "落盘失败", "agent.rs", 42));
+        logger.log(
+            Level::Warn,
+            &format!("{} ({}:{})", "落盘失败", "agent.rs", 42),
+        );
         let logs: Vec<_> = fs::read_dir(&dir).unwrap().flatten().collect();
         let content = fs::read_to_string(logs[0].path()).unwrap();
         assert!(content.contains("[WARN] 落盘失败 (agent.rs:42)"));

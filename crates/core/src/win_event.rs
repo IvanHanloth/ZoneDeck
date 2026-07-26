@@ -93,7 +93,9 @@ impl Drop for WinEventHook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use windows::Win32::UI::WindowsAndMessaging::{EVENT_OBJECT_FOCUS, EVENT_OBJECT_HIDE, OBJID_CURSOR};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EVENT_OBJECT_FOCUS, EVENT_OBJECT_HIDE, OBJID_CURSOR,
+    };
 
     #[test]
     fn only_toplevel_destroy_show_namechange_are_relevant() {
@@ -103,8 +105,14 @@ mod tests {
         assert!(relevant(EVENT_OBJECT_SHOW, obj, child));
         assert!(relevant(EVENT_OBJECT_NAMECHANGE, obj, child));
         assert!(!relevant(EVENT_OBJECT_HIDE, obj, child), "隐藏事件不用追踪");
-        assert!(!relevant(EVENT_OBJECT_FOCUS, obj, child), "区间内的无关事件应过滤");
-        assert!(!relevant(EVENT_OBJECT_DESTROY, OBJID_CURSOR.0, child), "非窗口对象应过滤");
+        assert!(
+            !relevant(EVENT_OBJECT_FOCUS, obj, child),
+            "区间内的无关事件应过滤"
+        );
+        assert!(
+            !relevant(EVENT_OBJECT_DESTROY, OBJID_CURSOR.0, child),
+            "非窗口对象应过滤"
+        );
         assert!(!relevant(EVENT_OBJECT_DESTROY, obj, 3), "子对象事件应过滤");
     }
 }

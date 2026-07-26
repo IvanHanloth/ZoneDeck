@@ -516,8 +516,10 @@ impl AgentState {
                 (Response::Ok, false)
             }
             Command::AdoptWindows { hwnds } => {
-                let targets: Vec<crate::hide::Target> =
-                    hwnds.iter().map(|&h| crate::hide::Target::bare(h, 0)).collect();
+                let targets: Vec<crate::hide::Target> = hwnds
+                    .iter()
+                    .map(|&h| crate::hide::Target::bare(h, 0))
+                    .collect();
                 // 恢复工具的手动隐藏不施加副作用，仅隐藏并纳入记录。
                 let mut setting = self.config.setting.clone();
                 setting.mute_after_hide = false;
@@ -1090,7 +1092,10 @@ pub fn run(options: AgentOptions) {
     let hwnd = match create_agent_window() {
         Ok(hwnd) => hwnd,
         Err(e) => {
-            log_error!("创建代理窗口失败，核心无法启动: {}", crate::util::win_err(&e));
+            log_error!(
+                "创建代理窗口失败，核心无法启动: {}",
+                crate::util::win_err(&e)
+            );
             return;
         }
     };

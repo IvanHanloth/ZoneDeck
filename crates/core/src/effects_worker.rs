@@ -113,7 +113,10 @@ mod tests {
 
     impl Effects for Recorder {
         fn mute(&self, pid: u32, mute: bool) {
-            self.calls.lock().unwrap().push(format!("mute:{pid}:{mute}"));
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("mute:{pid}:{mute}"));
         }
         fn suspend(&self, pid: u32, _enhanced: bool) {
             self.calls.lock().unwrap().push(format!("suspend:{pid}"));
