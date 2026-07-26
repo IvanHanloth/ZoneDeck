@@ -30,14 +30,19 @@ When on, a **left click on the tray icon** hides / shows the windows.
 
 - **On** by default.
 
-### Also hide the tray icon
+### Also hide Boss Key's tray icon
 
-When on, hiding the windows **hides Boss Key's tray icon as well** for extra discretion; triggering restore brings back both the windows and the icon.
+When on, hiding the windows **hides Boss Key's own tray icon as well** for extra discretion; triggering restore brings back both the windows and the icon.
 
 - **Off** by default.
+- This option only affects Boss Key's own tray icon — it **does not hide other programs' tray icons** (including the icons of the programs whose windows are hidden).
 
 ::: warning
 Once the tray icon is hidden you cannot click it to restore or open the settings. Be sure to remember your **hide / show hotkey** or mouse gesture, and use that to restore.
+:::
+
+::: tip Hiding other programs' tray icons
+Windows itself controls which tray icons are visible: you can choose which icons appear in the taskbar corner by hand. For detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the `ms-settings:taskbar` link works only on Windows; the browser asks for confirmation first).
 :::
 
 ### Send the pause key before hiding (beta)
@@ -93,3 +98,7 @@ When something goes wrong, the logs in the `logs` folder are the primary source 
 ### Window recovery tool
 
 For **recovering windows that were hidden by mistake and cannot be restored with a hotkey**. Click "Open" to list every window, then tick the ones to restore. See [Window recovery & crash self-healing](/en/guide/recovery).
+
+## See also
+
+[Customize the taskbar in Windows – Microsoft Support](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)

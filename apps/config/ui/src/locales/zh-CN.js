@@ -195,8 +195,9 @@ export default {
   "options.hideCurrentDesc": "按下热键时，除已绑定窗口外，同时隐藏当前正在使用的前台窗口。",
   "options.clickToHide": "单击托盘图标切换隐藏",
   "options.clickToHideDesc": "左键单击托盘图标即可隐藏 / 显示，无需按热键。",
-  "options.hideIcon": "隐藏后同时隐藏托盘图标",
-  "options.hideIconDesc": "隐藏窗口时连托盘图标一起藏起，更隐蔽；再次触发热键可恢复。",
+  "options.hideIcon": "同时隐藏 Boss Key 托盘图标",
+  "options.hideIconDesc":
+    "隐藏窗口时连 Boss Key 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
   "options.sendPause": "隐藏前发送暂停键（Beta）",
   "options.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐），会带来约 0.2 秒延迟。",
 

@@ -12,7 +12,7 @@ title: Introduction
 
 - **Multi-window / multi-process hiding**: hide any number of windows at once, or hide every window of a program by process.
 - **Multiple triggers**: global keyboard hotkeys, middle / side mouse button clicks (optionally with modifier keys), fast movement into a screen corner, and auto-hide on idle.
-- **Hiding enhancements**: mute automatically after hiding, send the media pause key, freeze processes to cut CPU and memory usage, and hide the tray icon along with the windows.
+- **Hiding enhancements**: mute automatically after hiding, send the media pause key, freeze processes to cut CPU and memory usage, and hide Boss Key's own tray icon along with the windows.
 - **Precise matching**: target a single window, or match titles and process paths in bulk with **regular expressions**.
 - **Minimal footprint**: v3 is rewritten in Rust; the resident core is roughly a 350 KB binary using about 1 MB of memory.
 - **Reliable**: crash logs, crash recovery and a watchdog form three layers of defence against windows disappearing permanently.

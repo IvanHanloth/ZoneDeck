@@ -26,7 +26,7 @@ features:
     details: v3 is rewritten in Rust; the resident core uses about 1 MB of memory, and its native implementation rarely trips antivirus false positives.
   - title: Highly configurable
     icon: 💅
-    details: Mute after hiding, send a pause key, freeze processes, hide the tray icon, match windows and processes by regex — tailor it to how you work.
+    details: Mute after hiding, send a pause key, freeze processes, hide its own tray icon, match windows and processes by regex — tailor it to how you work.
   - title: Built to stay up
     icon: 🛡️
     details: Crash logs, crash recovery and scheduled-task startup form three layers of defence for long-running background operation.

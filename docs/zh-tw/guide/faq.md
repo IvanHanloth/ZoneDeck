@@ -43,7 +43,11 @@ Boss Key 會監聽全域快速鍵、隱藏視窗，這類行為有時會被防�
 
 ## 視窗被隱藏後顯示不回來了？
 
-使用 [視窗復原工具](/zh-tw/guide/recovery)（其他選項 → 工具）勾選並復原。若開啟了「隱藏通知區域圖示」，請用您的**復原快速鍵**復原。
+使用 [視窗復原工具](/zh-tw/guide/recovery)（其他選項 → 工具）勾選並復原。若開啟了「一併隱藏 Boss Key 通知區域圖示」，請用您的**復原快速鍵**復原。
+
+## 能隱藏其他程式的通知區域圖示嗎？
+
+Boss Key 只能隱藏[自身的通知區域圖示](/zh-tw/guide/options)，無法操作其他程式的通知區域圖示。可使用 Windows 內建的功能手動設定：詳細步驟參見微軟官方教學 [在 Windows 中自訂工作列 · 系統匣](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接開啟 [工作列設定](ms-settings:taskbar)（該連結僅在 Windows 上有效），選擇哪些圖示顯示在工作列角落。
 
 ## 增強凍結的開關是灰的，按不了？
 

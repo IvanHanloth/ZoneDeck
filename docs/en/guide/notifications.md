@@ -45,6 +45,6 @@ Hovering over the tray icon shows "Boss Key" by default. Turn this option off to
 - **Hide / show notifications are off by default**: a notification on every hide would rather defeat the purpose, so they are not shown. Turn them on if you want explicit feedback.
 - **Start / exit / startup notifications are on by default**: these are infrequent events, and keeping them helps you confirm the core's state.
 
-::: info Not the same as "Also hide the tray icon"
-[Also hide the tray icon](/en/guide/options) controls whether **the icon itself is visible**; this page controls **notifications and icon badges**. They are independent.
+::: info Not the same as "Also hide Boss Key's tray icon"
+[Also hide Boss Key's tray icon](/en/guide/options) controls whether **the icon itself is visible**; this page controls **notifications and icon badges**. They are independent.
 :::

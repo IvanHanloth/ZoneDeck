@@ -194,8 +194,9 @@ export default {
   "options.hideCurrentDesc": "按下快速鍵時，除已綁定的視窗外，同時隱藏目前正在使用的前景視窗。",
   "options.clickToHide": "按一下通知區域圖示切換隱藏",
   "options.clickToHideDesc": "以左鍵按一下通知區域圖示即可隱藏／顯示，不需按快速鍵。",
-  "options.hideIcon": "隱藏後一併隱藏通知區域圖示",
-  "options.hideIconDesc": "隱藏視窗時連通知區域圖示一起隱藏，更為隱密；再次觸發快速鍵即可復原。",
+  "options.hideIcon": "一併隱藏 Boss Key 通知區域圖示",
+  "options.hideIconDesc":
+    "隱藏視窗時連 Boss Key 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
   "options.sendPause": "隱藏前傳送暫停鍵（Beta）",
   "options.sendPauseDesc":
     "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂），會造成約 0.2 秒延遲。",

@@ -12,7 +12,7 @@ title: 本機執行
 | --- | --- | --- |
 | **Rust** | stable，建議 1.85+（專案使用 edition 2024） | <https://rustup.rs> |
 | **Node.js** | 18+，建議 24（用於前端建置） | <https://nodejs.org> |
-| **WebView2** | 設定介面執行階段（Win10/11 通常已內建） | 系統內建／[微軟官網](https://developer.microsoft.com/microsoft-edge/webview2) |
+| **WebView2** | 設定介面執行階段（Win10/11 通常已內建） | 系統內建／[微軟官網](https://developer.microsoft.com/zh-tw/microsoft-edge/webview2) |
 | **Inno Setup 6** | *選用*，本機產生安裝包時需要 | `winget install JRSoftware.InnoSetup` |
 | **pssuspend64.exe** | *選用*，測試增強凍結時需要 | [Microsoft PSTools](https://download.sysinternals.com/files/PSTools.zip) |
 

@@ -202,9 +202,9 @@ export default {
     "When the hotkey is pressed, also hide the foreground window in addition to the bound windows.",
   "options.clickToHide": "Toggle hiding by clicking the tray icon",
   "options.clickToHideDesc": "Left-click the tray icon to hide / show without pressing a hotkey.",
-  "options.hideIcon": "Also hide the tray icon",
+  "options.hideIcon": "Also hide Boss Key's tray icon",
   "options.hideIconDesc":
-    "Hide the tray icon along with the windows for more discretion; press the hotkey again to restore it.",
+    "Hide Boss Key's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
   "options.sendPause": "Send the pause key before hiding (beta)",
   "options.sendPauseDesc":
     "Send the media pause key before hiding (pausing any playing video or music); adds roughly 0.2 seconds of delay.",

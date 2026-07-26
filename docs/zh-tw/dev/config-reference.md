@@ -48,7 +48,7 @@ Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。*
 | `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/options) |
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/options) |
 | `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [隱藏後一併隱藏通知區域圖示](/zh-tw/guide/options) |
+| `hide_icon_after_hide` | bool | `false` | [一併隱藏 Boss Key 通知區域圖示](/zh-tw/guide/options) |
 | `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |

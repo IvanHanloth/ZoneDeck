@@ -48,7 +48,7 @@ The settings window reads and writes the configuration automatically. This page 
 | `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/options) |
 | `hide_current` | bool | `true` | [Also hide the active window](/en/guide/options) |
 | `click_to_hide` | bool | `true` | [Toggle hiding by clicking the tray icon](/en/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [Also hide the tray icon](/en/guide/options) |
+| `hide_icon_after_hide` | bool | `false` | [Also hide Boss Key's tray icon](/en/guide/options) |
 | `tray_badges` | object | See below | [Tray icon status](/en/guide/notifications#tray-icon-status) |
 | `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |

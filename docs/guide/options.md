@@ -30,14 +30,19 @@ title: 其他选项
 
 - 默认**开启**。
 
-### 隐藏后同时隐藏托盘图标
+### 同时隐藏 Boss Key 托盘图标
 
-开启后，隐藏窗口时会**连 Boss Key 的托盘图标一起隐藏**，更加隐蔽；再次触发恢复即可恢复窗口与图标。
+开启后，隐藏窗口时会**连 Boss Key 自身的托盘图标一起隐藏**，更加隐蔽；再次触发恢复即可恢复窗口与图标。
 
 - 默认**关闭**。
+- 该选项只作用于 Boss Key 自己的托盘图标，**不会隐藏其他程序的托盘图标**（包括被隐藏窗口所属程序的图标）。
 
 ::: warning 
 托盘图标被隐藏后，你将无法通过点击图标来恢复或打开设置。请务必记住你的**隐藏 / 显示热键**或鼠标手势，用它来恢复。
+:::
+
+::: tip 隐藏其他程序的托盘图标
+Windows 自带控制托盘图标显隐的功能，可手动设置哪些程序的图标显示在任务栏角落，具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（`ms-settings:taskbar` 链接仅在 Windows 上有效，浏览器会先请求确认）。
 :::
 
 ### 隐藏前发送暂停键（Beta）
@@ -93,3 +98,7 @@ title: 其他选项
 ### 窗口恢复工具
 
 用于**找回被误隐藏、无法通过热键恢复的窗口**。点击"打开"后会列出所有窗口，勾选后即可恢复显示。详见 [窗口恢复与崩溃自愈](/guide/recovery#窗口恢复工具)。
+
+## See Also
+
+[在 Windows 中自定义任务栏 - Microsoft 支持](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)

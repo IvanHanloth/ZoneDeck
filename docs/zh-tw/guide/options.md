@@ -30,14 +30,19 @@ title: 其他選項
 
 - 預設**開啟**。
 
-### 隱藏後一併隱藏通知區域圖示
+### 一併隱藏 Boss Key 通知區域圖示
 
-開啟後，隱藏視窗時會**連 Boss Key 的通知區域圖示一起隱藏**，更加隱密；再次觸發復原即可復原視窗與圖示。
+開啟後，隱藏視窗時會**連 Boss Key 自身的通知區域圖示一起隱藏**，更加隱密；再次觸發復原即可復原視窗與圖示。
 
 - 預設**關閉**。
+- 該選項只作用於 Boss Key 自己的通知區域圖示，**不會隱藏其他程式的通知區域圖示**（包括被隱藏視窗所屬程式的圖示）。
 
 ::: warning
 通知區域圖示被隱藏後，您將無法透過按圖示來復原或開啟設定。請務必記住您的**隱藏／顯示快速鍵**或滑鼠手勢，用它來復原。
+:::
+
+::: tip 隱藏其他程式的通知區域圖示
+Windows 內建控制通知區域圖示顯示與否的功能，可手動設定哪些程式的圖示顯示在工作列角落，詳細步驟參見微軟官方教學 [在 Windows 中自訂工作列 · 系統匣](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接開啟 [工作列設定](ms-settings:taskbar)（`ms-settings:taskbar` 連結僅在 Windows 上有效，瀏覽器會先要求確認）。
 :::
 
 ### 隱藏前傳送暫停鍵（Beta）
@@ -93,3 +98,7 @@ title: 其他選項
 ### 視窗復原工具
 
 用於**找回被誤隱藏、無法透過快速鍵復原的視窗**。按一下「開啟」後會列出所有視窗，勾選後即可復原顯示。詳見 [視窗復原與當機自癒](/zh-tw/guide/recovery)。
+
+## 延伸閱讀
+
+[在 Windows 中自訂工作列 - Microsoft 支援](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)
