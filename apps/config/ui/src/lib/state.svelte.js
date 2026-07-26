@@ -23,6 +23,8 @@ export const app = $state({
   /** 当前自启注册方式："task"｜"registry"｜null（未注册）。 */
   autostartMethod: null,
   info: null,
+  /** Verhub 上的项目公开链接（主页 / 仓库 / 文档等）；null 时用内置回退链接。 */
+  project: null,
   maximized: false,
   saving: false,
   /** 程序目录下是否存在 pssuspend64.exe（增强冻结的前置条件）。 */
@@ -139,6 +141,11 @@ export async function loadAll() {
     }),
     invoke("pssuspend_available").then((v) => (app.pssuspend = !!v)),
   ];
+  // 项目链接拉不到时静默——「关于」页有内置回退链接，不值得打扰用户。
+  verhub
+    .projectLinks()
+    .then((p) => (app.project = p))
+    .catch(() => {});
   const results = await Promise.allSettled(tasks);
   const failed = results.find((r) => r.status === "rejected");
   if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);

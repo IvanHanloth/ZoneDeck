@@ -79,25 +79,29 @@ Boss-Key/
 │           platform/win32.rs  視窗列舉/隱藏/顯示（WindowManager trait）
 │           agent.rs      訊息迴圈，彙整快速鍵/通知區域/IPC/滑鼠/計時器
 │           hotkey.rs     快速鍵字串 → RegisterHotKey 解析
-│           hide.rs       隱藏選擇邏輯 + HideController（隱藏/顯示編排）
+│           hide.rs       隱藏選擇邏輯 + HideController（plan/commit 兩段式編排，
+│                         含死控制代碼剪枝與復原前的視窗/處理程序身分校驗）
 │           effects.rs    Effects trait（靜音/凍結/暫停鍵，可注入 mock）
+│           effects_worker.rs  副作用專職執行緒（FIFO 佇列；訊息迴圈只做 SW_HIDE）
 │           audio.rs      Core Audio 工作階段靜音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增強凍結
 │           mouse_hook.rs WH_MOUSE_LL（中鍵/側鍵/四角）
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
 │           tray.rs       Shell_NotifyIcon 通知區域 + 通知
-│           ipc_server.rs 具名管道伺服端
+│           ipc_server.rs 具名管道伺服端（建立失敗退避重試，不結束）
 │           autostart.rs  開機自動啟動（排程工作 XML 含失敗自動重新啟動 + 登錄檔回落）
 │           elevation.rs  系統管理員偵測 + UAC 提升權限重新啟動
 │           i18n.rs       核心使用者可見文案 catalog（通知區域選單／通知／IPC 錯誤；記錄檔不走它）
 │           logging.rs    分級檔案記錄（logs/BossKey-YYYY-MM-DD.log 按日切割 + panic 掛鉤）
-│           recovery.rs   當機復原（隱藏狀態寫入磁碟，異常結束後找回視窗）
+│           recovery.rs   當機復原（意圖先行寫入 + 原子寫；快照帶開機時刻與
+│                         處理程序建立時刻，跨重新開機的快照會被丟棄）
 │           icon.rs       程序圖示擷取（HICON → 手寫 PNG/base64 編碼）
 │           single_instance.rs  具名互斥鎖單一執行個體
 └── apps/config/                    設定介面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 後端命令 + tauri.conf.json + capabilities
-    │   └── src/verhub.rs  Verhub 用戶端（版本／公告／回饋／日誌，基於 verhub-sdk）
+    │   └── src/verhub.rs  Verhub 用戶端（版本／公告／回饋／日誌／專案連結，基於 verhub-sdk；
+    │                      專案連結帶快取：記憶體 + 同目錄 verhub_cache.json，有效期一天）
     ├── ui/         前端原始碼（Vite + Svelte 5）
     │   └── src/    lib/（純邏輯 + vitest 測試）+ components/（Svelte 元件）
     │                + locales/（三語文案 catalog，以 zh-CN.js 為基準）
@@ -118,7 +122,11 @@ Boss-Key/
 - 計時器（閒置偵測、狀態維護等）；
 - 通知區域圖示互動。
 
-當觸發隱藏／顯示時，交由 `HideController` 編排：選擇命中的視窗 → 套用 `Effects`（靜音／凍結／暫停鍵）→ 隱藏／顯示視窗，並把狀態寫入 `recovery.json`。
+訊息迴圈狀態由 `RefCell` 承載：通知區域／懸浮窗選單的強制回應迴圈（`TrackPopupMenu`）會重入 `wndproc`，重入期間的事件借用失敗即被安全丟棄，避免出現兩個可變參考的別名。IPC 執行緒建立具名管道失敗時按退避（1s → 5s → 30s）重試，不會結束。
+
+當觸發隱藏／顯示時，交由 `HideController` 編排，流程為「意圖先行」兩段式：`plan_hide` 算出執行計畫（剪掉失效紀錄、補齊 PID）→ 把計畫後的快照寫入 `recovery.json`（先寫入再動手，隱藏中途當機不丟紀錄）→ `commit_hide` 同步隱藏視窗（`SW_HIDE`），並把靜音／凍結／暫停鍵交給副作用專職執行緒（`effects_worker.rs`）按 FIFO 非同步執行——訊息迴圈不被慢操作（音訊列舉、pssuspend 等待）阻塞，快速鍵與介面保持回應。
+
+復原（顯示）時逐條校驗紀錄的有效性：控制代碼須仍存在且仍屬於當初的處理程序（`IsWindow` + PID 比對），凍結／靜音紀錄須符合處理程序建立時刻——控制代碼與 PID 都會被系統回收重複使用，校驗不過的紀錄跳過並如實計入日誌。
 
 ::: info 可測試性設計
 `Effects` 被抽象為 trait，測試時可注入 mock，從而在不真正靜音／凍結系統的情況下驗證隱藏編排邏輯。同理 `WindowManager` 也是 trait。
@@ -127,7 +135,7 @@ Boss-Key/
 ## 穩定性設計（當機自癒三層防線）
 
 1. **當機記錄**：關鍵事件與 panic 寫入 exe 同資料夾的 `logs/BossKey-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；release 建置丟棄 DEBUG 級）。
-2. **當機復原**：隱藏時把「隱藏／凍結／靜音了什麼」寫入 `recovery.json`，異常結束後重新啟動自動找回。
+2. **當機復原**：隱藏動作執行前先把「將要隱藏／凍結／靜音什麼」寫入 `recovery.json`（tmp + rename 原子替換），異常結束後重新啟動自動找回；快照帶開機時刻與處理程序建立時刻，跨重新開機的過期快照直接丟棄，不會對無關視窗／處理程序做復原動作。
 3. **監控程式**：排程工作 `RestartOnFailure`（當機後 1 分鐘內重新啟動，最多 3 次）。release 建置 `panic = "abort"`，panic 掛鉤寫完記錄後以非零碼結束，正好觸發排程工作重新啟動。
 
 使用者視角的說明見 [視窗復原與當機自癒](/zh-tw/guide/recovery)。

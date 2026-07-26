@@ -21,3 +21,6 @@ bosskey-common = { path = "../../../crates/common" }
 bosskey-core = { path = "../../../crates/core" }
 tauri-plugin-single-instance = "2.4.2"
 verhub-sdk = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

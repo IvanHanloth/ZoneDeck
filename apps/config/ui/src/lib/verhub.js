@@ -2,6 +2,11 @@
 
 import { invoke } from "./ipc.js";
 
+/** 项目公开链接（主页 / 仓库 / 文档等）。后端带缓存，可随意调用。 */
+export function projectLinks() {
+  return invoke("verhub_project_links");
+}
+
 /** 检查更新。返回 { should_update, required, target_version, latest_version, … }。 */
 export function checkUpdate(includePreview = false) {
   return invoke("verhub_check_update", { includePreview });

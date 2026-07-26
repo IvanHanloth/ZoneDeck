@@ -27,6 +27,16 @@ pub enum Command {
     SetHotkeys {
         enabled: bool,
     },
+    /// 窗口恢复工具：恢复显示指定句柄。在核心隐藏记录里的窗口按整进程释放
+    /// （连同解冻 / 取消静音）；不在记录里的句柄直接恢复显示。
+    ReleaseWindows {
+        hwnds: Vec<i64>,
+    },
+    /// 窗口恢复工具：隐藏指定句柄并纳入核心隐藏记录（享受崩溃恢复保护），
+    /// 不施加静音 / 冻结 / 暂停键。
+    AdoptWindows {
+        hwnds: Vec<i64>,
+    },
     Quit,
 }
 
@@ -164,6 +174,11 @@ mod tests {
             },
             Command::SetHotkeys { enabled: true },
             Command::SetHotkeys { enabled: false },
+            Command::ReleaseWindows {
+                hwnds: vec![1, 2, 3],
+            },
+            Command::ReleaseWindows { hwnds: vec![] },
+            Command::AdoptWindows { hwnds: vec![42] },
             Command::Quit,
         ];
         for c in cases {

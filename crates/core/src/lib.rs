@@ -2,6 +2,7 @@ pub mod agent;
 pub mod audio;
 pub mod autostart;
 pub mod effects;
+pub mod effects_worker;
 pub mod elevation;
 pub mod float_window;
 pub mod freeze;

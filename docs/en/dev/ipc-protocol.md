@@ -27,6 +27,8 @@ Serialised with `#[serde(tag = "cmd", rename_all = "snake_case")]`.
 | `Toggle` | `{"cmd":"toggle"}` | Toggle hide / show |
 | `SetAutostart` | `{"cmd":"set_autostart","enabled":true}` | Configure startup |
 | `SetHotkeys` | `{"cmd":"set_hotkeys","enabled":false}` | Temporarily suspend / resume hotkey and mouse monitoring |
+| `ReleaseWindows` | `{"cmd":"release_windows","hwnds":[..]}` | Recovery tool: show the given handles. Windows tracked by the core are released per whole process (including unfreeze / unmute); untracked handles are simply shown |
+| `AdoptWindows` | `{"cmd":"adopt_windows","hwnds":[..]}` | Recovery tool: hide the given handles and track them in the core (covered by crash recovery), without muting / freezing |
 | `Quit` | `{"cmd":"quit"}` | Exit the core |
 
 ## Response (core → settings window)

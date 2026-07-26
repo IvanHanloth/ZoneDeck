@@ -152,6 +152,16 @@ function mockInvoke(cmd, args) {
         blog: "https://blog.ivan-hanloth.cn/",
         license: "MIT",
       };
+    case "verhub_project_links":
+      return {
+        name: "Boss Key",
+        website_url: "https://boss-key.ivan-hanloth.cn/",
+        repo_url: "https://github.com/IvanHanloth/Boss-Key",
+        docs_url: "https://boss-key.ivan-hanloth.cn/guide/",
+        author: "Ivan Hanloth",
+        author_homepage_url: "https://www.ivan-hanloth.cn/",
+        fetched_at: Math.floor(Date.now() / 1000),
+      };
     case "verhub_check_update":
       return {
         should_update: false,

@@ -18,6 +18,8 @@ The tool lists every window on the system (including currently invisible ones). 
 
 The tool can also **freeze / resume** windows' processes. A frozen window stops rendering, which lowers resource usage. Frozen windows can still be recovered with the tool.
 
+While the core is running, the tool's show / hide operations are carried out by the core: manually hidden windows are covered by crash recovery too, and restoring a window also unfreezes and unmutes its process. When the core is not running, the tool operates on windows directly.
+
 ## Three layers of defence
 
 The Boss Key core has **three layers of crash self-healing**, so windows stay safe even if the program crashes.

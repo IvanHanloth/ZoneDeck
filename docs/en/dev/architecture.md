@@ -79,25 +79,29 @@ Boss-Key/
 │           platform/win32.rs  Window enumeration/hiding/showing (WindowManager trait)
 │           agent.rs      Message loop; aggregates hotkeys/tray/IPC/mouse/timers
 │           hotkey.rs     Hotkey string → RegisterHotKey parsing
-│           hide.rs       Hiding selection logic + HideController (hide/show orchestration)
+│           hide.rs       Hiding selection logic + HideController (plan/commit two-phase orchestration
+│                         with stale-handle pruning and window/process identity checks before restore)
 │           effects.rs    Effects trait (muting/freezing/pause key; mockable)
+│           effects_worker.rs  Dedicated side-effect thread (FIFO queue; the message loop only does SW_HIDE)
 │           audio.rs      Core Audio session muting
 │           freeze.rs     NtSuspend/Resume + pssuspend64 enhanced freezing
 │           mouse_hook.rs WH_MOUSE_LL (middle/side buttons, corners)
 │           keyboard_hook.rs WH_KEYBOARD_LL ("don't pass through" hotkey interception)
 │           idle.rs       GetLastInputInfo idle detection + auto-hide decision
 │           tray.rs       Shell_NotifyIcon tray + balloons
-│           ipc_server.rs Named-pipe server
+│           ipc_server.rs Named-pipe server (retries pipe creation with backoff instead of exiting)
 │           autostart.rs  Startup (scheduled-task XML with restart-on-failure + registry fallback)
 │           elevation.rs  Administrator detection + UAC elevation restart
 │           i18n.rs       Catalog of user-visible core strings (tray menu / balloons / IPC errors; logs excluded)
 │           logging.rs    Levelled file logging (logs/BossKey-YYYY-MM-DD.log, rotated daily + panic hook)
-│           recovery.rs   Crash recovery (hidden state persisted; windows recovered after an abnormal exit)
+│           recovery.rs   Crash recovery (intent persisted before acting + atomic writes; snapshots carry
+│                         boot time and process creation times, snapshots from a previous boot are discarded)
 │           icon.rs       Process icon extraction (HICON → hand-written PNG/base64 encoding)
 │           single_instance.rs  Named-mutex single instance
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
     ├── src-tauri/  Rust backend commands + tauri.conf.json + capabilities
-    │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs, built on verhub-sdk)
+    │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs/project links, built on verhub-sdk;
+    │                      project links are cached: in memory + verhub_cache.json next to the exe, valid for one day)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)
@@ -118,7 +122,11 @@ Boss-Key/
 - Timers (idle detection, state maintenance, and so on);
 - Tray icon interaction.
 
-When hiding or showing is triggered, `HideController` orchestrates it: select the matching windows → apply `Effects` (muting / freezing / pause key) → hide or show the windows, and write the state to `recovery.json`.
+Message-loop state lives in a `RefCell`: the modal loops of the tray / floating-window menus (`TrackPopupMenu`) re-enter `wndproc`, and events arriving during re-entry fail the borrow and are safely dropped, so no aliased mutable references can exist. The IPC thread retries pipe creation with backoff (1s → 5s → 30s) instead of exiting.
+
+When hiding or showing is triggered, `HideController` orchestrates it with a two-phase, intent-first flow: `plan_hide` computes the execution plan (pruning stale records and backfilling PIDs) → the planned snapshot is written to `recovery.json` (persist first, act second — a crash mid-hide loses no records) → `commit_hide` hides the windows synchronously (`SW_HIDE`) and hands muting / freezing / the pause key to the dedicated side-effect thread (`effects_worker.rs`), executed asynchronously in FIFO order — the message loop is never blocked by slow operations (audio enumeration, waiting on pssuspend), so hotkeys and the UI stay responsive.
+
+When restoring (showing), every record is validated first: the handle must still exist and still belong to the original process (`IsWindow` + PID comparison), and frozen / muted records must match the process creation time — both handles and PIDs are recycled by the system, and records that fail validation are skipped and reported truthfully in the log.
 
 ::: info Designed for testability
 `Effects` is a trait, so tests can inject a mock and verify the hiding orchestration without actually muting or freezing the system. `WindowManager` is a trait for the same reason.
@@ -127,7 +135,7 @@ When hiding or showing is triggered, `HideController` orchestrates it: select th
 ## Stability (three layers of crash self-healing)
 
 1. **Crash logs**: key events and panics are written to `logs/BossKey-YYYY-MM-DD.log` next to the exe (rotated daily, retained per `log_retention_days`; 0 disables logging; release builds drop the DEBUG level).
-2. **Crash recovery**: hiding writes what was hidden / frozen / muted into `recovery.json`, recovered automatically on the next start after an abnormal exit.
+2. **Crash recovery**: before any hide action executes, what is *about to be* hidden / frozen / muted is written to `recovery.json` (tmp + rename atomic replace); windows are recovered automatically on the next start after an abnormal exit. Snapshots carry the boot time and process creation times, so stale snapshots from a previous boot are discarded instead of acting on unrelated windows / processes.
 3. **Watchdog**: the scheduled task's `RestartOnFailure` (restart within a minute of a crash, up to 3 times). Release builds use `panic = "abort"`, and the panic hook exits with a non-zero code once the log is written — exactly what triggers the scheduled-task restart.
 
 For the user-facing explanation see [Window recovery & crash self-healing](/en/guide/recovery).

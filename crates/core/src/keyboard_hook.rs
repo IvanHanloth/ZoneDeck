@@ -118,16 +118,11 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
         let data = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         // 注入的按键（自家的媒体键模拟等）不参与判定，避免反馈回路。
         if data.flags.0 & LLKHF_INJECTED.0 == 0 {
+            // GetKeyState 在锁外调用，锁内只剩纯内存判定。
+            let pressed = pressed_modifiers();
             let decision = HOTKEYS
                 .lock()
-                .map(|mut states| {
-                    decide(
-                        wparam.0 as u32,
-                        data.vkCode as u16,
-                        pressed_modifiers(),
-                        &mut states,
-                    )
-                })
+                .map(|mut states| decide(wparam.0 as u32, data.vkCode as u16, pressed, &mut states))
                 .unwrap_or(Decision::Pass);
             match decision {
                 Decision::Pass => {}

@@ -1,14 +1,15 @@
 use std::ffi::c_void;
 
 use bosskey_common::{NO_TITLE, WindowInfo};
-use windows::Win32::Foundation::{CloseHandle, HWND, LPARAM};
+use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM};
 use windows::Win32::System::Threading::{
-    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
+    GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+    QueryFullProcessImageNameW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
-    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible, SW_HIDE,
-    SW_SHOW, ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindow, IsWindowVisible,
+    SW_HIDE, SW_SHOW, ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 use windows::core::{BOOL, PWSTR};
 
@@ -73,6 +74,35 @@ pub(crate) fn process_path(pid: u32) -> String {
         match result {
             Ok(()) => String::from_utf16_lossy(&buf[..size as usize]),
             Err(_) => String::new(),
+        }
+    }
+}
+
+/// FILETIME（1601 起 100ns）→ Unix 毫秒。
+fn filetime_to_unix_ms(ft: FILETIME) -> i64 {
+    const EPOCH_DIFF_100NS: i64 = 116_444_736_000_000_000;
+    let raw = ((ft.dwHighDateTime as i64) << 32) | ft.dwLowDateTime as i64;
+    (raw - EPOCH_DIFF_100NS) / 10_000
+}
+
+/// 进程创建时刻（Unix 毫秒）；打不开进程时返回 0。
+pub(crate) fn process_start_time(pid: u32) -> i64 {
+    if pid == 0 {
+        return 0;
+    }
+    unsafe {
+        let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else {
+            return 0;
+        };
+        let mut created = FILETIME::default();
+        let mut exited = FILETIME::default();
+        let mut kernel = FILETIME::default();
+        let mut user = FILETIME::default();
+        let result = GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user);
+        let _ = CloseHandle(handle);
+        match result {
+            Ok(()) => filetime_to_unix_ms(created),
+            Err(_) => 0,
         }
     }
 }
@@ -150,6 +180,18 @@ impl WindowManager for WindowsWindowManager {
 
     fn foreground(&self) -> i64 {
         unsafe { hwnd_to_i64(GetForegroundWindow()) }
+    }
+
+    fn is_window(&self, hwnd: i64) -> bool {
+        unsafe { IsWindow(Some(hwnd_from(hwnd))).as_bool() }
+    }
+
+    fn window_pid(&self, hwnd: i64) -> u32 {
+        window_pid(hwnd_from(hwnd))
+    }
+
+    fn process_start_time(&self, pid: u32) -> i64 {
+        process_start_time(pid)
     }
 }
 
@@ -234,5 +276,60 @@ mod tests {
 
             let _ = DestroyWindow(hwnd);
         }
+    }
+
+    #[test]
+    fn filetime_epoch_maps_to_zero() {
+        // 1970-01-01 对应的 FILETIME 值应换算为 0 毫秒。
+        let ft = FILETIME {
+            dwLowDateTime: (116_444_736_000_000_000u64 & 0xFFFF_FFFF) as u32,
+            dwHighDateTime: (116_444_736_000_000_000u64 >> 32) as u32,
+        };
+        assert_eq!(filetime_to_unix_ms(ft), 0);
+    }
+
+    #[test]
+    fn dead_handle_and_pid_are_detected() {
+        unsafe {
+            let hwnd = CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("Static"),
+                w!("BossKeyIdentityTestWindow"),
+                WS_OVERLAPPEDWINDOW,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                100,
+                80,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("创建测试窗口失败");
+            let wm = WindowsWindowManager;
+            let id = hwnd_to_i64(hwnd);
+
+            assert!(wm.is_window(id), "存活窗口应通过 IsWindow");
+            assert_eq!(
+                wm.window_pid(id),
+                std::process::id(),
+                "自建窗口应属于本进程"
+            );
+
+            let _ = DestroyWindow(hwnd);
+            assert!(!wm.is_window(id), "销毁后句柄应判定失效");
+            assert_eq!(wm.window_pid(id), 0, "失效句柄查不到 PID");
+        }
+    }
+
+    #[test]
+    fn own_process_start_time_is_recent_and_stable() {
+        let wm = WindowsWindowManager;
+        let t1 = wm.process_start_time(std::process::id());
+        let t2 = wm.process_start_time(std::process::id());
+        assert!(t1 > 0, "本进程创建时刻应可查询");
+        assert_eq!(t1, t2, "同一进程两次查询应一致");
+        assert_eq!(wm.process_start_time(0), 0, "PID 0 应返回 0");
+        assert_eq!(wm.process_start_time(0xFFFF_FFF0), 0, "无效 PID 应返回 0");
     }
 }

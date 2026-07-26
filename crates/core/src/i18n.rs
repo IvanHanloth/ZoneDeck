@@ -21,6 +21,7 @@ pub enum Msg {
     HiddenBody,
     ShownBody,
     ConfigExeMissing,
+    RecoveryPersistFailedBody,
     AutostartOffTitle,
     AutostartOffBody,
     AutostartOnTitle,
@@ -67,6 +68,7 @@ impl Msg {
             Msg::HiddenBody => "已隐藏窗口",
             Msg::ShownBody => "已恢复显示窗口",
             Msg::ConfigExeMissing => "未找到配置程序",
+            Msg::RecoveryPersistFailedBody => "无法写入崩溃恢复文件，异常退出后将无法自动找回窗口",
             Msg::AutostartOffTitle => "开机自启已关闭",
             Msg::AutostartOffBody => "Boss Key 将不再随系统启动",
             Msg::AutostartOnTitle => "开机自启已开启",
@@ -104,6 +106,7 @@ impl Msg {
             Msg::HiddenBody => "Windows hidden",
             Msg::ShownBody => "Windows restored",
             Msg::ConfigExeMissing => "Settings app not found",
+            Msg::RecoveryPersistFailedBody => "Cannot write the crash-recovery file; windows cannot be restored automatically after an abnormal exit",
             Msg::AutostartOffTitle => "Startup disabled",
             Msg::AutostartOffBody => "Boss Key will no longer start with Windows",
             Msg::AutostartOnTitle => "Startup enabled",
@@ -141,6 +144,7 @@ impl Msg {
             Msg::HiddenBody => "已隱藏視窗",
             Msg::ShownBody => "已復原顯示視窗",
             Msg::ConfigExeMissing => "找不到設定程式",
+            Msg::RecoveryPersistFailedBody => "無法寫入當機復原檔案，異常結束後將無法自動找回視窗",
             Msg::AutostartOffTitle => "已關閉開機自動啟動",
             Msg::AutostartOffBody => "Boss Key 將不再隨系統啟動",
             Msg::AutostartOnTitle => "已開啟開機自動啟動",
@@ -214,7 +218,7 @@ mod tests {
     use super::*;
 
     /// 全部文案键；新增 Msg 变体后必须同步登记，否则跨语言校验会漏掉它。
-    const ALL_MSGS: [Msg; 32] = [
+    const ALL_MSGS: [Msg; 33] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -226,6 +230,7 @@ mod tests {
         Msg::HiddenBody,
         Msg::ShownBody,
         Msg::ConfigExeMissing,
+        Msg::RecoveryPersistFailedBody,
         Msg::AutostartOffTitle,
         Msg::AutostartOffBody,
         Msg::AutostartOnTitle,

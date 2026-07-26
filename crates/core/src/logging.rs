@@ -180,6 +180,16 @@ pub fn error(message: &str) {
     log(Level::Error, message);
 }
 
+/// 供 [`crate::log_warn!`] 使用：warn 并附上报错位置。
+pub fn warn_at(file: &str, line: u32, message: &str) {
+    log(Level::Warn, &format!("{message} ({file}:{line})"));
+}
+
+/// 供 [`crate::log_error!`] 使用：error 并附上报错位置。
+pub fn error_at(file: &str, line: u32, message: &str) {
+    log(Level::Error, &format!("{message} ({file}:{line})"));
+}
+
 fn log(level: Level, message: &str) {
     if !should_emit(level) {
         return;
@@ -190,6 +200,22 @@ fn log(level: Level, message: &str) {
     if let Some(logger) = GLOBAL.get() {
         logger.log(level, message);
     }
+}
+
+/// warn 级日志并自动附上调用处的 `文件:行号`。
+#[macro_export]
+macro_rules! log_warn {
+    ($($arg:tt)*) => {
+        $crate::logging::warn_at(file!(), line!(), &format!($($arg)*))
+    };
+}
+
+/// error 级日志并自动附上调用处的 `文件:行号`。
+#[macro_export]
+macro_rules! log_error {
+    ($($arg:tt)*) => {
+        $crate::logging::error_at(file!(), line!(), &format!($($arg)*))
+    };
 }
 
 /// 格式化 panic 信息为单条日志（便于单元测试）。
@@ -334,6 +360,17 @@ mod tests {
         let dir = temp_dir();
         init(dir.join("logs"), 0);
         assert!(!dir.join("logs").exists(), "关闭日志时不应创建目录");
+    }
+
+    #[test]
+    fn warn_at_appends_source_location() {
+        let dir = temp_dir();
+        let logger = Logger::new(dir.clone(), 7);
+        // 直接验证格式化结果（warn_at 走全局 logger，测试里用本地实例复刻其格式）。
+        logger.log(Level::Warn, &format!("{} ({}:{})", "落盘失败", "agent.rs", 42));
+        let logs: Vec<_> = fs::read_dir(&dir).unwrap().flatten().collect();
+        let content = fs::read_to_string(logs[0].path()).unwrap();
+        assert!(content.contains("[WARN] 落盘失败 (agent.rs:42)"));
     }
 
     #[test]

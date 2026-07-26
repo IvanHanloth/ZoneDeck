@@ -27,6 +27,8 @@ title: IPC 协议
 | `Toggle` | `{"cmd":"toggle"}` | 切换隐藏 / 显示 |
 | `SetAutostart` | `{"cmd":"set_autostart","enabled":true}` | 设置开机自启 |
 | `SetHotkeys` | `{"cmd":"set_hotkeys","enabled":false}` | 临时停用 / 恢复热键与鼠标监控 |
+| `ReleaseWindows` | `{"cmd":"release_windows","hwnds":[..]}` | 窗口恢复工具：恢复显示指定句柄。在核心记录里的窗口按整进程释放（连同解冻 / 取消静音）；记录外的句柄直接显示 |
+| `AdoptWindows` | `{"cmd":"adopt_windows","hwnds":[..]}` | 窗口恢复工具：隐藏指定句柄并纳入核心记录（享受崩溃恢复），不施加静音 / 冻结 |
 | `Quit` | `{"cmd":"quit"}` | 退出核心 |
 
 ## Response（核心 → 配置界面）

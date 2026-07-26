@@ -27,6 +27,8 @@ title: IPC 協定
 | `Toggle` | `{"cmd":"toggle"}` | 切換隱藏／顯示 |
 | `SetAutostart` | `{"cmd":"set_autostart","enabled":true}` | 設定開機自動啟動 |
 | `SetHotkeys` | `{"cmd":"set_hotkeys","enabled":false}` | 暫時停用／復原快速鍵與滑鼠監控 |
+| `ReleaseWindows` | `{"cmd":"release_windows","hwnds":[..]}` | 視窗復原工具：復原顯示指定控制代碼。在核心紀錄裡的視窗按整個處理程序釋放（連同解除凍結／取消靜音）；紀錄外的控制代碼直接顯示 |
+| `AdoptWindows` | `{"cmd":"adopt_windows","hwnds":[..]}` | 視窗復原工具：隱藏指定控制代碼並納入核心紀錄（享有當機復原保護），不施加靜音／凍結 |
 | `Quit` | `{"cmd":"quit"}` | 結束核心 |
 
 ## Response（核心 → 設定介面）
