@@ -308,6 +308,7 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-single-instance",
+ "tempfile",
  "verhub-sdk",
 ]
 
@@ -4218,9 +4219,9 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "verhub-sdk"
-version = "0.2.5"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61704ff45c9dd4e311e21b254be2405e8e3c9a81a5c1ad0ef8e8bb123fe65115"
+checksum = "b6d327c305b7a92625c9bd30009a1ab80091c401c268b52c4d4576978aecb165"
 dependencies = [
  "log",
  "os_info",

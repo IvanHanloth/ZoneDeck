@@ -31,7 +31,7 @@ apps/config/ui/
 │       ├── theme.js         主题切换（配 theme.test.js）
 │       ├── i18n.svelte.js   界面语言：catalog 查表 + 语言解析（配 i18n.test.js）
 │       ├── markdown.js      公告/更新日志的 Markdown 渲染（配 markdown.test.js）
-│       └── verhub.js        检查更新/公告/打开外链
+│       └── verhub.js        检查更新/公告/项目链接/打开外链
 ├── locales/                 三语文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
 └── svelte.config.js

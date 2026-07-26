@@ -1,15 +1,17 @@
-//! Verhub 客户端：版本 / 公告 / 反馈 / 日志，基于官方 verhub-sdk。
+//! Verhub 客户端：版本 / 公告 / 反馈 / 日志 / 项目链接，基于官方 verhub-sdk。
 //!
 //! 只用公开端点（无需凭据）。HTTP 由 SDK 完成；本模块把 SDK 的响应类型映射成
 //! 前端 IPC 契约所需的可序列化 DTO，字段名保持不变。
 
+use std::path::Path;
+use std::sync::Mutex;
 use std::time::Duration;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use verhub_sdk::VerhubClient;
 use verhub_sdk::models::{
     AnnouncementItem, CheckUpdateInput, CreateFeedbackInput, JsonObject, ListAnnouncementsOptions,
-    LogLevel, Platform, UploadLogInput, VersionDownloadLink, VersionItem,
+    LogLevel, Platform, ProjectItem, UploadLogInput, VersionDownloadLink, VersionItem,
 };
 
 /// Verhub 基础路径。
@@ -190,6 +192,101 @@ pub async fn upload_log(content: &str, device_info: serde_json::Value) -> Result
     Ok(())
 }
 
+/// 项目公开链接（主页 / 仓库 / 文档等）的缓存有效期。链接极少变动，一天刷新一次足够。
+const PROJECT_CACHE_TTL_SECS: i64 = 24 * 60 * 60;
+
+/// 项目公开链接。所有字段都可能缺省（Verhub 上未填写）；前端须自备回退链接。
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProjectLinks {
+    pub name: Option<String>,
+    pub website_url: Option<String>,
+    pub repo_url: Option<String>,
+    pub docs_url: Option<String>,
+    pub author: Option<String>,
+    pub author_homepage_url: Option<String>,
+    /// 拉取时刻（Unix 秒），用于判断缓存新鲜度。
+    pub fetched_at: i64,
+}
+
+/// 进程内缓存，避免每次都读盘。
+static PROJECT_CACHE: Mutex<Option<ProjectLinks>> = Mutex::new(None);
+
+fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
+    ProjectLinks {
+        name: Some(item.name),
+        website_url: item.website_url,
+        repo_url: item.repo_url,
+        docs_url: item.docs_url,
+        author: item.author,
+        author_homepage_url: item.author_homepage_url,
+        fetched_at,
+    }
+}
+
+/// 缓存是否仍在有效期内。`fetched_at` 在未来（时钟回拨）按过期处理。
+fn cache_fresh(links: &ProjectLinks, now: i64) -> bool {
+    (0..PROJECT_CACHE_TTL_SECS).contains(&(now - links.fetched_at))
+}
+
+fn cache_get() -> Option<ProjectLinks> {
+    PROJECT_CACHE.lock().ok()?.clone()
+}
+
+fn cache_put(links: ProjectLinks) {
+    if let Ok(mut cache) = PROJECT_CACHE.lock() {
+        *cache = Some(links);
+    }
+}
+
+/// 读磁盘缓存；文件不存在或损坏一律当作没有缓存。
+fn read_cache_file(path: &Path) -> Option<ProjectLinks> {
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&content).ok()
+}
+
+/// 写磁盘缓存；尽力而为，写失败只影响下次冷启动的命中率。
+fn write_cache_file(path: &Path, links: &ProjectLinks) {
+    if let Ok(json) = serde_json::to_string_pretty(links) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// 项目公开链接：内存缓存 → 磁盘缓存（`cache_path`）→ Verhub API 逐级回退。
+/// API 拉取失败时退回过期缓存（有旧数据总比没有强），完全没有缓存才报错。
+pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
+    let now = unix_now();
+    if let Some(cached) = cache_get()
+        && cache_fresh(&cached, now)
+    {
+        return Ok(cached);
+    }
+    if let Some(cached) = read_cache_file(cache_path)
+        && cache_fresh(&cached, now)
+    {
+        cache_put(cached.clone());
+        return Ok(cached);
+    }
+    match client()?.public().get_project().await {
+        Ok(item) => {
+            let links = map_project(item, now);
+            write_cache_file(cache_path, &links);
+            cache_put(links.clone());
+            Ok(links)
+        }
+        Err(err) => match cache_get().or_else(|| read_cache_file(cache_path)) {
+            Some(stale) => Ok(stale),
+            None => Err(err),
+        },
+    }
+}
+
 /// 截到上限以内，按字符边界切以避免切碎多字节字符。
 fn truncate_log(content: &str) -> String {
     if content.len() <= LOG_CONTENT_MAX {
@@ -231,5 +328,43 @@ mod tests {
     fn log_level_maps_to_verhub_numbers() {
         assert_eq!(u8::from(LogLevel::Debug), 0);
         assert_eq!(u8::from(LogLevel::Error), 3);
+    }
+
+    #[test]
+    fn cache_fresh_within_ttl_only() {
+        let links = ProjectLinks {
+            fetched_at: 1_000_000,
+            ..Default::default()
+        };
+        assert!(cache_fresh(&links, 1_000_000)); // 刚拉取
+        assert!(cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS - 1));
+        assert!(!cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS)); // 到期
+        assert!(!cache_fresh(&links, 999_999)); // 时钟回拨
+    }
+
+    #[test]
+    fn cache_file_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("verhub_cache.json");
+        let links = ProjectLinks {
+            name: Some("Boss Key".into()),
+            website_url: Some("https://example.com/".into()),
+            fetched_at: 42,
+            ..Default::default()
+        };
+        write_cache_file(&path, &links);
+        let read = read_cache_file(&path).expect("缓存应可读回");
+        assert_eq!(read.name.as_deref(), Some("Boss Key"));
+        assert_eq!(read.website_url.as_deref(), Some("https://example.com/"));
+        assert_eq!(read.fetched_at, 42);
+    }
+
+    #[test]
+    fn cache_file_tolerates_missing_and_corrupt() {
+        let dir = tempfile::tempdir().unwrap();
+        assert!(read_cache_file(&dir.path().join("absent.json")).is_none());
+        let bad = dir.path().join("bad.json");
+        std::fs::write(&bad, "not json{{").unwrap();
+        assert!(read_cache_file(&bad).is_none());
     }
 }

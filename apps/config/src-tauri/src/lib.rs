@@ -402,6 +402,15 @@ async fn open_external(url: String) -> Result<(), String> {
     blocking(move || bosskey_core::shell::open(&url)).await
 }
 
+/// 项目公开链接（主页 / 仓库 / 文档等）。带缓存（内存 + exe 同目录磁盘文件，
+/// 有效期一天），过期才请求 Verhub；请求失败退回过期缓存。
+#[tauri::command]
+async fn verhub_project_links() -> Result<verhub::ProjectLinks, String> {
+    verhub::project_links(&exe_dir().join("verhub_cache.json"))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// 检查更新。`required=true` 即强制更新，界面须阻断使用。
 #[tauri::command]
 async fn verhub_check_update(include_preview: bool) -> Result<verhub::CheckUpdate, String> {
@@ -528,6 +537,7 @@ pub fn run() {
             startup_action,
             app_info,
             open_external,
+            verhub_project_links,
             verhub_check_update,
             verhub_announcements,
             verhub_submit_feedback,

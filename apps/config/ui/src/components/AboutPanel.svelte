@@ -24,6 +24,14 @@
   const v = $derived(app.config.verhub);
   const year = new Date().getFullYear();
 
+  // 链接以 Verhub 项目信息为准（后端带缓存），拉不到时退回内置地址。
+  const links = $derived(app.project);
+  const homepageUrl = $derived(links?.website_url || "https://boss-key.ivan-hanloth.cn/");
+  const repoUrl = $derived(links?.repo_url || info?.website || "https://github.com/IvanHanloth/Boss-Key");
+  const docsUrl = $derived(links?.docs_url || "https://boss-key.ivan-hanloth.cn/guide/");
+  const authorUrl = $derived(links?.author_homepage_url || info?.blog || "https://www.ivan-hanloth.cn/");
+  const authorName = $derived(links?.author || info?.author || "Ivan Hanloth");
+
   let content = $state("");
   let rating = $state(0);
   let hoverRating = $state(0);
@@ -81,22 +89,22 @@
     <p class="muted">{t("about.version", { version: info?.version ?? "…" })}</p>
     <p>{t("about.tagline")}</p>
     <p>
-      <button class="val link" onclick={() => open(info?.website ?? "https://boss-key.ivan-hanloth.cn/")}>
+      <button class="val link" onclick={() => open(homepageUrl)}>
         {t("about.homepage")}
       </button>
       <span> • </span>
-      <button class="val link" onclick={() => open("https://github.com/IvanHanloth/Boss-Key")}>
+      <button class="val link" onclick={() => open(repoUrl)}>
         {t("about.repository")}
       </button>
       <span> • </span>
-      <button class="val link" onclick={() => open("https://boss-key.ivan-hanloth.cn/guide/")}>
+      <button class="val link" onclick={() => open(docsUrl)}>
         {t("about.docs")}
       </button>
-      
+
     </p>
     <p>Copyright © 2022-{year}
-      <button class="val link" onclick={() => open(info?.blog ?? "https://www.ivan-hanloth.cn/")}>
-        Ivan Hanloth
+      <button class="val link" onclick={() => open(authorUrl)}>
+        {authorName}
       </button> All Rights Reserved.</p>
   </div>
 

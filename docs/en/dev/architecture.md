@@ -97,7 +97,8 @@ Boss-Key/
 │           single_instance.rs  Named-mutex single instance
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
     ├── src-tauri/  Rust backend commands + tauri.conf.json + capabilities
-    │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs, built on verhub-sdk)
+    │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs/project links, built on verhub-sdk;
+    │                      project links are cached: in memory + verhub_cache.json next to the exe, valid for one day)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)

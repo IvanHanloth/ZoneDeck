@@ -97,7 +97,8 @@ Boss-Key/
 │           single_instance.rs  命名互斥单实例
 └── apps/config/                    配置界面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 后端命令 + tauri.conf.json + capabilities
-    │   └── src/verhub.rs  Verhub 客户端（版本/公告/反馈/日志，基于 verhub-sdk）
+    │   └── src/verhub.rs  Verhub 客户端（版本/公告/反馈/日志/项目链接，基于 verhub-sdk；
+    │                      项目链接带缓存：内存 + 同目录 verhub_cache.json，有效期一天）
     ├── ui/         前端源码（Vite + Svelte 5）
     │   └── src/    lib/（纯逻辑 + vitest 测试）+ components/（Svelte 组件）
     │                + locales/（三语文案 catalog，以 zh-CN.js 为基准）
