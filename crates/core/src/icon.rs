@@ -56,7 +56,7 @@ pub fn extract_icon_rgba(path: &str) -> Option<IconRgba> {
     rgba
 }
 
-fn hicon_to_rgba(hicon: HICON) -> Option<IconRgba> {
+pub(crate) fn hicon_to_rgba(hicon: HICON) -> Option<IconRgba> {
     unsafe {
         let mut icon_info = ICONINFO::default();
         GetIconInfo(hicon, &mut icon_info).ok()?;

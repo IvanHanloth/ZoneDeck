@@ -5,20 +5,22 @@
   import IconDownload from "~icons/lucide/download";
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import IconX from "~icons/lucide/x";
+  import Markdown from "./Markdown.svelte";
   import { win } from "../lib/ipc.js";
   import { app, toast } from "../lib/state.svelte.js";
   import { downloadUrl, formatTime, openExternal } from "../lib/verhub.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   const target = $derived(app.update?.target_version ?? app.update?.latest_version ?? null);
   const forced = $derived(!!app.update?.required);
   const url = $derived(downloadUrl(target));
 
   async function download() {
-    if (!url) return toast("该版本没有提供下载地址，请前往项目主页获取", true);
+    if (!url) return toast(t("update.noDownloadUrl"), true);
     try {
       await openExternal(url);
     } catch (err) {
-      toast("打开下载页失败：" + err, true);
+      toast(t("update.openDownloadFailed", { err }), true);
     }
   }
 
@@ -36,14 +38,14 @@
 
 {#if app.updateOpen && target}
   <div class="overlay" role="presentation" onclick={(e) => e.target === e.currentTarget && close()}>
-    <div class="dialog" role="dialog" aria-modal="true" aria-label="发现新版本">
+    <div class="dialog" role="dialog" aria-modal="true" aria-label={t("update.aria")}>
       <header class="dhead" class:forced>
         <h3>
           {#if forced}<IconTriangleAlert width="15" height="15" />{/if}
-          {forced ? "必须更新后才能继续使用" : "发现新版本"}
+          {t(forced ? "update.forcedTitle" : "update.title")}
         </h3>
         {#if !forced}
-          <button class="x" title="稍后再说" aria-label="稍后再说" onclick={close}>
+          <button class="x" title={t("update.later")} aria-label={t("update.later")} onclick={close}>
             <IconX width="15" height="15" />
           </button>
         {/if}
@@ -52,31 +54,29 @@
       <div class="dbody">
         <div class="ver">
           <span class="tag">{target.version}</span>
-          {#if target.is_preview}<span class="tag preview">预览版</span>{/if}
+          {#if target.is_preview}<span class="tag preview">{t("update.preview")}</span>{/if}
           <span class="muted">
-            当前 {app.info?.version ?? "…"}
-            {#if target.published_at}· 发布于 {formatTime(target.published_at)}{/if}
+            {t("update.current", { version: app.info?.version ?? "…" })}
+            {#if target.published_at}{t("update.publishedAt", { time: formatTime(target.published_at) })}{/if}
           </span>
         </div>
 
         {#if target.title}<p class="title">{target.title}</p>{/if}
-        {#if target.content}<pre class="notes">{target.content}</pre>{/if}
+        {#if target.content}<div class="notes"><Markdown source={target.content} /></div>{/if}
 
         {#if forced}
-          <p class="warn">
-            这是一个强制更新，旧版本已停止服务。请下载新版本后重新启动 Boss Key。
-          </p>
+          <p class="warn">{t("update.forcedNote")}</p>
         {/if}
       </div>
 
       <footer class="dfoot">
         {#if forced}
-          <button class="btn ghost" onclick={() => win.close()}>退出程序</button>
+          <button class="btn ghost" onclick={() => win.close()}>{t("update.quitApp")}</button>
         {:else}
-          <button class="btn ghost" onclick={close}>稍后再说</button>
+          <button class="btn ghost" onclick={close}>{t("update.later")}</button>
         {/if}
         <button class="btn primary" onclick={download}>
-          <IconDownload width="14" height="14" /> 前往下载
+          <IconDownload width="14" height="14" /> {t("update.download")}
         </button>
       </footer>
     </div>
@@ -165,16 +165,11 @@
     font-weight: 600;
   }
   .notes {
-    margin: 0;
     padding: 10px 12px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     border-radius: 8px;
-    font-family: inherit;
     font-size: 12.5px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    word-break: break-word;
     max-height: 240px;
     overflow-y: auto;
   }

@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   import WindowList from "./WindowList.svelte";
   import WindowRuleList from "./WindowRuleList.svelte";
   import ProcessRuleList from "./ProcessRuleList.svelte";
@@ -27,14 +28,14 @@
 
   function addWindows() {
     const picked = pickedWindows();
-    if (picked.length === 0) return toast("请先在左侧勾选要隐藏的窗口", true);
+    if (picked.length === 0) return toast(t("binding.pickWindowsFirst"), true);
     app.config.window_rules = addWindowRules(app.config.window_rules, picked);
     selectedAvail = [];
   }
 
   function addProcesses() {
     const picked = pickedWindows();
-    if (picked.length === 0) return toast("请先在左侧勾选要隐藏的进程", true);
+    if (picked.length === 0) return toast(t("binding.pickProcessesFirst"), true);
     app.config.process_rules = addProcessRules(app.config.process_rules, picked);
     selectedAvail = [];
   }
@@ -61,7 +62,7 @@
   async function refresh() {
     await refreshWindows();
     selectedAvail = [];
-    toast("窗口列表已刷新");
+    toast(t("binding.windowsRefreshed"));
   }
 </script>
 
@@ -69,7 +70,7 @@
   <div class="grid">
     <div class="avail">
       <WindowList
-        title="现有窗口"
+        title={t("binding.availableWindows")}
         windows={shownAvailable}
         bind:selected={selectedAvail}
         bind:search={app.search}

@@ -12,7 +12,7 @@ title: 本地运行
 | --- | --- | --- |
 | **Rust** | stable，建议 1.85+（项目使用 edition 2024） | <https://rustup.rs> |
 | **Node.js** | 18+，建议 24（用于前端构建） | <https://nodejs.org> |
-| **WebView2** | 配置界面运行时（Win10/11 通常已内置） | 系统自带 / [微软官网](https://developer.microsoft.com/microsoft-edge/webview2) |
+| **WebView2** | 配置界面运行时（Win10/11 通常已内置） | 系统自带 / [微软官网](https://developer.microsoft.com/zh-cn/microsoft-edge/webview2) |
 | **Inno Setup 6** | *可选*，本机生成安装包时需要 | `winget install JRSoftware.InnoSetup` |
 | **pssuspend64.exe** | *可选*，测试增强冻结时需要 | [Microsoft PSTools](https://download.sysinternals.com/files/PSTools.zip) |
 

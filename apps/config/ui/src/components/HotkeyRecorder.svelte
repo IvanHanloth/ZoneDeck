@@ -1,10 +1,18 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   // 录制热键期间暂停核心的全局热键监控，结束后恢复。
   import { onDestroy } from "svelte";
   import { comboFromEvent } from "../lib/hotkey.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
+  import Toggle from "./Toggle.svelte";
 
-  let { label, value = $bindable("") } = $props();
+  let {
+    label,
+    value = $bindable(""),
+    intercept = $bindable(false),
+    interceptLabel = "",
+    interceptTitle = "",
+  } = $props();
 
   // 独立理由，避免多个录制器互相撤销停用。
   const REASON = { recorder: "hotkey" };
@@ -37,13 +45,28 @@
     resumeMonitoring(REASON);
   }
 
+  function clear() {
+    stop();
+    value = "";
+  }
+
   onDestroy(stop);
 </script>
 
 <div class="row">
   <span class="label">{label}</span>
-  <kbd class="combo" class:recording>{recording ? "请按下组合键…" : value || "未设置"}</kbd>
-  <button class="btn ghost" onclick={start}>{recording ? "取消" : "录制"}</button>
+  <kbd class="combo" class:recording class:off={!recording && !value}>
+    {recording ? t("recorder.pressCombo") : value || t("recorder.disabled")}
+  </kbd>
+  <button class="btn" type="button" onclick={clear} disabled={!value || recording}>
+    {t("common.clear")}
+  </button>
+  <button class="btn" type="button" onclick={start}>
+    {recording ? t("common.cancel") : t("common.record")}
+  </button>
+  {#if interceptLabel}
+    <Toggle bind:checked={intercept} label={interceptLabel} title={interceptTitle} />
+  {/if}
 </div>
 
 <style>
@@ -69,10 +92,21 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .btn {
+    flex: none;
+    min-width: 4.5em;
+    background: var(--surface-2);
+  }
+  .btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
   .combo.recording {
     border-color: var(--accent);
     color: var(--accent);
     animation: pulse 1.2s ease-in-out infinite;
+  }
+  .combo.off {
+    color: var(--muted);
   }
   @keyframes pulse {
     50% {

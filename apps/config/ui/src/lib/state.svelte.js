@@ -1,6 +1,7 @@
 // 全局应用状态（Svelte 5 runes）：配置双向绑定的单一数据源 + 核心状态轮询。
 
 import { invoke } from "./ipc.js";
+import { setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
 import * as verhub from "./verhub.js";
 
@@ -17,11 +18,13 @@ export const app = $state({
   /** exe 路径 → PNG data URI；null 表示查询过但无图标（负缓存）。 */
   icons: {},
   /** 核心状态；running 为 null 表示首次检测尚未返回。monitoring 由核心回报。 */
-  status: { running: null, hidden: false, elevated: false, monitoring: true },
+  status: { running: null, hidden: false, elevated: false, monitoring: true, auto_hide_enabled: false },
   autostart: false,
   /** 当前自启注册方式："task"｜"registry"｜null（未注册）。 */
   autostartMethod: null,
   info: null,
+  /** Verhub 上的项目公开链接（主页 / 仓库 / 文档等）；null 时用内置回退链接。 */
+  project: null,
   maximized: false,
   saving: false,
   /** 程序目录下是否存在 pssuspend64.exe（增强冻结的前置条件）。 */
@@ -75,7 +78,7 @@ async function applyMonitoring(enabled) {
   try {
     await invoke("set_hotkeys_enabled", { enabled });
   } catch (err) {
-    toast("暂停热键监控失败：" + err, true);
+    toast(t("state.suspendFailed", { err }), true);
   }
   if (seq !== monitorSeq) return;
   app.monitorPending = false;
@@ -101,9 +104,9 @@ export function openRestoreTool() {
 export async function refreshPssuspend() {
   try {
     app.pssuspend = !!(await invoke("pssuspend_available"));
-    toast(app.pssuspend ? "已检测到 pssuspend64.exe" : "未检测到 pssuspend64.exe", !app.pssuspend);
+    toast(t(app.pssuspend ? "state.pssuspendFound" : "state.pssuspendMissing"), !app.pssuspend);
   } catch (err) {
-    toast("检测失败：" + err, true);
+    toast(t("state.detectFailed", { err }), true);
   }
 }
 
@@ -128,6 +131,8 @@ export async function loadAll() {
   const tasks = [
     invoke("load_config").then((c) => {
       app.config = c;
+      // 界面语言先于首帧生效，避免加载后文案跳变。
+      setLangPref(c?.setting?.language);
       return refreshWindows();
     }),
     refreshAutostart(),
@@ -136,9 +141,14 @@ export async function loadAll() {
     }),
     invoke("pssuspend_available").then((v) => (app.pssuspend = !!v)),
   ];
+  // 项目链接拉不到时静默——「关于」页有内置回退链接，不值得打扰用户。
+  verhub
+    .projectLinks()
+    .then((p) => (app.project = p))
+    .catch(() => {});
   const results = await Promise.allSettled(tasks);
   const failed = results.find((r) => r.status === "rejected");
-  if (failed) toast("部分数据加载失败：" + failed.reason, true);
+  if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);
 }
 
 /** 回读开机自启真实状态（是否已注册 + 注册方式）。 */
@@ -170,11 +180,15 @@ async function loadIcons(windows) {
 // 自动保存：改动即存，带 debounce。
 
 let saveTimer = null;
+/** 有改动排队待存（debounce 期间为 true）；状态回读不得覆盖未保存的改动。 */
+let savePending = false;
 
 /** 安排一次自动保存；连续改动只在停顿后写一次盘。 */
 export function scheduleSave(delayMs = 600) {
+  savePending = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    savePending = false;
     saveConfig();
   }, delayMs);
 }
@@ -185,7 +199,7 @@ async function saveConfig() {
   try {
     await invoke("save_config", { config: $state.snapshot(app.config) });
   } catch (err) {
-    reportError("保存配置失败，你的改动可能没有写入磁盘。", err);
+    reportError(t("state.saveFailed"), err);
   } finally {
     app.saving = false;
   }
@@ -194,32 +208,32 @@ async function saveConfig() {
 export async function startCore(elevated) {
   try {
     const accepted = await invoke("start_core", { elevated });
-    if (accepted === false) return toast("已取消提权", true);
-    toast(elevated ? "核心正在以管理员身份启动…" : "核心正在启动…");
+    if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    toast(t(elevated ? "state.coreStartingAdmin" : "state.coreStarting"));
     setTimeout(refreshStatus, 1200);
   } catch (err) {
-    reportError("核心启动失败，热键与鼠标触发都不会生效。", err);
+    reportError(t("state.coreStartFailed"), err);
   }
 }
 
 export async function restartCore(elevated) {
   try {
     const accepted = await invoke("restart_core", { elevated });
-    if (accepted === false) return toast("已取消提权", true);
-    toast(elevated ? "核心正在以管理员身份重启…" : "核心正在重启…");
+    if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    toast(t(elevated ? "state.coreRestartingAdmin" : "state.coreRestarting"));
     setTimeout(refreshStatus, 1500);
   } catch (err) {
-    reportError("核心重启失败。", err);
+    reportError(t("state.coreRestartFailed"), err);
   }
 }
 
 export async function quitCore() {
   try {
     await invoke("quit_core");
-    toast("已请求核心退出");
+    toast(t("state.coreQuitRequested"));
     setTimeout(refreshStatus, 800);
   } catch (err) {
-    toast("退出核心失败：" + err, true);
+    toast(t("state.coreQuitFailed", { err }), true);
   }
 }
 
@@ -229,10 +243,10 @@ export async function setAutostart(enabled, admin) {
     app.autostart = enabled;
     // 计划任务可能回退到注册表，回读真实注册方式。
     await refreshAutostart();
-    toast(enabled ? "已开启开机自启" : "已关闭开机自启");
+    toast(t(enabled ? "state.autostartOn" : "state.autostartOff"));
   } catch (err) {
     app.autostart = !enabled; // 失败回滚
-    toast("设置开机自启失败：" + err, true);
+    toast(t("state.autostartFailed", { err }), true);
   }
 }
 
@@ -247,10 +261,10 @@ export async function checkForUpdate(manual = false) {
     const result = await verhub.checkUpdate(app.config?.verhub?.include_preview ?? false);
     app.update = result;
     if (result.should_update) app.updateOpen = true;
-    else if (manual) toast("已是最新版本");
+    else if (manual) toast(t("state.upToDate"));
   } catch (err) {
     app.update = null;
-    if (manual) toast("检查更新失败，请稍后重试", true);
+    if (manual) toast(t("state.checkUpdateFailed"), true);
   } finally {
     app.updateChecking = false;
   }
@@ -284,13 +298,23 @@ export function reportError(message, detail = "") {
   app.errorReport = { message, detail: String(detail) };
 }
 
+/** 托盘菜单也能切换自动隐藏；以核心回报为准回读界面，但不覆盖用户尚未保存的改动。 */
+function syncAutoHideFromCore() {
+  if (!app.config || !app.status.running) return;
+  if (savePending || app.saving) return;
+  if (app.config.setting.auto_hide_enabled !== app.status.auto_hide_enabled) {
+    app.config.setting.auto_hide_enabled = app.status.auto_hide_enabled;
+  }
+}
+
 /** 刷新核心状态；失败时视为核心离线。 */
 export async function refreshStatus() {
   try {
     app.status = await invoke("core_status");
   } catch {
-    app.status = { running: false, hidden: false, elevated: false, monitoring: false };
+    app.status = { running: false, hidden: false, elevated: false, monitoring: false, auto_hide_enabled: false };
   }
+  syncAutoHideFromCore();
   // 核心在停用期间重启过（新实例默认监听），重新按下停用。
   if (suspenders.size > 0 && app.status.running && app.status.monitoring) {
     invoke("set_hotkeys_enabled", { enabled: false }).catch(() => {});

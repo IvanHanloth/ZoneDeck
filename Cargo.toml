@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/common", "crates/core", "apps/config/src-tauri"]
 
 [workspace.package]
-version = "3.0.0"
+version = "3.1.0-rc.1"
 edition = "2024"
 authors = ["IvanHanloth"]
 license = "MIT"
@@ -17,7 +17,7 @@ regex = "1.11.1"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 windows = "0.62.2"
 tempfile = "3.27.0"
-ureq = { version = "3.1.2", default-features = false, features = ["json", "rustls", "gzip"] }
+verhub-sdk = { version = "0.2.6", default-features = false, features = ["native-tls"] }
 
 [profile.release]
 opt-level = "z"

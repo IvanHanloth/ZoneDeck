@@ -1,20 +1,55 @@
 use std::collections::HashSet;
-use std::time::Duration;
 
 use bosskey_common::matching::{WindowResolution, match_process_rule, resolve_window_rule};
-use bosskey_common::{Config, Setting, WindowInfo};
+use bosskey_common::{Config, NO_TITLE, Setting, WindowInfo, WindowRule};
 use serde::{Deserialize, Serialize};
 
 use crate::effects::Effects;
 use crate::platform::WindowManager;
-use crate::recovery::Snapshot;
+use crate::recovery::{ProcRecord, Snapshot};
 
-const SEND_PAUSE_DELAY: Duration = Duration::from_millis(200);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// 一条隐藏记录。`process_path` / `title` 供日志与排查使用；旧恢复文件缺省为空串。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Target {
     pub hwnd: i64,
     pub pid: u32,
+    #[serde(default)]
+    pub process_path: String,
+    #[serde(default)]
+    pub title: String,
+}
+
+impl Target {
+    /// 只有句柄与 PID 的记录（来源没有路径 / 标题信息时使用）。
+    pub fn bare(hwnd: i64, pid: u32) -> Self {
+        Self {
+            hwnd,
+            pid,
+            process_path: String::new(),
+            title: String::new(),
+        }
+    }
+
+    pub fn from_window(w: &WindowInfo) -> Self {
+        Self {
+            hwnd: w.hwnd,
+            pid: w.pid,
+            process_path: w.path.clone(),
+            title: w.title.clone(),
+        }
+    }
+
+    /// 日志用的一行摘要：`进程名「标题」(hwnd=…, pid=…)`。
+    pub fn describe(&self) -> String {
+        let process = std::path::Path::new(&self.process_path)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("未知进程");
+        format!(
+            "{process}「{}」(hwnd={}, pid={})",
+            self.title, self.hwnd, self.pid
+        )
+    }
 }
 
 /// 一条窗口规则的解析结果摘要。
@@ -40,29 +75,20 @@ pub fn resolve_targets(
         let outcome = match resolve_window_rule(rule, windows) {
             WindowResolution::Live(w) => {
                 rule.title = w.title.clone();
-                result.push(Target {
-                    hwnd: w.hwnd,
-                    pid: w.pid,
-                });
+                result.push(Target::from_window(w));
                 RuleOutcome::Live
             }
             WindowResolution::Reacquired(w) => {
                 rule.hwnd = w.hwnd;
                 rule.pid = w.pid;
                 rule.title = w.title.clone();
-                result.push(Target {
-                    hwnd: w.hwnd,
-                    pid: w.pid,
-                });
+                result.push(Target::from_window(w));
                 RuleOutcome::Reacquired
             }
             WindowResolution::Missing => RuleOutcome::Missing,
             WindowResolution::Regex(hits) => {
                 for w in &hits {
-                    result.push(Target {
-                        hwnd: w.hwnd,
-                        pid: w.pid,
-                    });
+                    result.push(Target::from_window(w));
                 }
                 RuleOutcome::Regex(hits.len())
             }
@@ -72,28 +98,35 @@ pub fn resolve_targets(
 
     for rule in &config.process_rules {
         for w in match_process_rule(rule, windows) {
-            result.push(Target {
-                hwnd: w.hwnd,
-                pid: w.pid,
-            });
+            result.push(Target::from_window(w));
         }
     }
 
     if config.setting.hide_current && foreground != 0 {
-        let pid = windows
-            .iter()
-            .find(|w| w.hwnd == foreground)
-            .map(|w| w.pid)
-            .unwrap_or(0);
-        result.push(Target {
-            hwnd: foreground,
-            pid,
-        });
+        // 前台窗口可能不在枚举结果里（如工具窗口）；缺失的 PID 由 plan_hide 补查。
+        match windows.iter().find(|w| w.hwnd == foreground) {
+            Some(w) => result.push(Target::from_window(w)),
+            None => result.push(Target::bare(foreground, 0)),
+        }
     }
 
     let mut seen = HashSet::new();
     result.retain(|t| seen.insert(t.hwnd));
     (result, outcomes)
+}
+
+/// 前台窗口对应的隐藏目标。
+///
+/// 只接受出现在枚举结果里且当前可见的顶层窗口：工具窗口不在枚举结果内，
+/// 已被隐藏的窗口 `visible` 为假，二者都不该再次成为隐藏目标。
+pub fn foreground_target(windows: &[WindowInfo], foreground: i64) -> Option<Target> {
+    if foreground == 0 {
+        return None;
+    }
+    windows
+        .iter()
+        .find(|w| w.hwnd == foreground && w.visible)
+        .map(Target::from_window)
 }
 
 /// 可以安全冻结的进程 PID 集合：仅当某进程的全部可见窗口都在隐藏目标里时才纳入。
@@ -154,12 +187,56 @@ pub fn expand_descendants(roots: &[u32], edges: &[(u32, u32)]) -> Vec<u32> {
     out
 }
 
+/// 一次隐藏的执行计划：由 [`HideController::plan_hide`] 算出、
+/// [`HideController::commit_hide`] 原样执行，两段之间由调用方落盘意图。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HidePlan {
+    /// 本次新增的隐藏目标（已剔除死句柄 / 不可见项 / 已隐藏项 / 查不到 PID 的项）。
+    pub fresh: Vec<Target>,
+    /// 本次新增的静音进程。
+    pub mute: Vec<ProcRecord>,
+    /// 本次新增的冻结进程。
+    pub freeze: Vec<ProcRecord>,
+    /// 是否发送媒体暂停键。
+    pub send_pause: bool,
+    /// 本轮冻结方式（首轮跟随设置，之后沿用，保证解冻方式一致）。
+    pub enhanced: bool,
+}
+
+/// [`HideController::show`] 的执行结果，供调用方如实记录日志。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ShowOutcome {
+    /// 实际恢复显示的窗口数。
+    pub shown: usize,
+    /// 因句柄失效或已被其他窗口复用而跳过的记录数。
+    pub stale: usize,
+    /// 句柄失效后按「进程路径 + 标题」重新找回并显示的窗口数。
+    pub refound: usize,
+}
+
+/// 把标题变化同步进句柄匹配的精确窗口规则（仅内存，随下次配置保存落盘）。
+/// `NO_TITLE` 不参与同步。返回是否有规则被更新。
+pub fn sync_rule_titles(rules: &mut [WindowRule], hwnd: i64, title: &str) -> bool {
+    if title == NO_TITLE {
+        return false;
+    }
+    let mut changed = false;
+    for rule in rules
+        .iter_mut()
+        .filter(|r| r.regex.is_none() && r.hwnd == hwnd && r.title != title)
+    {
+        rule.title = title.to_string();
+        changed = true;
+    }
+    changed
+}
+
 pub struct HideController<W: WindowManager, E: Effects> {
     wm: W,
     effects: E,
     hidden: Vec<Target>,
-    frozen: Vec<u32>,
-    muted: Vec<u32>,
+    frozen: Vec<ProcRecord>,
+    muted: Vec<ProcRecord>,
     used_enhanced: bool,
 }
 
@@ -179,6 +256,11 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         !self.hidden.is_empty()
     }
 
+    /// 当前被隐藏的窗口数（供日志如实记录恢复了多少个窗口）。
+    pub fn hidden_count(&self) -> usize {
+        self.hidden.len()
+    }
+
     /// 枚举当前窗口（供上层解析目标；封装 wm 依赖）。
     pub fn enumerate(&self) -> Vec<WindowInfo> {
         self.wm.enumerate()
@@ -188,63 +270,239 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.wm.foreground()
     }
 
-    /// 隐藏已解析出的目标：隐藏窗口并按设置应用静音 / 冻结 / 发送暂停键。
-    /// `freeze_pids` 为最终要冻结的 PID 集（调用方算好，可能已含递归展开的子进程树，
-    /// 见 [`freezable_pids`] 与 [`expand_descendants`]）；仅在 `freeze_after_hide` 开启时生效。
-    pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
-        // 隐藏前先发一次媒体「播放/暂停」键，暂停正在播放的音视频。
-        // 只发一次：多目标时重复发送会把「播放/暂停」这个切换键又切回播放。
-        // 仅当确有音视频在播放时才真正发键（由 effects 判断），此时才需等待其生效。
-        if setting.send_before_hide && !targets.is_empty() && self.effects.send_pause() {
-            std::thread::sleep(SEND_PAUSE_DELAY);
-        }
-
-        let mut muted = Vec::new();
-
-        for t in targets {
-            self.wm.hide(t.hwnd);
-            if setting.mute_after_hide && t.pid != 0 {
-                self.effects.mute(t.pid, true);
-                muted.push(t.pid);
-            }
-        }
-        muted.sort_unstable();
-        muted.dedup();
-
-        // 冻结与目标窗口解耦：freeze_pids 已是最终集合（含子进程树），逐个挂起。
-        let mut frozen = Vec::new();
-        if setting.freeze_after_hide {
-            frozen = freeze_pids.to_vec();
-            frozen.retain(|pid| *pid != 0);
-            // 挂起是计数式的，去重以匹配解冻次数。
-            frozen.sort_unstable();
-            frozen.dedup();
-            self.used_enhanced = setting.enhanced_freeze;
-            for pid in &frozen {
-                self.effects.suspend(*pid, self.used_enhanced);
-            }
-        }
-
-        self.frozen = frozen;
-        self.muted = muted;
-        self.hidden = targets.to_vec();
+    /// 窗口当前标题（封装 wm 依赖，供事件追踪查询）。
+    pub fn window_title(&self, hwnd: i64) -> String {
+        self.wm.window_title(hwnd)
     }
 
-    pub fn show(&mut self) {
-        for pid in &self.frozen {
-            self.effects.resume(*pid, self.used_enhanced);
-        }
-        self.frozen.clear();
+    /// 该句柄是否在隐藏记录里。
+    pub fn tracks_window(&self, hwnd: i64) -> bool {
+        self.hidden.iter().any(|t| t.hwnd == hwnd)
+    }
 
-        for t in &self.hidden {
-            self.wm.show(t.hwnd);
+    /// 移除句柄对应的隐藏记录（窗口已销毁或被外部恢复显示时由事件追踪调用）。
+    /// 返回是否有记录被移除。
+    pub fn forget_window(&mut self, hwnd: i64) -> bool {
+        let before = self.hidden.len();
+        self.hidden.retain(|t| t.hwnd != hwnd);
+        self.hidden.len() != before
+    }
+
+    /// 同步隐藏记录里的窗口标题（标题变化事件）；`NO_TITLE` 不参与同步。
+    /// 返回是否有记录被更新。
+    pub fn update_title(&mut self, hwnd: i64, title: &str) -> bool {
+        if title == NO_TITLE {
+            return false;
+        }
+        let mut changed = false;
+        for t in self
+            .hidden
+            .iter_mut()
+            .filter(|t| t.hwnd == hwnd && t.title != title)
+        {
+            t.title = title.to_string();
+            changed = true;
+        }
+        changed
+    }
+
+    /// 计算一次隐藏的执行计划，不做任何窗口 / 副作用动作；顺带完成隐藏集剪枝
+    /// 与 PID 补查（仍查不到的目标剔除）。`freeze_pids` 为最终要冻结的 PID 集
+    /// （可能已含子进程树），仅在 `freeze_after_hide` 开启时生效。
+    ///
+    /// 只有「由本程序从可见变为不可见」的窗口才进入隐藏集，恢复即逆转这次
+    /// 改变；本来就不可见的目标不入集。隐藏是累加的，`show` 时一并恢复。
+    /// 已在隐藏 / 静音 / 冻结集内的目标会被跳过——挂起是计数式的，重复施加
+    /// 会让解冻次数对不上。
+    pub fn plan_hide(
+        &mut self,
+        setting: &Setting,
+        targets: &[Target],
+        freeze_pids: &[u32],
+    ) -> HidePlan {
+        self.prune_stale();
+        let known: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
+
+        let mut fresh: Vec<Target> = Vec::new();
+        for t in targets {
+            // 只隐藏当前可见的窗口：本来就不可见的目标（如程序自行藏到托盘，
+            // Steam 的关闭按钮即是）不入集，恢复时也就不会被错误地弹出来。
+            if known.contains(&t.hwnd)
+                || fresh.iter().any(|f| f.hwnd == t.hwnd)
+                || !self.wm.is_window(t.hwnd)
+                || !self.wm.is_visible(t.hwnd)
+            {
+                continue;
+            }
+            let mut t = t.clone();
+            if t.pid == 0 {
+                t.pid = self.wm.window_pid(t.hwnd);
+                if t.pid == 0 {
+                    continue;
+                }
+            }
+            fresh.push(t);
         }
 
-        for pid in &self.muted {
-            self.effects.mute(*pid, false);
+        let mut mute: Vec<ProcRecord> = Vec::new();
+        if setting.mute_after_hide {
+            for t in &fresh {
+                if !self.muted.iter().any(|r| r.pid == t.pid)
+                    && !mute.iter().any(|r| r.pid == t.pid)
+                {
+                    mute.push(self.proc_record(t.pid));
+                }
+            }
         }
-        self.muted.clear();
-        self.hidden.clear();
+
+        let mut freeze: Vec<ProcRecord> = Vec::new();
+        if setting.freeze_after_hide {
+            for pid in freeze_pids {
+                if *pid != 0
+                    && !self.frozen.iter().any(|r| r.pid == *pid)
+                    && !freeze.iter().any(|r| r.pid == *pid)
+                {
+                    freeze.push(self.proc_record(*pid));
+                }
+            }
+        }
+
+        HidePlan {
+            send_pause: setting.send_before_hide && !fresh.is_empty(),
+            // 解冻方式必须与冻结时一致：仅首轮冻结跟随设置，之后沿用。
+            enhanced: if self.frozen.is_empty() {
+                setting.enhanced_freeze
+            } else {
+                self.used_enhanced
+            },
+            fresh,
+            mute,
+            freeze,
+        }
+    }
+
+    /// 执行计划：同步隐藏窗口（`SW_HIDE`），静音 / 冻结 / 暂停键经 [`Effects`] 施加
+    /// （生产实现为异步队列）。
+    pub fn commit_hide(&mut self, plan: HidePlan) {
+        // 暂停键先入队：冻结后的进程收不到按键。
+        if plan.send_pause {
+            self.effects.send_pause();
+        }
+
+        for t in &plan.fresh {
+            self.wm.hide(t.hwnd);
+        }
+
+        for r in &plan.mute {
+            self.effects.mute(r.pid, true);
+            self.muted.push(*r);
+        }
+        self.muted.sort_unstable_by_key(|r| r.pid);
+
+        self.used_enhanced = plan.enhanced;
+        for r in &plan.freeze {
+            self.effects.suspend(r.pid, plan.enhanced);
+            self.frozen.push(*r);
+        }
+        self.frozen.sort_unstable_by_key(|r| r.pid);
+
+        self.hidden.extend(plan.fresh);
+    }
+
+    /// plan + commit 的便捷封装（不需要意图落盘的调用方使用）。
+    pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
+        let plan = self.plan_hide(setting, targets, freeze_pids);
+        self.commit_hide(plan);
+    }
+
+    /// 剔除已不成立的隐藏记录：句柄失效、句柄被别的进程复用（PID 不符）、
+    /// 或窗口已重新可见（被外部恢复显示或句柄复用）。
+    fn prune_stale(&mut self) {
+        let wm = &self.wm;
+        self.hidden.retain(|t| {
+            wm.is_window(t.hwnd) && wm.window_pid(t.hwnd) == t.pid && !wm.is_visible(t.hwnd)
+        });
+    }
+
+    /// 记录进程身份；创建时刻查不到时记 0，恢复侧对 0 不做校验。
+    fn proc_record(&self, pid: u32) -> ProcRecord {
+        ProcRecord {
+            pid,
+            created_at: self.wm.process_start_time(pid),
+        }
+    }
+
+    /// 进程记录是否仍指向当初那个进程（PID 会被系统回收复用，须比对创建时刻）。
+    fn proc_alive(&self, r: &ProcRecord) -> bool {
+        let now = self.wm.process_start_time(r.pid);
+        if now == 0 {
+            return false; // 进程已退出或查不到。
+        }
+        r.created_at == 0 || now == r.created_at
+    }
+
+    /// 恢复全部隐藏窗口并撤销副作用；失效记录一律跳过并计入返回值。
+    pub fn show(&mut self) -> ShowOutcome {
+        let mut outcome = ShowOutcome::default();
+
+        let frozen = std::mem::take(&mut self.frozen);
+        for r in &frozen {
+            if self.proc_alive(r) {
+                self.effects.resume(r.pid, self.used_enhanced);
+            }
+        }
+
+        let hidden = std::mem::take(&mut self.hidden);
+        let mut stale: Vec<&Target> = Vec::new();
+        for t in &hidden {
+            // 句柄仍存活且仍属于当初的进程才恢复，避免弹出复用同一句柄的无关窗口。
+            if self.wm.is_window(t.hwnd) && (t.pid == 0 || self.wm.window_pid(t.hwnd) == t.pid) {
+                self.wm.show(t.hwnd);
+                outcome.shown += 1;
+            } else {
+                outcome.stale += 1;
+                stale.push(t);
+            }
+        }
+        outcome.refound = self.refind_stale(&hidden, &stale);
+
+        let muted = std::mem::take(&mut self.muted);
+        for r in &muted {
+            if self.proc_alive(r) {
+                self.effects.mute(r.pid, false);
+            }
+        }
+        outcome
+    }
+
+    /// 按「进程路径 + 标题」为失效记录找回窗口：只匹配当前不可见、且不在
+    /// 本次隐藏集内的窗口，找到即恢复显示。返回找回数。
+    fn refind_stale(&self, hidden: &[Target], stale: &[&Target]) -> usize {
+        if stale
+            .iter()
+            .all(|t| t.process_path.is_empty() || t.title.is_empty() || t.title == NO_TITLE)
+        {
+            return 0;
+        }
+        let windows = self.wm.enumerate();
+        let mut used: HashSet<i64> = hidden.iter().map(|t| t.hwnd).collect();
+        let mut refound = 0;
+        for t in stale {
+            if t.process_path.is_empty() || t.title.is_empty() || t.title == NO_TITLE {
+                continue;
+            }
+            if let Some(w) = windows.iter().find(|w| {
+                !w.visible
+                    && !used.contains(&w.hwnd)
+                    && w.path == t.process_path
+                    && w.title == t.title
+            }) {
+                used.insert(w.hwnd);
+                self.wm.show(w.hwnd);
+                refound += 1;
+            }
+        }
+        refound
     }
 
     /// 释放指定进程的隐藏状态：显示窗口、解冻、取消静音，并从隐藏集移除。返回被释放的窗口数。
@@ -254,56 +512,96 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
 
         // 先解冻，否则窗口显示出来仍是卡死的。
-        let (thaw, keep): (Vec<u32>, Vec<u32>) = self
+        let (thaw, keep): (Vec<ProcRecord>, Vec<ProcRecord>) = self
             .frozen
             .iter()
             .copied()
-            .partition(|pid| pids.contains(pid));
-        for pid in &thaw {
-            self.effects.resume(*pid, self.used_enhanced);
+            .partition(|r| pids.contains(&r.pid));
+        for r in &thaw {
+            if self.proc_alive(r) {
+                self.effects.resume(r.pid, self.used_enhanced);
+            }
         }
         self.frozen = keep;
 
         let (show, keep): (Vec<Target>, Vec<Target>) = self
             .hidden
             .iter()
-            .copied()
+            .cloned()
             .partition(|t| pids.contains(&t.pid));
         for t in &show {
-            self.wm.show(t.hwnd);
+            if self.wm.is_window(t.hwnd) {
+                self.wm.show(t.hwnd);
+            }
         }
         self.hidden = keep;
 
-        let (unmute, keep): (Vec<u32>, Vec<u32>) = self
+        let (unmute, keep): (Vec<ProcRecord>, Vec<ProcRecord>) = self
             .muted
             .iter()
             .copied()
-            .partition(|pid| pids.contains(pid));
-        for pid in &unmute {
-            self.effects.mute(*pid, false);
+            .partition(|r| pids.contains(&r.pid));
+        for r in &unmute {
+            if self.proc_alive(r) {
+                self.effects.mute(r.pid, false);
+            }
         }
         self.muted = keep;
 
         show.len()
     }
 
-    /// 当前隐藏状态的快照，用于崩溃恢复落盘。
+    /// 恢复显示指定句柄（窗口恢复工具经 IPC 调用）。在隐藏记录里的窗口按
+    /// 整进程释放（连同解冻 / 取消静音）；不在记录里的句柄直接恢复显示。
+    /// 返回从记录中释放的窗口数。
+    pub fn release_windows(&mut self, hwnds: &[i64]) -> usize {
+        let known: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
+        let mut pids: Vec<u32> = self
+            .hidden
+            .iter()
+            .filter(|t| hwnds.contains(&t.hwnd))
+            .map(|t| t.pid)
+            .collect();
+        pids.sort_unstable();
+        pids.dedup();
+        let released = self.release_pids(&pids);
+        for &hwnd in hwnds {
+            if !known.contains(&hwnd) && self.wm.is_window(hwnd) {
+                self.wm.show(hwnd);
+            }
+        }
+        released
+    }
+
+    /// 当前隐藏状态的快照，用于崩溃恢复落盘。版本与开机时刻由 `recovery::save` 盖章。
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
             hidden: self.hidden.clone(),
             frozen: self.frozen.clone(),
             muted: self.muted.clone(),
             enhanced: self.used_enhanced,
+            ..Default::default()
         }
     }
 
-    /// 从崩溃前的快照恢复：显示窗口、解冻进程、取消静音。
-    pub fn restore_from(&mut self, snapshot: Snapshot) {
+    /// 在当前状态上叠加执行计划后的快照，供意图先行落盘。
+    pub fn planned_snapshot(&self, plan: &HidePlan) -> Snapshot {
+        let mut snapshot = self.snapshot();
+        snapshot.hidden.extend(plan.fresh.iter().cloned());
+        snapshot.frozen.extend(plan.freeze.iter().copied());
+        snapshot.muted.extend(plan.mute.iter().copied());
+        snapshot.enhanced = plan.enhanced;
+        snapshot
+    }
+
+    /// 从崩溃前的快照恢复。快照整体有效性由调用方先行校验，
+    /// 逐条身份校验由 [`Self::show`] 完成。
+    pub fn restore_from(&mut self, snapshot: Snapshot) -> ShowOutcome {
         self.hidden = snapshot.hidden;
         self.frozen = snapshot.frozen;
         self.muted = snapshot.muted;
         self.used_enhanced = snapshot.enhanced;
-        self.show();
+        self.show()
     }
 }
 
@@ -311,6 +609,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 mod tests {
     use super::*;
     use std::cell::RefCell;
+    use std::collections::HashMap;
 
     use bosskey_common::{ProcessRule, WindowRule};
 
@@ -318,8 +617,23 @@ mod tests {
         WindowInfo::new(title, hwnd, process, hwnd as u32, path)
     }
 
+    /// 与 `win` 相同，但可指定 PID（用于构造同一进程的多个窗口）。
+    fn win_pid(title: &str, hwnd: i64, process: &str, pid: u32, path: &str) -> WindowInfo {
+        WindowInfo::new(title, hwnd, process, pid, path)
+    }
+
     fn wrule(title: &str, hwnd: i64, process: &str, path: &str) -> WindowRule {
         WindowRule::from_window(&win(title, hwnd, process, path))
+    }
+
+    /// 断言用：目标列表压缩为 (hwnd, pid) 序列。
+    fn ids(targets: &[Target]) -> Vec<(i64, u32)> {
+        targets.iter().map(|t| (t.hwnd, t.pid)).collect()
+    }
+
+    /// Mock 里进程创建时刻的默认值：`1000 + pid`。
+    fn start_of(pid: u32) -> i64 {
+        1000 + pid as i64
     }
 
     /// 复刻 agent 的隐藏编排：解析目标（含追溯回填）后交给控制器应用副作用。
@@ -345,8 +659,21 @@ mod tests {
             win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
         ];
         let (targets, outcomes) = resolve_targets(&mut config, &windows, 0);
-        assert_eq!(targets, vec![Target { hwnd: 10, pid: 10 }]);
+        assert_eq!(ids(&targets), vec![(10, 10)]);
         assert_eq!(outcomes, vec![RuleOutcome::Live]);
+    }
+
+    #[test]
+    fn resolved_target_carries_path_and_title() {
+        let mut config = Config {
+            window_rules: vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")],
+            ..Default::default()
+        };
+        let windows = vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+        let (targets, _) = resolve_targets(&mut config, &windows, 0);
+        assert_eq!(targets[0].process_path, "C:\\WeChat.exe");
+        assert_eq!(targets[0].title, "微信");
+        assert_eq!(targets[0].describe(), "WeChat.exe「微信」(hwnd=10, pid=10)");
     }
 
     #[test]
@@ -357,7 +684,7 @@ mod tests {
         };
         let windows = vec![win("新标题", 10, "app.exe", "C:\\app.exe")];
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
-        assert_eq!(targets, vec![Target { hwnd: 10, pid: 10 }]);
+        assert_eq!(ids(&targets), vec![(10, 10)]);
         assert_eq!(
             config.window_rules[0].title, "新标题",
             "隐藏时应同步最新标题"
@@ -372,7 +699,7 @@ mod tests {
         };
         let windows = vec![win("微信", 99, "WeChat.exe", "C:\\WeChat.exe")];
         let (targets, outcomes) = resolve_targets(&mut config, &windows, 0);
-        assert_eq!(targets, vec![Target { hwnd: 99, pid: 99 }]);
+        assert_eq!(ids(&targets), vec![(99, 99)]);
         assert_eq!(outcomes, vec![RuleOutcome::Reacquired]);
         assert_eq!(config.window_rules[0].hwnd, 99, "应回填新句柄");
     }
@@ -406,15 +733,7 @@ mod tests {
             win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
         ];
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
-        assert_eq!(
-            targets,
-            vec![Target { hwnd: 10, pid: 10 }, Target { hwnd: 11, pid: 11 }]
-        );
-    }
-
-    /// 与 `win` 相同，但可指定 PID（用于构造同一进程的多个窗口）。
-    fn win_pid(title: &str, hwnd: i64, process: &str, pid: u32, path: &str) -> WindowInfo {
-        WindowInfo::new(title, hwnd, process, pid, path)
+        assert_eq!(ids(&targets), vec![(10, 10), (11, 11)]);
     }
 
     #[test]
@@ -423,7 +742,7 @@ mod tests {
             win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
             win_pid("文件传输助手", 11, "WeChat.exe", 500, "C:\\WeChat.exe"),
         ];
-        let targets = vec![Target { hwnd: 10, pid: 500 }];
+        let targets = vec![Target::bare(10, 500)];
         assert!(
             freezable_pids(&targets, &windows).is_empty(),
             "还有窗口开着时不应冻结"
@@ -436,7 +755,7 @@ mod tests {
             win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
             win_pid("文件传输助手", 11, "WeChat.exe", 500, "C:\\WeChat.exe"),
         ];
-        let targets = vec![Target { hwnd: 10, pid: 500 }, Target { hwnd: 11, pid: 500 }];
+        let targets = vec![Target::bare(10, 500), Target::bare(11, 500)];
         assert_eq!(freezable_pids(&targets, &windows), vec![500]);
     }
 
@@ -446,7 +765,7 @@ mod tests {
             win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
             win_pid("后台窗口", 11, "WeChat.exe", 500, "C:\\WeChat.exe").with_visibility(false),
         ];
-        let targets = vec![Target { hwnd: 10, pid: 500 }];
+        let targets = vec![Target::bare(10, 500)];
         assert_eq!(freezable_pids(&targets, &windows), vec![500]);
     }
 
@@ -526,43 +845,59 @@ mod tests {
             win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
         ];
         let (targets, _) = resolve_targets(&mut config.clone(), &windows, 20);
-        assert_eq!(
-            targets,
-            vec![Target { hwnd: 10, pid: 10 }, Target { hwnd: 20, pid: 20 }]
-        );
+        assert_eq!(ids(&targets), vec![(10, 10), (20, 20)]);
 
         let (same, _) = resolve_targets(&mut config, &windows, 10);
-        assert_eq!(
-            same,
-            vec![Target { hwnd: 10, pid: 10 }],
-            "前台与已命中窗口相同应去重"
-        );
+        assert_eq!(ids(&same), vec![(10, 10)], "前台与已命中窗口相同应去重");
     }
 
     struct MockWm {
         windows: Vec<WindowInfo>,
         foreground: i64,
         visible: RefCell<HashSet<i64>>,
+        /// 仍然存在的句柄集合（窗口销毁 = 从中移除；与 visible 是两回事）。
+        exists: RefCell<HashSet<i64>>,
+        /// 覆写某句柄当前所属的 PID（模拟句柄被别的窗口复用）。
+        pid_overrides: RefCell<HashMap<i64, u32>>,
+        /// 覆写某进程的创建时刻（模拟 PID 被回收复用；0 = 进程已退出）。
+        start_overrides: RefCell<HashMap<u32, i64>>,
     }
 
     impl MockWm {
         fn new(windows: Vec<WindowInfo>, foreground: i64) -> Self {
-            let visible = windows.iter().map(|w| w.hwnd).collect();
+            let handles: HashSet<i64> = windows.iter().map(|w| w.hwnd).collect();
             Self {
                 windows,
                 foreground,
-                visible: RefCell::new(visible),
+                visible: RefCell::new(handles.clone()),
+                exists: RefCell::new(handles),
+                pid_overrides: RefCell::new(HashMap::new()),
+                start_overrides: RefCell::new(HashMap::new()),
             }
+        }
+
+        /// 模拟窗口被销毁：句柄失效且不可见。
+        fn destroy(&self, hwnd: i64) {
+            self.visible.borrow_mut().remove(&hwnd);
+            self.exists.borrow_mut().remove(&hwnd);
+        }
+
+        /// 模拟句柄被系统回收后分配给了新窗口。
+        fn revive(&self, hwnd: i64) {
+            self.exists.borrow_mut().insert(hwnd);
+            self.visible.borrow_mut().insert(hwnd);
         }
     }
 
     impl WindowManager for MockWm {
+        // 与真实平台一致：不可见窗口也在枚举结果里，visible 标记如实反映当前状态。
         fn enumerate(&self) -> Vec<WindowInfo> {
             let visible = self.visible.borrow();
+            let exists = self.exists.borrow();
             self.windows
                 .iter()
-                .filter(|w| visible.contains(&w.hwnd))
-                .cloned()
+                .filter(|w| exists.contains(&w.hwnd))
+                .map(|w| w.clone().with_visibility(visible.contains(&w.hwnd)))
                 .collect()
         }
         fn hide(&self, hwnd: i64) {
@@ -576,6 +911,39 @@ mod tests {
         }
         fn foreground(&self) -> i64 {
             self.foreground
+        }
+        fn is_window(&self, hwnd: i64) -> bool {
+            self.exists.borrow().contains(&hwnd)
+        }
+        fn window_pid(&self, hwnd: i64) -> u32 {
+            if !self.is_window(hwnd) {
+                return 0;
+            }
+            if let Some(pid) = self.pid_overrides.borrow().get(&hwnd) {
+                return *pid;
+            }
+            self.windows
+                .iter()
+                .find(|w| w.hwnd == hwnd)
+                .map(|w| w.pid)
+                .unwrap_or(0)
+        }
+        fn window_title(&self, hwnd: i64) -> String {
+            self.windows
+                .iter()
+                .find(|w| w.hwnd == hwnd)
+                .map(|w| w.title.clone())
+                .unwrap_or_else(|| bosskey_common::NO_TITLE.to_string())
+        }
+        fn process_start_time(&self, pid: u32) -> i64 {
+            if pid == 0 {
+                return 0;
+            }
+            self.start_overrides
+                .borrow()
+                .get(&pid)
+                .copied()
+                .unwrap_or(start_of(pid))
         }
     }
 
@@ -597,9 +965,8 @@ mod tests {
         fn resume(&self, pid: u32, _enhanced: bool) {
             self.resumes.borrow_mut().push(pid);
         }
-        fn send_pause(&self) -> bool {
+        fn send_pause(&self) {
             *self.pauses.borrow_mut() += 1;
-            true
         }
     }
 
@@ -629,7 +996,15 @@ mod tests {
         assert_eq!(*controller.effects.suspends.borrow(), vec![10]);
         assert_eq!(*controller.effects.pauses.borrow(), 1, "应发送一次暂停键");
 
-        controller.show();
+        let outcome = controller.show();
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 0,
+                refound: 0
+            }
+        );
         assert!(!controller.is_hidden());
         assert!(controller.wm.is_visible(10), "恢复后微信应可见");
         assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻");
@@ -637,6 +1012,102 @@ mod tests {
             *controller.effects.mutes.borrow(),
             vec![(10, true), (10, false)],
             "恢复后应取消静音"
+        );
+    }
+
+    #[test]
+    fn successive_hides_accumulate_and_restore_together() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: false,
+            ..Setting::default()
+        };
+
+        let wm = MockWm::new(
+            vec![
+                win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+                win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+            ],
+            10,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(&setting, &[Target::bare(10, 10)], &[]);
+        controller.apply_hide(&setting, &[Target::bare(20, 20)], &[]);
+
+        assert_eq!(
+            controller.hidden_count(),
+            2,
+            "第二次隐藏不应挤掉第一次的窗口"
+        );
+        assert!(!controller.wm.is_visible(10) && !controller.wm.is_visible(20));
+
+        controller.show();
+        assert!(
+            controller.wm.is_visible(10) && controller.wm.is_visible(20),
+            "恢复应把累计隐藏的窗口一并放出来"
+        );
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(10, true), (20, true), (10, false), (20, false)],
+            "两个进程都应取消静音"
+        );
+    }
+
+    #[test]
+    fn re_hiding_the_same_window_does_not_repeat_effects() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let targets = [Target::bare(10, 10)];
+        controller.apply_hide(&setting, &targets, &[10]);
+        controller.apply_hide(&setting, &targets, &[10]);
+
+        assert_eq!(controller.hidden_count(), 1, "同一窗口不应重复入集");
+        assert_eq!(
+            *controller.effects.suspends.borrow(),
+            vec![10],
+            "重复挂起会让解冻次数对不上，须跳过"
+        );
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.resumes.borrow(),
+            vec![10],
+            "一次解冻即可"
+        );
+        assert!(controller.wm.is_visible(10));
+    }
+
+    #[test]
+    fn foreground_target_takes_the_visible_foreground_window() {
+        let windows = vec![
+            win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
+            win_pid("已隐藏", 11, "app.exe", 600, "C:\\app.exe").with_visibility(false),
+        ];
+        assert_eq!(
+            foreground_target(&windows, 10).map(|t| (t.hwnd, t.pid)),
+            Some((10, 500))
+        );
+        assert_eq!(foreground_target(&windows, 0), None, "无前台窗口");
+        assert_eq!(
+            foreground_target(&windows, 11),
+            None,
+            "已隐藏的窗口不该再次成为目标"
+        );
+        assert_eq!(
+            foreground_target(&windows, 99),
+            None,
+            "枚举不到的窗口（如工具窗口）不作为目标"
         );
     }
 
@@ -685,12 +1156,52 @@ mod tests {
 
         do_hide(&mut controller, &mut config);
         let snapshot = controller.snapshot();
-        assert_eq!(snapshot.hidden, vec![Target { hwnd: 10, pid: 10 }]);
-        assert_eq!(snapshot.frozen, vec![10]);
-        assert_eq!(snapshot.muted, vec![10]);
+        assert_eq!(ids(&snapshot.hidden), vec![(10, 10)]);
+        assert_eq!(
+            snapshot.frozen,
+            vec![ProcRecord {
+                pid: 10,
+                created_at: start_of(10)
+            }],
+            "冻结记录应带进程创建时刻"
+        );
+        assert_eq!(
+            snapshot.muted,
+            vec![ProcRecord {
+                pid: 10,
+                created_at: start_of(10)
+            }]
+        );
 
         controller.show();
         assert!(controller.snapshot().is_empty(), "显示后快照应清空");
+    }
+
+    #[test]
+    fn planned_snapshot_matches_state_after_commit() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.setting.mute_after_hide = true;
+        config.setting.freeze_after_hide = true;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let windows = controller.enumerate();
+        let (targets, _) = resolve_targets(&mut config, &windows, 0);
+        let freezable = freezable_pids(&targets, &windows);
+
+        let plan = controller.plan_hide(&config.setting, &targets, &freezable);
+        let planned = controller.planned_snapshot(&plan);
+        controller.commit_hide(plan);
+        let actual = controller.snapshot();
+
+        // 意图快照与提交后的实际状态一致——落盘发生在动作前，两者必须等价。
+        assert_eq!(planned.hidden, actual.hidden);
+        assert_eq!(planned.frozen, actual.frozen);
+        assert_eq!(planned.muted, actual.muted);
+        assert_eq!(planned.enhanced, actual.enhanced);
     }
 
     #[test]
@@ -699,13 +1210,28 @@ mod tests {
         wm.hide(10);
         let mut controller = HideController::new(wm, MockEffects::default());
 
-        controller.restore_from(Snapshot {
-            hidden: vec![Target { hwnd: 10, pid: 10 }],
-            frozen: vec![10],
-            muted: vec![10],
+        let outcome = controller.restore_from(Snapshot {
+            hidden: vec![Target::bare(10, 10)],
+            frozen: vec![ProcRecord {
+                pid: 10,
+                created_at: start_of(10),
+            }],
+            muted: vec![ProcRecord {
+                pid: 10,
+                created_at: start_of(10),
+            }],
             enhanced: false,
+            ..Default::default()
         });
 
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 0,
+                refound: 0
+            }
+        );
         assert!(!controller.is_hidden(), "恢复完成后应回到未隐藏状态");
         assert!(controller.wm.is_visible(10), "崩溃前隐藏的窗口应被找回");
         assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻进程");
@@ -715,6 +1241,339 @@ mod tests {
             "应取消静音"
         );
         assert!(controller.snapshot().is_empty());
+    }
+
+    #[test]
+    fn dead_handle_is_pruned_and_reused_handle_can_hide_again() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(&setting, &[Target::bare(10, 10)], &[]);
+        assert_eq!(controller.hidden_count(), 1);
+
+        // 旧窗口销毁，句柄随后被新窗口复用。
+        controller.wm.destroy(10);
+        controller.wm.revive(10);
+
+        controller.apply_hide(&setting, &[Target::bare(10, 10)], &[]);
+        assert_eq!(
+            controller.hidden_count(),
+            1,
+            "死记录应被剪掉，复用句柄的新窗口不应被误判为已隐藏"
+        );
+        assert!(!controller.wm.is_visible(10), "新窗口应真的被隐藏");
+    }
+
+    #[test]
+    fn show_skips_destroyed_and_reused_handles() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![
+                win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+                win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+                win("画图", 30, "mspaint.exe", "C:\\mspaint.exe"),
+            ],
+            10,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[
+                Target::bare(10, 10),
+                Target::bare(20, 20),
+                Target::bare(30, 30),
+            ],
+            &[],
+        );
+
+        controller.wm.destroy(10); // 窗口已退出。
+        controller.wm.pid_overrides.borrow_mut().insert(20, 999); // 句柄被别的进程复用。
+
+        let outcome = controller.show();
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 2,
+                refound: 0
+            },
+            "死句柄与被复用句柄都应跳过"
+        );
+        assert!(!controller.wm.is_visible(20), "被复用的句柄不得被弹出来");
+        assert!(controller.wm.is_visible(30), "正常窗口应恢复");
+    }
+
+    #[test]
+    fn resume_is_skipped_when_pid_was_recycled_or_process_exited() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: false,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![
+                win_pid("A", 10, "a.exe", 100, "C:\\a.exe"),
+                win_pid("B", 20, "b.exe", 200, "C:\\b.exe"),
+            ],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[Target::bare(10, 100), Target::bare(20, 200)],
+            &[100, 200],
+        );
+
+        // PID 100 被回收给了新进程（创建时刻变了）；PID 200 的进程已退出。
+        controller
+            .wm
+            .start_overrides
+            .borrow_mut()
+            .insert(100, 9_999);
+        controller.wm.start_overrides.borrow_mut().insert(200, 0);
+
+        controller.show();
+        assert!(
+            controller.effects.resumes.borrow().is_empty(),
+            "身份不符或已退出的进程不得解冻，避免干扰无关进程"
+        );
+    }
+
+    #[test]
+    fn plan_fills_missing_pid_and_drops_unresolvable_targets() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("画图", 30, "mspaint.exe", 33, "C:\\mspaint.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        // hwnd 40 不存在（is_window=false），hwnd 30 的 pid 现场补查为 33。
+        controller.apply_hide(&setting, &[Target::bare(30, 0), Target::bare(40, 0)], &[]);
+        assert_eq!(controller.hidden_count(), 1, "查无此窗的目标应被剔除");
+        assert_eq!(
+            controller.release_pids(&[33]),
+            1,
+            "补齐 PID 后 release_pids 应能按进程释放该窗口"
+        );
+    }
+
+    #[test]
+    fn forget_window_removes_record_and_update_title_syncs_it() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[Target::from_window(&win(
+                "微信",
+                10,
+                "WeChat.exe",
+                "C:\\WeChat.exe",
+            ))],
+            &[],
+        );
+
+        assert!(controller.tracks_window(10));
+        assert!(controller.update_title(10, "微信 - 新会话"));
+        assert!(
+            !controller.update_title(10, "微信 - 新会话"),
+            "标题未变不算更新"
+        );
+        assert!(
+            !controller.update_title(10, bosskey_common::NO_TITLE),
+            "NO_TITLE 不参与同步"
+        );
+        assert_eq!(controller.snapshot().hidden[0].title, "微信 - 新会话");
+
+        assert!(!controller.forget_window(99), "未记录的句柄无事发生");
+        assert!(controller.forget_window(10));
+        assert!(!controller.is_hidden(), "记录移除后不再处于隐藏态");
+    }
+
+    #[test]
+    fn sync_rule_titles_updates_exact_rules_only() {
+        let mut rules = vec![
+            wrule("旧标题", 10, "app.exe", "C:\\app.exe"),
+            WindowRule::from_regex("^项目"),
+        ];
+        assert!(sync_rule_titles(&mut rules, 10, "新标题"));
+        assert_eq!(rules[0].title, "新标题");
+        assert!(
+            !sync_rule_titles(&mut rules, 10, "新标题"),
+            "标题未变不算更新"
+        );
+        assert!(
+            !sync_rule_titles(&mut rules, 99, "别的"),
+            "句柄不匹配不更新"
+        );
+        assert!(
+            !sync_rule_titles(&mut rules, 10, NO_TITLE),
+            "NO_TITLE 不参与同步"
+        );
+    }
+
+    #[test]
+    fn show_refinds_stale_records_by_path_and_title() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        // 99 是同进程同标题的新窗口（程序重建了窗口），当前不可见。
+        let wm = MockWm::new(
+            vec![
+                win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
+                win_pid("微信", 99, "WeChat.exe", 600, "C:\\WeChat.exe"),
+            ],
+            0,
+        );
+        wm.hide(99);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[Target::from_window(&win_pid(
+                "微信",
+                10,
+                "WeChat.exe",
+                500,
+                "C:\\WeChat.exe",
+            ))],
+            &[],
+        );
+
+        controller.wm.destroy(10);
+        let outcome = controller.show();
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 0,
+                stale: 1,
+                refound: 1
+            }
+        );
+        assert!(
+            controller.wm.is_visible(99),
+            "应按进程路径 + 标题找回重建的窗口"
+        );
+    }
+
+    #[test]
+    fn refind_skips_visible_windows_and_records_without_info() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![
+                win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
+                win_pid("微信", 99, "WeChat.exe", 600, "C:\\WeChat.exe"),
+            ],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        // bare 目标没有路径 / 标题信息，失效后无从找回。
+        controller.apply_hide(&setting, &[Target::bare(10, 500)], &[]);
+        controller.wm.destroy(10);
+        let outcome = controller.show();
+        assert_eq!(outcome.refound, 0, "无路径 / 标题信息的记录不找回");
+        assert!(controller.wm.is_visible(99), "可见窗口不受影响");
+    }
+
+    #[test]
+    fn already_invisible_windows_are_not_recorded_or_restored() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            ..Setting::default()
+        };
+        // Steam 用关闭按钮把自己藏了起来（窗口仍存在但不可见），记事本可见；
+        // 两者都被规则命中。
+        let wm = MockWm::new(
+            vec![
+                win_pid("Steam", 10, "steam.exe", 500, "C:\\steam.exe"),
+                win_pid("记事本", 20, "notepad.exe", 600, "C:\\notepad.exe"),
+            ],
+            0,
+        );
+        wm.hide(10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(
+            &setting,
+            &[Target::bare(10, 500), Target::bare(20, 600)],
+            &[],
+        );
+        assert_eq!(controller.hidden_count(), 1, "已不可见的窗口不应入集");
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(600, true)],
+            "只对真正被隐藏的窗口施加副作用"
+        );
+
+        let outcome = controller.show();
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 0,
+                refound: 0
+            }
+        );
+        assert!(controller.wm.is_visible(20), "记事本应恢复");
+        assert!(
+            !controller.wm.is_visible(10),
+            "Steam 自己藏起来的窗口不得被恢复弹出"
+        );
+    }
+
+    #[test]
+    fn release_windows_frees_whole_process_and_shows_unknown_handles() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![
+                win_pid("主窗口", 10, "game.exe", 500, "C:\\game.exe"),
+                win_pid("子窗口", 11, "game.exe", 500, "C:\\game.exe"),
+                win_pid("无关窗口", 30, "other.exe", 700, "C:\\other.exe"),
+            ],
+            0,
+        );
+        // 记录外的句柄：被别的途径隐藏，核心不知情。
+        wm.hide(30);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[Target::bare(10, 500), Target::bare(11, 500)],
+            &[500],
+        );
+
+        // 只点选了一个窗口 + 一个记录外句柄。
+        assert_eq!(controller.release_windows(&[10, 30]), 2);
+        assert!(
+            controller.wm.is_visible(10) && controller.wm.is_visible(11),
+            "同进程的两个窗口应一起释放，避免解冻后仍有窗口藏着"
+        );
+        assert_eq!(*controller.effects.resumes.borrow(), vec![500], "应解冻");
+        assert!(controller.wm.is_visible(30), "记录外的句柄应直接恢复显示");
+        assert!(!controller.is_hidden());
     }
 
     #[test]

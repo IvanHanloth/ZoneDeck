@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   import IconFilter from "~icons/lucide/list-filter";
   import IconChevron from "~icons/lucide/chevron-down";
 
@@ -12,9 +13,11 @@
 
   const summary = $derived.by(() => {
     const parts = [];
-    if (includeUntitled) parts.push("无标题");
-    if (includeBackground) parts.push("后台");
-    return parts.length ? `含${parts.join(" + ")}` : "仅可见窗口";
+    if (includeUntitled) parts.push(t("scope.untitled"));
+    if (includeBackground) parts.push(t("scope.background"));
+    return parts.length
+      ? t("scope.summaryWith", { parts: parts.join(" + ") })
+      : t("scope.visibleOnly");
   });
 
   function onWindowDown(e) {
@@ -31,7 +34,7 @@
   <button
     class="trigger"
     class:on={includeUntitled || includeBackground}
-    title="匹配范围：决定这条规则在哪些窗口里查找"
+    title={t("scope.title")}
     aria-haspopup="true"
     aria-expanded={open}
     onclick={(e) => {
@@ -45,18 +48,14 @@
   </button>
 
   {#if open}
-    <div class="menu" role="group" aria-label="匹配范围">
+    <div class="menu" role="group" aria-label={t("scope.aria")}>
       <label class="opt">
         <input type="checkbox" bind:checked={includeUntitled} />
-        <span>
-          匹配无标题窗口
-        </span>
+        <span>{t("scope.matchUntitled")}</span>
       </label>
       <label class="opt">
         <input type="checkbox" bind:checked={includeBackground} />
-        <span>
-          匹配后台窗口
-        </span>
+        <span>{t("scope.matchBackground")}</span>
       </label>
     </div>
   {/if}

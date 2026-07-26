@@ -1,42 +1,93 @@
 name: Release
 
-# 构建并发布一个已存在的 tag。
+# 构建并发布一个已随合并进入 main 的 tag。
 #
-# 两种进入方式：
-#   1. 直接推送 v* tag（手动打的 tag）；
-#   2. 由 tag.yml 通过 workflow_call 调用 —— 用默认 GITHUB_TOKEN 推的 tag 不会触发
-#      上面的 push 事件，所以 tag.yml 必须显式调用本工作流，而不能指望 tag 推送。
+# 触发方式：
+#   1. 推送到 main —— tag.yml 事先把版本号提交与 v* tag 落在 dev，等 dev → main 的
+#      PR 合并，tag 随之进入 main 的历史，这里检测到就构建；
+#   2. 手动触发（workflow_dispatch），指定 tag —— 用于重跑或补发。
+#
+# 为什么不监听 push: tags：tag 是 tag.yml 用 GITHUB_TOKEN 推到 dev 的，那次推送
+# 不会触发任何工作流；而 PR 合并本身**不产生 tag 推送事件**（tag 是独立的 ref，
+# 合并只是让它指向的提交变得可从 main 追溯）。所以只能从 main 的 push 事件里检测。
 
 on:
   push:
-    tags:
-      - "v*"
-  workflow_call:
+    branches: ["main"]
+  workflow_dispatch:
     inputs:
       tag:
-        description: "要发布的 tag，例如 v3.0.1"
+        description: "要构建发布的 tag，例如 v3.0.1"
         required: true
         type: string
 
-concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
-  cancel-in-progress: false
-
 jobs:
+  # 找出「这次推送新带进 main 的 v* tag」。
+  # 不能用「HEAD 上挂着的 tag」：merge commit 才是 HEAD，tag 指向的是它的父提交。
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.find.outputs.tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 需要完整历史与全部 tag 才能算可达性
+
+      - name: Find newly merged release tag
+        id: find
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          if [ -n "${INPUT_TAG}" ]; then
+            echo "手动指定：${INPUT_TAG}"
+            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 推送前 main 上已可追溯的 v* tag。新建分支 / 强推时 before 可能不可用，
+          # 那就当作「之前一个都没有」，让下面取到最新的一个。
+          if [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            git tag --merged "${BEFORE}" --list 'v*' | sort > /tmp/before.txt
+          else
+            : > /tmp/before.txt
+          fi
+          git tag --merged HEAD --list 'v*' | sort > /tmp/after.txt
+
+          # 一次合并正常只带进一个；真有多个就取版本号最大的
+          tag=$(comm -13 /tmp/before.txt /tmp/after.txt | sort -V | tail -n 1)
+
+          if [ -z "$tag" ]; then
+            echo "本次推送没有新的 v* tag 进入 main，跳过发布"
+          else
+            echo "检测到新进入 main 的 tag：$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
   build-and-release:
+    needs: detect
+    if: needs.detect.outputs.tag != ''
     runs-on: windows-latest
     permissions:
       contents: write
       id-token: write # attest-build-provenance 取 OIDC token
       attestations: write # 写入构建来源证明
+    concurrency:
+      group: release-${{ needs.detect.outputs.tag }}
+      cancel-in-progress: false
     env:
-      TAG: ${{ inputs.tag || github.ref_name }}
+      TAG: ${{ needs.detect.outputs.tag }}
 
     steps:
+      # 构建 tag 指向的那个提交，而不是 main 的 merge commit：
+      # 前者才是版本号提交本身，与 version.ps1 check 的校验对象一致。
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref_name }}
+          ref: ${{ needs.detect.outputs.tag }}
 
       # tag 与代码里的版本号必须一致，否则装出来的包版本号是错的
       - name: Verify version matches tag
@@ -103,12 +154,29 @@ jobs:
       #       /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 `
       #       "dist/Boss-Key/Boss Key.exe" dist/Boss-Key/config.exe dist/installer/Boss-Key-*-Setup.exe
 
+      # 发布说明 = GitHub 自动生成的更新日志 + 结尾的安全提示。
+      # 创建 Release 时若同时传 body 和 generate_release_notes，自定义内容只会被
+      # 放在自动生成内容**之前**，所以这里先调 generate-notes API 拿到更新日志，
+      # 再手动把安全提示拼在末尾。
+      - name: Compose release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = (gh api "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$env:TAG" --jq '.body') -join "`n"
+          $notice = @'
+          > [!WARNING]
+          > 【安全提示】
+          > 本软件中运用了大量的系统底层API，并且提供开机自启、热键监控、窗口冻结等功能，容易被杀毒软件识别为木马病毒，但是程序本身完全开源、免费，并不包含病毒、木马行为，请放心使用。请务必从官方渠道下载和使用程序，运行程序前通过文件哈希、文件签名等方式验证文件的真实性，谨防利用软件信任伪装的病毒程序。
+          '@
+          Set-Content -Path release-notes.md -Value ($notes + "`n`n" + $notice) -Encoding utf8
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Boss Key ${{ env.TAG }}
           tag_name: ${{ env.TAG }}
-          generate_release_notes: true
+          body_path: release-notes.md
           draft: true
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.version.outputs.is_prerelease != 'true' }}

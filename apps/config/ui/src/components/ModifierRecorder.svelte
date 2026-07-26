@@ -1,4 +1,5 @@
 <script>
+  import { t } from "../lib/i18n.svelte.js";
   // 只录制修饰键（主键是鼠标按钮本身）。
   import { onDestroy } from "svelte";
   import { modifiersFromEvent } from "../lib/hotkey.js";
@@ -62,16 +63,16 @@
 <div class="rec" class:compact>
   <kbd class="combo" class:recording>
     {#if recording}
-      {held || "按住修饰键…"}
+      {held || t("recorder.holdModifiers")}
     {:else}
-      {value || "无"}
+      {value || t("recorder.none")}
     {/if}
   </kbd>
   <button class="btn ghost" type="button" onclick={start}>
-    {recording ? "取消" : "录制"}
+    {recording ? t("common.cancel") : t("common.record")}
   </button>
   {#if value && !recording}
-    <button class="btn ghost" type="button" onclick={clear}>清除</button>
+    <button class="btn ghost" type="button" onclick={clear}>{t("common.clear")}</button>
   {/if}
 </div>
 

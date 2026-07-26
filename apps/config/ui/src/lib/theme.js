@@ -1,5 +1,7 @@
 // 三态主题：auto（跟随系统）→ light → dark 循环。
 
+import { t } from "./i18n.svelte.js";
+
 export const THEMES = ["auto", "light", "dark"];
 const STORAGE_KEY = "bosskey-theme";
 
@@ -21,11 +23,8 @@ export function themeIcon(preference) {
 }
 
 export function themeLabel(preference) {
-  return (
-    { auto: "主题：跟随系统", light: "主题：浅色", dark: "主题：深色" }[
-      preference
-    ] ?? "主题"
-  );
+  const key = { auto: "theme.auto", light: "theme.light", dark: "theme.dark" }[preference];
+  return key ? t(key) : t("theme.fallback");
 }
 
 export function loadPreference() {

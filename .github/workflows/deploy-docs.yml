@@ -10,10 +10,11 @@ on:
   push:
     branches: ["main", "dev"]
     paths:
-      - "/docs/**"
-      - "/package.json"
-      - "/pnpm-lock.yaml"
-      - "/.github/workflows/deploy-docs.yml"
+      - "docs/**"
+      - "scripts/i18n-check.ps1"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - ".github/workflows/deploy-docs.yml"
   release:
     types: [published, edited, deleted]
   workflow_dispatch:
@@ -52,8 +53,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 三语文档配套与站内链接的一致性；跳过 catalog 单测（这里没装前端依赖，
+      # 那部分由 build-test.yml 的 npm test 覆盖）。
+      - name: i18n consistency check
+        shell: pwsh
+        run: ./scripts/i18n-check.ps1 -SkipVitest
+
       # 旧版客户端仍通过 Pages 上的 releases.json 检查更新，这里用 curl+jq（runner 自带，免安装）
       # 重新生成它，替代原来单独的 jekyll-gh-pages 工作流。
+      #
+      # 必须滤掉草稿：Actions 的 token 有 push 权限，/releases 会把未发布的草稿一并返回，
+      # 不过滤就会把还没发的版本推给老客户端。
       - name: Update releases.json
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,7 +72,9 @@ jobs:
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/releases" \
-          | jq 'map({tag_name, published_at, body, assets: [.assets[] | {name, browser_download_url}]}) | sort_by(.published_at)' \
+          | jq 'map(select(.draft == false)
+                    | {tag_name, published_at, body, assets: [.assets[] | {name, browser_download_url}]})
+                | sort_by(.published_at)' \
           > docs/public/releases.json
 
       - name: Build with VitePress

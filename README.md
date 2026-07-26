@@ -10,7 +10,7 @@
 
 <img src="https://img.shields.io/github/v/release/IvanHanloth/Boss-Key?style=flat-square" alt="Github Release Version">
 <img src="https://img.shields.io/github/license/IvanHanloth/Boss-Key?style=flat-square" alt="Github Repo License">
-<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/tag-release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
+<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
 <img src="https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue?style=flat-square" alt="Supported Platform">
 
 </p>
@@ -26,6 +26,14 @@
         <a href="https://github.com/IvanHanloth/Boss-Key/releases">下载地址</a>
     </h3>
 </div>
+
+<p align="center">
+    <strong>简体中文</strong>
+    <span> • </span>
+    <a href="/README.en.md">English</a>
+    <span> • </span>
+    <a href="/README.zh-TW.md">繁體中文</a>
+</p>
 
 <div align="center">
     <strong>老板来了？快用Boss-Key老板键一键隐藏窗口！上班摸鱼必备神器。</strong><br>
@@ -65,7 +73,7 @@
 
 右键点击托盘图标还有退出程序、检查更新、设置开机自启等功能。
 
-按下隐藏/显示窗口热键可以一键隐藏所绑定的窗口。按下一键关闭程序热键可以一键关闭Boss-Key程序
+按下隐藏/显示窗口热键可以一键隐藏所绑定的窗口。按下关闭核心热键可以一键关闭Boss-Key程序
 
 ### 绑定窗口
 
@@ -88,6 +96,10 @@
 v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键、侧键1、侧键2切换串口隐藏状态。
 
 可以勾选快速移动鼠标至四角隐藏窗口（启用允许移动恢复功能以允许通过快速移动鼠标至四角恢复窗口）
+
+### 界面语言
+
+配置界面与核心的托盘菜单、通知支持**简体中文、English、繁體中文**。默认跟随系统显示语言，也可在「其他选项 → 语言」中手动指定。
 
 ### 更多功能
 

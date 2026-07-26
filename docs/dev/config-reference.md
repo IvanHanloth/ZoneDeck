@@ -30,7 +30,15 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `hide_hotkey` | `"Ctrl+Q"` | 隐藏 / 显示窗口 |
-| `close_hotkey` | `"Win+Esc"` | 一键关闭程序 |
+| `close_hotkey` | `"Win+Esc"` | 关闭核心 |
+| `hide_only_hotkey` | `""` | [仅隐藏窗口](/guide/hotkeys#单向热键与隐藏前台窗口)，置空为关闭 |
+| `show_only_hotkey` | `""` | [仅显示窗口](/guide/hotkeys#单向热键与隐藏前台窗口)，置空为关闭 |
+| `hide_foreground_hotkey` | `""` | [隐藏前台窗口](/guide/hotkeys#单向热键与隐藏前台窗口)，置空为关闭 |
+| `hide_intercept` | `false` | [隐藏热键不传递](/guide/hotkeys#热键不传递)（键盘钩子拦截） |
+| `close_intercept` | `false` | [关闭热键不传递](/guide/hotkeys#热键不传递)（键盘钩子拦截） |
+| `hide_only_intercept` | `false` | 仅隐藏热键不传递 |
+| `show_only_intercept` | `false` | 仅显示热键不传递 |
+| `hide_foreground_intercept` | `false` | 隐藏前台窗口热键不传递 |
 
 ## `setting`
 
@@ -40,7 +48,9 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 | `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/options#隐藏前发送暂停键-beta) |
 | `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/options#同时隐藏当前活动窗口) |
 | `click_to_hide` | bool | `true` | [单击托盘切换隐藏](/guide/options#单击托盘图标切换隐藏) |
-| `hide_icon_after_hide` | bool | `false` | [隐藏后同时隐藏托盘图标](/guide/options#隐藏后同时隐藏托盘图标) |
+| `hide_icon_after_hide` | bool | `false` | [同时隐藏 Boss Key 托盘图标](/guide/options#同时隐藏-boss-key-托盘图标) |
+| `tray_badges` | object | 见下 | [图标状态提示](/guide/notifications#图标状态提示) |
+| `tray_show_tooltip` | bool | `true` | [显示图标悬浮名称](/guide/notifications#显示图标悬浮名称) |
 | `freeze_after_hide` | bool | `false` | [进程冻结总开关](/guide/freeze#隐藏窗口时冻结进程) |
 | `enhanced_freeze` | bool | `false` | [增强冻结](/guide/freeze#使用增强冻结) |
 | `freeze_whole_tree` | bool | `false` | [冻结完整进程](/guide/freeze#冻结完整进程) |
@@ -52,6 +62,12 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 | `corner_fast_only` | bool | `true` | 仅快速移动触发 |
 | `allow_move_restore` | bool | `false` | 角落恢复 |
 | `log_retention_days` | number | `7` | [日志保留天数](/guide/options#日志保留天数)（0 = 关闭） |
+| `autostart_admin` | bool | `false` | [以管理员身份自启](/guide/autostart)（仅计划任务方式生效） |
+| `language` | string | `"auto"` | [界面语言](/guide/options#界面语言)：`auto`｜`zh-CN`｜`en`｜`zh-TW` |
+
+::: info `language` 的取值与归一化
+`auto` 表示跟随系统显示语言。读取时会归一化：合法的 BCP-47 标签折叠为 `zh-CN`／`en`／`zh-TW`（如 `zh_TW`、`zh-Hant` → `zh-TW`；`en-US` → `en`），无对应翻译的值（如 `ja-JP`）一律回落为 `auto`。核心与配置程序共用该字段。
+:::
 
 ::: details 旧版扁平鼠标开关（已废弃）
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` 仅用于反序列化迁移，迁移后清零、不再写回文件。请使用 `mouse` 结构。
@@ -70,6 +86,19 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 ::: info 全新安装默认
 全新安装默认开启**中键单击**（`middle.enabled = true`，`clicks = 1`），其余四颗关闭。配置文件缺 `mouse` 一节的老配置读进来则**全关**。
 :::
+
+### `setting.tray_badges`
+
+[图标状态提示](/guide/notifications#图标状态提示)：四种颜色的圆点角标各自绑定一个状态源，多个状态同时活跃时按**红 > 绿 > 黄 > 蓝**的优先级只显示一个圆点。
+
+| 字段 | 默认 | 默认含义 |
+| --- | --- | --- |
+| `red` | `"hidden"` | 存在隐藏中的窗口 |
+| `green` | `"auto_hide"` | 启用了自动隐藏 |
+| `yellow` | `"hide_current"` | 启用了同时隐藏当前窗口 |
+| `blue` | `"freeze"` | 启用了进程冻结 |
+
+每项取值：`hidden`（存在隐藏中的窗口）｜`auto_hide`（启用了自动隐藏）｜`hide_current`（启用了同时隐藏当前窗口）｜`freeze`（启用了进程冻结）｜`elevated`（以管理员身份运行）｜`monitor_paused`（热键监控已暂停）｜`""`（置空 = 不显示该颜色）；未知取值读取时归一为置空。
 
 ## `notifications`
 

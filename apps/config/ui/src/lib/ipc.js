@@ -11,13 +11,26 @@ const mockConfig = {
   version: "v3.0.0.0",
   history: [],
   frozen_pids: [],
-  hotkey: { hide_hotkey: "Ctrl+Q", close_hotkey: "Win+Esc" },
+  hotkey: {
+    hide_hotkey: "Ctrl+Q",
+    close_hotkey: "Win+Esc",
+    hide_only_hotkey: "",
+    show_only_hotkey: "",
+    hide_foreground_hotkey: "",
+    hide_intercept: false,
+    close_intercept: false,
+    hide_only_intercept: false,
+    show_only_intercept: false,
+    hide_foreground_intercept: false,
+  },
   setting: {
     mute_after_hide: true,
     send_before_hide: false,
     hide_current: true,
     click_to_hide: true,
     hide_icon_after_hide: false,
+    tray_badges: { red: "hidden", green: "auto_hide", yellow: "hide_current", blue: "freeze" },
+    tray_show_tooltip: true,
     freeze_after_hide: false,
     enhanced_freeze: false,
     freeze_whole_tree: false,
@@ -41,6 +54,7 @@ const mockConfig = {
     corner_fast_only: true,
     log_retention_days: 7,
     autostart_admin: false,
+    language: "auto",
   },
   notifications: {
     on_start: true,
@@ -84,6 +98,8 @@ const mockWindows = [
 
 /** mock 下的核心监控状态。 */
 let mockMonitoring = true;
+/** mock 下的自动隐藏开关（随 save_config 更新，供状态轮询回读联动）。 */
+let mockAutoHide = mockConfig.setting.auto_hide_enabled;
 /** mock 下的开机自启状态（有状态，供预览联动 UI）。 */
 let mockAutostart = false;
 
@@ -98,7 +114,16 @@ function mockInvoke(cmd, args) {
     case "autostart_status":
       return { enabled: mockAutostart, method: mockAutostart ? "task" : null };
     case "core_status":
-      return { running: true, hidden: false, elevated: false, monitoring: mockMonitoring };
+      return {
+        running: true,
+        hidden: false,
+        elevated: false,
+        monitoring: mockMonitoring,
+        auto_hide_enabled: mockAutoHide,
+      };
+    case "save_config":
+      mockAutoHide = !!args?.config?.setting?.auto_hide_enabled;
+      return null;
     case "set_hotkeys_enabled":
       mockMonitoring = !!args?.enabled;
       return true;
@@ -127,6 +152,16 @@ function mockInvoke(cmd, args) {
         blog: "https://blog.ivan-hanloth.cn/",
         license: "MIT",
       };
+    case "verhub_project_links":
+      return {
+        name: "Boss Key",
+        website_url: "https://boss-key.ivan-hanloth.cn/",
+        repo_url: "https://github.com/IvanHanloth/Boss-Key",
+        docs_url: "https://boss-key.ivan-hanloth.cn/guide/",
+        author: "Ivan Hanloth",
+        author_homepage_url: "https://www.ivan-hanloth.cn/",
+        fetched_at: Math.floor(Date.now() / 1000),
+      };
     case "verhub_check_update":
       return {
         should_update: false,
@@ -141,7 +176,7 @@ function mockInvoke(cmd, args) {
         {
           id: "mock-1",
           title: "Boss Key 3.0 发布",
-          content: "全新界面与核心，鼠标按键触发、崩溃恢复、进程冻结。",
+          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://boss-key.ivan-hanloth.cn/changelog/)。",
           is_pinned: true,
           is_hidden: false,
           author: "Ivan Hanloth",

@@ -101,7 +101,7 @@ fn load_icon_from_file() -> Option<HICON> {
 
 pub struct TrayIcon {
     hwnd: HWND,
-    /// 业务层期望的可见性（如「隐藏后同时隐藏图标」时为 false）。
+    /// 业务层期望的可见性（如「同时隐藏 Boss Key 托盘图标」时为 false）。
     desired: bool,
     /// 图标是否实际已挂到任务栏（NIM_ADD 成功）。
     visible: bool,
@@ -202,6 +202,35 @@ impl TrayIcon {
 
     pub fn is_visible(&self) -> bool {
         self.visible
+    }
+
+    /// 替换托盘图标（状态角标变化时调用）。已挂载时立即 NIM_MODIFY 生效，
+    /// 未挂载时仅记下句柄，待补挂时一并带上。图标未变化时不重复提交。
+    pub fn set_icon(&mut self, icon: HICON) {
+        if self.icon == icon {
+            return;
+        }
+        self.icon = icon;
+        self.modify_if_visible();
+    }
+
+    /// 替换悬浮提示文字（空串 = 悬停不显示任何文字）。文字未变化时不重复提交。
+    pub fn set_tip(&mut self, tip: &str) {
+        if self.tip == tip {
+            return;
+        }
+        self.tip = tip.to_string();
+        self.modify_if_visible();
+    }
+
+    fn modify_if_visible(&self) {
+        if !self.visible {
+            return;
+        }
+        let data = self.base_data();
+        unsafe {
+            let _ = Shell_NotifyIconW(NIM_MODIFY, &data);
+        }
     }
 
     pub fn balloon(&self, title: &str, message: &str) {

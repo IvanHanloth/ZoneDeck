@@ -4,9 +4,11 @@ use std::time::Duration;
 use bosskey_common::Config;
 use bosskey_common::ipc::{Command, PipeClient, Response};
 use bosskey_common::model::WindowInfo;
-use bosskey_common::verhub;
+use bosskey_core::i18n::{self, Msg};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
+
+mod verhub;
 
 const CORE_EXE: &str = "Boss Key.exe";
 
@@ -27,7 +29,7 @@ fn core_exe_path() -> Result<PathBuf, String> {
     if exe.exists() {
         Ok(exe)
     } else {
-        Err(format!("未找到核心程序 {CORE_EXE}"))
+        Err(i18n::tf(Msg::ErrCoreExeMissing, &[("exe", CORE_EXE)]))
     }
 }
 
@@ -72,14 +74,17 @@ struct AppInfo {
 
 #[tauri::command]
 fn load_config() -> Result<Config, String> {
-    Config::load(&config_path()).map_err(|e| e.to_string())
+    let config = Config::load(&config_path()).map_err(|e| e.to_string())?;
+    i18n::set_from_pref(&config.setting.language);
+    Ok(config)
 }
 
 #[tauri::command]
 async fn save_config(config: Config) -> Result<(), String> {
     blocking(move || {
+        i18n::set_from_pref(&config.setting.language);
         config.save(&config_path()).map_err(|e| e.to_string())?;
-        // 通知核心热重载；核心未运行时忽略错误。
+        // 通知核心热重载；核心据此同步语言。核心未运行时忽略错误。
         let _ = notify_core(&Command::ReloadConfig);
         Ok(())
     })
@@ -119,10 +124,25 @@ async fn show_all_windows() -> Result<(), String> {
     blocking(|| notify_core(&Command::Show).map(|_| ())).await
 }
 
-/// 恢复显示指定窗口（窗口恢复工具）：直接对选中的句柄 ShowWindow。
+/// 把恢复工具的窗口操作交给核心执行；核心未应答（未运行 / 出错）时返回 false，
+/// 由调用方退回直接操作。
+fn try_core_window_op(command: &Command) -> bool {
+    matches!(
+        PipeClient::connect_default().fast().send(command),
+        Ok(Response::Ok)
+    )
+}
+
+/// 恢复显示指定窗口（窗口恢复工具）。优先经核心释放并更新记录；
+/// 核心不在运行才直接对句柄 ShowWindow。
 #[tauri::command]
 async fn show_windows(hwnds: Vec<i64>) {
     blocking(move || {
+        if try_core_window_op(&Command::ReleaseWindows {
+            hwnds: hwnds.clone(),
+        }) {
+            return;
+        }
         use bosskey_core::platform::WindowManager;
         let mgr = bosskey_core::platform::manager();
         for h in hwnds {
@@ -132,10 +152,16 @@ async fn show_windows(hwnds: Vec<i64>) {
     .await
 }
 
-/// 隐藏指定窗口（窗口恢复工具）：直接对选中的句柄隐藏。
+/// 隐藏指定窗口（窗口恢复工具）。优先经核心纳入隐藏记录（不施加静音 / 冻结）；
+/// 核心不在运行才直接对句柄隐藏。
 #[tauri::command]
 async fn hide_windows(hwnds: Vec<i64>) {
     blocking(move || {
+        if try_core_window_op(&Command::AdoptWindows {
+            hwnds: hwnds.clone(),
+        }) {
+            return;
+        }
         use bosskey_core::platform::WindowManager;
         let mgr = bosskey_core::platform::manager();
         for h in hwnds {
@@ -193,8 +219,18 @@ async fn run_freeze(
         if failed == 0 {
             Ok(())
         } else {
-            let action = if suspend { "冻结" } else { "解冻" };
-            Err(format!("{failed}/{} 个进程{action}失败", targets.len()))
+            let msg = if suspend {
+                Msg::ErrFreezePartial
+            } else {
+                Msg::ErrResumePartial
+            };
+            Err(i18n::tf(
+                msg,
+                &[
+                    ("failed", &failed.to_string()),
+                    ("total", &targets.len().to_string()),
+                ],
+            ))
         }
     })
     .await
@@ -246,6 +282,8 @@ struct CoreStatus {
     elevated: bool,
     /// 核心是否正在监听热键与鼠标（由核心回报）。
     monitoring: bool,
+    /// 自动隐藏当前是否启用（托盘菜单也可切换，须回读对齐界面）。
+    auto_hide_enabled: bool,
 }
 
 const CORE_OFFLINE: CoreStatus = CoreStatus {
@@ -253,6 +291,7 @@ const CORE_OFFLINE: CoreStatus = CoreStatus {
     hidden: false,
     elevated: false,
     monitoring: false,
+    auto_hide_enabled: false,
 };
 
 /// 核心状态：单次管道往返 + 快速失败（核心未运行时立即返回，不重试）。
@@ -267,11 +306,13 @@ async fn core_status() -> CoreStatus {
                 hidden,
                 elevated,
                 monitoring,
+                auto_hide_enabled,
             }) => CoreStatus {
                 running: true,
                 hidden,
                 elevated,
                 monitoring,
+                auto_hide_enabled,
             },
             _ => CORE_OFFLINE,
         }
@@ -373,28 +414,38 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接。仅放行 http/https。
+/// 用系统默认浏览器打开外部链接。仅放行 http/https/mailto（与前端 markdown 白名单一致）。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err("只允许打开 http/https 链接".to_string());
+    if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("mailto:") {
+        return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
     blocking(move || bosskey_core::shell::open(&url)).await
+}
+
+/// 项目公开链接（主页 / 仓库 / 文档等）。带缓存（内存 + exe 同目录磁盘文件，
+/// 有效期一天），过期才请求 Verhub；请求失败退回过期缓存。
+#[tauri::command]
+async fn verhub_project_links() -> Result<verhub::ProjectLinks, String> {
+    verhub::project_links(&exe_dir().join("verhub_cache.json"))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 检查更新。`required=true` 即强制更新，界面须阻断使用。
 #[tauri::command]
 async fn verhub_check_update(include_preview: bool) -> Result<verhub::CheckUpdate, String> {
-    blocking(move || {
-        verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview).map_err(|e| e.to_string())
-    })
-    .await
+    verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 公告列表（本平台可见的，从新到旧）。
 #[tauri::command]
 async fn verhub_announcements(limit: u32) -> Result<Vec<verhub::Announcement>, String> {
-    blocking(move || verhub::announcements(limit.clamp(1, 50)).map_err(|e| e.to_string())).await
+    verhub::announcements(limit.clamp(1, 50))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// `contact` 可空——留了才好回复用户。
@@ -405,40 +456,28 @@ async fn verhub_submit_feedback(
     contact: String,
 ) -> Result<(), String> {
     if content.trim().is_empty() {
-        return Err("请先填写反馈内容".to_string());
+        return Err(i18n::t(Msg::ErrFeedbackEmpty).to_string());
     }
-    blocking(move || {
-        let feedback = verhub::Feedback {
-            rating: rating.map(|r| r.clamp(1, 5)),
-            content,
-            platform: verhub::PLATFORM,
-            custom_data: serde_json::json!({
-                "app_version": env!("CARGO_PKG_VERSION"),
-                "os": os_description(),
-                "contact": contact.trim(),
-            }),
-        };
-        verhub::submit_feedback(&feedback).map_err(|e| e.to_string())
-    })
-    .await
+    let custom_data = serde_json::json!({
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os": os_description(),
+        "contact": contact.trim(),
+    });
+    verhub::submit_feedback(content, rating.map(|r| r.clamp(1, 5)), custom_data)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// 上报一段日志
 #[tauri::command]
 async fn verhub_upload_log(content: String) -> Result<(), String> {
-    blocking(move || {
-        verhub::upload_log(
-            verhub::LogLevel::Error,
-            &content,
-            serde_json::json!({
-                "app_version": env!("CARGO_PKG_VERSION"),
-                "os": os_description(),
-
-            }),
-        )
+    let device_info = serde_json::json!({
+        "app_version": env!("CARGO_PKG_VERSION"),
+        "os": os_description(),
+    });
+    verhub::upload_log(&content, device_info)
+        .await
         .map_err(|e| e.to_string())
-    })
-    .await
 }
 
 /// 最新日志文件的末尾若干行。
@@ -519,6 +558,7 @@ pub fn run() {
             startup_action,
             app_info,
             open_external,
+            verhub_project_links,
             verhub_check_update,
             verhub_announcements,
             verhub_submit_feedback,

@@ -3,6 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 
 use crate::APP_CONFIG_VERSION;
+use crate::i18n::LANG_AUTO;
 use crate::model::{ProcessRule, WindowInfo, WindowRule};
 
 pub const DEFAULT_HIDE_HOTKEY: &str = "Ctrl+Q";
@@ -41,6 +42,9 @@ fn default_clicks() -> u8 {
 fn default_multi_click_ms() -> u32 {
     DEFAULT_MULTI_CLICK_MS
 }
+fn default_language() -> String {
+    LANG_AUTO.to_string()
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -56,6 +60,30 @@ pub struct Hotkey {
     pub hide_hotkey: String,
     #[serde(default = "default_close_hotkey")]
     pub close_hotkey: String,
+    /// 只隐藏、不恢复的热键；默认置空（关闭）。
+    #[serde(default)]
+    pub hide_only_hotkey: String,
+    /// 只恢复、不隐藏的热键；默认置空（关闭）。
+    #[serde(default)]
+    pub show_only_hotkey: String,
+    /// 只隐藏当前前台窗口的热键，可连续触发逐个隐藏；默认置空（关闭）。
+    #[serde(default)]
+    pub hide_foreground_hotkey: String,
+    /// 隐藏热键是否不传递给其他程序（核心改用键盘钩子拦截）。
+    #[serde(default)]
+    pub hide_intercept: bool,
+    /// 关闭热键是否不传递给其他程序（核心改用键盘钩子拦截）。
+    #[serde(default)]
+    pub close_intercept: bool,
+    /// 仅隐藏热键是否不传递给其他程序。
+    #[serde(default)]
+    pub hide_only_intercept: bool,
+    /// 仅显示热键是否不传递给其他程序。
+    #[serde(default)]
+    pub show_only_intercept: bool,
+    /// 隐藏前台窗口热键是否不传递给其他程序。
+    #[serde(default)]
+    pub hide_foreground_intercept: bool,
 }
 
 impl Default for Hotkey {
@@ -63,6 +91,14 @@ impl Default for Hotkey {
         Self {
             hide_hotkey: default_hide_hotkey(),
             close_hotkey: default_close_hotkey(),
+            hide_only_hotkey: String::new(),
+            show_only_hotkey: String::new(),
+            hide_foreground_hotkey: String::new(),
+            hide_intercept: false,
+            close_intercept: false,
+            hide_only_intercept: false,
+            show_only_intercept: false,
+            hide_foreground_intercept: false,
         }
     }
 }
@@ -176,6 +212,79 @@ impl MouseSetting {
     }
 }
 
+/// 托盘角标可绑定的状态源取值（空串 = 不显示该颜色）。
+pub const TRAY_STATUS_HIDDEN: &str = "hidden";
+pub const TRAY_STATUS_AUTO_HIDE: &str = "auto_hide";
+pub const TRAY_STATUS_HIDE_CURRENT: &str = "hide_current";
+pub const TRAY_STATUS_FREEZE: &str = "freeze";
+pub const TRAY_STATUS_ELEVATED: &str = "elevated";
+pub const TRAY_STATUS_MONITOR_PAUSED: &str = "monitor_paused";
+/// 全部合法的非空状态源。
+pub const TRAY_STATUSES: [&str; 6] = [
+    TRAY_STATUS_HIDDEN,
+    TRAY_STATUS_AUTO_HIDE,
+    TRAY_STATUS_HIDE_CURRENT,
+    TRAY_STATUS_FREEZE,
+    TRAY_STATUS_ELEVATED,
+    TRAY_STATUS_MONITOR_PAUSED,
+];
+
+fn default_badge_red() -> String {
+    TRAY_STATUS_HIDDEN.to_string()
+}
+fn default_badge_green() -> String {
+    TRAY_STATUS_AUTO_HIDE.to_string()
+}
+fn default_badge_yellow() -> String {
+    TRAY_STATUS_HIDE_CURRENT.to_string()
+}
+fn default_badge_blue() -> String {
+    TRAY_STATUS_FREEZE.to_string()
+}
+
+/// 托盘图标状态角标：四种颜色各自绑定一个状态源。
+///
+/// 多个绑定状态同时活跃时按 **红 > 绿 > 黄 > 蓝** 的优先级只显示一个圆点；
+/// 置空（`""`）表示该颜色不显示。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrayBadges {
+    #[serde(default = "default_badge_red")]
+    pub red: String,
+    #[serde(default = "default_badge_green")]
+    pub green: String,
+    #[serde(default = "default_badge_yellow")]
+    pub yellow: String,
+    #[serde(default = "default_badge_blue")]
+    pub blue: String,
+}
+
+impl Default for TrayBadges {
+    fn default() -> Self {
+        Self {
+            red: default_badge_red(),
+            green: default_badge_green(),
+            yellow: default_badge_yellow(),
+            blue: default_badge_blue(),
+        }
+    }
+}
+
+impl TrayBadges {
+    /// 未知状态源一律归一为置空（不显示），避免手改配置后角标行为不可预测。幂等。
+    pub fn normalize(&mut self) {
+        for v in [
+            &mut self.red,
+            &mut self.green,
+            &mut self.yellow,
+            &mut self.blue,
+        ] {
+            if !v.is_empty() && !TRAY_STATUSES.contains(&v.as_str()) {
+                v.clear();
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Setting {
     #[serde(default = "default_true")]
@@ -188,6 +297,12 @@ pub struct Setting {
     pub click_to_hide: bool,
     #[serde(default)]
     pub hide_icon_after_hide: bool,
+    /// 托盘图标状态角标的颜色绑定，见 [`TrayBadges`]。
+    #[serde(default)]
+    pub tray_badges: TrayBadges,
+    /// 是否显示托盘图标的悬浮名称（Boss Key）；关闭后悬停不显示任何文字。
+    #[serde(default = "default_true")]
+    pub tray_show_tooltip: bool,
     #[serde(default)]
     pub freeze_after_hide: bool,
     #[serde(default)]
@@ -232,6 +347,9 @@ pub struct Setting {
     /// 仅影响计划任务方式；注册表回退始终以普通权限运行。
     #[serde(default)]
     pub autostart_admin: bool,
+    /// 界面语言：`auto` 跟随系统，或 `zh-CN`／`en`／`zh-TW`。核心与配置程序共用。
+    #[serde(default = "default_language")]
+    pub language: String,
 }
 
 impl Default for Setting {
@@ -242,6 +360,8 @@ impl Default for Setting {
             hide_current: true,
             click_to_hide: true,
             hide_icon_after_hide: false,
+            tray_badges: TrayBadges::default(),
+            tray_show_tooltip: true,
             freeze_after_hide: false,
             enhanced_freeze: false,
             freeze_whole_tree: false,
@@ -260,6 +380,7 @@ impl Default for Setting {
             corner_fast_only: true,
             log_retention_days: DEFAULT_LOG_RETENTION_DAYS,
             autostart_admin: false,
+            language: default_language(),
         }
     }
 }
@@ -275,7 +396,9 @@ impl Setting {
         self.middle_button_hide = false;
         self.side_button1_hide = false;
         self.side_button2_hide = false;
+        self.tray_badges.normalize();
         self.mouse.normalize();
+        self.language = crate::i18n::normalize_pref(&self.language);
     }
 }
 
@@ -378,13 +501,25 @@ impl Config {
     }
 
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
+        Self::load_reporting(path).map(|(config, _)| config)
+    }
+
+    /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
+    ///
+    /// 损坏文件回退默认值是刻意行为（保证核心总能启动），代价是用户的规则会「凭空消失」。
+    /// 调用方据第二个返回值把解析错误写进日志，否则这一幕无迹可循。
+    /// 返回 `(配置, 解析错误)`；解析成功或文件不存在时第二项为 `None`。
+    pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
         match std::fs::read_to_string(path) {
             Ok(s) => {
-                let mut config: Config = serde_json::from_str(&s).unwrap_or_default();
+                let (mut config, parse_error) = match serde_json::from_str::<Config>(&s) {
+                    Ok(config) => (config, None),
+                    Err(e) => (Config::default(), Some(e.to_string())),
+                };
                 config.normalize();
-                Ok(config)
+                Ok((config, parse_error))
             }
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Config::default(), None)),
             Err(e) => Err(ConfigError::Io(e)),
         }
     }
@@ -463,6 +598,65 @@ mod tests {
         assert_eq!(c.window_rules[0].process, "WeChat.exe");
         assert_eq!(c.window_rules[0].pid, 8888);
         assert!(!c.window_rules[0].is_regex(), "迁移出的规则应为精确规则");
+    }
+
+    #[test]
+    fn intercept_flags_default_off_for_old_configs() {
+        let c = Config::from_json(
+            r#"{"hotkey": {"hide_hotkey": "Ctrl+Q", "close_hotkey": "Win+Esc"}}"#,
+        )
+        .unwrap();
+        assert!(!c.hotkey.hide_intercept, "旧配置无此字段应默认关闭");
+        assert!(!c.hotkey.close_intercept);
+        assert!(!Hotkey::default().hide_intercept, "全新配置也默认关闭");
+        assert!(!Hotkey::default().close_intercept);
+    }
+
+    #[test]
+    fn separate_hide_show_hotkeys_default_to_disabled() {
+        let h = Hotkey::default();
+        assert!(h.hide_only_hotkey.is_empty(), "仅隐藏热键默认置空");
+        assert!(h.show_only_hotkey.is_empty(), "仅显示热键默认置空");
+        assert!(h.hide_foreground_hotkey.is_empty(), "隐藏前台热键默认置空");
+        assert!(!h.hide_only_intercept);
+        assert!(!h.show_only_intercept);
+        assert!(!h.hide_foreground_intercept);
+
+        let c = Config::from_json(r#"{"hotkey": {"hide_hotkey": "Ctrl+Q"}}"#).unwrap();
+        assert!(c.hotkey.hide_only_hotkey.is_empty(), "旧配置无此字段应置空");
+        assert!(c.hotkey.show_only_hotkey.is_empty());
+        assert!(c.hotkey.hide_foreground_hotkey.is_empty());
+    }
+
+    #[test]
+    fn separate_hide_show_hotkeys_round_trip() {
+        let c = Config::from_json(
+            r#"{"hotkey": {
+                "hide_only_hotkey": "Ctrl+Alt+H",
+                "show_only_hotkey": "Ctrl+Alt+S",
+                "hide_foreground_hotkey": "Ctrl+Alt+F",
+                "hide_foreground_intercept": true
+            }}"#,
+        )
+        .unwrap();
+        assert_eq!(c.hotkey.hide_only_hotkey, "Ctrl+Alt+H");
+        assert_eq!(c.hotkey.show_only_hotkey, "Ctrl+Alt+S");
+        assert_eq!(c.hotkey.hide_foreground_hotkey, "Ctrl+Alt+F");
+        assert!(c.hotkey.hide_foreground_intercept);
+        assert!(!c.hotkey.hide_only_intercept, "各热键的开关相互独立");
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.hotkey, c.hotkey, "写回后应保留");
+    }
+
+    #[test]
+    fn intercept_flags_round_trip_independently() {
+        let c = Config::from_json(r#"{"hotkey": {"hide_intercept": true}}"#).unwrap();
+        assert!(c.hotkey.hide_intercept);
+        assert!(!c.hotkey.close_intercept, "两个开关相互独立");
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert!(back.hotkey.hide_intercept, "写回后应保留");
+        assert!(!back.hotkey.close_intercept);
     }
 
     #[test]
@@ -558,6 +752,57 @@ mod tests {
         assert_eq!(c.setting.auto_hide_time, 5);
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
         assert!(!c.setting.autostart_admin, "自启默认普通权限");
+    }
+
+    #[test]
+    fn tray_badges_default_bindings() {
+        let d = TrayBadges::default();
+        assert_eq!(
+            d.red, TRAY_STATUS_HIDDEN,
+            "红色默认绑定「存在隐藏中的窗口」"
+        );
+        assert_eq!(
+            d.green, TRAY_STATUS_AUTO_HIDE,
+            "绿色默认绑定「启用了自动隐藏」"
+        );
+        assert_eq!(
+            d.yellow, TRAY_STATUS_HIDE_CURRENT,
+            "黄色默认绑定「同时隐藏当前窗口」"
+        );
+        assert_eq!(d.blue, TRAY_STATUS_FREEZE, "蓝色默认绑定「启用了进程冻结」");
+        assert!(Setting::default().tray_show_tooltip, "悬浮名称默认显示");
+    }
+
+    #[test]
+    fn tray_badges_round_trip_including_empty() {
+        let c = Config::from_json(
+            r#"{"setting": {"tray_badges": {"red": "", "green": "freeze"}, "tray_show_tooltip": false}}"#,
+        )
+        .unwrap();
+        assert_eq!(c.setting.tray_badges.red, "", "置空表示不显示该颜色");
+        assert_eq!(c.setting.tray_badges.green, TRAY_STATUS_FREEZE);
+        assert_eq!(
+            c.setting.tray_badges.yellow, TRAY_STATUS_HIDE_CURRENT,
+            "缺失的颜色用默认绑定"
+        );
+        assert!(!c.setting.tray_show_tooltip);
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(
+            back.setting.tray_badges, c.setting.tray_badges,
+            "写回后应保留"
+        );
+        assert!(!back.setting.tray_show_tooltip, "写回后应保留");
+    }
+
+    #[test]
+    fn tray_badges_unknown_status_normalizes_to_empty() {
+        let c = Config::from_json(r#"{"setting": {"tray_badges": {"red": "no_such_status"}}}"#)
+            .unwrap();
+        assert_eq!(c.setting.tray_badges.red, "", "未知状态源应归一为置空");
+        assert_eq!(
+            c.setting.tray_badges.blue, TRAY_STATUS_FREEZE,
+            "其余颜色不受影响"
+        );
     }
 
     #[test]

@@ -27,6 +27,16 @@ pub enum Command {
     SetHotkeys {
         enabled: bool,
     },
+    /// 窗口恢复工具：恢复显示指定句柄。在核心隐藏记录里的窗口按整进程释放
+    /// （连同解冻 / 取消静音）；不在记录里的句柄直接恢复显示。
+    ReleaseWindows {
+        hwnds: Vec<i64>,
+    },
+    /// 窗口恢复工具：隐藏指定句柄并纳入核心隐藏记录（享受崩溃恢复保护），
+    /// 不施加静音 / 冻结 / 暂停键。
+    AdoptWindows {
+        hwnds: Vec<i64>,
+    },
     Quit,
 }
 
@@ -41,10 +51,13 @@ pub enum Response {
         elevated: bool,
     },
     /// `monitoring`：核心是否正在监听热键与鼠标（被 `SetHotkeys` 停用时为 false）。
+    /// `auto_hide_enabled`：自动隐藏当前是否启用（托盘菜单与设置界面均可切换，须回传对齐）。
     Status {
         hidden: bool,
         elevated: bool,
         monitoring: bool,
+        #[serde(default)]
+        auto_hide_enabled: bool,
     },
     Error {
         message: String,
@@ -161,6 +174,11 @@ mod tests {
             },
             Command::SetHotkeys { enabled: true },
             Command::SetHotkeys { enabled: false },
+            Command::ReleaseWindows {
+                hwnds: vec![1, 2, 3],
+            },
+            Command::ReleaseWindows { hwnds: vec![] },
+            Command::AdoptWindows { hwnds: vec![42] },
             Command::Quit,
         ];
         for c in cases {
@@ -198,11 +216,13 @@ mod tests {
                 hidden: true,
                 elevated: false,
                 monitoring: true,
+                auto_hide_enabled: false,
             },
             Response::Status {
                 hidden: false,
                 elevated: true,
                 monitoring: false,
+                auto_hide_enabled: true,
             },
             Response::Error {
                 message: "出错了".to_string(),

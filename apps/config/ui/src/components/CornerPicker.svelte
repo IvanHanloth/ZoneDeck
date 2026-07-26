@@ -1,5 +1,6 @@
 <script>
   import { CORNERS, buildTimeline, enabledParts } from "../lib/pointer.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   let { setting } = $props();
 
@@ -103,7 +104,7 @@
           role="checkbox"
           tabindex="0"
           aria-checked={setting[corner.key]}
-          aria-label={corner.label}
+          aria-label={t(corner.labelKey)}
           onclick={() => toggle(corner.key)}
           onkeydown={(e) => onkey(e, corner.key)}
         >
@@ -150,7 +151,7 @@
 
   <p class="caption" class:dim={picked.length === 0}>
     {#if picked.length === 0}
-      点击屏幕的任意一角即可启用
+      {t("corner.clickToEnable")}
     {:else}
       {frame.caption}
     {/if}

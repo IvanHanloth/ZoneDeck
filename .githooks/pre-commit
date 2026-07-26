@@ -1,0 +1,21 @@
+#!/bin/sh
+# Boss Key pre-commit：文档与文案的 i18n 一致性检查。
+#
+# 只在暂存区涉及 docs/、前端或 crates/ 时才跑对应检查，与本次提交无关的部分直接跳过。
+# 启用方式（每个克隆一次）：git config core.hooksPath .githooks
+# 确有需要时可跳过：git commit --no-verify
+
+set -e
+
+root=$(git rev-parse --show-toplevel)
+
+if command -v pwsh >/dev/null 2>&1; then
+  shell=pwsh
+elif command -v powershell >/dev/null 2>&1; then
+  shell=powershell
+else
+  echo "pre-commit：未找到 PowerShell，跳过 i18n 检查" >&2
+  exit 0
+fi
+
+"$shell" -NoProfile -File "$root/scripts/i18n-check.ps1" -Staged

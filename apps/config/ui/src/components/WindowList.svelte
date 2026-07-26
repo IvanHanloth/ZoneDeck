@@ -7,6 +7,8 @@
   import IconRefresh from "~icons/lucide/refresh-cw";
   import IconChevronDown from "~icons/lucide/chevron-down";
   import { groupByProcess, splitByVisibility } from "../lib/grouping.js";
+  import { t } from "../lib/i18n.svelte.js";
+  import { NO_TITLE } from "../lib/grouping.js";
   import { app } from "../lib/state.svelte.js";
 
   let {
@@ -46,14 +48,14 @@
     <span class="title-text"><IconAppWindow width="15" height="15" /> {title}</span>
     <span class="count">{windows.length}</span>
     <div class="tools">
-      <button class="mini" title="刷新窗口列表" onclick={() => onrefresh?.()}>
+      <button class="mini" title={t("windowList.refresh")} onclick={() => onrefresh?.()}>
         <IconRefresh width="14" height="14" />
       </button>
       <button
         class="mini"
         class:active={searchOpen}
-        title="搜索"
-        aria-label="搜索"
+        title={t("common.search")}
+        aria-label={t("common.search")}
         onclick={toggleSearch}
       >
         <IconSearch width="14" height="14" />
@@ -63,8 +65,8 @@
           class="mini"
           class:active={menuOpen}
           onclick={() => menuOpen = !menuOpen}
-          title="更多选项"
-          aria-label="更多选项"
+          title={t("windowList.moreOptions")}
+          aria-label={t("windowList.moreOptions")}
         >
           <IconChevronDown width="14" height="14" />
         </button>
@@ -72,11 +74,11 @@
           <div class="dropdown-menu">
             <label class="menu-item">
               <input type="checkbox" bind:checked={showBackground} />
-              <span>后台进程</span>
+              <span>{t("windowList.backgroundProcesses")}</span>
             </label>
             <label class="menu-item">
               <input type="checkbox" bind:checked={showUntitled} />
-              <span>无标题窗口</span>
+              <span>{t("windowList.untitledWindows")}</span>
             </label>
           </div>
         {/if}
@@ -90,13 +92,13 @@
       <!-- svelte-ignore a11y_autofocus -->
       <input
         type="text"
-        placeholder="搜索{title}…"
+        placeholder={t("windowList.searchPlaceholder", { title })}
         bind:value={search}
         spellcheck="false"
         autofocus
       />
       {#if search}
-        <button class="clear" title="清除" aria-label="清除" onclick={() => (search = "")}>
+        <button class="clear" title={t("common.clear")} aria-label={t("common.clear")} onclick={() => (search = "")}>
           <IconX width="13" height="13" />
         </button>
       {/if}
@@ -105,11 +107,11 @@
 
   <div class="win-list" role="listbox" aria-label={title}>
     {#if windows.length === 0}
-      <p class="hint empty">（空）</p>
+      <p class="hint empty">{t("common.empty")}</p>
     {:else}
       {@render section(parts.visible, null)}
       {#if parts.hidden.length}
-        {@render section(parts.hidden, "后台 / 已隐藏窗口")}
+        {@render section(parts.hidden, t("windowList.hiddenSection"))}
       {/if}
     {/if}
   </div>
@@ -133,7 +135,7 @@
         {#each group.windows as w (w.hwnd + "-" + w.process)}
           <label class="win-item" title={w.path}>
             <input type="checkbox" bind:group={selected} value={w.hwnd} />
-            <span class="wtitle">{w.title}</span>
+            <span class="wtitle">{w.title === NO_TITLE ? t("common.noTitleWindow") : w.title}</span>
             <span class="meta">PID {w.PID}</span>
           </label>
         {/each}

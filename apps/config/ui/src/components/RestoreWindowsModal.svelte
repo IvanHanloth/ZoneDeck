@@ -4,6 +4,7 @@
   import { invoke } from "../lib/ipc.js";
   import { app, toast } from "../lib/state.svelte.js";
   import { applyListFilters } from "../lib/grouping.js";
+  import { t } from "../lib/i18n.svelte.js";
 
   let { open = $bindable(false) } = $props();
 
@@ -52,55 +53,55 @@
       await fn();
       await load();
     } catch (err) {
-      toast(label + "失败：" + err, true);
+      toast(t("restore.actionFailed", { action: label, err }), true);
     } finally {
       busy = false;
     }
   }
 
   function showSel() {
-    if (selected.length === 0) return toast("请先勾选窗口", true);
-    run("显示窗口", async () => {
+    if (selected.length === 0) return toast(t("restore.pickFirst"), true);
+    run(t("restore.showWindows"), async () => {
       await invoke("show_windows", { hwnds: selected });
-      toast("已尝试显示选中窗口");
+      toast(t("restore.shown"));
     });
   }
 
   function hideSel() {
-    if (selected.length === 0) return toast("请先勾选窗口", true);
-    run("隐藏窗口", async () => {
+    if (selected.length === 0) return toast(t("restore.pickFirst"), true);
+    run(t("restore.hideWindows"), async () => {
       await invoke("hide_windows", { hwnds: selected });
-      toast("已隐藏选中窗口");
+      toast(t("restore.hidden"));
     });
   }
 
   function freezeSel() {
     const pids = selectedPids();
-    if (pids.length === 0) return toast("请先勾选窗口", true);
-    run("冻结进程", async () => {
+    if (pids.length === 0) return toast(t("restore.pickFirst"), true);
+    run(t("restore.freezeProcesses"), async () => {
       await invoke("freeze_pids", { pids, ...freezeArgs });
-      toast(`已冻结 ${pids.length} 个进程`);
+      toast(t("restore.frozen", { n: pids.length }));
     });
   }
 
   function resumeSel() {
     const pids = selectedPids();
-    if (pids.length === 0) return toast("请先勾选窗口", true);
-    run("解冻进程", async () => {
+    if (pids.length === 0) return toast(t("restore.pickFirst"), true);
+    run(t("restore.resumeProcesses"), async () => {
       await invoke("resume_pids", { pids, ...freezeArgs });
-      toast(`已解冻 ${pids.length} 个进程`);
+      toast(t("restore.resumed", { n: pids.length }));
     });
   }
 </script>
 
-<Modal title="窗口恢复工具" bind:open>
+<Modal title={t("restore.title")} bind:open>
   <p class="hint">
-   勾选后可显示 / 隐藏窗口，或冻结 / 解冻其所属进程<br>
-   冻结跟随「进程冻结」里的增强冻结与「冻结完整进程」设置。
+    {t("restore.hintLine1")}<br />
+    {t("restore.hintLine2")}
   </p>
   <div class="list-wrap">
     <WindowList
-      title="所有窗口"
+      title={t("restore.allWindows")}
       windows={shown}
       bind:selected
       bind:search
@@ -111,12 +112,12 @@
   </div>
 
   {#snippet footer()}
-    <button class="btn" onclick={() => (open = false)}>关闭</button>
+    <button class="btn" onclick={() => (open = false)}>{t("common.close")}</button>
     <span class="spacer"></span>
-    <button class="btn" disabled={busy} onclick={hideSel}>隐藏窗口</button>
-    <button class="btn" disabled={busy} onclick={freezeSel}>冻结进程</button>
-    <button class="btn" disabled={busy} onclick={resumeSel}>解冻进程</button>
-    <button class="btn primary" disabled={busy} onclick={showSel}>显示窗口</button>
+    <button class="btn" disabled={busy} onclick={hideSel}>{t("restore.hideWindows")}</button>
+    <button class="btn" disabled={busy} onclick={freezeSel}>{t("restore.freezeProcesses")}</button>
+    <button class="btn" disabled={busy} onclick={resumeSel}>{t("restore.resumeProcesses")}</button>
+    <button class="btn primary" disabled={busy} onclick={showSel}>{t("restore.showWindows")}</button>
   {/snippet}
 </Modal>
 
