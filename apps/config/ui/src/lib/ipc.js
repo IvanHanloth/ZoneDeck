@@ -29,6 +29,8 @@ const mockConfig = {
     hide_current: true,
     click_to_hide: true,
     hide_icon_after_hide: false,
+    tray_badges: { red: "hidden", green: "auto_hide", yellow: "hide_current", blue: "freeze" },
+    tray_show_tooltip: true,
     freeze_after_hide: false,
     enhanced_freeze: false,
     freeze_whole_tree: false,
@@ -96,6 +98,8 @@ const mockWindows = [
 
 /** mock 下的核心监控状态。 */
 let mockMonitoring = true;
+/** mock 下的自动隐藏开关（随 save_config 更新，供状态轮询回读联动）。 */
+let mockAutoHide = mockConfig.setting.auto_hide_enabled;
 /** mock 下的开机自启状态（有状态，供预览联动 UI）。 */
 let mockAutostart = false;
 
@@ -110,7 +114,16 @@ function mockInvoke(cmd, args) {
     case "autostart_status":
       return { enabled: mockAutostart, method: mockAutostart ? "task" : null };
     case "core_status":
-      return { running: true, hidden: false, elevated: false, monitoring: mockMonitoring };
+      return {
+        running: true,
+        hidden: false,
+        elevated: false,
+        monitoring: mockMonitoring,
+        auto_hide_enabled: mockAutoHide,
+      };
+    case "save_config":
+      mockAutoHide = !!args?.config?.setting?.auto_hide_enabled;
+      return null;
     case "set_hotkeys_enabled":
       mockMonitoring = !!args?.enabled;
       return true;

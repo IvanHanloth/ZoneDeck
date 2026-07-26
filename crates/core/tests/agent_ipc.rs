@@ -7,9 +7,10 @@ use bosskey_core::agent::{self, AgentOptions};
 fn agent_answers_ipc_and_quits_cleanly() {
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
-    bosskey_common::Config::default()
-        .save(&config_path)
-        .unwrap();
+    let mut config = bosskey_common::Config::default();
+    // 开启自动隐藏，验证 GetStatus 会如实回传该开关（供设置界面与托盘对齐）。
+    config.setting.auto_hide_enabled = true;
+    config.save(&config_path).unwrap();
 
     let pipe = r"\\.\pipe\bosskey_test_agent_e2e";
     let options = AgentOptions {
@@ -32,8 +33,15 @@ fn agent_answers_ipc_and_quits_cleanly() {
 
     let status = client.send(&Command::GetStatus).unwrap();
     assert!(
-        matches!(status, Response::Status { hidden: false, .. }),
-        "合并状态应一次往返返回隐藏态与权限: {status:?}"
+        matches!(
+            status,
+            Response::Status {
+                hidden: false,
+                auto_hide_enabled: true,
+                ..
+            }
+        ),
+        "合并状态应一次往返返回隐藏态、权限与自动隐藏开关: {status:?}"
     );
 
     let reload = client.send(&Command::ReloadConfig).unwrap();

@@ -212,6 +212,79 @@ impl MouseSetting {
     }
 }
 
+/// 托盘角标可绑定的状态源取值（空串 = 不显示该颜色）。
+pub const TRAY_STATUS_HIDDEN: &str = "hidden";
+pub const TRAY_STATUS_AUTO_HIDE: &str = "auto_hide";
+pub const TRAY_STATUS_HIDE_CURRENT: &str = "hide_current";
+pub const TRAY_STATUS_FREEZE: &str = "freeze";
+pub const TRAY_STATUS_ELEVATED: &str = "elevated";
+pub const TRAY_STATUS_MONITOR_PAUSED: &str = "monitor_paused";
+/// 全部合法的非空状态源。
+pub const TRAY_STATUSES: [&str; 6] = [
+    TRAY_STATUS_HIDDEN,
+    TRAY_STATUS_AUTO_HIDE,
+    TRAY_STATUS_HIDE_CURRENT,
+    TRAY_STATUS_FREEZE,
+    TRAY_STATUS_ELEVATED,
+    TRAY_STATUS_MONITOR_PAUSED,
+];
+
+fn default_badge_red() -> String {
+    TRAY_STATUS_HIDDEN.to_string()
+}
+fn default_badge_green() -> String {
+    TRAY_STATUS_AUTO_HIDE.to_string()
+}
+fn default_badge_yellow() -> String {
+    TRAY_STATUS_HIDE_CURRENT.to_string()
+}
+fn default_badge_blue() -> String {
+    TRAY_STATUS_FREEZE.to_string()
+}
+
+/// 托盘图标状态角标：四种颜色各自绑定一个状态源。
+///
+/// 多个绑定状态同时活跃时按 **红 > 绿 > 黄 > 蓝** 的优先级只显示一个圆点；
+/// 置空（`""`）表示该颜色不显示。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrayBadges {
+    #[serde(default = "default_badge_red")]
+    pub red: String,
+    #[serde(default = "default_badge_green")]
+    pub green: String,
+    #[serde(default = "default_badge_yellow")]
+    pub yellow: String,
+    #[serde(default = "default_badge_blue")]
+    pub blue: String,
+}
+
+impl Default for TrayBadges {
+    fn default() -> Self {
+        Self {
+            red: default_badge_red(),
+            green: default_badge_green(),
+            yellow: default_badge_yellow(),
+            blue: default_badge_blue(),
+        }
+    }
+}
+
+impl TrayBadges {
+    /// 未知状态源一律归一为置空（不显示），避免手改配置后角标行为不可预测。幂等。
+    pub fn normalize(&mut self) {
+        for v in [
+            &mut self.red,
+            &mut self.green,
+            &mut self.yellow,
+            &mut self.blue,
+        ] {
+            if !v.is_empty() && !TRAY_STATUSES.contains(&v.as_str()) {
+                v.clear();
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Setting {
     #[serde(default = "default_true")]
@@ -224,6 +297,12 @@ pub struct Setting {
     pub click_to_hide: bool,
     #[serde(default)]
     pub hide_icon_after_hide: bool,
+    /// 托盘图标状态角标的颜色绑定，见 [`TrayBadges`]。
+    #[serde(default)]
+    pub tray_badges: TrayBadges,
+    /// 是否显示托盘图标的悬浮名称（Boss Key）；关闭后悬停不显示任何文字。
+    #[serde(default = "default_true")]
+    pub tray_show_tooltip: bool,
     #[serde(default)]
     pub freeze_after_hide: bool,
     #[serde(default)]
@@ -281,6 +360,8 @@ impl Default for Setting {
             hide_current: true,
             click_to_hide: true,
             hide_icon_after_hide: false,
+            tray_badges: TrayBadges::default(),
+            tray_show_tooltip: true,
             freeze_after_hide: false,
             enhanced_freeze: false,
             freeze_whole_tree: false,
@@ -315,6 +396,7 @@ impl Setting {
         self.middle_button_hide = false;
         self.side_button1_hide = false;
         self.side_button2_hide = false;
+        self.tray_badges.normalize();
         self.mouse.normalize();
         self.language = crate::i18n::normalize_pref(&self.language);
     }
@@ -670,6 +752,57 @@ mod tests {
         assert_eq!(c.setting.auto_hide_time, 5);
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
         assert!(!c.setting.autostart_admin, "自启默认普通权限");
+    }
+
+    #[test]
+    fn tray_badges_default_bindings() {
+        let d = TrayBadges::default();
+        assert_eq!(
+            d.red, TRAY_STATUS_HIDDEN,
+            "红色默认绑定「存在隐藏中的窗口」"
+        );
+        assert_eq!(
+            d.green, TRAY_STATUS_AUTO_HIDE,
+            "绿色默认绑定「启用了自动隐藏」"
+        );
+        assert_eq!(
+            d.yellow, TRAY_STATUS_HIDE_CURRENT,
+            "黄色默认绑定「同时隐藏当前窗口」"
+        );
+        assert_eq!(d.blue, TRAY_STATUS_FREEZE, "蓝色默认绑定「启用了进程冻结」");
+        assert!(Setting::default().tray_show_tooltip, "悬浮名称默认显示");
+    }
+
+    #[test]
+    fn tray_badges_round_trip_including_empty() {
+        let c = Config::from_json(
+            r#"{"setting": {"tray_badges": {"red": "", "green": "freeze"}, "tray_show_tooltip": false}}"#,
+        )
+        .unwrap();
+        assert_eq!(c.setting.tray_badges.red, "", "置空表示不显示该颜色");
+        assert_eq!(c.setting.tray_badges.green, TRAY_STATUS_FREEZE);
+        assert_eq!(
+            c.setting.tray_badges.yellow, TRAY_STATUS_HIDE_CURRENT,
+            "缺失的颜色用默认绑定"
+        );
+        assert!(!c.setting.tray_show_tooltip);
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(
+            back.setting.tray_badges, c.setting.tray_badges,
+            "写回后应保留"
+        );
+        assert!(!back.setting.tray_show_tooltip, "写回后应保留");
+    }
+
+    #[test]
+    fn tray_badges_unknown_status_normalizes_to_empty() {
+        let c = Config::from_json(r#"{"setting": {"tray_badges": {"red": "no_such_status"}}}"#)
+            .unwrap();
+        assert_eq!(c.setting.tray_badges.red, "", "未知状态源应归一为置空");
+        assert_eq!(
+            c.setting.tray_badges.blue, TRAY_STATUS_FREEZE,
+            "其余颜色不受影响"
+        );
     }
 
     #[test]

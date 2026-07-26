@@ -6,7 +6,7 @@ export default {
 
   "tab.binding": "視窗綁定",
   "tab.hotkeys": "快速鍵與滑鼠",
-  "tab.notify": "通知設定",
+  "tab.notify": "提示設定",
   "tab.options": "其他選項",
   "tab.about": "關於與意見回饋",
 
@@ -169,6 +169,23 @@ export default {
   "notify.onHideDesc": "每次觸發隱藏時顯示通知",
   "notify.onShow": "顯示視窗時通知",
   "notify.onShowDesc": "每次復原顯示時顯示通知",
+
+  "notify.trayCard": "圖示狀態提示",
+  "notify.badgeRed": "紅色",
+  "notify.badgeGreen": "綠色",
+  "notify.badgeYellow": "黃色",
+  "notify.badgeBlue": "藍色",
+  "notify.statusNone": "不顯示",
+  "notify.statusHidden": "存在隱藏中的視窗",
+  "notify.statusAutoHide": "已啟用自動隱藏",
+  "notify.statusHideCurrent": "已啟用同時隱藏目前視窗",
+  "notify.statusFreeze": "已啟用程序凍結",
+  "notify.statusElevated": "以系統管理員身分執行",
+  "notify.statusMonitorPaused": "快速鍵監控已暫停",
+  "notify.trayPriorityNote":
+    "為每種顏色的圓點角標繫結一個狀態，角標顯示在通知區域圖示右下角；多個狀態同時滿足時，依紅 > 綠 > 黃 > 藍的優先順序僅顯示一個圓點。選擇「不顯示」可停用該顏色。",
+  "notify.trayTooltip": "顯示圖示懸浮名稱",
+  "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「Boss Key」；關閉後不顯示任何文字，更為隱密。",
 
   "options.generalCard": "一般",
   "options.muteAfterHide": "隱藏視窗後靜音",

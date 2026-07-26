@@ -18,7 +18,7 @@ export const app = $state({
   /** exe 路径 → PNG data URI；null 表示查询过但无图标（负缓存）。 */
   icons: {},
   /** 核心状态；running 为 null 表示首次检测尚未返回。monitoring 由核心回报。 */
-  status: { running: null, hidden: false, elevated: false, monitoring: true },
+  status: { running: null, hidden: false, elevated: false, monitoring: true, auto_hide_enabled: false },
   autostart: false,
   /** 当前自启注册方式："task"｜"registry"｜null（未注册）。 */
   autostartMethod: null,
@@ -173,11 +173,15 @@ async function loadIcons(windows) {
 // 自动保存：改动即存，带 debounce。
 
 let saveTimer = null;
+/** 有改动排队待存（debounce 期间为 true）；状态回读不得覆盖未保存的改动。 */
+let savePending = false;
 
 /** 安排一次自动保存；连续改动只在停顿后写一次盘。 */
 export function scheduleSave(delayMs = 600) {
+  savePending = true;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
+    savePending = false;
     saveConfig();
   }, delayMs);
 }
@@ -287,13 +291,23 @@ export function reportError(message, detail = "") {
   app.errorReport = { message, detail: String(detail) };
 }
 
+/** 托盘菜单也能切换自动隐藏；以核心回报为准回读界面，但不覆盖用户尚未保存的改动。 */
+function syncAutoHideFromCore() {
+  if (!app.config || !app.status.running) return;
+  if (savePending || app.saving) return;
+  if (app.config.setting.auto_hide_enabled !== app.status.auto_hide_enabled) {
+    app.config.setting.auto_hide_enabled = app.status.auto_hide_enabled;
+  }
+}
+
 /** 刷新核心状态；失败时视为核心离线。 */
 export async function refreshStatus() {
   try {
     app.status = await invoke("core_status");
   } catch {
-    app.status = { running: false, hidden: false, elevated: false, monitoring: false };
+    app.status = { running: false, hidden: false, elevated: false, monitoring: false, auto_hide_enabled: false };
   }
+  syncAutoHideFromCore();
   // 核心在停用期间重启过（新实例默认监听），重新按下停用。
   if (suspenders.size > 0 && app.status.running && app.status.monitoring) {
     invoke("set_hotkeys_enabled", { enabled: false }).catch(() => {});

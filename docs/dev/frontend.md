@@ -43,7 +43,7 @@ apps/config/ui/
 | --- | --- | --- |
 | 窗口绑定 | `BindingPanel` | 窗口列表 + 窗口/进程规则 |
 | 热键与鼠标 | `HotkeysPanel` | 键盘热键、鼠标连击、四角、空闲自动隐藏 |
-| 通知设置 | `NotificationsPanel` | 逐事件通知开关 |
+| 提示设置 | `NotificationsPanel` | 逐事件通知开关与图标状态角标 |
 | 其他选项 | `OptionsPanel` | 静音/暂停/冻结/权限/日志/工具 |
 | 关于与反馈 | `AboutPanel` | 版本、更新、公告、反馈 |
 

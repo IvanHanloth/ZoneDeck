@@ -7,7 +7,7 @@ export default {
 
   "tab.binding": "窗口绑定",
   "tab.hotkeys": "热键与鼠标",
-  "tab.notify": "通知设置",
+  "tab.notify": "提示设置",
   "tab.options": "其他选项",
   "tab.about": "关于与反馈",
 
@@ -170,6 +170,23 @@ export default {
   "notify.onHideDesc": "每次触发隐藏时弹出通知",
   "notify.onShow": "显示窗口时通知",
   "notify.onShowDesc": "每次恢复显示时弹出通知",
+
+  "notify.trayCard": "图标状态提示",
+  "notify.badgeRed": "红色",
+  "notify.badgeGreen": "绿色",
+  "notify.badgeYellow": "黄色",
+  "notify.badgeBlue": "蓝色",
+  "notify.statusNone": "不显示",
+  "notify.statusHidden": "存在隐藏中的窗口",
+  "notify.statusAutoHide": "启用了自动隐藏",
+  "notify.statusHideCurrent": "启用了同时隐藏当前窗口",
+  "notify.statusFreeze": "启用了进程冻结",
+  "notify.statusElevated": "以管理员身份运行",
+  "notify.statusMonitorPaused": "热键监控已暂停",
+  "notify.trayPriorityNote":
+    "为每种颜色的圆点角标绑定一个状态，角标显示在托盘图标右下角；多个状态同时满足时，按红 > 绿 > 黄 > 蓝的优先级只显示一个圆点。选择「不显示」可置空该颜色。",
+  "notify.trayTooltip": "显示图标悬浮名称",
+  "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「Boss Key」；关闭后不显示任何文字，更隐蔽。",
 
   "options.generalCard": "常规",
   "options.muteAfterHide": "隐藏窗口后静音",

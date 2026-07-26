@@ -49,6 +49,8 @@ The settings window reads and writes the configuration automatically. This page 
 | `hide_current` | bool | `true` | [Also hide the active window](/en/guide/options) |
 | `click_to_hide` | bool | `true` | [Toggle hiding by clicking the tray icon](/en/guide/options) |
 | `hide_icon_after_hide` | bool | `false` | [Also hide the tray icon](/en/guide/options) |
+| `tray_badges` | object | See below | [Tray icon status](/en/guide/notifications#tray-icon-status) |
+| `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [Enhanced freezing](/en/guide/freeze) |
 | `freeze_whole_tree` | bool | `false` | [Freeze the whole process tree](/en/guide/freeze) |
@@ -84,6 +86,19 @@ Each button is a `MouseButton`: `{ enabled: bool, clicks: 1..=3, modifiers: stri
 ::: info Defaults for a fresh installation
 A fresh installation enables **a middle-button single click** (`middle.enabled = true`, `clicks = 1`) and leaves the other four off. An old configuration without a `mouse` section reads as **all off**.
 :::
+
+### `setting.tray_badges`
+
+[Tray icon status](/en/guide/notifications#tray-icon-status): each of the four colored dot badges is bound to a state source; when several bound states are active at once, only one dot is shown, in **red > green > yellow > blue** priority order.
+
+| Field | Default | Default meaning |
+| --- | --- | --- |
+| `red` | `"hidden"` | Windows are hidden |
+| `green` | `"auto_hide"` | Auto hide is enabled |
+| `yellow` | `"hide_current"` | Also-hide-active-window is enabled |
+| `blue` | `"freeze"` | Process freezing is enabled |
+
+Each field accepts `hidden` (windows are hidden) \| `auto_hide` (auto hide is enabled) \| `hide_current` (also-hide-active-window is enabled) \| `freeze` (process freezing is enabled) \| `elevated` (running as administrator) \| `monitor_paused` (hotkey monitoring is paused) \| `""` (empty = do not show that color); unknown values are normalised to empty on read.
 
 ## `notifications`
 

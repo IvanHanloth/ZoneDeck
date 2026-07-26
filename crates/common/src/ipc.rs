@@ -41,10 +41,13 @@ pub enum Response {
         elevated: bool,
     },
     /// `monitoring`：核心是否正在监听热键与鼠标（被 `SetHotkeys` 停用时为 false）。
+    /// `auto_hide_enabled`：自动隐藏当前是否启用（托盘菜单与设置界面均可切换，须回传对齐）。
     Status {
         hidden: bool,
         elevated: bool,
         monitoring: bool,
+        #[serde(default)]
+        auto_hide_enabled: bool,
     },
     Error {
         message: String,
@@ -198,11 +201,13 @@ mod tests {
                 hidden: true,
                 elevated: false,
                 monitoring: true,
+                auto_hide_enabled: false,
             },
             Response::Status {
                 hidden: false,
                 elevated: true,
                 monitoring: false,
+                auto_hide_enabled: true,
             },
             Response::Error {
                 message: "出错了".to_string(),

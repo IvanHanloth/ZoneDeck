@@ -43,7 +43,7 @@ apps/config/ui/
 | --- | --- | --- |
 | 視窗綁定 | `BindingPanel` | 視窗清單 + 視窗/程序規則 |
 | 快速鍵與滑鼠 | `HotkeysPanel` | 鍵盤快速鍵、滑鼠連按、四角、閒置自動隱藏 |
-| 通知設定 | `NotificationsPanel` | 逐事件通知開關 |
+| 提示設定 | `NotificationsPanel` | 逐事件通知開關與圖示狀態角標 |
 | 其他選項 | `OptionsPanel` | 靜音/暫停/凍結/權限/記錄檔/工具 |
 | 關於與意見回饋 | `AboutPanel` | 版本、更新、公告、意見回饋 |
 

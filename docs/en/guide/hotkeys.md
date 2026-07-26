@@ -92,6 +92,7 @@ Corner hiding relies on a low-level mouse hook (`WH_MOUSE_LL`), installed only w
 With **Enable auto-hide** on, Boss Key hides the bound windows automatically once the keyboard and mouse have been **idle** for the configured time.
 
 - **Idle time**: the period without input (in minutes) that triggers it. Default **5 minutes**.
+- **Quick toggle from the tray menu**: right-click the tray icon and click **Auto Hide** to pause / resume auto-hide without opening the settings window. A check mark means it is currently enabled, and the change stays in sync with the settings window. The tray icon can also show this state as a badge — see [Tray icon status](/en/guide/notifications#tray-icon-status).
 
 ## Summary
 

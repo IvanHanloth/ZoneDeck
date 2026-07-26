@@ -49,6 +49,8 @@ Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。*
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/options) |
 | `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/options) |
 | `hide_icon_after_hide` | bool | `false` | [隱藏後一併隱藏通知區域圖示](/zh-tw/guide/options) |
+| `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
+| `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [增強凍結](/zh-tw/guide/freeze) |
 | `freeze_whole_tree` | bool | `false` | [凍結完整程序](/zh-tw/guide/freeze) |
@@ -84,6 +86,19 @@ Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。*
 ::: info 全新安裝預設
 全新安裝預設開啟**中鍵按一下**（`middle.enabled = true`，`clicks = 1`），其餘四顆關閉。設定檔缺 `mouse` 一節的舊設定讀進來則**全關**。
 :::
+
+### `setting.tray_badges`
+
+[圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示)：四種顏色的圓點角標各自繫結一個狀態來源，多個狀態同時活躍時依**紅 > 綠 > 黃 > 藍**的優先順序僅顯示一個圓點。
+
+| 欄位 | 預設 | 預設含義 |
+| --- | --- | --- |
+| `red` | `"hidden"` | 存在隱藏中的視窗 |
+| `green` | `"auto_hide"` | 已啟用自動隱藏 |
+| `yellow` | `"hide_current"` | 已啟用同時隱藏目前視窗 |
+| `blue` | `"freeze"` | 已啟用程序凍結 |
+
+每項取值：`hidden`（存在隱藏中的視窗）｜`auto_hide`（已啟用自動隱藏）｜`hide_current`（已啟用同時隱藏目前視窗）｜`freeze`（已啟用程序凍結）｜`elevated`（以系統管理員身分執行）｜`monitor_paused`（快速鍵監控已暫停）｜`""`（留空 = 不顯示該顏色）；未知取值讀取時正規化為留空。
 
 ## `notifications`
 

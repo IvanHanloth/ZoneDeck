@@ -6,7 +6,7 @@ export default {
 
   "tab.binding": "Windows",
   "tab.hotkeys": "Hotkeys & Mouse",
-  "tab.notify": "Notifications",
+  "tab.notify": "Alerts",
   "tab.options": "Options",
   "tab.about": "About & Feedback",
 
@@ -174,6 +174,24 @@ export default {
   "notify.onHideDesc": "Show a notification each time hiding is triggered",
   "notify.onShow": "Notify when showing windows",
   "notify.onShowDesc": "Show a notification each time windows are restored",
+
+  "notify.trayCard": "Tray icon status",
+  "notify.badgeRed": "Red",
+  "notify.badgeGreen": "Green",
+  "notify.badgeYellow": "Yellow",
+  "notify.badgeBlue": "Blue",
+  "notify.statusNone": "Do not show",
+  "notify.statusHidden": "Windows are hidden",
+  "notify.statusAutoHide": "Auto hide is enabled",
+  "notify.statusHideCurrent": "Also-hide-active-window is enabled",
+  "notify.statusFreeze": "Process freezing is enabled",
+  "notify.statusElevated": "Running as administrator",
+  "notify.statusMonitorPaused": "Hotkey monitoring is paused",
+  "notify.trayPriorityNote":
+    "Bind a state to each colored dot badge; the badge appears in the bottom-right corner of the tray icon. When several bound states are active at once, only one dot is shown, in red > green > yellow > blue priority order. Choose “Do not show” to disable a color.",
+  "notify.trayTooltip": "Show the tray icon tooltip",
+  "notify.trayTooltipDesc":
+    "Show “Boss Key” when hovering over the tray icon; turn this off to show no text for extra discretion.",
 
   "options.generalCard": "General",
   "options.muteAfterHide": "Mute after hiding",

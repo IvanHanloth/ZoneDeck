@@ -16,7 +16,7 @@ The **first time** you open Boss Key after installing or updating, the **setting
 | --- | --- | --- |
 | **Windows** | Choose the windows / processes to hide | [Binding windows & processes](/en/guide/binding) |
 | **Hotkeys & Mouse** | Keyboard hotkeys, mouse clicks, corner gestures, auto-hide on idle | [Hotkeys & mouse gestures](/en/guide/hotkeys) |
-| **Notifications** | Per-event control of tray notifications | [Notifications](/en/guide/notifications) |
+| **Alerts** | Notifications and tray icon status badges | [Alerts](/en/guide/notifications) |
 | **Options** | Muting, pause key, freezing, privileges, logs, recovery tool, and more | [Other options](/en/guide/options) |
 | **About & Feedback** | Version information, update checks, announcements, feedback | [Updates & feedback](/en/guide/update) |
 
@@ -72,6 +72,7 @@ Day to day, **right-click the tray icon** to open the menu. It offers:
 - **Settings**: open the settings window.
 - **Hide Windows / Show Windows**: quickly hide or show the bound windows.
 - **Window Recovery Tool**: open the settings window on the window recovery tool — see [Window recovery & crash self-healing](/en/guide/recovery).
+- **Auto Hide**: pause / resume [auto-hide on idle](/en/guide/hotkeys#auto-hide-when-idle); a check mark means it is currently enabled.
 - **Start with Windows**: toggle starting automatically when you sign in.
 - **Exit**: end the core process.
 
