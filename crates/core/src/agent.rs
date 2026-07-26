@@ -32,6 +32,7 @@ use crate::keyboard_hook::{self, KeyboardHook, WM_KEY_TRIGGER};
 use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
+use crate::tray_badge::TrayIconSet;
 use crate::util::append_menu_item;
 use crate::{idle, ipc_server, logging, recovery};
 
@@ -50,6 +51,7 @@ const MENU_QUIT: usize = 1003;
 const MENU_AUTOSTART: usize = 1004;
 const MENU_RESTORE: usize = 1005;
 const MENU_ABOUT: usize = 1006;
+const MENU_AUTO_HIDE: usize = 1007;
 
 const AUTO_QUIT_TIMER_ID: usize = 10;
 const AUTO_HIDE_TIMER_ID: usize = 11;
@@ -85,6 +87,8 @@ struct AgentState {
     recovery_path: PathBuf,
     controller: HideController<WindowsWindowManager, WinEffects>,
     tray: Option<TrayIcon>,
+    /// 托盘图标的角标变体缓存；未启用托盘时为 None。
+    tray_icons: Option<TrayIconSet>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
     mouse_hook: Option<MouseHook>,
     float_window: Option<FloatWindow>,
@@ -239,20 +243,44 @@ impl AgentState {
         } else {
             self.float_window = None;
         }
+
+        self.update_tray_icon();
     }
 
     fn sync_tray(&mut self) {
-        if !self.config.setting.hide_icon_after_hide {
-            return;
-        }
         let hidden = self.controller.is_hidden();
-        if let Some(tray) = &mut self.tray {
+        if self.config.setting.hide_icon_after_hide
+            && let Some(tray) = &mut self.tray
+        {
             if hidden {
                 tray.hide();
             } else {
                 tray.show();
             }
         }
+        self.update_tray_icon();
+    }
+
+    /// 让托盘图标的状态角标与悬浮提示对齐当前配置与运行状态。均未变化时开销为零。
+    fn update_tray_icon(&mut self) {
+        let (Some(tray), Some(icons)) = (&mut self.tray, &mut self.tray_icons) else {
+            return;
+        };
+        let status = crate::tray_badge::TrayStatus {
+            hidden: self.controller.is_hidden(),
+            auto_hide: self.config.setting.auto_hide_enabled,
+            hide_current: self.config.setting.hide_current,
+            freeze: self.config.setting.freeze_after_hide,
+            elevated: crate::elevation::is_elevated(),
+            monitor_paused: !self.monitoring,
+        };
+        let badge = crate::tray_badge::active_badge(&self.config.setting.tray_badges, &status);
+        tray.set_icon(icons.icon(badge));
+        tray.set_tip(if self.config.setting.tray_show_tooltip {
+            APP_NAME
+        } else {
+            ""
+        });
     }
 
     /// 隐藏状态落盘：崩溃后下次启动据此找回窗口。快照为空时清除文件。
@@ -398,6 +426,7 @@ impl AgentState {
                     hidden: self.controller.is_hidden(),
                     elevated: crate::elevation::is_elevated(),
                     monitoring: self.monitoring,
+                    auto_hide_enabled: self.config.setting.auto_hide_enabled,
                 },
                 false,
             ),
@@ -531,6 +560,25 @@ fn set_autostart(enabled: bool, admin: bool) -> Response {
     }
 }
 
+/// 托盘菜单切换自动隐藏：翻转配置并落盘，与在设置界面切换等效。
+/// 设置界面经 2 秒一次的状态轮询回读该值，保持两侧一致。
+fn toggle_auto_hide(state: &mut AgentState, hwnd: HWND) {
+    let enabled = !state.config.setting.auto_hide_enabled;
+    state.config.setting.auto_hide_enabled = enabled;
+    logging::info(if enabled {
+        "托盘菜单：已启用自动隐藏"
+    } else {
+        "托盘菜单：已暂停自动隐藏"
+    });
+    if let Err(e) = state.config.save(&state.config_path) {
+        logging::warn(&format!(
+            "自动隐藏开关写入配置失败，核心重启后将丢失本次切换: {e}"
+        ));
+    }
+    // 重新武装/停掉空闲检测定时器，并刷新托盘角标。
+    state.refresh_runtime(hwnd);
+}
+
 fn toggle_autostart(state: &AgentState) {
     let Ok(auto) = crate::autostart::Autostart::standard() else {
         return;
@@ -567,7 +615,7 @@ fn state_mut<'a>(hwnd: HWND) -> Option<&'a mut AgentState> {
     }
 }
 
-fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
+fn show_tray_menu(hwnd: HWND, hidden: bool, auto_hide_on: bool) -> bool {
     let autostart_on = crate::autostart::Autostart::standard()
         .map(|a| a.status().is_some())
         .unwrap_or(false);
@@ -580,15 +628,28 @@ fn show_tray_menu(hwnd: HWND, hidden: bool) -> bool {
         } else {
             Msg::MenuHideWindows
         };
-        let autostart_flags = if autostart_on {
-            MF_STRING | MF_CHECKED
-        } else {
-            MF_STRING
+        let checked = |on: bool| {
+            if on {
+                MF_STRING | MF_CHECKED
+            } else {
+                MF_STRING
+            }
         };
         append_menu_item(menu, MF_STRING, MENU_SETTINGS, Msg::MenuSettings);
         append_menu_item(menu, MF_STRING, MENU_TOGGLE, toggle_label);
         append_menu_item(menu, MF_STRING, MENU_RESTORE, Msg::MenuRestoreTool);
-        append_menu_item(menu, autostart_flags, MENU_AUTOSTART, Msg::MenuAutostart);
+        append_menu_item(
+            menu,
+            checked(auto_hide_on),
+            MENU_AUTO_HIDE,
+            Msg::MenuAutoHide,
+        );
+        append_menu_item(
+            menu,
+            checked(autostart_on),
+            MENU_AUTOSTART,
+            Msg::MenuAutostart,
+        );
         append_menu_item(menu, MF_STRING, MENU_ABOUT, Msg::MenuAbout);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         append_menu_item(menu, MF_STRING, MENU_QUIT, Msg::MenuQuit);
@@ -731,7 +792,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     }
                 }
                 WM_RBUTTONUP => {
-                    show_tray_menu(hwnd, state.controller.is_hidden());
+                    show_tray_menu(
+                        hwnd,
+                        state.controller.is_hidden(),
+                        state.config.setting.auto_hide_enabled,
+                    );
                 }
                 _ => {}
             }
@@ -759,6 +824,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 MENU_RESTORE => launch_settings(state, Some(ARG_RESTORE)),
                 MENU_ABOUT => launch_settings(state, Some(ARG_ABOUT)),
                 MENU_TOGGLE => state.apply_toggle(),
+                MENU_AUTO_HIDE => toggle_auto_hide(state, hwnd),
                 MENU_AUTOSTART => toggle_autostart(state),
                 MENU_QUIT => quit(state, hwnd),
                 _ => {}
@@ -971,12 +1037,15 @@ pub fn run(options: AgentOptions) {
         .config_path
         .with_file_name(recovery::RECOVERY_FILE_NAME);
 
+    let tray_icons = tray.as_ref().map(|_| TrayIconSet::new());
+
     let mut state = Box::new(AgentState {
         config,
         config_path: options.config_path.clone(),
         recovery_path,
         controller: HideController::new(WindowsWindowManager, WinEffects::new(exe_dir)),
         tray,
+        tray_icons,
         ipc_rx,
         mouse_hook: None,
         float_window: None,

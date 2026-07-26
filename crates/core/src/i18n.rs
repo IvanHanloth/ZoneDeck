@@ -14,6 +14,7 @@ pub enum Msg {
     MenuShowWindows,
     MenuHideWindows,
     MenuRestoreTool,
+    MenuAutoHide,
     MenuAutostart,
     MenuAbout,
     MenuQuit,
@@ -59,6 +60,7 @@ impl Msg {
             Msg::MenuShowWindows => "显示窗口",
             Msg::MenuHideWindows => "隐藏窗口",
             Msg::MenuRestoreTool => "窗口恢复工具",
+            Msg::MenuAutoHide => "自动隐藏",
             Msg::MenuAutostart => "开机自启",
             Msg::MenuAbout => "关于",
             Msg::MenuQuit => "退出",
@@ -95,6 +97,7 @@ impl Msg {
             Msg::MenuShowWindows => "Show Windows",
             Msg::MenuHideWindows => "Hide Windows",
             Msg::MenuRestoreTool => "Window Recovery Tool",
+            Msg::MenuAutoHide => "Auto Hide",
             Msg::MenuAutostart => "Start with Windows",
             Msg::MenuAbout => "About",
             Msg::MenuQuit => "Exit",
@@ -131,6 +134,7 @@ impl Msg {
             Msg::MenuShowWindows => "顯示視窗",
             Msg::MenuHideWindows => "隱藏視窗",
             Msg::MenuRestoreTool => "視窗復原工具",
+            Msg::MenuAutoHide => "自動隱藏",
             Msg::MenuAutostart => "開機自動啟動",
             Msg::MenuAbout => "關於",
             Msg::MenuQuit => "結束",
@@ -210,11 +214,12 @@ mod tests {
     use super::*;
 
     /// 全部文案键；新增 Msg 变体后必须同步登记，否则跨语言校验会漏掉它。
-    const ALL_MSGS: [Msg; 31] = [
+    const ALL_MSGS: [Msg; 32] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
         Msg::MenuRestoreTool,
+        Msg::MenuAutoHide,
         Msg::MenuAutostart,
         Msg::MenuAbout,
         Msg::MenuQuit,

@@ -261,6 +261,8 @@ struct CoreStatus {
     elevated: bool,
     /// 核心是否正在监听热键与鼠标（由核心回报）。
     monitoring: bool,
+    /// 自动隐藏当前是否启用（托盘菜单也可切换，须回读对齐界面）。
+    auto_hide_enabled: bool,
 }
 
 const CORE_OFFLINE: CoreStatus = CoreStatus {
@@ -268,6 +270,7 @@ const CORE_OFFLINE: CoreStatus = CoreStatus {
     hidden: false,
     elevated: false,
     monitoring: false,
+    auto_hide_enabled: false,
 };
 
 /// 核心状态：单次管道往返 + 快速失败（核心未运行时立即返回，不重试）。
@@ -282,11 +285,13 @@ async fn core_status() -> CoreStatus {
                 hidden,
                 elevated,
                 monitoring,
+                auto_hide_enabled,
             }) => CoreStatus {
                 running: true,
                 hidden,
                 elevated,
                 monitoring,
+                auto_hide_enabled,
             },
             _ => CORE_OFFLINE,
         }

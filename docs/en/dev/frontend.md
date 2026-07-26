@@ -43,7 +43,7 @@ The settings window is organised as tabs, one panel component each:
 | --- | --- | --- |
 | Windows | `BindingPanel` | Window list + window/process rules |
 | Hotkeys & Mouse | `HotkeysPanel` | Keyboard hotkeys, mouse clicks, corners, auto-hide on idle |
-| Notifications | `NotificationsPanel` | Per-event notification switches |
+| Alerts | `NotificationsPanel` | Per-event notification switches and tray icon badges |
 | Options | `OptionsPanel` | Muting/pausing/freezing/privileges/logs/tools |
 | About & Feedback | `AboutPanel` | Version, updates, announcements, feedback |
 
