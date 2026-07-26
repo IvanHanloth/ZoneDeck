@@ -66,13 +66,16 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
         .unwrap();
 
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
+    // save 会盖上版本与本次开机时刻，等价于核心崩溃前留下的真实快照。
+    // 测试窗口属于本进程，pid 须如实填写，否则恢复侧的身份校验会拦下它。
     recovery::save(
         &recovery_path,
         &Snapshot {
-            hidden: vec![Target { hwnd, pid: 0 }],
+            hidden: vec![Target::bare(hwnd, std::process::id())],
             frozen: vec![],
             muted: vec![],
             enhanced: false,
+            ..Default::default()
         },
     )
     .unwrap();
@@ -97,6 +100,65 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
 
     assert!(is_visible(hwnd), "崩溃前被隐藏的窗口应在核心启动时被找回");
     assert!(!recovery_path.exists(), "恢复完成后 recovery.json 应被清除");
+
+    let quit = client.send(&Command::Quit).unwrap();
+    assert_eq!(quit, Response::Ok);
+
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !agent_thread.is_finished() {
+        assert!(Instant::now() < deadline, "代理线程未在退出命令后结束");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    agent_thread.join().unwrap();
+
+    unsafe {
+        let _ = PostThreadMessageW(window_tid, WM_QUIT, WPARAM(0), LPARAM(0));
+    }
+    window_thread.join().unwrap();
+}
+
+/// 跨重启的快照里 HWND 与 PID 都已失效，核心不得执行恢复动作，只清除文件。
+#[test]
+fn agent_discards_snapshot_from_a_previous_boot() {
+    let (hwnd, window_tid, window_thread) = spawn_hidden_window();
+    assert!(!is_visible(hwnd), "测试前提：窗口已隐藏");
+
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.json");
+    bosskey_common::Config::default()
+        .save(&config_path)
+        .unwrap();
+
+    // 手工构造「上一次开机」留下的快照：boot_time_ms 远早于本次开机。
+    let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
+    let stale = Snapshot {
+        schema: recovery::SCHEMA_CURRENT,
+        boot_time_ms: recovery::current_boot_time_ms() - 86_400_000,
+        hidden: vec![Target::bare(hwnd, std::process::id())],
+        frozen: vec![],
+        muted: vec![],
+        enhanced: false,
+    };
+    std::fs::write(&recovery_path, serde_json::to_string(&stale).unwrap()).unwrap();
+
+    let pipe = r"\\.\pipe\bosskey_test_agent_recovery_stale";
+    let options = AgentOptions {
+        config_path,
+        pipe_name: pipe.to_string(),
+        enable_tray: false,
+        auto_quit_ms: Some(15_000),
+    };
+    let agent_thread = std::thread::spawn(move || agent::run(options));
+
+    let client = PipeClient::new(pipe);
+    let state = client.send(&Command::GetState).unwrap();
+    assert_eq!(state, Response::State { hidden: false });
+
+    assert!(
+        !is_visible(hwnd),
+        "跨重启快照中的句柄不可信，不得执行恢复动作"
+    );
+    assert!(!recovery_path.exists(), "过期快照应被清除，不再反复触发");
 
     let quit = client.send(&Command::Quit).unwrap();
     assert_eq!(quit, Response::Ok);

@@ -79,8 +79,10 @@ Boss-Key/
 │           platform/win32.rs  窗口枚举/隐藏/显示（WindowManager trait）
 │           agent.rs      消息循环，聚合热键/托盘/IPC/鼠标/定时器
 │           hotkey.rs     热键字符串 → RegisterHotKey 解析
-│           hide.rs       隐藏选择逻辑 + HideController（隐藏/显示编排）
+│           hide.rs       隐藏选择逻辑 + HideController（plan/commit 两段式编排，
+│                         含死句柄剪枝与恢复前的窗口/进程身份校验）
 │           effects.rs    Effects trait（静音/冻结/暂停键，可注入 mock）
+│           effects_worker.rs  副作用专职线程（FIFO 队列；消息循环只做 SW_HIDE）
 │           audio.rs      Core Audio 会话静音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增强冻结
 │           mouse_hook.rs WH_MOUSE_LL（中键/侧键/四角）
@@ -92,7 +94,8 @@ Boss-Key/
 │           elevation.rs  管理员检测 + UAC 提权重启
 │           i18n.rs       核心用户可见文案 catalog（托盘菜单 / 气泡 / IPC 错误；日志不走它）
 │           logging.rs    分级文件日志（logs/BossKey-YYYY-MM-DD.log 按天切割 + panic 钩子）
-│           recovery.rs   崩溃恢复（隐藏状态落盘，异常退出后找回窗口）
+│           recovery.rs   崩溃恢复（意图先行落盘 + 原子写；快照带开机时刻与
+│                         进程创建时刻，跨重启的快照会被丢弃）
 │           icon.rs       进程图标提取（HICON → 手写 PNG/base64 编码）
 │           single_instance.rs  命名互斥单实例
 └── apps/config/                    配置界面（Tauri 2 + Svelte 5）
@@ -119,7 +122,9 @@ Boss-Key/
 - 定时器（空闲检测、状态维护等）；
 - 托盘图标交互。
 
-当触发隐藏 / 显示时，交由 `HideController` 编排：选择命中的窗口 → 应用 `Effects`（静音 / 冻结 / 暂停键）→ 隐藏 / 显示窗口，并把状态写入 `recovery.json`。
+当触发隐藏 / 显示时，交由 `HideController` 编排，流程为「意图先行」两段式：`plan_hide` 算出执行计划（剪掉失效记录、补齐 PID）→ 把计划后的快照写入 `recovery.json`（先落盘再动手，隐藏中途崩溃不丢记录）→ `commit_hide` 同步隐藏窗口（`SW_HIDE`），并把静音 / 冻结 / 暂停键交给副作用专职线程（`effects_worker.rs`）按 FIFO 异步执行——消息循环不被慢操作（音频枚举、pssuspend 等待）阻塞，热键与界面保持响应。
+
+恢复（显示）时逐条校验记录的有效性：句柄须仍存在且仍属于当初的进程（`IsWindow` + PID 比对），冻结 / 静音记录须匹配进程创建时刻——句柄与 PID 都会被系统回收复用，校验不过的记录跳过并如实计入日志。
 
 ::: info 可测试性设计
 `Effects` 被抽象为 trait，测试时可注入 mock，从而在不真正静音 / 冻结系统的情况下验证隐藏编排逻辑。同理 `WindowManager` 也是 trait。
@@ -128,7 +133,7 @@ Boss-Key/
 ## 稳定性设计（崩溃自愈三层防线）
 
 1. **崩溃日志**：关键事件与 panic 写入 exe 同目录的 `logs/BossKey-YYYY-MM-DD.log`（按天切割，按 `log_retention_days` 保留，0 表示关闭日志；release 构建丢弃 DEBUG 级）。
-2. **崩溃恢复**：隐藏时把"隐藏 / 冻结 / 静音了什么"写入 `recovery.json`，异常退出后重启自动找回。
+2. **崩溃恢复**：隐藏动作执行前先把"将要隐藏 / 冻结 / 静音什么"写入 `recovery.json`（tmp + rename 原子替换），异常退出后重启自动找回；快照带开机时刻与进程创建时刻，跨重启的过期快照直接丢弃，不会对无关窗口 / 进程做恢复动作。
 3. **看门狗**：计划任务 `RestartOnFailure`（崩溃后 1 分钟内重启，最多 3 次）。release 构建 `panic = "abort"`，panic 钩子写完日志后以非零码退出，正好触发计划任务重启。
 
 用户视角的说明见 [窗口恢复与崩溃自愈](/guide/recovery)。
