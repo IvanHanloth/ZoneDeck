@@ -74,37 +74,24 @@ powershell -File scripts/version.ps1 show
 
 同一分支有新推送时会自动取消旧任务（`concurrency` + `cancel-in-progress`）。
 
-### `tag.yml` — 版本号写入并打 tag
+### `release.yml` — 一键发版
 
-**触发**：手动（`workflow_dispatch`），输入要发布的版本号。**请从 `dev` 分支触发**。
+**触发**：手动（`workflow_dispatch`），输入要发布的版本号。**请从 `main` 触发**（待发布内容合并进 `main` 之后）。
 
 **做什么**：
 1. 用 `version.ps1 apply` 把版本号写入四处文件；
-2. 提交到 `dev` 并打上 `v<版本>` tag，两者一起推送；
-3. 确保有一个 `dev` → `main` 的 PR（已存在就复用，没有才新开）。
+2. 以 OIDC 身份向 [octo-sts](https://octo-sts.dev) 换取本仓库 `contents:write` 的短期 token；
+3. 经 GraphQL `createCommitOnBranch` 把版本号变更提交到触发分支，并打上 `v<版本>` 附注 tag——API 创建的提交由 GitHub 服务端签名，带 **Verified** 徽章；
+4. 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试；
+5. `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip；
+6. 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
 
-**这一步不构建**。用 GITHUB_TOKEN 推的 tag 不会触发任何工作流，正合本流程的意图：等 PR 合并、tag 随之进入 `main` 的历史，`release.yml` 才开始生产构建。
+tag 已存在时跳过第 2、3 步，直接检出该 tag 重新构建——重跑 / 补发就是再次运行并填入同一版本号。
 
-::: warning 用 merge commit 合并发版 PR
-tag 指向 `dev` 上的那个版本号提交。**squash / rebase 合并会另造提交**，tag 就进不了 `main` 的历史，`release.yml` 检测不到，**构建根本不会触发**。请用 **merge commit**。
+::: info 凭据从哪来
+仓库不保存任何长期凭据。工作流用 GitHub Actions 的 OIDC 身份向 octo-sts 换取短期 token，放行条件由 `.github/chainguard/tag-release.sts.yaml` 声明（只允许 `main` / `dev` 上的运行），token 在 job 结束时自动吊销。Octo STS App 在分支保护的 bypass 名单中，因此版本号提交无需发版 PR。
 
-真的误用了 squash，可以手动触发 `release.yml` 并指定 tag 来补救。
-:::
-
-::: tip PR 上没有检查记录？
-GITHUB_TOKEN 创建的 PR 不会触发 `pull_request` 事件，PR 页面上不会有 CI 记录（你点 Merge 时的 push 事件仍会正常触发 `build-test.yml`）。若 `main` 的分支保护要求状态检查通过，请在仓库 secrets 中配置 `RELEASE_PAT`（repo 权限的 PAT），工作流会优先使用它来开 PR。
-:::
-
-### `release.yml` — 构建并发布 Release
-
-**触发**：推送到 `main`（检测到有新的 `v*` tag 随之进入 `main` 的历史才继续），或手动触发并指定 tag。
-
-**做什么**：检测本次推送新带进 `main` 的 tag → 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试 → `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip → 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
-
-::: info 为什么不监听 `push: tags`
-tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不会触发任何工作流。而**合并 PR 并不产生 tag 推送事件**——tag 是独立的 ref，合并只是让它指向的提交变得可从 `main` 追溯。所以只能从 `main` 的 push 事件里检测。
-
-检测方式是比较推送前后「可从 `main` 追溯的 `v*` tag」集合，取新增的那个。不能用「HEAD 上挂着的 tag」：merge commit 才是 HEAD，tag 指向的是它的父提交。
+提交能带 Verified 徽章，是因为它经 GitHub API 创建、由 GitHub 服务端签名；tag 没有服务端签名机制，是普通附注 tag。
 :::
 
 ### `deploy-docs.yml` — 文档站部署
@@ -120,20 +107,16 @@ tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不会触发�
 ### 发布一个新版本
 
 ```
-dev ──① Bump version and tag──▶ dev（版本号提交 + v3.0.1 tag）
-                                 │
-                                 ②  PR，merge commit 合并
-                                 ▼
-                               main ──③ release.yml 检测到新 tag──▶ 构建 + 草稿 Release
-                                                                        │
-                                                                        ④ Publish
-                                                                        ▼
-                                                              文档站 + releases.json 刷新
+main ──① Release──▶ 版本号提交（Verified）+ v3.0.1 tag ──▶ 构建 + 草稿 Release
+                                                              │
+                                                              ② Publish
+                                                              ▼
+                                                    文档站 + releases.json 刷新
 ```
 
-1. 功能开发完毕、准备发版时，切到 `dev`，在 GitHub Actions 中运行 **"Bump version and tag"**，填入版本号（如 `3.0.1`）。工作流把版本号提交与 tag 落在 `dev`，并确保有一个 `dev` → `main` 的 PR。
-2. 审查该 PR，用 **merge commit** 合并进 `main`。
-3. 合并触发 `release.yml`：它检测到 `v3.0.1` 随之进入 `main`，检出该 tag 开始生产构建，完成后留下一个**草稿** Release。
-4. 检查产物与发布说明，点 **Publish release** 正式发布 —— 这一步同时会刷新文档站与 `releases.json`。
+1. 功能开发完毕，照常把 `dev` 经 PR 合并进 `main`。
+2. 在 `main` 上运行 **"Release"**，填入版本号（如 `3.0.1`）。工作流把版本号提交与 tag 落在 `main`，随后完成生产构建，留下一个**草稿** Release。
+3. 检查产物与发布说明，点 **Publish release** 正式发布 —— 这一步同时会刷新文档站与 `releases.json`。
+4. 把 `main` 合回 `dev`（或在下次从 `dev` 开 PR 前先合并 `main`），让版本号提交回到 `dev`。
 
-需要重跑或补发时，手动触发 `release.yml` 并指定 tag 即可。
+需要重跑或补发时，再次运行 **"Release"** 并填入同一版本号即可。

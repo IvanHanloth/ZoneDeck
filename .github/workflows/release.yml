@@ -1,99 +1,151 @@
 name: Release
 
-# 构建并发布一个已随合并进入 main 的 tag。
+# 一键发版：写版本号 → 经 GitHub API 创建带 Verified 签名的提交 → 打 tag → 构建 → 草稿 Release。
 #
-# 触发方式：
-#   1. 推送到 main —— tag.yml 事先把版本号提交与 v* tag 落在 dev，等 dev → main 的
-#      PR 合并，tag 随之进入 main 的历史，这里检测到就构建；
-#   2. 手动触发（workflow_dispatch），指定 tag —— 用于重跑或补发。
+# 推送凭据来自 octo-sts（https://octo-sts.dev）：工作流以 OIDC 身份向其换取一个
+# 只限本仓库、仅 contents:write 的短期 token，job 结束时自动吊销，仓库不保存
+# 任何长期凭据。信任策略见 .github/chainguard/tag-release.sts.yaml。
 #
-# 为什么不监听 push: tags：tag 是 tag.yml 用 GITHUB_TOKEN 推到 dev 的，那次推送
-# 不会触发任何工作流；而 PR 合并本身**不产生 tag 推送事件**（tag 是独立的 ref，
-# 合并只是让它指向的提交变得可从 main 追溯）。所以只能从 main 的 push 事件里检测。
+# 版本号提交与 tag 直接落在触发分支上（请从 main 触发）。Octo STS App 已加入
+# 分支保护的 bypass 名单，无需发版 PR。提交经 GraphQL createCommitOnBranch 创建，
+# 由 GitHub 服务端签名（Verified 徽章）；tag 没有服务端签名机制，是普通附注 tag。
+#
+# 重跑 / 补发：填入已发过的版本号即可 —— tag 已存在时跳过提交与打 tag，
+# 直接检出该 tag 重新构建。
 
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: "要构建发布的 tag，例如 v3.0.1"
+      version:
+        description: "要发布的版本号，例如 3.0.1 或 3.1.0-rc.1（可带前导 v）；对应 tag 已存在时仅重新构建"
         required: true
         type: string
 
+permissions:
+  contents: write # 创建 Release
+  id-token: write # octo-sts 换 token 与 attest-build-provenance 都依赖 OIDC token
+  attestations: write # 写入构建来源证明
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
-  # 找出「这次推送新带进 main 的 v* tag」。
-  # 不能用「HEAD 上挂着的 tag」：merge commit 才是 HEAD，tag 指向的是它的父提交。
-  detect:
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.find.outputs.tag }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # 需要完整历史与全部 tag 才能算可达性
-
-      - name: Find newly merged release tag
-        id: find
-        env:
-          INPUT_TAG: ${{ inputs.tag }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          set -euo pipefail
-
-          if [ -n "${INPUT_TAG}" ]; then
-            echo "手动指定：${INPUT_TAG}"
-            echo "tag=${INPUT_TAG}" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          # 推送前 main 上已可追溯的 v* tag。新建分支 / 强推时 before 可能不可用，
-          # 那就当作「之前一个都没有」，让下面取到最新的一个。
-          if [ -n "${BEFORE:-}" ] && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
-            git tag --merged "${BEFORE}" --list 'v*' | sort > /tmp/before.txt
-          else
-            : > /tmp/before.txt
-          fi
-          git tag --merged HEAD --list 'v*' | sort > /tmp/after.txt
-
-          # 一次合并正常只带进一个；真有多个就取版本号最大的
-          tag=$(comm -13 /tmp/before.txt /tmp/after.txt | sort -V | tail -n 1)
-
-          if [ -z "$tag" ]; then
-            echo "本次推送没有新的 v* tag 进入 main，跳过发布"
-          else
-            echo "检测到新进入 main 的 tag：$tag"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
-  build-and-release:
-    needs: detect
-    if: needs.detect.outputs.tag != ''
+  release:
     runs-on: windows-latest
-    permissions:
-      contents: write
-      id-token: write # attest-build-provenance 取 OIDC token
-      attestations: write # 写入构建来源证明
-    concurrency:
-      group: release-${{ needs.detect.outputs.tag }}
-      cancel-in-progress: false
-    env:
-      TAG: ${{ needs.detect.outputs.tag }}
-
     steps:
-      # 构建 tag 指向的那个提交，而不是 main 的 merge commit：
-      # 前者才是版本号提交本身，与 version.ps1 check 的校验对象一致。
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      # 先写版本号再判断新发版还是重建：借用 version.ps1 的归一化
+      # （去前导 v、折叠四段号），避免在工作流里重复实现一遍
+      - name: Apply version to files
+        id: bump
+        shell: pwsh
+        run: ./scripts/version.ps1 apply "${{ inputs.version }}"
+
+      - name: Determine release mode
+        id: mode
+        shell: pwsh
+        env:
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          $tag = "v$env:VERSION"
+          git ls-remote --tags --exit-code origin "refs/tags/$tag" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "tag $tag 已存在，本次仅重新构建"
+            $rebuild = 'true'
+          } else {
+            Write-Host "tag $tag 不存在，本次为新发版"
+            $rebuild = 'false'
+          }
+          @("tag=$tag", "rebuild=$rebuild") | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          # ls-remote 在 tag 不存在时返回 2，而 pwsh 步骤以最后一条原生命令的
+          # 退出码收尾，这里显式归零
+          exit 0
+
+      # 以 OIDC 身份向 octo-sts 换取本仓库 contents:write 的短期 token，
+      # job 结束时由该 action 的 post 步骤吊销
+      - name: Federate token via octo-sts
+        if: steps.mode.outputs.rebuild != 'true'
+        id: sts
+        uses: octo-sts/action@main
         with:
-          ref: ${{ needs.detect.outputs.tag }}
+          scope: ${{ github.repository }}
+          identity: tag-release
+
+      # 经 GraphQL createCommitOnBranch 提交版本号变更：GitHub 会在服务端为
+      # API 创建的提交签名（Verified 徽章），这是不保管签名私钥的前提下唯一的
+      # 签名途径。expectedHeadOid 保证分支头未被并发移动，否则失败而不是覆盖。
+      - name: Create verified commit and tag
+        if: steps.mode.outputs.rebuild != 'true'
+        shell: pwsh
+        env:
+          STS_TOKEN: ${{ steps.sts.outputs.token }}
+          TAG: ${{ steps.mode.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          $headers = @{ Authorization = "Bearer $env:STS_TOKEN"; 'Content-Type' = 'application/json' }
+
+          $files = @(
+            'Cargo.toml',
+            'Cargo.lock',
+            'apps/config/src-tauri/tauri.conf.json',
+            'apps/config/ui/package.json'
+          )
+          $additions = foreach ($f in $files) {
+            @{ path = $f; contents = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f)) }
+          }
+
+          $body = @{
+            query = 'mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }'
+            variables = @{
+              input = @{
+                branch = @{ repositoryNameWithOwner = $env:GITHUB_REPOSITORY; branchName = $env:BRANCH }
+                expectedHeadOid = $env:HEAD_SHA
+                message = @{ headline = "chore(release): $env:TAG" }
+                fileChanges = @{ additions = @($additions) }
+              }
+            }
+          } | ConvertTo-Json -Depth 12 -Compress
+
+          $resp = Invoke-RestMethod -Uri 'https://api.github.com/graphql' -Method Post -Headers $headers -Body $body
+          if ($resp.errors) { throw "创建提交失败：$($resp.errors[0].message)" }
+          $oid = $resp.data.createCommitOnBranch.commit.oid
+          Write-Host "版本号已提交至 $env:BRANCH：$oid"
+
+          # 带 message 的附注 tag
+          $tagBody = @{ tag = $env:TAG; message = "Boss Key $env:TAG"; object = $oid; type = 'commit' } | ConvertTo-Json -Compress
+          $tagObj = Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/tags" -Method Post -Headers $headers -Body $tagBody
+
+          $refBody = @{ ref = "refs/tags/$env:TAG"; sha = $tagObj.sha } | ConvertTo-Json -Compress
+          Invoke-RestMethod -Uri "https://api.github.com/repos/$env:GITHUB_REPOSITORY/git/refs" -Method Post -Headers $headers -Body $refBody | Out-Null
+          Write-Host "tag $env:TAG 已创建"
+
+      # 构建对象统一为 tag 指向的提交：新发版时它刚经 API 落在远端（本地工作区
+      # 内容与之相同，但没有这个提交对象），重建时它就是当年的版本号提交
+      - name: Checkout release tag
+        shell: pwsh
+        env:
+          TAG: ${{ steps.mode.outputs.tag }}
+        run: |
+          git fetch origin --no-tags "refs/tags/${env:TAG}:refs/tags/${env:TAG}"
+          if ($LASTEXITCODE -ne 0) { throw "拉取 tag $env:TAG 失败" }
+          git checkout -f "refs/tags/$env:TAG"
+          if ($LASTEXITCODE -ne 0) { throw "检出 tag $env:TAG 失败" }
 
       # tag 与代码里的版本号必须一致，否则装出来的包版本号是错的
       - name: Verify version matches tag
         id: version
         shell: pwsh
-        run: ./scripts/version.ps1 check "$env:TAG"
+        run: ./scripts/version.ps1 check "${{ steps.mode.outputs.tag }}"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -101,12 +153,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: apps/config/ui/package-lock.json
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Rust cache
-        uses: Swatinem/rust-cache@v2
 
       - name: Frontend install, test & build
         run: |
@@ -128,6 +174,8 @@ jobs:
       # 不会把 exe 散落到用户的下载目录里。
       - name: Zip portable build
         shell: pwsh
+        env:
+          TAG: ${{ steps.mode.outputs.tag }}
         run: Compress-Archive -Path "dist/Boss-Key" -DestinationPath "Boss-Key-$env:TAG-portable.zip"
 
       # 构建来源证明（Sigstore）：证明产物由本仓库的本 workflow 从该 commit 构建。
@@ -137,7 +185,7 @@ jobs:
         with:
           subject-path: |
             dist/installer/Boss-Key-*-Setup.exe
-            Boss-Key-${{ env.TAG }}-portable.zip
+            Boss-Key-${{ steps.mode.outputs.tag }}-portable.zip
 
       # ---- 代码签名（可选，反杀软误报最有效的单项措施）----
       # 取得 OV/EV 证书后：PFX 以 base64 存入 secrets.CODE_SIGN_PFX，
@@ -162,6 +210,7 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.mode.outputs.tag }}
         run: |
           $notes = (gh api "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$env:TAG" --jq '.body') -join "`n"
           $notice = @'
@@ -174,12 +223,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: Boss Key ${{ env.TAG }}
-          tag_name: ${{ env.TAG }}
+          name: Boss Key ${{ steps.mode.outputs.tag }}
+          tag_name: ${{ steps.mode.outputs.tag }}
           body_path: release-notes.md
           draft: true
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.version.outputs.is_prerelease != 'true' }}
           files: |
-            Boss-Key-${{ env.TAG }}-portable.zip
+            Boss-Key-${{ steps.mode.outputs.tag }}-portable.zip
             dist/installer/Boss-Key-*-Setup.exe

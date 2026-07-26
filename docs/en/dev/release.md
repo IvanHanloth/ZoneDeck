@@ -74,37 +74,24 @@ The workflows live in `.github/workflows/`.
 
 A new push on the same branch cancels the previous run automatically (`concurrency` + `cancel-in-progress`).
 
-### `tag.yml` — write the version and tag
+### `release.yml` — one-shot release
 
-**Trigger**: manual (`workflow_dispatch`), taking the version to release as input. **Run it from `dev`.**
+**Trigger**: manual (`workflow_dispatch`), taking the version to release as input. **Run it from `main`** (after the release content has been merged into `main`).
 
 **What it does**:
 1. Writes the version into the four files with `version.ps1 apply`;
-2. Commits onto `dev` and tags it `v<version>`, pushing both;
-3. Makes sure a `dev` → `main` pull request exists (reusing an open one, creating it otherwise).
+2. Federates the workflow's OIDC identity through [octo-sts](https://octo-sts.dev) into a short-lived `contents:write` token for this repository;
+3. Commits the version change onto the triggering branch via GraphQL `createCommitOnBranch` and creates the `v<version>` annotated tag — commits created through the API are signed by GitHub server-side and carry the **Verified** badge;
+4. Checks that tag out → verifies the tag matches the code version → frontend / Rust tests;
+5. `package.ps1 -Installer` to assemble `dist/Boss-Key` and `dist/installer` → zip `dist/Boss-Key` as the portable archive;
+6. Generates **build provenance** (a Sigstore attestation) → composes the release notes (the auto-generated changelog with a security notice appended) → creates a **draft** Release and uploads the zip and the installer.
 
-**This step does not build.** A tag pushed with GITHUB_TOKEN triggers no workflow, which is exactly what this flow wants: the production build starts only once the PR is merged and the tag enters `main`'s history.
+If the tag already exists, steps 2 and 3 are skipped and that tag is checked out and rebuilt — rerunning / re-publishing is just running again with the same version.
 
-::: warning Merge the release PR with a merge commit
-The tag points at the version commit on `dev`. **Squash and rebase merges create a different commit**, so the tag never enters `main`'s history, `release.yml` cannot detect it, and **no build is triggered at all**. Use a **merge commit**.
+::: info Where the credentials come from
+The repository stores no long-lived credentials. The workflow trades its GitHub Actions OIDC identity to octo-sts for a short-lived token; the conditions are declared in `.github/chainguard/tag-release.sts.yaml` (only runs on `main` / `dev` are allowed), and the token is revoked automatically when the job ends. The Octo STS App is on the branch protection bypass list, so the version commit needs no release PR.
 
-If you squash-merged by mistake, trigger `release.yml` manually with the tag to recover.
-:::
-
-::: tip No checks on the PR?
-A PR created with GITHUB_TOKEN does not raise a `pull_request` event, so the PR page shows no CI runs (the push event from your own Merge click still triggers `build-test.yml` normally). If branch protection on `main` requires status checks, add a repo-scoped PAT as the `RELEASE_PAT` secret and the workflow will prefer it when opening the PR.
-:::
-
-### `release.yml` — build and publish the release
-
-**Triggers**: a push to `main` (it continues only if a new `v*` tag entered `main`'s history with that push), or a manual run with an explicit tag.
-
-**What it does**: detect the tag the push brought into `main` → check that tag out → verify the tag matches the code version → frontend / Rust tests → `package.ps1 -Installer` to assemble `dist/Boss-Key` and `dist/installer` → zip `dist/Boss-Key` as the portable archive → generate **build provenance** (a Sigstore attestation) → compose the release notes (the auto-generated changelog with a security notice appended) → create a **draft** Release and upload the zip and the installer.
-
-::: info Why it does not listen for `push: tags`
-The tag was pushed to `dev` by `tag.yml` using GITHUB_TOKEN, and that push triggers nothing. **Merging a PR does not produce a tag push event either** — a tag is an independent ref, and merging merely makes the commit it points at reachable from `main`. Detecting it from `main`'s push event is the only option left.
-
-Detection compares the set of `v*` tags reachable from `main` before and after the push and takes what is new. It cannot use "the tag on HEAD": HEAD is the merge commit, and the tag points at one of its parents.
+The commit carries the Verified badge because it is created through the GitHub API and signed by GitHub server-side; tags have no server-side signing mechanism and remain plain annotated tags.
 :::
 
 ### `deploy-docs.yml` — documentation site deployment
@@ -120,20 +107,17 @@ Detection compares the set of `v*` tags reachable from `main` before and after t
 ### Releasing a new version
 
 ```
-dev ──① Bump version and tag──▶ dev (version commit + v3.0.1 tag)
-                                 │
-                                 ②  PR, merged with a merge commit
-                                 ▼
-                               main ──③ release.yml sees the new tag──▶ build + draft Release
-                                                                             │
-                                                                             ④ Publish
-                                                                             ▼
-                                                                docs site + releases.json refresh
+main ──① Release──▶ version commit (Verified) + v3.0.1 tag ──▶ build + draft Release
+                                                                    │
+                                                                    ② Publish
+                                                                    ▼
+                                                       docs site + releases.json refresh
 ```
 
-1. Once the features are done and you are ready to release, switch to `dev` and run **"Bump version and tag"** in GitHub Actions, entering the version (for example `3.0.1`). The workflow lands the version commit and the tag on `dev` and makes sure a `dev` → `main` PR exists.
-2. Review that PR and merge it into `main` with a **merge commit**.
-3. The merge triggers `release.yml`: it detects that `v3.0.1` came along into `main`, checks that tag out, runs the production build, and leaves a **draft** Release behind.
-4. Check the artefacts and the release notes, then click **Publish release** — this also refreshes the docs site and `releases.json`.
+1. Once the features are done, merge `dev` into `main` through a PR as usual.
+2. Run **"Release"** from `main`, entering the version (for example `3.0.1`). The workflow lands the version commit and the tag on `main`, then runs the production build and leaves a **draft** Release behind.
+3. Check the artefacts and the release notes, then click **Publish release** — this also refreshes the docs site and `releases.json`.
+4. Merge `main` back into `dev` (or merge `main` before the next PR from `dev`) so the version commit returns to `dev`.
 
-To rebuild or re-publish, trigger `release.yml` manually with the tag.
+To rebuild or re-publish, run **"Release"** again with the same version.
+
