@@ -124,10 +124,25 @@ async fn show_all_windows() -> Result<(), String> {
     blocking(|| notify_core(&Command::Show).map(|_| ())).await
 }
 
-/// 恢复显示指定窗口（窗口恢复工具）：直接对选中的句柄 ShowWindow。
+/// 把恢复工具的窗口操作交给核心执行；核心未应答（未运行 / 出错）时返回 false，
+/// 由调用方退回直接操作。
+fn try_core_window_op(command: &Command) -> bool {
+    matches!(
+        PipeClient::connect_default().fast().send(command),
+        Ok(Response::Ok)
+    )
+}
+
+/// 恢复显示指定窗口（窗口恢复工具）。优先经核心释放并更新记录；
+/// 核心不在运行才直接对句柄 ShowWindow。
 #[tauri::command]
 async fn show_windows(hwnds: Vec<i64>) {
     blocking(move || {
+        if try_core_window_op(&Command::ReleaseWindows {
+            hwnds: hwnds.clone(),
+        }) {
+            return;
+        }
         use bosskey_core::platform::WindowManager;
         let mgr = bosskey_core::platform::manager();
         for h in hwnds {
@@ -137,10 +152,16 @@ async fn show_windows(hwnds: Vec<i64>) {
     .await
 }
 
-/// 隐藏指定窗口（窗口恢复工具）：直接对选中的句柄隐藏。
+/// 隐藏指定窗口（窗口恢复工具）。优先经核心纳入隐藏记录（不施加静音 / 冻结）；
+/// 核心不在运行才直接对句柄隐藏。
 #[tauri::command]
 async fn hide_windows(hwnds: Vec<i64>) {
     blocking(move || {
+        if try_core_window_op(&Command::AdoptWindows {
+            hwnds: hwnds.clone(),
+        }) {
+            return;
+        }
         use bosskey_core::platform::WindowManager;
         let mgr = bosskey_core::platform::manager();
         for h in hwnds {

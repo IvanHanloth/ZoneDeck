@@ -89,7 +89,7 @@ Boss-Key/
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不传递」热键拦截）
 │           idle.rs       GetLastInputInfo 空闲 + 自动隐藏判定
 │           tray.rs       Shell_NotifyIcon 托盘 + 气泡
-│           ipc_server.rs 命名管道服务端
+│           ipc_server.rs 命名管道服务端（创建失败退避重试，不退出）
 │           autostart.rs  开机自启（计划任务 XML 含失败自动重启 + 注册表回退）
 │           elevation.rs  管理员检测 + UAC 提权重启
 │           i18n.rs       核心用户可见文案 catalog（托盘菜单 / 气泡 / IPC 错误；日志不走它）
@@ -121,6 +121,8 @@ Boss-Key/
 - 命名管道服务端（来自配置界面的命令）；
 - 定时器（空闲检测、状态维护等）；
 - 托盘图标交互。
+
+消息循环状态由 `RefCell` 承载：托盘 / 悬浮窗菜单的模态循环（`TrackPopupMenu`）会重入 `wndproc`，重入期间的事件借用失败即被安全丢弃，避免出现两个可变引用的别名。IPC 线程创建命名管道失败时按退避（1s → 5s → 30s）重试，不会退出。
 
 当触发隐藏 / 显示时，交由 `HideController` 编排，流程为「意图先行」两段式：`plan_hide` 算出执行计划（剪掉失效记录、补齐 PID）→ 把计划后的快照写入 `recovery.json`（先落盘再动手，隐藏中途崩溃不丢记录）→ `commit_hide` 同步隐藏窗口（`SW_HIDE`），并把静音 / 冻结 / 暂停键交给副作用专职线程（`effects_worker.rs`）按 FIFO 异步执行——消息循环不被慢操作（音频枚举、pssuspend 等待）阻塞，热键与界面保持响应。
 

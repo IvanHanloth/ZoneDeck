@@ -14,9 +14,21 @@ use windows::Win32::System::Pipes::{
 };
 use windows::core::{HRESULT, PCWSTR};
 
+use crate::log_error;
 use crate::util::to_wide_null;
 
 const PIPE_BUF_SIZE: u32 = 4096;
+
+/// 创建管道失败后的重试间隔：逐级退避，最后一档一直沿用，线程不退出。
+const RETRY_DELAYS: [std::time::Duration; 3] = [
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(5),
+    std::time::Duration::from_secs(30),
+];
+
+fn retry_delay(attempt: u32) -> std::time::Duration {
+    RETRY_DELAYS[(attempt as usize).min(RETRY_DELAYS.len() - 1)]
+}
 
 /// 命名管道安全描述符（SDDL）：Everyone 可读写，完整性标签设为 Low，
 /// 使普通配置程序能连上以管理员运行的核心。
@@ -95,6 +107,7 @@ where
         crate::logging::warn("命名管道安全描述符构造失败，管理员核心下普通配置程序可能无法连接");
     }
     let sa_ptr = security.as_ref().map(PipeSecurity::as_ptr);
+    let mut failures: u32 = 0;
     loop {
         let handle = unsafe {
             CreateNamedPipeW(
@@ -109,9 +122,16 @@ where
             )
         };
         if handle == INVALID_HANDLE_VALUE {
-            eprintln!("创建命名管道失败: {pipe_name}");
-            return;
+            let err = std::io::Error::last_os_error();
+            let delay = retry_delay(failures);
+            failures += 1;
+            log_error!(
+                "创建命名管道失败（第 {failures} 次），{delay:?} 后重试: {pipe_name} — {err}"
+            );
+            std::thread::sleep(delay);
+            continue;
         }
+        failures = 0;
 
         if !is_client_connected(unsafe { ConnectNamedPipe(handle, None) }) {
             unsafe {
@@ -186,6 +206,15 @@ mod tests {
         let mut buf = String::new();
         reader.read_line(&mut buf).unwrap();
         buf.trim_end().to_string()
+    }
+
+    #[test]
+    fn retry_delay_backs_off_and_caps_at_the_last_step() {
+        assert_eq!(retry_delay(0), Duration::from_secs(1));
+        assert_eq!(retry_delay(1), Duration::from_secs(5));
+        assert_eq!(retry_delay(2), Duration::from_secs(30));
+        assert_eq!(retry_delay(3), Duration::from_secs(30));
+        assert_eq!(retry_delay(1000), Duration::from_secs(30));
     }
 
     #[test]

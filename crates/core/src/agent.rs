@@ -1,9 +1,10 @@
+use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
 use bosskey_common::ipc::{Command, Response};
-use bosskey_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config};
+use bosskey_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, Setting};
 use windows::Win32::Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -312,16 +313,26 @@ impl AgentState {
 
     /// 意图先行：先落盘计划后的快照，再隐藏窗口；副作用由专职线程异步执行。
     fn hide_with_plan(&mut self, targets: &[crate::hide::Target], freeze_set: &[u32]) -> HidePlan {
-        let plan = self
-            .controller
-            .plan_hide(&self.config.setting, targets, freeze_set);
+        let setting = self.config.setting.clone();
+        let plan = self.hide_with_plan_using(&setting, targets, freeze_set);
+        if self.config.notifications.on_hide && !plan.fresh.is_empty() {
+            self.balloon(APP_NAME, i18n::t(Msg::HiddenBody));
+        }
+        plan
+    }
+
+    /// [`Self::hide_with_plan`] 的按指定设置版本（恢复工具的手动隐藏关闭副作用）。
+    fn hide_with_plan_using(
+        &mut self,
+        setting: &Setting,
+        targets: &[crate::hide::Target],
+        freeze_set: &[u32],
+    ) -> HidePlan {
+        let plan = self.controller.plan_hide(setting, targets, freeze_set);
         let planned = self.controller.planned_snapshot(&plan);
         self.persist_snapshot(&planned);
         self.controller.commit_hide(plan.clone());
         self.sync_tray();
-        if self.config.notifications.on_hide && !plan.fresh.is_empty() {
-            self.balloon(APP_NAME, i18n::t(Msg::HiddenBody));
-        }
         plan
     }
 
@@ -461,6 +472,29 @@ impl AgentState {
                     } else {
                         "配置中：已临时停用热键与鼠标监控"
                     });
+                }
+                (Response::Ok, false)
+            }
+            Command::ReleaseWindows { hwnds } => {
+                let released = self.controller.release_windows(&hwnds);
+                if released > 0 {
+                    logging::info(&format!("窗口恢复工具释放 {released} 个窗口"));
+                    self.persist_recovery();
+                    self.sync_tray();
+                }
+                (Response::Ok, false)
+            }
+            Command::AdoptWindows { hwnds } => {
+                let targets: Vec<crate::hide::Target> =
+                    hwnds.iter().map(|&h| crate::hide::Target::bare(h, 0)).collect();
+                // 恢复工具的手动隐藏不施加副作用，仅隐藏并纳入记录。
+                let mut setting = self.config.setting.clone();
+                setting.mute_after_hide = false;
+                setting.freeze_after_hide = false;
+                setting.send_before_hide = false;
+                let plan = self.hide_with_plan_using(&setting, &targets, &[]);
+                if !plan.fresh.is_empty() {
+                    logging::info(&format!("窗口恢复工具隐藏 {} 个窗口", plan.fresh.len()));
                 }
                 (Response::Ok, false)
             }
@@ -621,10 +655,12 @@ fn toggle_autostart(state: &AgentState) {
     }
 }
 
-fn state_mut<'a>(hwnd: HWND) -> Option<&'a mut AgentState> {
+/// 代理窗口 `GWLP_USERDATA` 里存放的状态单元。用 `RefCell` 而非裸 `&mut`：
+/// 菜单模态循环会重入 `wndproc`，重入时借用失败、事件被安全丢弃。
+fn state_cell<'a>(hwnd: HWND) -> Option<&'a RefCell<AgentState>> {
     unsafe {
-        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut AgentState;
-        ptr.as_mut()
+        let ptr = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *const RefCell<AgentState>;
+        ptr.as_ref()
     }
 }
 
@@ -769,9 +805,14 @@ fn quit(state: &mut AgentState, hwnd: HWND) {
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    let Some(state) = state_mut(hwnd) else {
+    let Some(cell) = state_cell(hwnd) else {
         return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
     };
+    // 借用失败即模态菜单重入：丢弃本次事件。
+    let Ok(mut state) = cell.try_borrow_mut() else {
+        return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
+    };
+    let state = &mut *state;
     if msg != 0 && msg == crate::tray::taskbar_created_msg() {
         if let Some(tray) = &mut state.tray {
             tray.on_taskbar_created();
@@ -817,6 +858,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         state.controller.is_hidden(),
                         state.config.setting.auto_hide_enabled,
                     );
+                    // 补发 IPC 唤醒，排干菜单模态期间积压的命令。
+                    unsafe {
+                        let _ = PostMessageW(Some(hwnd), WM_APP_IPC, WPARAM(0), LPARAM(0));
+                    }
                 }
                 _ => {}
             }
@@ -833,6 +878,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 // 右键菜单以代理窗口为宿主，经 WM_COMMAND 复用处理。
                 FLOAT_MENU => {
                     crate::float_window::show_float_menu(hwnd, MENU_SETTINGS, MENU_QUIT);
+                    unsafe {
+                        let _ = PostMessageW(Some(hwnd), WM_APP_IPC, WPARAM(0), LPARAM(0));
+                    }
                 }
                 _ => {}
             }
@@ -1056,7 +1104,7 @@ pub fn run(options: AgentOptions) {
     // 副作用由专职线程执行，消息循环不被慢操作阻塞。
     let effects_worker = EffectsWorker::spawn(WinEffects::new(exe_dir));
 
-    let mut state = Box::new(AgentState {
+    let state = Box::new(RefCell::new(AgentState {
         config,
         config_path: options.config_path.clone(),
         recovery_path,
@@ -1071,37 +1119,44 @@ pub fn run(options: AgentOptions) {
         monitoring: true,
         hotkeys_armed: false,
         keyboard_hook: None,
-    });
+    }));
 
     // 恢复文件存在即上次异常退出仍有窗口被隐藏，先找回。
-    if let Some(snapshot) = recovery::load(&state.recovery_path) {
-        if snapshot.is_restorable(recovery::current_boot_time_ms()) {
-            logging::warn(&format!(
-                "检测到上次异常退出，开始找回 {} 个被隐藏的窗口（另需解冻 {} 个、取消静音 {} 个进程）",
-                snapshot.hidden.len(),
-                snapshot.frozen.len(),
-                snapshot.muted.len()
-            ));
-            let outcome = state.controller.restore_from(snapshot);
-            logging::info(&format!(
-                "崩溃恢复完成：恢复 {} 个窗口，跳过 {} 条失效记录",
-                outcome.shown, outcome.stale
-            ));
-        } else {
-            // 跨重启（或旧版格式）快照中的句柄与 PID 已失效，只丢弃并留档。
-            log_warn!(
-                "恢复文件来自上一次开机或旧版本，其中的窗口句柄已失效，跳过恢复: {}",
-                state.recovery_path.display()
-            );
+    {
+        let mut state = state.borrow_mut();
+        if let Some(snapshot) = recovery::load(&state.recovery_path) {
+            if snapshot.is_restorable(recovery::current_boot_time_ms()) {
+                logging::warn(&format!(
+                    "检测到上次异常退出，开始找回 {} 个被隐藏的窗口（另需解冻 {} 个、取消静音 {} 个进程）",
+                    snapshot.hidden.len(),
+                    snapshot.frozen.len(),
+                    snapshot.muted.len()
+                ));
+                let outcome = state.controller.restore_from(snapshot);
+                logging::info(&format!(
+                    "崩溃恢复完成：恢复 {} 个窗口，跳过 {} 条失效记录",
+                    outcome.shown, outcome.stale
+                ));
+            } else {
+                // 跨重启（或旧版格式）快照中的句柄与 PID 已失效，只丢弃并留档。
+                log_warn!(
+                    "恢复文件来自上一次开机或旧版本，其中的窗口句柄已失效，跳过恢复: {}",
+                    state.recovery_path.display()
+                );
+            }
+            recovery::clear(&state.recovery_path);
         }
-        recovery::clear(&state.recovery_path);
     }
 
     unsafe {
-        SetWindowLongPtrW(hwnd, GWLP_USERDATA, &mut *state as *mut AgentState as isize);
+        SetWindowLongPtrW(
+            hwnd,
+            GWLP_USERDATA,
+            &*state as *const RefCell<AgentState> as isize,
+        );
     }
 
-    state.sync_monitoring(hwnd);
+    state.borrow_mut().sync_monitoring(hwnd);
 
     let hwnd_value = hwnd.0 as isize;
     ipc_server::spawn(options.pipe_name.clone(), move |cmd| {
@@ -1126,10 +1181,13 @@ pub fn run(options: AgentOptions) {
             })
     });
 
-    if state.config.notifications.on_start
-        && let Some(tray) = &state.tray
     {
-        tray.balloon(i18n::t(Msg::StartTitle), i18n::t(Msg::StartBody));
+        let state = state.borrow();
+        if state.config.notifications.on_start
+            && let Some(tray) = &state.tray
+        {
+            tray.balloon(i18n::t(Msg::StartTitle), i18n::t(Msg::StartBody));
+        }
     }
 
     if let Some(ms) = options.auto_quit_ms {
@@ -1154,7 +1212,7 @@ pub fn run(options: AgentOptions) {
     }
 
     // 非 quit() 路径（如 WM_DESTROY）退出时兜底排干副作用队列。
-    if let Some(worker) = state.effects_worker.take() {
+    if let Some(worker) = state.borrow_mut().effects_worker.take() {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
     }
 

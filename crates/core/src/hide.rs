@@ -458,6 +458,28 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         show.len()
     }
 
+    /// 恢复显示指定句柄（窗口恢复工具经 IPC 调用）。在隐藏记录里的窗口按
+    /// 整进程释放（连同解冻 / 取消静音）；不在记录里的句柄直接恢复显示。
+    /// 返回从记录中释放的窗口数。
+    pub fn release_windows(&mut self, hwnds: &[i64]) -> usize {
+        let known: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
+        let mut pids: Vec<u32> = self
+            .hidden
+            .iter()
+            .filter(|t| hwnds.contains(&t.hwnd))
+            .map(|t| t.pid)
+            .collect();
+        pids.sort_unstable();
+        pids.dedup();
+        let released = self.release_pids(&pids);
+        for &hwnd in hwnds {
+            if !known.contains(&hwnd) && self.wm.is_window(hwnd) {
+                self.wm.show(hwnd);
+            }
+        }
+        released
+    }
+
     /// 当前隐藏状态的快照，用于崩溃恢复落盘。版本与开机时刻由 `recovery::save` 盖章。
     pub fn snapshot(&self) -> Snapshot {
         Snapshot {
@@ -1225,6 +1247,42 @@ mod tests {
             1,
             "补齐 PID 后 release_pids 应能按进程释放该窗口"
         );
+    }
+
+    #[test]
+    fn release_windows_frees_whole_process_and_shows_unknown_handles() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![
+                win_pid("主窗口", 10, "game.exe", 500, "C:\\game.exe"),
+                win_pid("子窗口", 11, "game.exe", 500, "C:\\game.exe"),
+                win_pid("无关窗口", 30, "other.exe", 700, "C:\\other.exe"),
+            ],
+            0,
+        );
+        // 记录外的句柄：被别的途径隐藏，核心不知情。
+        wm.hide(30);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[Target::bare(10, 500), Target::bare(11, 500)],
+            &[500],
+        );
+
+        // 只点选了一个窗口 + 一个记录外句柄。
+        assert_eq!(controller.release_windows(&[10, 30]), 2);
+        assert!(
+            controller.wm.is_visible(10) && controller.wm.is_visible(11),
+            "同进程的两个窗口应一起释放，避免解冻后仍有窗口藏着"
+        );
+        assert_eq!(*controller.effects.resumes.borrow(), vec![500], "应解冻");
+        assert!(controller.wm.is_visible(30), "记录外的句柄应直接恢复显示");
+        assert!(!controller.is_hidden());
     }
 
     #[test]

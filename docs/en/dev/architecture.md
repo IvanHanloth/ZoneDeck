@@ -89,7 +89,7 @@ Boss-Key/
 │           keyboard_hook.rs WH_KEYBOARD_LL ("don't pass through" hotkey interception)
 │           idle.rs       GetLastInputInfo idle detection + auto-hide decision
 │           tray.rs       Shell_NotifyIcon tray + balloons
-│           ipc_server.rs Named-pipe server
+│           ipc_server.rs Named-pipe server (retries pipe creation with backoff instead of exiting)
 │           autostart.rs  Startup (scheduled-task XML with restart-on-failure + registry fallback)
 │           elevation.rs  Administrator detection + UAC elevation restart
 │           i18n.rs       Catalog of user-visible core strings (tray menu / balloons / IPC errors; logs excluded)
@@ -121,6 +121,8 @@ Boss-Key/
 - The named-pipe server (commands from the settings window);
 - Timers (idle detection, state maintenance, and so on);
 - Tray icon interaction.
+
+Message-loop state lives in a `RefCell`: the modal loops of the tray / floating-window menus (`TrackPopupMenu`) re-enter `wndproc`, and events arriving during re-entry fail the borrow and are safely dropped, so no aliased mutable references can exist. The IPC thread retries pipe creation with backoff (1s → 5s → 30s) instead of exiting.
 
 When hiding or showing is triggered, `HideController` orchestrates it with a two-phase, intent-first flow: `plan_hide` computes the execution plan (pruning stale records and backfilling PIDs) → the planned snapshot is written to `recovery.json` (persist first, act second — a crash mid-hide loses no records) → `commit_hide` hides the windows synchronously (`SW_HIDE`) and hands muting / freezing / the pause key to the dedicated side-effect thread (`effects_worker.rs`), executed asynchronously in FIFO order — the message loop is never blocked by slow operations (audio enumeration, waiting on pssuspend), so hotkeys and the UI stay responsive.
 

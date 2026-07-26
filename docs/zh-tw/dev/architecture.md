@@ -89,7 +89,7 @@ Boss-Key/
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
 │           tray.rs       Shell_NotifyIcon 通知區域 + 通知
-│           ipc_server.rs 具名管道伺服端
+│           ipc_server.rs 具名管道伺服端（建立失敗退避重試，不結束）
 │           autostart.rs  開機自動啟動（排程工作 XML 含失敗自動重新啟動 + 登錄檔回落）
 │           elevation.rs  系統管理員偵測 + UAC 提升權限重新啟動
 │           i18n.rs       核心使用者可見文案 catalog（通知區域選單／通知／IPC 錯誤；記錄檔不走它）
@@ -121,6 +121,8 @@ Boss-Key/
 - 具名管道伺服端（來自設定介面的命令）；
 - 計時器（閒置偵測、狀態維護等）；
 - 通知區域圖示互動。
+
+訊息迴圈狀態由 `RefCell` 承載：通知區域／懸浮窗選單的強制回應迴圈（`TrackPopupMenu`）會重入 `wndproc`，重入期間的事件借用失敗即被安全丟棄，避免出現兩個可變參考的別名。IPC 執行緒建立具名管道失敗時按退避（1s → 5s → 30s）重試，不會結束。
 
 當觸發隱藏／顯示時，交由 `HideController` 編排，流程為「意圖先行」兩段式：`plan_hide` 算出執行計畫（剪掉失效紀錄、補齊 PID）→ 把計畫後的快照寫入 `recovery.json`（先寫入再動手，隱藏中途當機不丟紀錄）→ `commit_hide` 同步隱藏視窗（`SW_HIDE`），並把靜音／凍結／暫停鍵交給副作用專職執行緒（`effects_worker.rs`）按 FIFO 非同步執行——訊息迴圈不被慢操作（音訊列舉、pssuspend 等待）阻塞，快速鍵與介面保持回應。
 
