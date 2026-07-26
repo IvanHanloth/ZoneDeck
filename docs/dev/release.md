@@ -99,7 +99,7 @@ GITHUB_TOKEN 创建的 PR 不会触发 `pull_request` 事件，PR 页面上不�
 
 **触发**：推送到 `main`（检测到有新的 `v*` tag 随之进入 `main` 的历史才继续），或手动触发并指定 tag。
 
-**做什么**：检测本次推送新带进 `main` 的 tag → 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试 → `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip → 生成**构建来源证明**（Sigstore attestation）→ 创建**草稿** Release 并上传 zip 与安装包。
+**做什么**：检测本次推送新带进 `main` 的 tag → 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试 → `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip → 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
 
 ::: info 为什么不监听 `push: tags`
 tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不会触发任何工作流。而**合并 PR 并不产生 tag 推送事件**——tag 是独立的 ref，合并只是让它指向的提交变得可从 `main` 追溯。所以只能从 `main` 的 push 事件里检测。

@@ -99,7 +99,7 @@ A PR created with GITHUB_TOKEN does not raise a `pull_request` event, so the PR 
 
 **Triggers**: a push to `main` (it continues only if a new `v*` tag entered `main`'s history with that push), or a manual run with an explicit tag.
 
-**What it does**: detect the tag the push brought into `main` → check that tag out → verify the tag matches the code version → frontend / Rust tests → `package.ps1 -Installer` to assemble `dist/Boss-Key` and `dist/installer` → zip `dist/Boss-Key` as the portable archive → generate **build provenance** (a Sigstore attestation) → create a **draft** Release and upload the zip and the installer.
+**What it does**: detect the tag the push brought into `main` → check that tag out → verify the tag matches the code version → frontend / Rust tests → `package.ps1 -Installer` to assemble `dist/Boss-Key` and `dist/installer` → zip `dist/Boss-Key` as the portable archive → generate **build provenance** (a Sigstore attestation) → compose the release notes (the auto-generated changelog with a security notice appended) → create a **draft** Release and upload the zip and the installer.
 
 ::: info Why it does not listen for `push: tags`
 The tag was pushed to `dev` by `tag.yml` using GITHUB_TOKEN, and that push triggers nothing. **Merging a PR does not produce a tag push event either** — a tag is an independent ref, and merging merely makes the commit it points at reachable from `main`. Detecting it from `main`'s push event is the only option left.

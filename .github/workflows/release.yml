@@ -154,12 +154,29 @@ jobs:
       #       /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 `
       #       "dist/Boss-Key/Boss Key.exe" dist/Boss-Key/config.exe dist/installer/Boss-Key-*-Setup.exe
 
+      # 发布说明 = GitHub 自动生成的更新日志 + 结尾的安全提示。
+      # 创建 Release 时若同时传 body 和 generate_release_notes，自定义内容只会被
+      # 放在自动生成内容**之前**，所以这里先调 generate-notes API 拿到更新日志，
+      # 再手动把安全提示拼在末尾。
+      - name: Compose release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $notes = (gh api "repos/$env:GITHUB_REPOSITORY/releases/generate-notes" -f tag_name="$env:TAG" --jq '.body') -join "`n"
+          $notice = @'
+          > [!WARNING]
+          > 【安全提示】
+          > 本软件中运用了大量的系统底层API，并且提供开机自启、热键监控、窗口冻结等功能，容易被杀毒软件识别为木马病毒，但是程序本身完全开源、免费，并不包含病毒、木马行为，请放心使用。请务必从官方渠道下载和使用程序，运行程序前通过文件哈希、文件签名等方式验证文件的真实性，谨防利用软件信任伪装的病毒程序。
+          '@
+          Set-Content -Path release-notes.md -Value ($notes + "`n`n" + $notice) -Encoding utf8
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           name: Boss Key ${{ env.TAG }}
           tag_name: ${{ env.TAG }}
-          generate_release_notes: true
+          body_path: release-notes.md
           draft: true
           prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
           make_latest: ${{ steps.version.outputs.is_prerelease != 'true' }}
