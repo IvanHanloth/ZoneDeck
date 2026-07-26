@@ -1,7 +1,7 @@
 use std::collections::HashSet;
 
 use bosskey_common::matching::{WindowResolution, match_process_rule, resolve_window_rule};
-use bosskey_common::{Config, Setting, WindowInfo};
+use bosskey_common::{Config, NO_TITLE, Setting, WindowInfo, WindowRule};
 use serde::{Deserialize, Serialize};
 
 use crate::effects::Effects;
@@ -210,6 +210,25 @@ pub struct ShowOutcome {
     pub shown: usize,
     /// 因句柄失效或已被其他窗口复用而跳过的记录数。
     pub stale: usize,
+    /// 句柄失效后按「进程路径 + 标题」重新找回并显示的窗口数。
+    pub refound: usize,
+}
+
+/// 把标题变化同步进句柄匹配的精确窗口规则（仅内存，随下次配置保存落盘）。
+/// `NO_TITLE` 不参与同步。返回是否有规则被更新。
+pub fn sync_rule_titles(rules: &mut [WindowRule], hwnd: i64, title: &str) -> bool {
+    if title == NO_TITLE {
+        return false;
+    }
+    let mut changed = false;
+    for rule in rules
+        .iter_mut()
+        .filter(|r| r.regex.is_none() && r.hwnd == hwnd && r.title != title)
+    {
+        rule.title = title.to_string();
+        changed = true;
+    }
+    changed
 }
 
 pub struct HideController<W: WindowManager, E: Effects> {
@@ -249,6 +268,42 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
     pub fn foreground(&self) -> i64 {
         self.wm.foreground()
+    }
+
+    /// 窗口当前标题（封装 wm 依赖，供事件追踪查询）。
+    pub fn window_title(&self, hwnd: i64) -> String {
+        self.wm.window_title(hwnd)
+    }
+
+    /// 该句柄是否在隐藏记录里。
+    pub fn tracks_window(&self, hwnd: i64) -> bool {
+        self.hidden.iter().any(|t| t.hwnd == hwnd)
+    }
+
+    /// 移除句柄对应的隐藏记录（窗口已销毁或被外部恢复显示时由事件追踪调用）。
+    /// 返回是否有记录被移除。
+    pub fn forget_window(&mut self, hwnd: i64) -> bool {
+        let before = self.hidden.len();
+        self.hidden.retain(|t| t.hwnd != hwnd);
+        self.hidden.len() != before
+    }
+
+    /// 同步隐藏记录里的窗口标题（标题变化事件）；`NO_TITLE` 不参与同步。
+    /// 返回是否有记录被更新。
+    pub fn update_title(&mut self, hwnd: i64, title: &str) -> bool {
+        if title == NO_TITLE {
+            return false;
+        }
+        let mut changed = false;
+        for t in self
+            .hidden
+            .iter_mut()
+            .filter(|t| t.hwnd == hwnd && t.title != title)
+        {
+            t.title = title.to_string();
+            changed = true;
+        }
+        changed
     }
 
     /// 计算一次隐藏的执行计划，不做任何窗口 / 副作用动作；顺带完成隐藏集剪枝
@@ -393,6 +448,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
 
         let hidden = std::mem::take(&mut self.hidden);
+        let mut stale: Vec<&Target> = Vec::new();
         for t in &hidden {
             // 句柄仍存活且仍属于当初的进程才恢复，避免弹出复用同一句柄的无关窗口。
             if self.wm.is_window(t.hwnd) && (t.pid == 0 || self.wm.window_pid(t.hwnd) == t.pid) {
@@ -400,8 +456,10 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                 outcome.shown += 1;
             } else {
                 outcome.stale += 1;
+                stale.push(t);
             }
         }
+        outcome.refound = self.refind_stale(&hidden, &stale);
 
         let muted = std::mem::take(&mut self.muted);
         for r in &muted {
@@ -410,6 +468,36 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             }
         }
         outcome
+    }
+
+    /// 按「进程路径 + 标题」为失效记录找回窗口：只匹配当前不可见、且不在
+    /// 本次隐藏集内的窗口，找到即恢复显示。返回找回数。
+    fn refind_stale(&self, hidden: &[Target], stale: &[&Target]) -> usize {
+        if stale
+            .iter()
+            .all(|t| t.process_path.is_empty() || t.title.is_empty() || t.title == NO_TITLE)
+        {
+            return 0;
+        }
+        let windows = self.wm.enumerate();
+        let mut used: HashSet<i64> = hidden.iter().map(|t| t.hwnd).collect();
+        let mut refound = 0;
+        for t in stale {
+            if t.process_path.is_empty() || t.title.is_empty() || t.title == NO_TITLE {
+                continue;
+            }
+            if let Some(w) = windows.iter().find(|w| {
+                !w.visible
+                    && !used.contains(&w.hwnd)
+                    && w.path == t.process_path
+                    && w.title == t.title
+            }) {
+                used.insert(w.hwnd);
+                self.wm.show(w.hwnd);
+                refound += 1;
+            }
+        }
+        refound
     }
 
     /// 释放指定进程的隐藏状态：显示窗口、解冻、取消静音，并从隐藏集移除。返回被释放的窗口数。
@@ -797,12 +885,14 @@ mod tests {
     }
 
     impl WindowManager for MockWm {
+        // 与真实平台一致：不可见窗口也在枚举结果里，visible 标记如实反映当前状态。
         fn enumerate(&self) -> Vec<WindowInfo> {
             let visible = self.visible.borrow();
+            let exists = self.exists.borrow();
             self.windows
                 .iter()
-                .filter(|w| visible.contains(&w.hwnd))
-                .cloned()
+                .filter(|w| exists.contains(&w.hwnd))
+                .map(|w| w.clone().with_visibility(visible.contains(&w.hwnd)))
                 .collect()
         }
         fn hide(&self, hwnd: i64) {
@@ -832,6 +922,13 @@ mod tests {
                 .find(|w| w.hwnd == hwnd)
                 .map(|w| w.pid)
                 .unwrap_or(0)
+        }
+        fn window_title(&self, hwnd: i64) -> String {
+            self.windows
+                .iter()
+                .find(|w| w.hwnd == hwnd)
+                .map(|w| w.title.clone())
+                .unwrap_or_else(|| bosskey_common::NO_TITLE.to_string())
         }
         fn process_start_time(&self, pid: u32) -> i64 {
             if pid == 0 {
@@ -895,7 +992,7 @@ mod tests {
         assert_eq!(*controller.effects.pauses.borrow(), 1, "应发送一次暂停键");
 
         let outcome = controller.show();
-        assert_eq!(outcome, ShowOutcome { shown: 1, stale: 0 });
+        assert_eq!(outcome, ShowOutcome { shown: 1, stale: 0, refound: 0 });
         assert!(!controller.is_hidden());
         assert!(controller.wm.is_visible(10), "恢复后微信应可见");
         assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻");
@@ -1115,7 +1212,7 @@ mod tests {
             ..Default::default()
         });
 
-        assert_eq!(outcome, ShowOutcome { shown: 1, stale: 0 });
+        assert_eq!(outcome, ShowOutcome { shown: 1, stale: 0, refound: 0 });
         assert!(!controller.is_hidden(), "恢复完成后应回到未隐藏状态");
         assert!(controller.wm.is_visible(10), "崩溃前隐藏的窗口应被找回");
         assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻进程");
@@ -1183,7 +1280,7 @@ mod tests {
         let outcome = controller.show();
         assert_eq!(
             outcome,
-            ShowOutcome { shown: 1, stale: 2 },
+            ShowOutcome { shown: 1, stale: 2, refound: 0 },
             "死句柄与被复用句柄都应跳过"
         );
         assert!(!controller.wm.is_visible(20), "被复用的句柄不得被弹出来");
@@ -1247,6 +1344,112 @@ mod tests {
             1,
             "补齐 PID 后 release_pids 应能按进程释放该窗口"
         );
+    }
+
+    #[test]
+    fn forget_window_removes_record_and_update_title_syncs_it() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::from_window(&win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"))], &[]);
+
+        assert!(controller.tracks_window(10));
+        assert!(controller.update_title(10, "微信 - 新会话"));
+        assert!(!controller.update_title(10, "微信 - 新会话"), "标题未变不算更新");
+        assert!(
+            !controller.update_title(10, bosskey_common::NO_TITLE),
+            "NO_TITLE 不参与同步"
+        );
+        assert_eq!(controller.snapshot().hidden[0].title, "微信 - 新会话");
+
+        assert!(!controller.forget_window(99), "未记录的句柄无事发生");
+        assert!(controller.forget_window(10));
+        assert!(!controller.is_hidden(), "记录移除后不再处于隐藏态");
+    }
+
+    #[test]
+    fn sync_rule_titles_updates_exact_rules_only() {
+        let mut rules = vec![
+            wrule("旧标题", 10, "app.exe", "C:\\app.exe"),
+            WindowRule::from_regex("^项目"),
+        ];
+        assert!(sync_rule_titles(&mut rules, 10, "新标题"));
+        assert_eq!(rules[0].title, "新标题");
+        assert!(!sync_rule_titles(&mut rules, 10, "新标题"), "标题未变不算更新");
+        assert!(!sync_rule_titles(&mut rules, 99, "别的"), "句柄不匹配不更新");
+        assert!(
+            !sync_rule_titles(&mut rules, 10, NO_TITLE),
+            "NO_TITLE 不参与同步"
+        );
+    }
+
+    #[test]
+    fn show_refinds_stale_records_by_path_and_title() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        // 99 是同进程同标题的新窗口（程序重建了窗口），当前不可见。
+        let wm = MockWm::new(
+            vec![
+                win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
+                win_pid("微信", 99, "WeChat.exe", 600, "C:\\WeChat.exe"),
+            ],
+            0,
+        );
+        wm.hide(99);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(
+            &setting,
+            &[Target::from_window(&win_pid(
+                "微信",
+                10,
+                "WeChat.exe",
+                500,
+                "C:\\WeChat.exe",
+            ))],
+            &[],
+        );
+
+        controller.wm.destroy(10);
+        let outcome = controller.show();
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 0,
+                stale: 1,
+                refound: 1
+            }
+        );
+        assert!(
+            controller.wm.is_visible(99),
+            "应按进程路径 + 标题找回重建的窗口"
+        );
+    }
+
+    #[test]
+    fn refind_skips_visible_windows_and_records_without_info() {
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![
+                win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
+                win_pid("微信", 99, "WeChat.exe", 600, "C:\\WeChat.exe"),
+            ],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        // bare 目标没有路径 / 标题信息，失效后无从找回。
+        controller.apply_hide(&setting, &[Target::bare(10, 500)], &[]);
+        controller.wm.destroy(10);
+        let outcome = controller.show();
+        assert_eq!(outcome.refound, 0, "无路径 / 标题信息的记录不找回");
+        assert!(controller.wm.is_visible(99), "可见窗口不受影响");
     }
 
     #[test]

@@ -32,7 +32,7 @@ The core writes key events and panic information to log files in the `logs` fold
 
 Each time windows are hidden, the core records which windows were hidden and which processes were frozen or muted into `recovery.json`, and deletes the file on a normal restore or exit.
 
-If that file still exists when the core restarts, the previous run **exited abnormally** — so the core automatically **restores the windows, resumes the processes and unmutes them**.
+If that file still exists when the core restarts, the previous run **exited abnormally** — so the core automatically **restores the windows, resumes the processes and unmutes them**. If a window handle is no longer valid (for example the app recreated its window), the core additionally tries to refind the window by process path and title.
 
 ### Layer 3: the scheduled task
 

@@ -190,6 +190,10 @@ impl WindowManager for WindowsWindowManager {
         window_pid(hwnd_from(hwnd))
     }
 
+    fn window_title(&self, hwnd: i64) -> String {
+        window_title(hwnd_from(hwnd))
+    }
+
     fn process_start_time(&self, pid: u32) -> i64 {
         process_start_time(pid)
     }

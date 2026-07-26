@@ -12,9 +12,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CW_USEDEFAULT, ChangeWindowMessageFilterEx, CreatePopupMenu, CreateWindowExW,
-    DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos,
-    GetMessageW, GetWindowLongPtrW, KillTimer, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG,
-    MSGFLT_ALLOW, PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow, SetTimer,
+    DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, EVENT_OBJECT_DESTROY,
+    EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW, GWLP_USERDATA, GetCursorPos, GetMessageW,
+    GetWindowLongPtrW, KillTimer, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG, MSGFLT_ALLOW,
+    PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow, SetTimer,
     SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TrackPopupMenu, TranslateMessage,
     WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP,
     WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
@@ -36,6 +37,7 @@ use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
 use crate::tray_badge::TrayIconSet;
 use crate::util::append_menu_item;
+use crate::win_event::{WM_APP_WINEVENT, WinEventHook};
 use crate::{idle, ipc_server, log_error, log_warn, logging, recovery};
 
 const HK_HIDE: i32 = 1;
@@ -94,6 +96,8 @@ struct AgentState {
     effects_worker: Option<EffectsWorker>,
     /// 恢复文件写入失败是否已提醒过（每次运行只弹一次气泡）。
     persist_warned: bool,
+    /// 窗口事件钩子（销毁 / 显示 / 改标题），实时维护隐藏记录与规则标题。
+    win_event_hook: Option<WinEventHook>,
     tray: Option<TrayIcon>,
     /// 托盘图标的角标变体缓存；未启用托盘时为 None。
     tray_icons: Option<TrayIconSet>,
@@ -370,6 +374,33 @@ impl AgentState {
         }
     }
 
+    /// 处理窗口事件：销毁 / 被外部恢复显示的窗口移出隐藏记录，
+    /// 标题变化同步进隐藏记录与规则（仅内存，随下一次正常落盘写出）。
+    fn on_win_event(&mut self, event: u32, hwnd: i64) {
+        match event {
+            EVENT_OBJECT_DESTROY | EVENT_OBJECT_SHOW => {
+                if self.controller.forget_window(hwnd) {
+                    self.persist_recovery();
+                    self.sync_tray();
+                }
+            }
+            EVENT_OBJECT_NAMECHANGE => {
+                let tracked_rule = self
+                    .config
+                    .window_rules
+                    .iter()
+                    .any(|r| r.regex.is_none() && r.hwnd == hwnd);
+                if !tracked_rule && !self.controller.tracks_window(hwnd) {
+                    return;
+                }
+                let title = self.controller.window_title(hwnd);
+                self.controller.update_title(hwnd, &title);
+                crate::hide::sync_rule_titles(&mut self.config.window_rules, hwnd, &title);
+            }
+            _ => {}
+        }
+    }
+
     fn apply_show(&mut self) {
         let outcome = self.controller.show();
         log_show(outcome);
@@ -538,12 +569,12 @@ fn log_hide(config: &Config, outcomes: &[RuleOutcome], plan: &HidePlan) {
     }
 }
 
-/// 记录恢复结果；有失效记录被跳过时如实写出。
+/// 记录恢复结果；失效与找回的数量如实写出。
 fn log_show(outcome: ShowOutcome) {
     if outcome.stale > 0 {
         logging::info(&format!(
-            "恢复显示 {} 个窗口，另有 {} 条记录已失效（窗口已关闭或句柄被复用），已跳过",
-            outcome.shown, outcome.stale
+            "恢复显示 {} 个窗口；{} 条记录句柄已失效，其中 {} 个按进程路径与标题重新找回",
+            outcome.shown, outcome.stale, outcome.refound
         ));
     } else {
         logging::info(&format!("恢复显示 {} 个窗口", outcome.shown));
@@ -833,6 +864,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             }
             LRESULT(0)
         }
+        WM_APP_WINEVENT => {
+            state.on_win_event(wparam.0 as u32, lparam.0 as i64);
+            LRESULT(0)
+        }
         WM_APP_IPC => {
             let mut should_quit = false;
             while let Ok((cmd, reply_tx)) = state.ipc_rx.try_recv() {
@@ -1111,6 +1146,7 @@ pub fn run(options: AgentOptions) {
         controller: HideController::new(WindowsWindowManager, effects_worker.effects()),
         effects_worker: Some(effects_worker),
         persist_warned: false,
+        win_event_hook: None,
         tray,
         tray_icons,
         ipc_rx,
@@ -1156,7 +1192,14 @@ pub fn run(options: AgentOptions) {
         );
     }
 
-    state.borrow_mut().sync_monitoring(hwnd);
+    {
+        let mut state = state.borrow_mut();
+        state.win_event_hook = WinEventHook::install(hwnd);
+        if state.win_event_hook.is_none() {
+            log_warn!("窗口事件钩子安装失败，隐藏记录仅在触发隐藏 / 恢复时维护");
+        }
+        state.sync_monitoring(hwnd);
+    }
 
     let hwnd_value = hwnd.0 as isize;
     ipc_server::spawn(options.pipe_name.clone(), move |cmd| {
