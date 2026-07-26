@@ -188,10 +188,7 @@ mod tests {
         std::fs::write(&path, "{ not valid json !!").unwrap();
         assert_eq!(load(&path), None, "损坏文件应按无快照处理而非 panic");
         assert!(!path.exists(), "损坏文件不应留在原名");
-        assert!(
-            corrupt_path(&path).exists(),
-            "损坏文件应改名保留现场供排查"
-        );
+        assert!(corrupt_path(&path).exists(), "损坏文件应改名保留现场供排查");
     }
 
     #[test]

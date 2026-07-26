@@ -191,7 +191,7 @@ pub fn expand_descendants(roots: &[u32], edges: &[(u32, u32)]) -> Vec<u32> {
 /// [`HideController::commit_hide`] 原样执行，两段之间由调用方落盘意图。
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HidePlan {
-    /// 本次新增的隐藏目标（已剔除死句柄 / 已隐藏项 / 查不到 PID 的项）。
+    /// 本次新增的隐藏目标（已剔除死句柄 / 不可见项 / 已隐藏项 / 查不到 PID 的项）。
     pub fresh: Vec<Target>,
     /// 本次新增的静音进程。
     pub mute: Vec<ProcRecord>,
@@ -310,8 +310,10 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 与 PID 补查（仍查不到的目标剔除）。`freeze_pids` 为最终要冻结的 PID 集
     /// （可能已含子进程树），仅在 `freeze_after_hide` 开启时生效。
     ///
-    /// 隐藏是累加的，`show` 时一并恢复。已在隐藏 / 静音 / 冻结集内的目标会被
-    /// 跳过——挂起是计数式的，重复施加会让解冻次数对不上。
+    /// 只有「由本程序从可见变为不可见」的窗口才进入隐藏集，恢复即逆转这次
+    /// 改变；本来就不可见的目标不入集。隐藏是累加的，`show` 时一并恢复。
+    /// 已在隐藏 / 静音 / 冻结集内的目标会被跳过——挂起是计数式的，重复施加
+    /// 会让解冻次数对不上。
     pub fn plan_hide(
         &mut self,
         setting: &Setting,
@@ -323,9 +325,12 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
         let mut fresh: Vec<Target> = Vec::new();
         for t in targets {
+            // 只隐藏当前可见的窗口：本来就不可见的目标（如程序自行藏到托盘，
+            // Steam 的关闭按钮即是）不入集，恢复时也就不会被错误地弹出来。
             if known.contains(&t.hwnd)
                 || fresh.iter().any(|f| f.hwnd == t.hwnd)
                 || !self.wm.is_window(t.hwnd)
+                || !self.wm.is_visible(t.hwnd)
             {
                 continue;
             }
@@ -992,7 +997,14 @@ mod tests {
         assert_eq!(*controller.effects.pauses.borrow(), 1, "应发送一次暂停键");
 
         let outcome = controller.show();
-        assert_eq!(outcome, ShowOutcome { shown: 1, stale: 0, refound: 0 });
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 0,
+                refound: 0
+            }
+        );
         assert!(!controller.is_hidden());
         assert!(controller.wm.is_visible(10), "恢复后微信应可见");
         assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻");
@@ -1212,7 +1224,14 @@ mod tests {
             ..Default::default()
         });
 
-        assert_eq!(outcome, ShowOutcome { shown: 1, stale: 0, refound: 0 });
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 0,
+                refound: 0
+            }
+        );
         assert!(!controller.is_hidden(), "恢复完成后应回到未隐藏状态");
         assert!(controller.wm.is_visible(10), "崩溃前隐藏的窗口应被找回");
         assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻进程");
@@ -1280,7 +1299,11 @@ mod tests {
         let outcome = controller.show();
         assert_eq!(
             outcome,
-            ShowOutcome { shown: 1, stale: 2, refound: 0 },
+            ShowOutcome {
+                shown: 1,
+                stale: 2,
+                refound: 0
+            },
             "死句柄与被复用句柄都应跳过"
         );
         assert!(!controller.wm.is_visible(20), "被复用的句柄不得被弹出来");
@@ -1354,11 +1377,23 @@ mod tests {
         };
         let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
         let mut controller = HideController::new(wm, MockEffects::default());
-        controller.apply_hide(&setting, &[Target::from_window(&win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"))], &[]);
+        controller.apply_hide(
+            &setting,
+            &[Target::from_window(&win(
+                "微信",
+                10,
+                "WeChat.exe",
+                "C:\\WeChat.exe",
+            ))],
+            &[],
+        );
 
         assert!(controller.tracks_window(10));
         assert!(controller.update_title(10, "微信 - 新会话"));
-        assert!(!controller.update_title(10, "微信 - 新会话"), "标题未变不算更新");
+        assert!(
+            !controller.update_title(10, "微信 - 新会话"),
+            "标题未变不算更新"
+        );
         assert!(
             !controller.update_title(10, bosskey_common::NO_TITLE),
             "NO_TITLE 不参与同步"
@@ -1378,8 +1413,14 @@ mod tests {
         ];
         assert!(sync_rule_titles(&mut rules, 10, "新标题"));
         assert_eq!(rules[0].title, "新标题");
-        assert!(!sync_rule_titles(&mut rules, 10, "新标题"), "标题未变不算更新");
-        assert!(!sync_rule_titles(&mut rules, 99, "别的"), "句柄不匹配不更新");
+        assert!(
+            !sync_rule_titles(&mut rules, 10, "新标题"),
+            "标题未变不算更新"
+        );
+        assert!(
+            !sync_rule_titles(&mut rules, 99, "别的"),
+            "句柄不匹配不更新"
+        );
         assert!(
             !sync_rule_titles(&mut rules, 10, NO_TITLE),
             "NO_TITLE 不参与同步"
@@ -1450,6 +1491,53 @@ mod tests {
         let outcome = controller.show();
         assert_eq!(outcome.refound, 0, "无路径 / 标题信息的记录不找回");
         assert!(controller.wm.is_visible(99), "可见窗口不受影响");
+    }
+
+    #[test]
+    fn already_invisible_windows_are_not_recorded_or_restored() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            ..Setting::default()
+        };
+        // Steam 用关闭按钮把自己藏了起来（窗口仍存在但不可见），记事本可见；
+        // 两者都被规则命中。
+        let wm = MockWm::new(
+            vec![
+                win_pid("Steam", 10, "steam.exe", 500, "C:\\steam.exe"),
+                win_pid("记事本", 20, "notepad.exe", 600, "C:\\notepad.exe"),
+            ],
+            0,
+        );
+        wm.hide(10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(
+            &setting,
+            &[Target::bare(10, 500), Target::bare(20, 600)],
+            &[],
+        );
+        assert_eq!(controller.hidden_count(), 1, "已不可见的窗口不应入集");
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(600, true)],
+            "只对真正被隐藏的窗口施加副作用"
+        );
+
+        let outcome = controller.show();
+        assert_eq!(
+            outcome,
+            ShowOutcome {
+                shown: 1,
+                stale: 0,
+                refound: 0
+            }
+        );
+        assert!(controller.wm.is_visible(20), "记事本应恢复");
+        assert!(
+            !controller.wm.is_visible(10),
+            "Steam 自己藏起来的窗口不得被恢复弹出"
+        );
     }
 
     #[test]

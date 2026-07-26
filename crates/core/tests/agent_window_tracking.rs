@@ -96,10 +96,7 @@ fn destroying_a_hidden_window_clears_the_record_in_real_time() {
         );
         std::thread::sleep(Duration::from_millis(50));
     }
-    assert!(
-        !recovery_path.exists(),
-        "记录清空后恢复文件应同步清除"
-    );
+    assert!(!recovery_path.exists(), "记录清空后恢复文件应同步清除");
 
     let quit = client.send(&Command::Quit).unwrap();
     assert_eq!(quit, Response::Ok);

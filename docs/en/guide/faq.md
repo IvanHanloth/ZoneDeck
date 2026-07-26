@@ -17,6 +17,10 @@ Some stripped-down or older Windows builds (Windows 7 and earlier) may not inclu
 A settings window that will not open **does not affect the core's hiding features** — the core is a fully native program and does not depend on WebView2. You can still hide windows with your configured hotkeys.
 :::
 
+## Will restoring pop up programs I "closed" to the tray?
+
+No. Hiding only records windows that were **visible at the time**, and restoring only reverses Boss Key's own hiding; windows an app hid by itself (Steam's close button, for example, merely hides its window) are untouched and will not be shown on restore.
+
 ## Antivirus flags or blocks Boss Key — what now?
 
 Boss Key listens for global hotkeys and hides windows, behaviour that antivirus software sometimes misreads. v3 uses a native single-file Rust implementation, which considerably reduces false positives. If it is still blocked:
