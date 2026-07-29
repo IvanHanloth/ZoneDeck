@@ -30,30 +30,49 @@ dist/
 ├── Boss-Key/                    便携版（拷走即用，发布时整个文件夹压成 zip）
 │   ├── Boss Key.exe               常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
 │   ├── config.exe                 配置界面（前端已内嵌，自包含）
+│   ├── cleanup.ps1                残留数据清理脚本（便携版没有卸载程序）
 │   ├── LICENSE.txt
-│   └── README.md
+│   ├── README.md                  简体中文
+│   ├── README.en.md               English
+│   └── README.zh-TW.md            繁體中文
 └── installer/                   安装包（-Installer 时生成）
     └── Boss-Key-<版本>-Setup.exe  InnoSetup（安装前自动结束运行中的核心）
 ```
 
-便携版**无需安装、无外部依赖**（除系统自带的 WebView2）。两个程序通过同目录的 `config.json` 与命名管道协作。
+便携版**无需安装、无外部依赖**（除系统自带的 WebView2）。两个程序通过[数据目录](/dev/architecture#数据目录)下的 `config.json` 与命名管道协作。
+
+三语 README 都要带上：便携版没有安装向导，README 是唯一的随包说明，其中「数据存放位置与清理」一节交代了程序在用户目录下留了什么、怎么用 `cleanup.ps1` 清掉。
+
+::: danger 便携文件夹里不能出现 installed.marker
+程序凭它认出自己是安装版并改用 `%APPDATA%\BossKey`（见[数据目录](/dev/architecture#数据目录)）。该文件由 `.iss` 从脚本目录直取，不经过 `dist\Boss-Key`——若混进便携包，便携版就不便携了。
+:::
+
+安装包默认走**普通权限**安装（`%LocalAppData%\Programs\Boss Key`），用户可在向导首屏改选「为所有用户安装」装进 `Program Files`。两种模式下数据都在 `%APPDATA%\BossKey`，不在安装目录里。
 
 ## 版本号管理
 
 ::: info 版本号唯一真源
-版本号的唯一真源是 `Cargo.toml` 的 `[workspace.package] version`。另外三处必须与之一致：`apps/config/src-tauri/tauri.conf.json`、`apps/config/ui/package.json`、`Cargo.lock`。
+版本号只写在 `Cargo.toml` 的 `[workspace.package] version` 一处，`Cargo.lock` 跟着它走。其余地方**不再各存一份**，一律在构建时取真实版本号：
+
+| 位置 | 版本号从哪来 |
+| --- | --- |
+| 两个 exe 的文件版本信息 | `CARGO_PKG_VERSION`（tauri-winres / tauri-build；`tauri.conf.json` 不写 `version` 即回落到 Cargo.toml） |
+| 核心清单的 `assemblyIdentity` | `crates/core/build.rs` 按 `CARGO_PKG_VERSION` 填入（换算成纯数字四段号） |
+| 安装包的 `MyAppVersion` | `scripts/package.ps1` 从 `Cargo.toml` 读出后传给 Inno；未传则编译报错，不留过期的默认值 |
+| 程序内与上报给 Verhub 的版本 | `env!("CARGO_PKG_VERSION")` |
+| 配置文件的 `app_version` | 核心启动时写入 `bosskey_common::APP_VERSION` |
 :::
 
 `scripts/version.ps1` 负责写入与校验：
 
 ```powershell
-# 把版本号写入四处文件（并同步 Cargo.lock）
+# 把版本号写入 Cargo.toml（并同步 Cargo.lock）
 powershell -File scripts/version.ps1 apply 3.0.1
 
-# 校验四处与该 tag 一致，不一致则失败
+# 校验 Cargo.toml 与该 tag 一致，不一致则失败
 powershell -File scripts/version.ps1 check 3.0.1
 
-# 不给 tag 时以 Cargo.toml 为基准校验其余文件
+# 不给 tag 时只回显当前版本号
 powershell -File scripts/version.ps1 check
 
 # 打印当前版本号
@@ -74,37 +93,24 @@ powershell -File scripts/version.ps1 show
 
 同一分支有新推送时会自动取消旧任务（`concurrency` + `cancel-in-progress`）。
 
-### `tag.yml` — 版本号写入并打 tag
+### `release.yml` — 一键发版
 
-**触发**：手动（`workflow_dispatch`），输入要发布的版本号。**请从 `dev` 分支触发**。
+**触发**：手动（`workflow_dispatch`），输入要发布的版本号。**请从 `main` 触发**（待发布内容合并进 `main` 之后）。
 
 **做什么**：
-1. 用 `version.ps1 apply` 把版本号写入四处文件；
-2. 提交到 `dev` 并打上 `v<版本>` tag，两者一起推送；
-3. 确保有一个 `dev` → `main` 的 PR（已存在就复用，没有才新开）。
+1. 用 `version.ps1 apply` 把版本号写入 `Cargo.toml` 并同步 `Cargo.lock`；
+2. 以 OIDC 身份向 [octo-sts](https://octo-sts.dev) 换取本仓库 `contents:write` 的短期 token；
+3. 经 GraphQL `createCommitOnBranch` 把版本号变更提交到触发分支，并打上 `v<版本>` 附注 tag——API 创建的提交由 GitHub 服务端签名，带 **Verified** 徽章；
+4. 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试；
+5. `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip；
+6. 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
 
-**这一步不构建**。用 GITHUB_TOKEN 推的 tag 不会触发任何工作流，正合本流程的意图：等 PR 合并、tag 随之进入 `main` 的历史，`release.yml` 才开始生产构建。
+tag 已存在时跳过第 2、3 步，直接检出该 tag 重新构建——重跑 / 补发就是再次运行并填入同一版本号。
 
-::: warning 用 merge commit 合并发版 PR
-tag 指向 `dev` 上的那个版本号提交。**squash / rebase 合并会另造提交**，tag 就进不了 `main` 的历史，`release.yml` 检测不到，**构建根本不会触发**。请用 **merge commit**。
+::: info 凭据从哪来
+仓库不保存任何长期凭据。工作流用 GitHub Actions 的 OIDC 身份向 octo-sts 换取短期 token，放行条件由 `.github/chainguard/tag-release.sts.yaml` 声明（只允许 `main` / `dev` 上的运行），token 在 job 结束时自动吊销。Octo STS App 在分支保护的 bypass 名单中，因此版本号提交无需发版 PR。
 
-真的误用了 squash，可以手动触发 `release.yml` 并指定 tag 来补救。
-:::
-
-::: tip PR 上没有检查记录？
-GITHUB_TOKEN 创建的 PR 不会触发 `pull_request` 事件，PR 页面上不会有 CI 记录（你点 Merge 时的 push 事件仍会正常触发 `build-test.yml`）。若 `main` 的分支保护要求状态检查通过，请在仓库 secrets 中配置 `RELEASE_PAT`（repo 权限的 PAT），工作流会优先使用它来开 PR。
-:::
-
-### `release.yml` — 构建并发布 Release
-
-**触发**：推送到 `main`（检测到有新的 `v*` tag 随之进入 `main` 的历史才继续），或手动触发并指定 tag。
-
-**做什么**：检测本次推送新带进 `main` 的 tag → 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试 → `package.ps1 -Installer` 组装 `dist/Boss-Key` 与 `dist/installer` → 把 `dist/Boss-Key` 压成便携 zip → 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
-
-::: info 为什么不监听 `push: tags`
-tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不会触发任何工作流。而**合并 PR 并不产生 tag 推送事件**——tag 是独立的 ref，合并只是让它指向的提交变得可从 `main` 追溯。所以只能从 `main` 的 push 事件里检测。
-
-检测方式是比较推送前后「可从 `main` 追溯的 `v*` tag」集合，取新增的那个。不能用「HEAD 上挂着的 tag」：merge commit 才是 HEAD，tag 指向的是它的父提交。
+提交能带 Verified 徽章，是因为它经 GitHub API 创建、由 GitHub 服务端签名；tag 没有服务端签名机制，是普通附注 tag。
 :::
 
 ### `deploy-docs.yml` — 文档站部署
@@ -120,20 +126,16 @@ tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不会触发�
 ### 发布一个新版本
 
 ```
-dev ──① Bump version and tag──▶ dev（版本号提交 + v3.0.1 tag）
-                                 │
-                                 ②  PR，merge commit 合并
-                                 ▼
-                               main ──③ release.yml 检测到新 tag──▶ 构建 + 草稿 Release
-                                                                        │
-                                                                        ④ Publish
-                                                                        ▼
-                                                              文档站 + releases.json 刷新
+main ──① Release──▶ 版本号提交（Verified）+ v3.0.1 tag ──▶ 构建 + 草稿 Release
+                                                              │
+                                                              ② Publish
+                                                              ▼
+                                                    文档站 + releases.json 刷新
 ```
 
-1. 功能开发完毕、准备发版时，切到 `dev`，在 GitHub Actions 中运行 **"Bump version and tag"**，填入版本号（如 `3.0.1`）。工作流把版本号提交与 tag 落在 `dev`，并确保有一个 `dev` → `main` 的 PR。
-2. 审查该 PR，用 **merge commit** 合并进 `main`。
-3. 合并触发 `release.yml`：它检测到 `v3.0.1` 随之进入 `main`，检出该 tag 开始生产构建，完成后留下一个**草稿** Release。
-4. 检查产物与发布说明，点 **Publish release** 正式发布 —— 这一步同时会刷新文档站与 `releases.json`。
+1. 功能开发完毕，照常把 `dev` 经 PR 合并进 `main`。
+2. 在 `main` 上运行 **"Release"**，填入版本号（如 `3.0.1`）。工作流把版本号提交与 tag 落在 `main`，随后完成生产构建，留下一个**草稿** Release。
+3. 检查产物与发布说明，点 **Publish release** 正式发布 —— 这一步同时会刷新文档站与 `releases.json`。
+4. 把 `main` 合回 `dev`（或在下次从 `dev` 开 PR 前先合并 `main`），让版本号提交回到 `dev`。
 
-需要重跑或补发时，手动触发 `release.yml` 并指定 tag 即可。
+需要重跑或补发时，再次运行 **"Release"** 并填入同一版本号即可。

@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::{audio, freeze, input, log_warn, logging};
@@ -9,24 +10,49 @@ use crate::{audio, freeze, input, log_warn, logging};
 /// 不得依赖「方法返回即动作已生效」，只能依赖调用顺序与执行顺序一致（FIFO）。
 pub trait Effects {
     fn mute(&self, pid: u32, mute: bool);
+    /// 冻结整批进程前静置一次，见 [`FREEZE_SETTLE_DELAY`]。
+    fn settle_before_freeze(&self);
     fn suspend(&self, pid: u32, enhanced: bool);
     fn resume(&self, pid: u32, enhanced: bool);
-    /// 发送媒体「播放/暂停」键（仅在检测到有音视频正在播放时才发送），
-    /// 并等待其生效。检测与等待都由实现负责。
+    /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。检测由实现负责。
     fn send_pause(&self);
 }
 
-/// 暂停键发出后等待媒体程序响应的时长。冻结须在这之后（FIFO 保证），
-/// 否则被冻结的进程收不到按键。
-const SEND_PAUSE_DELAY: Duration = Duration::from_millis(200);
+/// 冻结前的静置时长。
+///
+/// 冻结让进程彻底停止响应消息：隐藏动作没画完就冻结会留下残影，已发出的媒体
+/// 暂停键也需要这段时间被目标程序处理掉。静音走音频会话，不受影响，故不等。
+const FREEZE_SETTLE_DELAY: Duration = Duration::from_millis(200);
 
 pub struct WinEffects {
     exe_dir: PathBuf,
+    /// 「已开增强冻结但缺 pssuspend」是否已记过，每次运行只记一条。
+    missing_tool_logged: AtomicBool,
 }
 
 impl WinEffects {
     pub fn new(exe_dir: PathBuf) -> Self {
-        Self { exe_dir }
+        Self {
+            exe_dir,
+            missing_tool_logged: AtomicBool::new(false),
+        }
+    }
+
+    /// 增强冻结是否可用；因缺少 pssuspend 而不可用时，每次运行提醒一次。
+    fn enhanced_ready(&self, enhanced: bool) -> bool {
+        if !enhanced {
+            return false;
+        }
+        if freeze::pssuspend_available(&self.exe_dir) {
+            return true;
+        }
+        if !self.missing_tool_logged.swap(true, Ordering::Relaxed) {
+            log_warn!(
+                "已启用增强冻结，但核心所在目录下没有 {}，本次运行一律改用普通冻结",
+                freeze::PSSUSPEND_EXE
+            );
+        }
+        false
     }
 }
 
@@ -35,8 +61,12 @@ impl Effects for WinEffects {
         audio::set_mute(pid, mute);
     }
 
+    fn settle_before_freeze(&self) {
+        std::thread::sleep(FREEZE_SETTLE_DELAY);
+    }
+
     fn suspend(&self, pid: u32, enhanced: bool) {
-        if enhanced && freeze::pssuspend_available(&self.exe_dir) {
+        if self.enhanced_ready(enhanced) {
             match freeze::suspend_enhanced(&self.exe_dir, pid) {
                 Ok(()) => {
                     logging::debug(&format!("增强冻结成功 (pid={pid})"));
@@ -52,7 +82,7 @@ impl Effects for WinEffects {
     }
 
     fn resume(&self, pid: u32, enhanced: bool) {
-        if enhanced && freeze::pssuspend_available(&self.exe_dir) {
+        if self.enhanced_ready(enhanced) {
             match freeze::resume_enhanced(&self.exe_dir, pid) {
                 Ok(()) => {
                     logging::debug(&format!("增强解冻成功 (pid={pid})"));
@@ -72,7 +102,6 @@ impl Effects for WinEffects {
         // 没有音视频在播放时不发键，避免把静止的播放器切成播放。
         if audio::is_audio_playing() {
             input::send_media_pause();
-            std::thread::sleep(SEND_PAUSE_DELAY);
         }
     }
 }

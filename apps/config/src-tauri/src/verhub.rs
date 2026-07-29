@@ -22,6 +22,8 @@ pub const PLATFORM: Platform = Platform::Windows;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 const LOG_CONTENT_MAX: usize = 4096;
+/// 上报正文里留给日志摘录的预算，其余部分留给错误描述与详情。
+pub const LOG_EXCERPT_MAX: usize = LOG_CONTENT_MAX * 3 / 5;
 
 type Result<T> = verhub_sdk::Result<T>;
 
@@ -163,15 +165,45 @@ pub async fn announcements(limit: u32) -> Result<Vec<Announcement>> {
         .collect())
 }
 
+/// 反馈提交选项：服务端决定本项目能否把反馈转换为 GitHub Issue。
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct FeedbackOptions {
+    /// 是否开放「转换为 Issue」。为假时前端不显示该选项。
+    pub github_forward_available: bool,
+    /// 选择转换时联系方式是否必填；转换不可用时恒为假。
+    pub contact_required_for_forward: bool,
+}
+
+pub async fn feedback_options() -> Result<FeedbackOptions> {
+    let resp = client()?.public().get_feedback_options().await?;
+    Ok(FeedbackOptions {
+        github_forward_available: resp.github_forward_available,
+        contact_required_for_forward: resp.contact_required_for_forward,
+    })
+}
+
+/// 规整联系方式：只有空白等同于未填写。
+pub fn normalize_contact(contact: &str) -> Option<String> {
+    let trimmed = contact.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// 提交客户端反馈。`rating` 为 1..=5；`custom_data` 携带附加信息。
+///
+/// `forward_to_github` 为真时由 Verhub 侧的机器人把这条反馈建成 GitHub Issue：
+/// 联系方式必填（SDK 本地即拒绝），且 Issue 创建失败时整条反馈不会被记录。
 pub async fn submit_feedback(
     content: String,
     rating: Option<u8>,
+    contact: Option<String>,
+    forward_to_github: bool,
     custom_data: serde_json::Value,
 ) -> Result<()> {
     let input = CreateFeedbackInput {
         content,
         rating,
+        contact,
+        forward_to_github: forward_to_github.then_some(true),
         platform: Some(PLATFORM),
         custom_data: json_object(custom_data),
         ..Default::default()
@@ -192,7 +224,7 @@ pub async fn upload_log(content: &str, device_info: serde_json::Value) -> Result
     Ok(())
 }
 
-/// 项目公开链接（主页 / 仓库 / 文档等）的缓存有效期。链接极少变动，一天刷新一次足够。
+/// 项目公开链接的缓存有效期。
 const PROJECT_CACHE_TTL_SECS: i64 = 24 * 60 * 60;
 
 /// 项目公开链接。所有字段都可能缺省（Verhub 上未填写）；前端须自备回退链接。
@@ -259,7 +291,7 @@ fn unix_now() -> i64 {
 }
 
 /// 项目公开链接：内存缓存 → 磁盘缓存（`cache_path`）→ Verhub API 逐级回退。
-/// API 拉取失败时退回过期缓存（有旧数据总比没有强），完全没有缓存才报错。
+/// API 拉取失败时退回过期缓存，完全没有缓存才报错。
 pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
     let now = unix_now();
     if let Some(cached) = cache_get()
@@ -322,6 +354,16 @@ mod tests {
     #[test]
     fn truncate_leaves_short_content_alone() {
         assert_eq!(truncate_log("崩了"), "崩了");
+    }
+
+    #[test]
+    fn normalize_contact_treats_blank_as_absent() {
+        assert_eq!(
+            normalize_contact("  ivan@o5g.top "),
+            Some("ivan@o5g.top".into())
+        );
+        assert_eq!(normalize_contact(""), None);
+        assert_eq!(normalize_contact("   \t\n "), None);
     }
 
     #[test]

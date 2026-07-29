@@ -17,7 +17,7 @@ use windows::Win32::UI::WindowsAndMessaging::{CreateIconIndirect, HICON, ICONINF
 
 use crate::icon::IconRgba;
 
-/// 角标描边：白色，用于在深浅任务栏背景上都能衬出圆点边界。
+/// 角标描边，使圆点在深浅任务栏背景上都衬得出边界。
 const BADGE_RING: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 
 /// 角标颜色，declaration 顺序即显示优先级（红最高）。
@@ -84,8 +84,7 @@ pub fn active_badge(badges: &TrayBadges, status: &TrayStatus) -> Option<BadgeCol
 }
 
 /// 在顶到底 RGBA 像素的右下角叠加一个带白色描边的实心圆点。
-///
-/// 圆点直径约为图标边长的 44%，紧贴右下角；边缘做 1px 线性过渡抗锯齿。
+/// 直径约为图标边长的 44%，边缘做 1px 线性过渡抗锯齿。
 /// `pixels` 长度必须等于 `width*height*4`，否则不做任何修改。
 fn overlay_badge(pixels: &mut [u8], width: u32, height: u32, color: [u8; 4]) {
     if width == 0 || height == 0 || pixels.len() != (width * height * 4) as usize {
@@ -189,9 +188,7 @@ fn rgba_to_hicon(icon: &IconRgba) -> Option<HICON> {
     }
 }
 
-/// 基础图标 + 各颜色角标的 HICON 缓存。
-///
-/// 颜色数量有限（4 种），生成后缓存复用；缓存的 HICON 随进程存活，不逐个销毁。
+/// 基础图标 + 各颜色角标的 HICON 缓存；缓存的 HICON 随进程存活，不逐个销毁。
 pub struct TrayIconSet {
     base: HICON,
     base_rgba: Option<IconRgba>,

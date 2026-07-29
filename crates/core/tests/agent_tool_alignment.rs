@@ -66,10 +66,10 @@ fn adopt_and_release_keep_core_records_and_recovery_file_in_sync() {
 
     let pipe = r"\\.\pipe\bosskey_test_tool_alignment";
     let options = AgentOptions {
-        config_path,
         pipe_name: pipe.to_string(),
         enable_tray: false,
         auto_quit_ms: Some(15_000),
+        ..AgentOptions::standard(config_path)
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
     let client = PipeClient::new(pipe);

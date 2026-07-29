@@ -23,7 +23,7 @@ Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 │  │ • 列舉/隱藏/顯示視窗       │        └────────────┬───────────┘ │
 │  │ • Core Audio 靜音         │                     │ 讀寫         │
 │  │ • NtSuspend 程序凍結       │        ┌────────────▼───────────┐ │
-│  │ • 通知區域圖示／通知       │        │ config.json（與 exe 同資料夾）│
+│  │ • 通知區域圖示／通知       │        │ config.json（資料目錄）    │
 │  │ • 開機自動啟動（排程/登錄檔）        │ 核心收到 reload 後熱重新載入 │
 │  └──────────────────────────┘        └────────────────────────┘ │
 │         ▲ 隨登入自動啟動                                         │
@@ -68,10 +68,11 @@ Boss-Key/
 ├── Cargo.toml                      workspace（含 release profile 調校）
 ├── crates/
 │   ├── common/                     共用程式庫（無平台相依，可跨平台編譯）
-│   │   └── src/{model,config,matching,ipc,i18n}.rs
+│   │   └── src/{model,config,matching,ipc,i18n,paths}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule（serde 相容舊 config.json，PID 大寫）
-│   │       config    Config/Setting/Hotkey（相容讀取舊設定 + 移轉）
+│   │       config    Config/Setting/Hotkey（相容讀取舊設定 + 移轉；儲存走 tmp + rename 原子取代）
 │   │       matching  視窗比對邏輯
+│   │       paths     資料目錄定位（安裝版走 %APPDATA%，可攜版就地，見下）
 │   │       ipc       Command/Response 協定 + PipeClient 用戶端
 │   │       i18n      介面語言標籤（Lang）與語言偏好解析，核心與設定程式共用
 │   └── core/                       常駐核心（lib + bin）
@@ -85,6 +86,7 @@ Boss-Key/
 │           effects_worker.rs  副作用專職執行緒（FIFO 佇列；訊息迴圈只做 SW_HIDE）
 │           audio.rs      Core Audio 工作階段靜音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增強凍結
+│           input_hooks.rs 輸入掛鉤專職執行緒（承載兩個低階掛鉤，優先權 above normal）
 │           mouse_hook.rs WH_MOUSE_LL（中鍵/側鍵/四角）
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
@@ -93,7 +95,7 @@ Boss-Key/
 │           autostart.rs  開機自動啟動（排程工作 XML 含失敗自動重新啟動 + 登錄檔回落）
 │           elevation.rs  系統管理員偵測 + UAC 提升權限重新啟動
 │           i18n.rs       核心使用者可見文案 catalog（通知區域選單／通知／IPC 錯誤；記錄檔不走它）
-│           logging.rs    分級檔案記錄（logs/BossKey-YYYY-MM-DD.log 按日切割 + panic 掛鉤）
+│           logging.rs    分級檔案記錄（按日切割 + 等級過濾 + 去識別化 + panic 掛鉤）
 │           recovery.rs   當機復原（意圖先行寫入 + 原子寫；快照帶開機時刻與
 │                         處理程序建立時刻，跨重新開機的快照會被丟棄）
 │           icon.rs       程序圖示擷取（HICON → 手寫 PNG/base64 編碼）
@@ -101,7 +103,8 @@ Boss-Key/
 └── apps/config/                    設定介面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 後端命令 + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub 用戶端（版本／公告／回饋／日誌／專案連結，基於 verhub-sdk；
-    │                      專案連結帶快取：記憶體 + 同目錄 verhub_cache.json，有效期一天）
+    │                      回饋可選轉為 GitHub Issue，由 Verhub 機器人建立，此時須填 GitHub 帳號；
+    │                      專案連結帶快取：記憶體 + 資料目錄下的 verhub_cache.json，有效期一天）
     ├── ui/         前端原始碼（Vite + Svelte 5）
     │   └── src/    lib/（純邏輯 + vitest 測試）+ components/（Svelte 元件）
     │                + locales/（三語文案 catalog，以 zh-CN.js 為基準）
@@ -111,6 +114,41 @@ Boss-Key/
 ::: tip common 為什麼無平台相依
 `crates/common` 刻意不相依於 Windows API，因此可以跨平台編譯，其純邏輯（設定解析、比對、協定）也更易做單元測試。平台相關程式碼集中在 `crates/core`。
 :::
+
+## 資料目錄
+
+設定 `config.json`、記錄檔 `logs/`、復原檔 `recovery.json`、快取 `verhub_cache.json` 共處一個**資料目錄**，由 `crates/common/src/paths.rs` 定位。安裝版與可攜版分開對待：
+
+| 情形 | 資料目錄 | `DataDirKind` |
+| --- | --- | --- |
+| 安裝版 | `%APPDATA%\BossKey` | `Installed` |
+| 可攜版，程式資料夾可寫入 | 程式資料夾 | `Portable` |
+| 可攜版，程式資料夾寫不進去 | `%APPDATA%\BossKey` | `PortableFallback` |
+
+可攜版把資料留在程式資料夾，複製走整個資料夾就帶走了全部設定；安裝版則不能這麼做——安裝程式可以裝進 `Program Files`，那裡一般權限程序不可寫入，設定程式每次儲存都會得到 `os error 5`。
+
+### 怎麼分辨是哪一種
+
+看程式資料夾裡有沒有安裝痕跡（`paths::is_installed`）：
+
+1. 安裝程式放的標記檔案 `installed.marker`（`[Files]` 裡裝，解除安裝時隨之移除）；
+2. 解除安裝程式 `unins*.exe` —— 兜底，標記檔案被誤刪時仍認得出是安裝版，不至於把資料寫回 `Program Files`。序號隨重複安裝遞增，故按前綴比對。
+
+::: warning 判據必須是檔案，不能是程序權限
+核心可能以系統管理員身分執行、設定程式不會：核心在 `Program Files` 下寫得進去，設定程式寫不進去。若兩邊各按自己能否寫入來選資料夾，就會各讀一份設定，使用者改了設定卻不生效。看檔案則兩邊必然一致。也因此，安裝版根本不做可寫性探測——結果一樣是使用者資料夾。
+:::
+
+### 回退與移轉
+
+可攜版探測到程式資料夾不可寫入時退回使用者資料夾，`kind` 記為 `PortableFallback`。核心把它寫進記錄檔，設定程式透過 `data_location` 命令讀到後彈出提示，說明這是權限問題以及怎麼改（見 `DataNoticeModal.svelte`）。程式功能不受影響。
+
+用到使用者資料夾時，程式資料夾裡的 `config.json` 會搬過來：先複製，再盡力刪掉原檔案。目標已有設定就不動它——那是目前在用的一份，舊檔案不得覆蓋，也不去刪。刪不掉（沒有寫入權限、檔案被占用）就留在原處，反正不會再被讀到。
+
+::: tip 設定介面的瀏覽器資料另有一處
+Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，不在資料目錄裡，也不由 `paths.rs` 管。安裝程式的解除安裝程式與可攜版隨附的 `scripts/cleanup.ps1` 都會清理它。
+:::
+
+每次啟動的實際資料目錄與判定結果會寫進記錄檔的 `[START]` 標記，排查讀寫失敗先看它（路徑中的使用者目錄已去識別化為 `%USERPROFILE%`）。
 
 ## 核心內部：Agent 訊息迴圈
 
@@ -125,9 +163,19 @@ Boss-Key/
 
 訊息迴圈狀態由 `RefCell` 承載：通知區域／懸浮窗選單的強制回應迴圈（`TrackPopupMenu`）會重入 `wndproc`，重入期間的事件借用失敗即被安全丟棄，避免出現兩個可變參考的別名。IPC 執行緒建立具名管道失敗時按退避（1s → 5s → 30s）重試，不會結束。
 
+### 低階輸入掛鉤不與訊息迴圈同執行緒
+
+`WH_MOUSE_LL`／`WH_KEYBOARD_LL` 的回呼由**安裝執行緒的訊息幫浦**派送，且系統的輸入執行緒要等掛鉤鏈返回才繼續投遞事件。若與 agent 同執行緒，列舉視窗、寫入復原檔案、處理全系統視窗事件這類操作會直接拖慢全域滑鼠與鍵盤輸入，單次超過 `LowLevelHooksTimeout`（預設 300ms）時系統還會丟棄該事件。
+
+故 `input_hooks.rs` 單獨啟動一條只跑訊息幫浦的執行緒承載這兩個掛鉤，執行緒優先權提到 above normal，回呼裡只做純記憶體判定與 `PostMessageW`（滑鼠移動這條最熱的路徑上不加鎖，取樣存在不可分割變數裡）。agent 執行緒透過一個僅訊息視窗向它同步下達裝卸請求，並依返回值決定是否回退（鍵盤掛鉤裝不上時「不傳遞」快速鍵退化為 `RegisterHotKey`）。
+
+agent 執行緒本身**不**提優先權：它做的是列舉／凍結／寫入磁碟這類重活，抬高只會從前景程式手裡搶 CPU。
+
 視窗事件驅動隱藏紀錄的即時維護：被隱藏的視窗自行銷毀或被外部復原顯示時，紀錄即刻移除並寫入磁碟；標題變化同步進隱藏紀錄與精確視窗規則（僅記憶體，隨下次正常寫入時落盤），使「標題 + 程序路徑」的追溯與找回始終基於最新資訊。復原時若控制代碼已失效，還會按「程序路徑 + 標題」在目前不可見視窗中嘗試重新找回。
 
 當觸發隱藏／顯示時，交由 `HideController` 編排，流程為「意圖先行」兩段式：`plan_hide` 算出執行計畫（剪掉失效紀錄、補齊 PID）→ 把計畫後的快照寫入 `recovery.json`（先寫入再動手，隱藏中途當機不丟紀錄）→ `commit_hide` 同步隱藏視窗（`SW_HIDE`），並把靜音／凍結／暫停鍵交給副作用專職執行緒（`effects_worker.rs`）按 FIFO 非同步執行——訊息迴圈不被慢操作（音訊列舉、pssuspend 等待）阻塞，快速鍵與介面保持回應。
+
+佇列內的先後有講究：暫停鍵→靜音→靜置→凍結。凍結讓程序徹底停止回應訊息，隱藏若還沒在螢幕上畫完就凍結，被凍結的視窗會留下殘影；發出去的暫停鍵同樣要有時間被目標程式處理掉。故凍結前統一靜置一次（`FREEZE_SETTLE_DELAY`，整批只等一次，沒有要凍結的程序就不等）。靜音不排在這道等待之後——它走音訊工作階段，與目標程序是否在跑無關。
 
 復原（顯示）時逐條校驗紀錄的有效性：控制代碼須仍存在且仍屬於當初的處理程序（`IsWindow` + PID 比對），凍結／靜音紀錄須符合處理程序建立時刻——控制代碼與 PID 都會被系統回收重複使用，校驗不過的紀錄跳過並如實計入日誌。
 
@@ -137,11 +185,45 @@ Boss-Key/
 
 ## 穩定性設計（當機自癒三層防線）
 
-1. **當機記錄**：關鍵事件與 panic 寫入 exe 同資料夾的 `logs/BossKey-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；release 建置丟棄 DEBUG 級）。
+1. **當機記錄**：關鍵事件與 panic 寫入[資料目錄](#資料目錄)下的 `logs/BossKey-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；依 `log_level` 過濾，預設只記 WARN 及以上，詳見[記錄分級與去識別化](#記錄分級與去識別化)）。
 2. **當機復原**：隱藏動作執行前先把「將要隱藏／凍結／靜音什麼」寫入 `recovery.json`（tmp + rename 原子替換），異常結束後重新啟動自動找回；快照帶開機時刻與處理程序建立時刻，跨重新開機的過期快照直接丟棄，不會對無關視窗／處理程序做復原動作。
 3. **監控程式**：排程工作 `RestartOnFailure`（當機後 1 分鐘內重新啟動，最多 3 次）。release 建置 `panic = "abort"`，panic 掛鉤寫完記錄後以非零碼結束，正好觸發排程工作重新啟動。
 
 使用者視角的說明見 [視窗復原與當機自癒](/zh-tw/guide/recovery)。
+
+## 記錄分級與去識別化
+
+`crates/core/src/logging.rs` 提供 `debug`／`info`／`warn`／`error` 四級與兩條工作階段標記，寫入前統一去識別化。使用者在設定介面選擇的 `log_level` 是**記錄門檻**：低於它的記錄直接丟棄，預設 `warn` 即只留警告與錯誤。等級在 `reload_config` 時即時生效，無須重新啟動核心。
+
+新增記錄時按下表歸類：
+
+| 級別 | 收什麼 | 例子 |
+| --- | --- | --- |
+| `error` | 功能已不可用或資料有遺失風險，使用者需要知道 | 代理視窗建立失敗、設定解析失敗回退預設、復原檔寫入失敗 |
+| `warn` | 降級但仍能用，或出現了使用者會察覺的異常 | 熱鍵註冊失敗、掛鉤安裝失敗、規則未比對到視窗、偵測到上次異常結束 |
+| `info` | 每次執行至多一兩條的里程碑 | 更新後首次啟動並拉起設定程式 |
+| `debug` | 逐次動作的流水與自癒過程，僅排查時才需要 | 每次隱藏／還原的明細、熱鍵註冊成功、通知區域圖示補掛 |
+
+兩條**工作階段標記**不受等級過濾，每次執行各一條：`[START]` 記錄版本、設定 schema、生效等級與資料目錄，`[EXIT]` 記錄正常結束及其來由（關閉熱鍵／通知區域選單／設定程式下發／冒煙計時）。記錄檔末尾沒有 `[EXIT]` 即上次是當機或被強制結束；只有 `[START]` 能讓一段上傳上來的記錄說清楚它出自哪個版本。
+
+隱藏與還原的記錄會帶上**觸發來源**（`Trigger`：熱鍵、滑鼠按鍵、四角、閒置、通知區域、懸浮視窗、設定程式）。使用者回報「視窗莫名其妙被隱藏」時，第一步就是分清是誰觸發的。
+
+### 回報只取本次執行
+
+`logging::latest_session` 從最近一個 `[START]` 起截到目前，跨零點時向前回溯一個記錄檔；設定程式的 `current_session_log` 命令即取這一段。不按固定末尾若干行取，是因為那樣既會混進上幾次執行的內容，又會漏掉本次執行開頭的版本與資料目錄。超出回報預算（[`verhub::LOG_EXCERPT_MAX`]）時保留首行與末尾，中間註明省略了多少行——首行是版本資訊，末尾是出錯現場，兩頭都不能丟。
+
+::: warning 記錄檔可能被使用者上傳
+設定介面的意見回饋功能會把記錄送往 Verhub，因此記錄裡**不得出現視窗標題**（可能是檔名、聊天對象、網頁標題），視窗一律以「處理程序名稱 + 控制代碼 + PID」指代，視窗規則以「序號 + 處理程序名稱」指代。使用者目錄由 `logging.rs` 統一替換為 `%USERPROFILE%`，無須各呼叫點自行處理。
+:::
+
+### error 資訊
+
+- **對象**：出問題的路徑、PID、熱鍵、管道名稱等，路徑直接 `display()`（去識別化由記錄層負責）。
+- **原因**：系統 API 用 `util::win_err`（訊息 + 十六進位錯誤碼），IO 與子處理程序錯誤直接帶 `{e}`。
+- **後果**：哪個功能因此不可用、資料是否可能遺失，而不是只說「失敗」。
+- **位置**：用 `log_error!`／`log_warn!` 巨集，自動附上 `檔案:行號`。
+
+例：`重新加载配置失败，本次改动未生效，核心仍在用上一次加载的配置: <路徑> — <原因> (agent.rs:123)`。
 
 ## 介面語言
 

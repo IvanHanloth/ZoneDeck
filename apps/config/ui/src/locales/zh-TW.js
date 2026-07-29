@@ -182,8 +182,7 @@ export default {
   "notify.statusFreeze": "已啟用程序凍結",
   "notify.statusElevated": "以系統管理員身分執行",
   "notify.statusMonitorPaused": "快速鍵監控已暫停",
-  "notify.trayPriorityNote":
-    "為每種顏色的圓點角標繫結一個狀態，角標顯示在通知區域圖示右下角；多個狀態同時滿足時，依紅 > 綠 > 黃 > 藍的優先順序僅顯示一個圓點。選擇「不顯示」可停用該顏色。",
+  "notify.trayPriorityNote": "多個狀態同時滿足時，依紅 > 綠 > 黃 > 藍的優先順序顯示",
   "notify.trayTooltip": "顯示圖示懸浮名稱",
   "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「Boss Key」；關閉後不顯示任何文字，更為隱密。",
 
@@ -197,17 +196,16 @@ export default {
   "options.hideIcon": "一併隱藏 Boss Key 通知區域圖示",
   "options.hideIconDesc":
     "隱藏視窗時連 Boss Key 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
-  "options.sendPause": "隱藏前傳送暫停鍵（Beta）",
-  "options.sendPauseDesc":
-    "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂），會造成約 0.2 秒延遲。",
+  "options.sendPause": "隱藏前傳送暫停鍵",
+  "options.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
 
   "options.freezeCard": "程序凍結",
-  "options.freezeAfterHide": "隱藏視窗時凍結程序（Beta）",
+  "options.freezeAfterHide": "隱藏視窗時凍結程序",
   "options.freezeAfterHideDesc":
-    "隱藏後暫停目標程序，降低其 CPU／記憶體佔用；復原顯示時自動解除凍結。",
+    "隱藏後暫停目標程序，降低其 CPU／記憶體佔用；復原顯示時自動解除凍結。可能造成一定的隱藏／復原延遲。",
   "options.enhancedFreeze": "使用增強凍結",
   "options.enhancedFreezeDesc":
-    "改用 pssuspend64.exe 凍結。需在程式資料夾放置該檔案，且核心以系統管理員身分執行。",
+    "改用 pssuspend64.exe 凍結。需在程式資料夾放置該檔案，且核心以系統管理員身分執行。可能造成一定的隱藏／復原延遲。",
   "options.enhancedFreezeBlocked": "目前無法使用：{reasons}。",
   "options.needFreezeFirst": "需先開啟「隱藏視窗時凍結程序」",
   "options.blockedCoreStopped": "核心未執行",
@@ -215,7 +213,7 @@ export default {
   "options.blockedNoPssuspend": "程式資料夾缺少 pssuspend64.exe",
   "options.freezeWholeTree": "凍結完整程序（Beta）",
   "options.freezeWholeTreeDesc":
-    "遞迴凍結命中程式的整棵子程序樹，凍結更徹底；對一般與增強凍結均生效。可能影響這些子程序的背景工作",
+    "遞迴凍結命中程式的整棵子程序樹，凍結更徹底；對一般與增強凍結均生效。可能影響這些子程序的背景工作，並造成更高的隱藏／復原延遲。",
   "options.freezeNoteBefore": "增強凍結需下載",
   "options.freezeNoteAfter": "並將 pssuspend64.exe 放入程式資料夾，且核心以系統管理員身分執行。",
   "options.recheck": "重新偵測",
@@ -243,6 +241,13 @@ export default {
     "核心記錄檔會按日儲存在程式資料夾的 logs 資料夾內，啟動時自動清除更早的記錄檔；選擇「關閉」則不記錄。",
   "options.logOff": "關閉",
   "options.logDays": "{n} 天",
+  "options.logLevel": "記錄輸出等級",
+  "options.logLevelDesc":
+    "只記錄所選等級及以上的內容。預設「警告」，即僅記錄警告與錯誤；日常隱藏、還原等流水不寫入。回報問題前可暫時調低以取得更詳細的記錄。",
+  "options.logLevel.debug": "偵錯（最詳細）",
+  "options.logLevel.info": "資訊",
+  "options.logLevel.warn": "警告（預設）",
+  "options.logLevel.error": "錯誤（最精簡）",
 
   "options.languageCard": "語言",
   "options.language": "介面語言",
@@ -281,10 +286,17 @@ export default {
   "about.ratingOptional": "評分（選填）",
   "about.feedbackPlaceholder": "開發者會認真閱讀這裡的每一則意見，歡迎說說想要的功能、遇到的問題或者誇一誇開發者ヾ(≧▽≦*)o~\n不過，如果可以的話，推薦將 bug 和功能建議提交到 GitHub 的 Issue 區，方便開發者及時統一追蹤（所以，這裡只接受對開發者的誇獎( •̀ ω •́ )✧（開個玩笑））",
   "about.contactPlaceholder": "聯絡方式（選填，電子郵件／通訊軟體等）",
+  "about.contactPlaceholderGithub": "GitHub 帳號（必填，例如 @IvanHanloth）",
+  "about.contactNotice": "如果不留聯絡方式，我們無法直接回覆與處理這則意見。",
+  "about.forwardToIssue": "同時轉換為 GitHub Issue",
+  "about.forwardToIssueDesc": "送出後由 Verhub 機器人自動轉換為 GitHub Issue，不需要特別的網路環境，也不需要登入 GitHub 帳號；選擇轉換時必須留下 GitHub 帳號，以便在 Issue 中後續追蹤。",
+  "about.contactRequiredForIssue": "轉換為 Issue 需要留下 GitHub 帳號",
   "about.submitting": "送出中…",
   "about.submitFeedback": "送出意見回饋",
+  "about.submitAsIssue": "送出並轉換為 Issue",
   "about.writeSomething": "請先寫點什麼",
   "about.feedbackThanks": "意見回饋已送出，謝謝！",
+  "about.issueThanks": "意見回饋已送出，將自動轉換為 Issue，謝謝！",
   "about.feedbackFailed": "送出意見回饋失敗：{err}",
   "about.licenseCard": "開放原始碼授權",
   "about.licenseHint": "本專案基於 MIT 授權條款開放原始碼：",
@@ -321,8 +333,18 @@ export default {
   "announce.pinned": "置頂",
   "announce.gotIt": "知道了",
 
+  "dataNotice.title": "設定的存放位置",
+  "dataNotice.heading": "程式所在資料夾無法寫入",
+  "dataNotice.reason": "目前帳戶對 {dir} 沒有寫入權限，多半是程式放在了 Program Files 等系統資料夾下，或所在磁碟是唯讀的。",
+  "dataNotice.stored": "設定已改存到 {dir}，程式功能不受影響。",
+  "dataNotice.fixTitle": "想讓設定跟著程式資料夾走，可以：",
+  "dataNotice.fixMove": "把整個程式資料夾移到有寫入權限的位置，例如桌面、文件或另一個磁碟的一般資料夾；",
+  "dataNotice.fixPermission": "或在該資料夾按右鍵 → 內容 → 安全性 → 編輯，為目前使用者勾選「寫入」權限（需要系統管理員確認）；",
+  "dataNotice.fixKeep": "也可以什麼都不做——設定留在使用者資料夾同樣正常使用，只是複製程式資料夾時不會一起帶走。",
+  "dataNotice.gotIt": "知道了",
+
   "error.title": "發生錯誤",
-  "error.summary": "展開檢視將要傳送的內容（記錄檔裡可能含視窗標題與程式路徑，請先檢查）",
+  "error.summary": "展開檢視將要傳送的內容（記錄檔不含視窗標題，使用者目錄已替換為 %USERPROFILE%）",
   "error.hint": "記錄檔僅在點按回報後才傳送，不會自動回報。",
   "error.dontReport": "不回報",
   "error.reporting": "回報中…",
@@ -332,7 +354,7 @@ export default {
   "error.reportFailed": "回報失敗：{err}",
   "error.payloadError": "錯誤：{message}",
   "error.payloadDetail": "詳細資料：{detail}",
-  "error.payloadLog": "最近的記錄：",
+  "error.payloadLog": "核心本次執行的記錄：",
 
   "state.suspendFailed": "暫停快速鍵監聽失敗：{err}",
   "state.pssuspendFound": "已偵測到 pssuspend64.exe",

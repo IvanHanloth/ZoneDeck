@@ -55,7 +55,7 @@ cargo build --release
 ```
 
 ::: warning 版本號一致性
-若您改動了版本號，務必保證 `Cargo.toml`、`tauri.conf.json`、`ui/package.json`、`Cargo.lock` **四處一致**。CI 會用 `scripts/version.ps1 check` 驗證。日常功能開發一般**不要**手動改版本號——版本號由發布流程統一管理，詳見 [打包與發布](/zh-tw/dev/release)。
+版本號只寫在 `Cargo.toml` 的 `[workspace.package] version`，`Cargo.lock` 跟著它走；其餘地方建置時自動取用，無需手改。CI 會用 `scripts/version.ps1 check` 驗證。日常功能開發一般**不要**手動改版本號——版本號由發布流程統一管理，詳見 [打包與發布](/zh-tw/dev/release)。
 :::
 
 ## 程式碼風格

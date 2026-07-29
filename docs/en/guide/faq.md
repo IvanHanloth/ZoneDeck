@@ -59,6 +59,17 @@ Enhanced freezing needs all three conditions; missing any one greys it out:
 
 The settings window states which one is missing. See [Process freezing](/en/guide/freeze).
 
+## "Could not save the configuration" (access denied / os error 5)
+
+Update to v3.1.0 or later first. Older versions always kept the settings next to the program, and "Install for all users" puts the program in `C:\Program Files`, which normal privileges cannot write to — so every change failed to save. In newer versions the installer edition always stores the settings in `%APPDATA%\BossKey` and migrates the existing `config.json` there — nothing to do by hand. A portable copy still keeps them in the program folder, and switches to `%APPDATA%\BossKey` with an explanatory notice if that folder is not writable.
+
+If it still fails after updating, it is usually one of these:
+
+- **Antivirus interference**: add the Boss Key program folder and `%APPDATA%\BossKey` to your antivirus allowlist. Windows Security's "Controlled folder access" blocks writes the same way.
+- **The configuration file is read-only**: right-click `config.json` → Properties and clear "Read-only".
+
+The error message names the path it failed on, which tells you which folder is at fault.
+
 ## Will updating lose my configuration?
 
 No. The `config.json` structure is **fully compatible** with older versions, so your bindings, hotkeys and options are preserved. The flat bindings from v2 are migrated to the new rule format automatically.

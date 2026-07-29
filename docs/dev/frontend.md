@@ -31,7 +31,7 @@ apps/config/ui/
 │       ├── theme.js         主题切换（配 theme.test.js）
 │       ├── i18n.svelte.js   界面语言：catalog 查表 + 语言解析（配 i18n.test.js）
 │       ├── markdown.js      公告/更新日志的 Markdown 渲染（配 markdown.test.js）
-│       └── verhub.js        检查更新/公告/项目链接/打开外链
+│       └── verhub.js        检查更新/公告/反馈（含转 Issue）/项目链接/打开外链
 ├── locales/                 三语文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
 └── svelte.config.js
@@ -45,7 +45,7 @@ apps/config/ui/
 | 热键与鼠标 | `HotkeysPanel` | 键盘热键、鼠标连击、四角、空闲自动隐藏 |
 | 提示设置 | `NotificationsPanel` | 逐事件通知开关与图标状态角标 |
 | 其他选项 | `OptionsPanel` | 静音/暂停/冻结/权限/日志/工具 |
-| 关于与反馈 | `AboutPanel` | 版本、更新、公告、反馈 |
+| 关于与反馈 | `AboutPanel` | 版本、更新、公告、反馈（可转为 GitHub Issue） |
 
 ## 无边框自绘窗口
 

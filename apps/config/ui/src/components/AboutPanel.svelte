@@ -1,11 +1,8 @@
 <script>
-  import IconGlobe from "~icons/lucide/globe";
-  import IconMail from "~icons/lucide/mail";
-  import IconGithub from "~icons/lucide/github";
-  import IconScale from "~icons/lucide/scale";
   import IconMegaphone from "~icons/lucide/megaphone";
   import IconRefreshCw from "~icons/lucide/refresh-cw";
   import IconStar from "~icons/lucide/star";
+  import IconHelp from "~icons/lucide/circle-help";
   import Card from "./Card.svelte";
   import Markdown from "./Markdown.svelte";
   import SettingRow from "./SettingRow.svelte";
@@ -17,7 +14,7 @@
     toast,
   } from "../lib/state.svelte.js";
   import { MIT_LICENSE } from "../lib/license.js";
-  import { formatTime, openExternal, submitFeedback } from "../lib/verhub.js";
+  import { feedbackOptions, formatTime, openExternal, submitFeedback } from "../lib/verhub.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const info = $derived(app.info);
@@ -37,8 +34,13 @@
   let hoverRating = $state(0);
   let contact = $state("");
   let sending = $state(false);
+  // 服务端说了算：项目未开放转换时不显示该选项。拉取失败按未开放处理。
+  let forwardAvailable = $state(false);
+  let forwardToGithub = $state(false);
 
   const litStars = $derived(hoverRating || rating);
+  // 转成 Issue 后要靠 GitHub 账号跟进，缺了服务端也不受理。
+  const forwardNeedsContact = $derived(forwardToGithub && !contact.trim());
 
   async function open(url) {
     try {
@@ -50,16 +52,20 @@
 
   async function sendFeedback() {
     if (!content.trim()) return toast(t("about.writeSomething"), true);
+    if (forwardNeedsContact) return toast(t("about.contactRequiredForIssue"), true);
     sending = true;
+    const asIssue = forwardToGithub;
     try {
       await submitFeedback({
         content: content.trim(),
         rating: rating || null,
         contact: contact.trim(),
+        forwardToGithub: asIssue,
       });
       content = "";
       rating = 0;
-      toast(t("about.feedbackThanks"));
+      forwardToGithub = false;
+      toast(t(asIssue ? "about.issueThanks" : "about.feedbackThanks"));
     } catch (err) {
       toast(t("about.feedbackFailed", { err }), true);
     } finally {
@@ -70,6 +76,13 @@
   // 进「关于」页拉取公告列表。
   $effect(() => {
     if (app.announcements.length === 0) loadAnnouncements();
+  });
+
+  // 进「关于」页问一次服务端有没有开放转换为 Issue；失败静默，选项不显示。
+  $effect(() => {
+    feedbackOptions()
+      .then((o) => (forwardAvailable = !!o?.github_forward_available))
+      .catch(() => (forwardAvailable = false));
   });
 
   const updateText = $derived.by(() => {
@@ -149,6 +162,7 @@
     <div
       class="stars"
       role="radiogroup"
+      tabindex="-1"
       aria-label={t("about.ratingAria")}
       onpointerleave={() => (hoverRating = 0)}
     >
@@ -181,14 +195,29 @@
     <input
       type="text"
       maxlength="120"
-      placeholder={t("about.contactPlaceholder")}
+      class:required={forwardNeedsContact}
+      placeholder={t(forwardToGithub ? "about.contactPlaceholderGithub" : "about.contactPlaceholder")}
       bind:value={contact}
     />
 
+    <p class="card-hint">{t("about.contactNotice")}</p>
+
+    {#if forwardAvailable}
+      <label class="fb-issue" title={t("about.forwardToIssueDesc")}>
+        <input type="checkbox" bind:checked={forwardToGithub} />
+        <span class="fb-issue-label">{t("about.forwardToIssue")}</span>
+        <IconHelp width="13" height="13" />
+      </label>
+    {/if}
+
     <div class="fb-foot">
       <span class="muted">{content.length} / 4000</span>
-      <button class="btn primary" onclick={sendFeedback} disabled={sending || !content.trim()}>
-        {t(sending ? "about.submitting" : "about.submitFeedback")}
+      <button
+        class="btn primary"
+        onclick={sendFeedback}
+        disabled={sending || !content.trim() || forwardNeedsContact}
+      >
+        {t(sending ? "about.submitting" : forwardToGithub ? "about.submitAsIssue" : "about.submitFeedback")}
       </button>
     </div>
   </Card>
@@ -343,5 +372,30 @@
   }
   .fb-foot .muted {
     font-size: 12px;
+  }
+
+  input.required {
+    border-color: var(--warn);
+  }
+
+  .fb-issue {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    align-self: flex-start;
+    cursor: help;
+    font-size: 12.5px;
+  }
+  .fb-issue input {
+    flex: none;
+    cursor: pointer;
+  }
+  .fb-issue-label {
+    font-weight: 600;
+  }
+  /* 说明走原生 title 气泡，这里只留一个可发现性提示。 */
+  .fb-issue :global(svg) {
+    flex: none;
+    color: var(--muted);
   }
 </style>

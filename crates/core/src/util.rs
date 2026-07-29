@@ -51,9 +51,8 @@ pub fn pressed_modifiers() -> u32 {
     m
 }
 
-/// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」，供日志同时记录可读原因与可检索的码值。
-///
-/// 只有消息文本时无法区分「拒绝访问」的来源，只有码值又难以直接判读，故两者都写出。
+/// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」。
+/// 只有消息文本时无法区分「拒绝访问」的来源，只有码值又难以判读，故两者都写出。
 pub fn win_err(e: &windows::core::Error) -> String {
     let message = e.message();
     let message = message.trim();
@@ -63,6 +62,17 @@ pub fn win_err(e: &windows::core::Error) -> String {
     } else {
         format!("{message} (0x{code:08X})")
     }
+}
+
+/// 取字符串开头至多 `max` 个字符，其余以「…（共 N 字符）」代替。
+/// 按字符切，不会切碎多字节字符。
+pub fn head_chars(text: &str, max: usize) -> String {
+    let total = text.chars().count();
+    if total <= max {
+        return text.to_string();
+    }
+    let head: String = text.chars().take(max).collect();
+    format!("{head}…（共 {total} 字符）")
 }
 
 /// 把系统 ANSI 代码页（CP_ACP，中文系统为 GBK/936）编码的字节解码成 `String`。
@@ -111,6 +121,17 @@ mod tests {
         let text = win_err(&e);
         assert!(text.ends_with("(0x80070005)"), "应带十六进制错误码: {text}");
         assert!(!text.starts_with('('), "应同时带系统消息: {text}");
+    }
+
+    #[test]
+    fn head_chars_limits_length_without_breaking_characters() {
+        assert_eq!(head_chars("短内容", 10), "短内容", "不超长时原样返回");
+        assert_eq!(
+            head_chars("中文中文中文", 3),
+            "中文中…（共 6 字符）",
+            "应按字符切并注明原长"
+        );
+        assert_eq!(head_chars("", 5), "");
     }
 
     #[test]

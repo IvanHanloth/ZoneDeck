@@ -1,7 +1,6 @@
 <script>
-  // 更新提示。强制更新（Verhub 的 required=true）时**不能关**：没有右上角的叉、
-  // Esc 和点遮罩都不管用，只能去下载或退出程序——这正是「强制」的含义。
-  // 因此这里不用通用的 Modal 组件（那个总是可关闭的）。
+  // 更新提示。强制更新（required=true）时不可关闭：无关闭按钮，Esc 与点遮罩均无效。
+  // 故不复用总是可关闭的 Modal 组件。
   import IconDownload from "~icons/lucide/download";
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import IconX from "~icons/lucide/x";

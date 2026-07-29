@@ -4,7 +4,7 @@ title: Configuration fields
 
 # Configuration field reference
 
-Boss Key stores its configuration in `config.json`, in the **same folder** as the executable. The structure is **fully compatible with older versions**, so existing configurations carry over. If the file is missing on first run, defaults are used. The field definitions live in `crates/common/src/config.rs`.
+Boss Key stores its configuration in `config.json` — in the program folder for a portable copy, in `%APPDATA%\BossKey` for an installed one; see [Data folder](/en/dev/architecture#data-folder). When the location changes, the old configuration is migrated across automatically. The structure is **fully compatible with older versions**, so existing configurations carry over. If the file is missing on first run, defaults are used. The field definitions live in `crates/common/src/config.rs`.
 
 ::: tip You normally do not edit this by hand
 The settings window reads and writes the configuration automatically. This page is for developers who need to understand the fields.
@@ -14,7 +14,8 @@ The settings window reads and writes the configuration automatically. This page 
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `version` | string | Configuration version |
+| `version` | string | Configuration schema version; only changes when the structure does |
+| `app_version` | string | The program version last seen; when it differs from the current one this is the first run after an update, and the core opens the settings window automatically. Empty by default |
 | `history` | number[] | History (timestamps) |
 | `frozen_pids` | number[] | PIDs of currently frozen processes (used for recovery) |
 | `hotkey` | object | Keyboard hotkeys; see below |
@@ -62,12 +63,9 @@ The settings window reads and writes the configuration automatically. This page 
 | `corner_fast_only` | bool | `true` | Only trigger on fast movement |
 | `allow_move_restore` | bool | `false` | Restore from a corner |
 | `log_retention_days` | number | `7` | [Log retention](/en/guide/options) (0 = off) |
+| `log_level` | string | `"warn"` | [Log level](/en/guide/options): `debug` \| `info` \| `warn` \| `error` |
 | `autostart_admin` | bool | `false` | [Start as administrator](/en/guide/autostart) (scheduled-task method only) |
 | `language` | string | `"auto"` | [Display language](/en/guide/options): `auto` \| `zh-CN` \| `en` \| `zh-TW` |
-
-::: info Values and normalisation of `language`
-`auto` follows the system display language. Values are normalised on read: valid BCP-47 tags collapse to `zh-CN` / `en` / `zh-TW` (for example `zh_TW` and `zh-Hant` → `zh-TW`; `en-US` → `en`), and values with no matching translation (such as `ja-JP`) fall back to `auto`. The core and the settings program share this field.
-:::
 
 ::: details Legacy flat mouse switches (deprecated)
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` exist only for deserialisation and migration; they are cleared afterwards and never written back. Use the `mouse` structure instead.

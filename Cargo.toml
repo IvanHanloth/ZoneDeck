@@ -17,7 +17,7 @@ regex = "1.11.1"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "macros", "net", "io-util", "sync", "time"] }
 windows = "0.62.2"
 tempfile = "3.27.0"
-verhub-sdk = { version = "0.2.6", default-features = false, features = ["native-tls"] }
+verhub-sdk = { version = "0.2.7", default-features = false, features = ["native-tls"] }
 
 [profile.release]
 opt-level = "z"

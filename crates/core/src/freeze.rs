@@ -6,7 +6,7 @@ use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_SUSPEND_RESUME};
 use windows::core::{PCSTR, s, w};
 
-const PSSUSPEND_EXE: &str = "pssuspend64.exe";
+pub const PSSUSPEND_EXE: &str = "pssuspend64.exe";
 
 type NtProc = unsafe extern "system" fn(HANDLE) -> i32;
 
@@ -142,9 +142,8 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if !exe.exists() {
         return Err(FreezeError::PssuspendMissing);
     }
-    // `-accepteula` 必不可少：首次运行若未接受 EULA，pssuspend 会弹出许可
-    // 对话框并阻塞/失败（并写入 HKCU\Software\Sysinternals\PsSuspend）。
-    // 缺了它，增强冻结在没接受过 EULA 的机器上永远失败。旗标须在 PID 之前。
+    // `-accepteula` 必不可少：未接受 EULA 时 pssuspend 会弹出许可对话框并阻塞，
+    // 增强冻结在这类机器上将永远失败。旗标须排在 PID 之前。
     let output = std::process::Command::new(exe)
         .arg("-accepteula")
         .arg("-nobanner")
@@ -156,9 +155,8 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if output.status.success() {
         Ok(())
     } else {
-        // pssuspend 把失败原因（如「拒绝访问」「进程不存在」）打到 stdout，
-        // 而非 stderr；两路都收进来，否则日志只剩一个退出码、无从排查。
-        // 它按系统本地代码页（中文系统 GBK）输出，须按 ANSI 解码，否则中文乱码。
+        // pssuspend 把失败原因打到 stdout 而非 stderr，两路都须收进来；
+        // 它按系统本地代码页输出，须按 ANSI 解码，否则中文乱码。
         let mut detail = crate::util::from_ansi(&output.stdout).trim().to_string();
         let stderr = crate::util::from_ansi(&output.stderr);
         let stderr = stderr.trim();

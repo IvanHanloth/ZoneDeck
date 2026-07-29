@@ -31,8 +31,9 @@ use crate::hide::{
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
-use crate::keyboard_hook::{self, KeyboardHook, WM_KEY_TRIGGER};
-use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
+use crate::input_hooks::InputHooks;
+use crate::keyboard_hook::{self, WM_KEY_TRIGGER};
+use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
 use crate::tray_badge::TrayIconSet;
@@ -69,6 +70,39 @@ const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 /// 退出时等待副作用线程排干队列（解冻 / 取消静音）的上限。
 const EFFECTS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
 
+/// 一次隐藏 / 恢复的触发来源，仅用于日志。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Trigger {
+    Hotkey,
+    MouseButton,
+    Corner,
+    Idle,
+    TrayClick,
+    TrayMenu,
+    FloatWindow,
+    /// 配置程序经 IPC 下发。
+    Ipc,
+    /// 核心退出前的收尾恢复。
+    Quit,
+}
+
+impl std::fmt::Display for Trigger {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Trigger::Hotkey => "热键",
+            Trigger::MouseButton => "鼠标按键",
+            Trigger::Corner => "移动到屏幕四角",
+            Trigger::Idle => "空闲自动隐藏",
+            Trigger::TrayClick => "单击托盘图标",
+            Trigger::TrayMenu => "托盘菜单",
+            Trigger::FloatWindow => "悬浮窗",
+            Trigger::Ipc => "配置程序",
+            Trigger::Quit => "核心退出前",
+        };
+        f.write_str(name)
+    }
+}
+
 pub struct AgentOptions {
     pub config_path: PathBuf,
     pub pipe_name: String,
@@ -102,14 +136,13 @@ struct AgentState {
     /// 托盘图标的角标变体缓存；未启用托盘时为 None。
     tray_icons: Option<TrayIconSet>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
-    mouse_hook: Option<MouseHook>,
+    /// 承载两个低级输入钩子的专职线程；起不来时为 None，鼠标绑定与「不传递」失效。
+    input_hooks: Option<InputHooks>,
     float_window: Option<FloatWindow>,
     /// 是否正在监听热键与鼠标（见 `Command::SetHotkeys`）。
     monitoring: bool,
     /// 热键当前是否已注册（避免重复 RegisterHotKey）。
     hotkeys_armed: bool,
-    /// 承载「不传递」热键的键盘钩子；没有热键开启「不传递」时不安装。
-    keyboard_hook: Option<KeyboardHook>,
 }
 
 impl AgentState {
@@ -175,16 +208,13 @@ impl AgentState {
     ) {
         if intercepts.is_empty() {
             keyboard_hook::set_hotkeys(&[]);
-            self.keyboard_hook = None;
+            self.set_keyboard_hook(false);
             return;
         }
         let parsed: Vec<(i32, ParsedHotkey)> =
             intercepts.iter().map(|(id, _, _, hk)| (*id, *hk)).collect();
         keyboard_hook::set_hotkeys(&parsed);
-        if self.keyboard_hook.is_none() {
-            self.keyboard_hook = KeyboardHook::install(hwnd);
-        }
-        if self.keyboard_hook.is_some() {
+        if self.set_keyboard_hook(true) {
             for (_, label, raw, _) in &intercepts {
                 logging::debug(&format!("{label}热键已由键盘钩子拦截（不传递）: {raw}"));
             }
@@ -202,6 +232,14 @@ impl AgentState {
         }
     }
 
+    /// 请求钩子线程把键盘钩子对齐 `on`，返回对齐后是否已装上。
+    /// 钩子线程起不来时恒为未装上，由调用方回退。
+    fn set_keyboard_hook(&self, on: bool) -> bool {
+        self.input_hooks
+            .as_ref()
+            .is_some_and(|hooks| hooks.set_keyboard(on))
+    }
+
     fn unregister_hotkeys(&mut self, hwnd: HWND) {
         unsafe {
             for id in [
@@ -215,7 +253,7 @@ impl AgentState {
             }
         }
         keyboard_hook::set_hotkeys(&[]);
-        self.keyboard_hook = None;
+        self.set_keyboard_hook(false);
     }
 
     /// 让热键与鼠标钩子对齐 `self.monitoring`。幂等：已是目标状态时什么都不做。
@@ -232,13 +270,16 @@ impl AgentState {
 
     fn refresh_runtime(&mut self, hwnd: HWND) {
         // 监控停用期间不装鼠标钩子。
-        if self.monitoring && mouse_hook::wants_hook(&self.config.setting) {
+        let want_mouse = self.monitoring && mouse_hook::wants_hook(&self.config.setting);
+        if want_mouse {
             mouse_hook::set_flags(&self.config.setting);
-            if self.mouse_hook.is_none() {
-                self.mouse_hook = MouseHook::install(hwnd, &self.config.setting);
-            }
-        } else {
-            self.mouse_hook = None;
+        }
+        let mouse_armed = self
+            .input_hooks
+            .as_ref()
+            .is_some_and(|hooks| hooks.set_mouse(want_mouse));
+        if want_mouse && !mouse_armed {
+            log_warn!("鼠标钩子安装失败，鼠标按键绑定与四角触发不生效");
         }
 
         unsafe {
@@ -251,6 +292,9 @@ impl AgentState {
         if self.config.setting.show_float_window {
             if self.float_window.is_none() {
                 self.float_window = FloatWindow::create(hwnd);
+                if self.float_window.is_none() {
+                    log_warn!("悬浮窗创建失败，本次运行不显示悬浮窗，其余功能不受影响");
+                }
             }
         } else {
             self.float_window = None;
@@ -273,7 +317,7 @@ impl AgentState {
         self.update_tray_icon();
     }
 
-    /// 让托盘图标的状态角标与悬浮提示对齐当前配置与运行状态。均未变化时开销为零。
+    /// 让托盘图标的状态角标与悬浮提示对齐当前配置与运行状态。
     fn update_tray_icon(&mut self) {
         let (Some(tray), Some(icons)) = (&mut self.tray, &mut self.tray_icons) else {
             return;
@@ -349,20 +393,22 @@ impl AgentState {
         }
     }
 
-    fn apply_hide(&mut self) {
+    fn apply_hide(&mut self, trigger: Trigger) {
         let windows = self.controller.enumerate();
         let foreground = self.controller.foreground();
         let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
         let freeze_set = self.freeze_set(freezable_pids(&targets, &windows));
         let plan = self.hide_with_plan(&targets, &freeze_set);
-        log_hide(&self.config, &outcomes, &plan);
+        log_hide(trigger, &self.config, &outcomes, &plan);
     }
 
-    fn apply_hide_foreground(&mut self) {
+    fn apply_hide_foreground(&mut self, trigger: Trigger) {
         let windows = self.controller.enumerate();
         let foreground = self.controller.foreground();
         let Some(target) = foreground_target(&windows, foreground) else {
-            logging::info("隐藏前台窗口：当前没有可隐藏的前台窗口");
+            logging::debug(&format!(
+                "{trigger}触发隐藏前台窗口：当前没有可隐藏的前台窗口"
+            ));
             return;
         };
 
@@ -370,7 +416,7 @@ impl AgentState {
         let freeze_set = self.freeze_set(freezable_pids(&targets, &windows));
         let plan = self.hide_with_plan(&targets, &freeze_set);
         if let Some(t) = plan.fresh.first() {
-            logging::info(&format!("隐藏前台窗口: {}", t.describe()));
+            logging::debug(&format!("{trigger}触发隐藏前台窗口: {}", t.describe()));
         }
     }
 
@@ -401,9 +447,9 @@ impl AgentState {
         }
     }
 
-    fn apply_show(&mut self) {
+    fn apply_show(&mut self, trigger: Trigger) {
         let outcome = self.controller.show();
-        log_show(outcome);
+        log_show(trigger, outcome);
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_show {
@@ -418,11 +464,11 @@ impl AgentState {
         }
     }
 
-    fn apply_toggle(&mut self) {
+    fn apply_toggle(&mut self, trigger: Trigger) {
         if self.controller.is_hidden() {
-            self.apply_show();
+            self.apply_show(trigger);
         } else {
-            self.apply_hide();
+            self.apply_hide(trigger);
         }
     }
 
@@ -437,15 +483,24 @@ impl AgentState {
                     }
                     self.config = config;
                     i18n::set_from_pref(&self.config.setting.language);
+                    // 保留天数只在启动时清理，此处只对齐输出等级。
+                    logging::set_level(logging::Level::from_config(&self.config.setting.log_level));
                     self.sync_monitoring(hwnd);
+                    logging::debug("配置已重新加载，热键、鼠标监控与日志等级均已对齐");
                     (Response::Ok, false)
                 }
-                Err(e) => (
-                    Response::Error {
-                        message: i18n::tf(Msg::ErrReloadConfig, &[("err", &e.to_string())]),
-                    },
-                    false,
-                ),
+                Err(e) => {
+                    log_error!(
+                        "重新加载配置失败，本次改动未生效，核心仍在用上一次加载的配置: {} — {e}",
+                        self.config_path.display()
+                    );
+                    (
+                        Response::Error {
+                            message: i18n::tf(Msg::ErrReloadConfig, &[("err", &e.to_string())]),
+                        },
+                        false,
+                    )
+                }
             },
             Command::GetState => (
                 Response::State {
@@ -469,15 +524,15 @@ impl AgentState {
                 false,
             ),
             Command::Hide => {
-                self.apply_hide();
+                self.apply_hide(Trigger::Ipc);
                 (Response::Ok, false)
             }
             Command::Show => {
-                self.apply_show();
+                self.apply_show(Trigger::Ipc);
                 (Response::Ok, false)
             }
             Command::Toggle => {
-                self.apply_toggle();
+                self.apply_toggle(Trigger::Ipc);
                 (Response::Ok, false)
             }
             Command::SetAutostart { enabled, admin } => (set_autostart(enabled, admin), false),
@@ -509,7 +564,7 @@ impl AgentState {
             Command::ReleaseWindows { hwnds } => {
                 let released = self.controller.release_windows(&hwnds);
                 if released > 0 {
-                    logging::info(&format!("窗口恢复工具释放 {released} 个窗口"));
+                    logging::debug(&format!("窗口恢复工具释放 {released} 个窗口"));
                     self.persist_recovery();
                     self.sync_tray();
                 }
@@ -527,7 +582,7 @@ impl AgentState {
                 setting.send_before_hide = false;
                 let plan = self.hide_with_plan_using(&setting, &targets, &[]);
                 if !plan.fresh.is_empty() {
-                    logging::info(&format!("窗口恢复工具隐藏 {} 个窗口", plan.fresh.len()));
+                    logging::debug(&format!("窗口恢复工具隐藏 {} 个窗口", plan.fresh.len()));
                 }
                 (Response::Ok, false)
             }
@@ -536,33 +591,45 @@ impl AgentState {
     }
 }
 
-/// 摘要式记录本次隐藏；规则失效 / 追溯事件逐条保留。
-fn log_hide(config: &Config, outcomes: &[RuleOutcome], plan: &HidePlan) {
-    for (rule, outcome) in config.window_rules.iter().zip(outcomes) {
+/// 日志中指代一条窗口规则的写法：序号 + 进程名。
+/// 不含规则标题——标题即窗口标题，不写入日志。
+fn rule_label(index: usize, rule: &bosskey_common::WindowRule) -> String {
+    let kind = if rule.is_regex() { "正则" } else { "精确" };
+    let process = if rule.process.is_empty() {
+        "未知进程"
+    } else {
+        &rule.process
+    };
+    format!("{kind}窗口规则 #{}（{process}）", index + 1)
+}
+
+/// 摘要式记录本次隐藏：明细记 debug，规则未匹配到窗口记 warn。
+fn log_hide(trigger: Trigger, config: &Config, outcomes: &[RuleOutcome], plan: &HidePlan) {
+    for (index, (rule, outcome)) in config.window_rules.iter().zip(outcomes).enumerate() {
         match outcome {
-            RuleOutcome::Reacquired => logging::info(&format!(
-                "窗口规则「{}」的句柄已失效（目标程序重启过），已重新匹配并更新规则",
-                rule.title
+            RuleOutcome::Reacquired => logging::debug(&format!(
+                "{} 的句柄已失效（目标程序重启过），已重新匹配并更新规则",
+                rule_label(index, rule)
             )),
             // 「未能追溯」只说明当前没有匹配的窗口，看不出是关闭了还是标题变了，故不臆断原因。
             RuleOutcome::Missing => logging::warn(&format!(
-                "窗口规则「{}」未匹配到任何窗口（可能已关闭或标题已变），本次不隐藏它",
-                rule.title
+                "{} 未匹配到任何窗口（可能已关闭或标题已变），本次不隐藏它",
+                rule_label(index, rule)
             )),
             _ => {}
         }
     }
     if plan.fresh.is_empty() {
-        logging::info("触发隐藏：没有新的目标窗口");
+        logging::debug(&format!("{trigger}触发隐藏：没有新的目标窗口"));
         return;
     }
-    logging::info(&format!(
-        "隐藏 {} 个窗口: {}",
+    logging::debug(&format!(
+        "{trigger}触发隐藏 {} 个窗口: {}",
         plan.fresh.len(),
         summarize(plan.fresh.iter().map(|t| t.describe()))
     ));
     if !plan.freeze.is_empty() {
-        logging::info(&format!(
+        logging::debug(&format!(
             "冻结 {} 个进程（增强={}）: {}",
             plan.freeze.len(),
             plan.enhanced,
@@ -571,15 +638,16 @@ fn log_hide(config: &Config, outcomes: &[RuleOutcome], plan: &HidePlan) {
     }
 }
 
-/// 记录恢复结果；失效与找回的数量如实写出。
-fn log_show(outcome: ShowOutcome) {
-    if outcome.stale > 0 {
-        logging::info(&format!(
-            "恢复显示 {} 个窗口；{} 条记录句柄已失效，其中 {} 个按进程路径与标题重新找回",
+/// 记录恢复结果：有记录未能找回时记 warn，否则记 debug。
+fn log_show(trigger: Trigger, outcome: ShowOutcome) {
+    let lost = outcome.stale.saturating_sub(outcome.refound);
+    if lost > 0 {
+        logging::warn(&format!(
+            "{trigger}触发恢复：显示 {} 个窗口；{} 条记录的句柄已失效，其中 {} 个已按进程与标题找回，{lost} 个未能找回",
             outcome.shown, outcome.stale, outcome.refound
         ));
     } else {
-        logging::info(&format!("恢复显示 {} 个窗口", outcome.shown));
+        logging::debug(&format!("{trigger}触发恢复显示 {} 个窗口", outcome.shown));
     }
 }
 
@@ -605,10 +673,8 @@ unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> windows::core::Res
     }
 }
 
-/// 热键注册失败的日志文案。
-///
-/// 「已被占用」（1409）是最常见的原因，但并非唯一，故按系统错误码区分：
-/// 命中 1409 才断言被占用，其余情况如实报告错误码，不作猜测。
+/// 热键注册失败的日志文案。「已被占用」（1409）常见但非唯一原因，
+/// 故只在命中 1409 时断言被占用，其余如实报告错误码。
 fn hotkey_failure_message(label: &str, raw: &str, e: &windows::core::Error) -> String {
     if e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult() {
         format!("{label}热键注册失败，已被其他程序占用，该热键不生效: {raw}")
@@ -620,10 +686,19 @@ fn hotkey_failure_message(label: &str, raw: &str, e: &windows::core::Error) -> S
     }
 }
 
+/// 开机自启注册方式的日志写法。
+fn autostart_method_name(method: crate::autostart::Method) -> &'static str {
+    match method {
+        crate::autostart::Method::TaskScheduler => "计划任务",
+        crate::autostart::Method::Registry => "注册表启动项",
+    }
+}
+
 fn set_autostart(enabled: bool, admin: bool) -> Response {
     let auto = match crate::autostart::Autostart::standard() {
         Ok(a) => a,
         Err(e) => {
+            log_warn!("设置开机自启失败，无法确定核心程序路径，自启状态未改变: {e}");
             return Response::Error {
                 message: e.to_string(),
             };
@@ -631,13 +706,26 @@ fn set_autostart(enabled: bool, admin: bool) -> Response {
     };
     if enabled {
         match auto.enable(admin) {
-            Ok(_) => Response::Ok,
-            Err(e) => Response::Error {
-                message: e.to_string(),
-            },
+            Ok(method) => {
+                logging::debug(&format!(
+                    "已开启开机自启，方式为{}（管理员权限={admin}）",
+                    autostart_method_name(method)
+                ));
+                Response::Ok
+            }
+            Err(e) => {
+                log_warn!(
+                    "开启开机自启失败，开机后核心不会自动运行（管理员权限={admin}，任务名 {}）: {e}",
+                    crate::autostart::TASK_NAME
+                );
+                Response::Error {
+                    message: e.to_string(),
+                }
+            }
         }
     } else {
         auto.disable();
+        logging::debug("已关闭开机自启");
         Response::Ok
     }
 }
@@ -647,7 +735,7 @@ fn set_autostart(enabled: bool, admin: bool) -> Response {
 fn toggle_auto_hide(state: &mut AgentState, hwnd: HWND) {
     let enabled = !state.config.setting.auto_hide_enabled;
     state.config.setting.auto_hide_enabled = enabled;
-    logging::info(if enabled {
+    logging::debug(if enabled {
         "托盘菜单：已启用自动隐藏"
     } else {
         "托盘菜单：已暂停自动隐藏"
@@ -655,30 +743,48 @@ fn toggle_auto_hide(state: &mut AgentState, hwnd: HWND) {
     if let Err(e) = state.config.save(&state.config_path) {
         log_warn!("自动隐藏开关写入配置失败，核心重启后将丢失本次切换: {e}");
     }
-    // 重新武装/停掉空闲检测定时器，并刷新托盘角标。
     state.refresh_runtime(hwnd);
 }
 
 fn toggle_autostart(state: &AgentState) {
-    let Ok(auto) = crate::autostart::Autostart::standard() else {
-        return;
+    let auto = match crate::autostart::Autostart::standard() {
+        Ok(auto) => auto,
+        Err(e) => {
+            log_warn!("托盘菜单切换开机自启失败，无法确定核心程序路径，自启状态未改变: {e}");
+            return;
+        }
     };
     let admin = state.config.setting.autostart_admin;
     let (title, message) = if auto.status().is_some() {
         auto.disable();
+        logging::debug("托盘菜单：已关闭开机自启");
         (Msg::AutostartOffTitle, Msg::AutostartOffBody)
     } else {
         match auto.enable(admin) {
-            Ok(crate::autostart::Method::TaskScheduler) if admin => {
-                (Msg::AutostartOnTitle, Msg::AutostartOnTaskAdmin)
+            Ok(method) => {
+                logging::debug(&format!(
+                    "托盘菜单：已开启开机自启，方式为{}（管理员权限={admin}）",
+                    autostart_method_name(method)
+                ));
+                match method {
+                    crate::autostart::Method::TaskScheduler if admin => {
+                        (Msg::AutostartOnTitle, Msg::AutostartOnTaskAdmin)
+                    }
+                    crate::autostart::Method::TaskScheduler => {
+                        (Msg::AutostartOnTitle, Msg::AutostartOnTaskUser)
+                    }
+                    crate::autostart::Method::Registry => {
+                        (Msg::AutostartOnTitle, Msg::AutostartOnRegistry)
+                    }
+                }
             }
-            Ok(crate::autostart::Method::TaskScheduler) => {
-                (Msg::AutostartOnTitle, Msg::AutostartOnTaskUser)
+            Err(e) => {
+                log_warn!(
+                    "托盘菜单开启开机自启失败，开机后核心不会自动运行（管理员权限={admin}，任务名 {}）: {e}",
+                    crate::autostart::TASK_NAME
+                );
+                (Msg::AutostartFailTitle, Msg::AutostartFailBody)
             }
-            Ok(crate::autostart::Method::Registry) => {
-                (Msg::AutostartOnTitle, Msg::AutostartOnRegistry)
-            }
-            Err(_) => (Msg::AutostartFailTitle, Msg::AutostartFailBody),
         }
     };
     if state.config.notifications.on_autostart
@@ -774,7 +880,7 @@ fn release_config_windows(state: &mut AgentState, exe: &Path) {
 
     let released = state.controller.release_pids(&pids);
     if released > 0 {
-        logging::info(&format!(
+        logging::debug(&format!(
             "配置窗口此前被 Boss Key 隐藏，已先释放 {released} 个窗口再拉起设置"
         ));
         state.persist_recovery();
@@ -796,6 +902,9 @@ fn find_config_exe() -> Option<PathBuf> {
 /// 拉起配置程序。`action` 会作为命令行参数传入（如 `restore` 直达窗口恢复工具）。
 fn launch_settings(state: &mut AgentState, action: Option<&str>) {
     let Some(path) = find_config_exe() else {
+        log_warn!(
+            "核心所在目录下找不到配置程序（config.exe / bosskey-config.exe），无法打开设置界面"
+        );
         if let Some(tray) = &state.tray {
             tray.balloon(APP_NAME, i18n::t(Msg::ConfigExeMissing));
         }
@@ -809,22 +918,28 @@ fn launch_settings(state: &mut AgentState, action: Option<&str>) {
         cmd.arg(arg);
     }
     if let Err(e) = cmd.spawn() {
-        log_warn!("启动配置程序失败: {e}");
+        log_warn!(
+            "启动配置程序失败，设置界面未打开（可能被安全软件拦截）: {} — {e}",
+            path.display()
+        );
     }
 }
 
-fn quit(state: &mut AgentState, hwnd: HWND) {
+/// 退出核心。`reason` 写进会话结束标记。
+fn quit(state: &mut AgentState, hwnd: HWND, reason: &str) {
     let outcome = state.controller.show();
     if outcome.shown > 0 || outcome.stale > 0 {
-        log_show(outcome);
+        log_show(Trigger::Quit, outcome);
     }
     state.persist_recovery();
     state.unregister_hotkeys(hwnd);
+    // 先摘钩子再收尾，退出过程中不再有输入事件进来。
+    state.input_hooks = None;
     // 排干副作用队列，确保退出前解冻 / 取消静音已生效。
     if let Some(worker) = state.effects_worker.take() {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
     }
-    logging::info("核心正常退出");
+    logging::session_exit(&format!("核心正常退出（{reason}）"));
     let notify_quit = state.config.notifications.on_quit;
     if let Some(tray) = &mut state.tray {
         if notify_quit {
@@ -857,11 +972,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         // WM_KEY_TRIGGER 是「不传递」热键经键盘钩子转发的等价触发。
         WM_HOTKEY | WM_KEY_TRIGGER => {
             match wparam.0 as i32 {
-                HK_HIDE => state.apply_toggle(),
-                HK_CLOSE => quit(state, hwnd),
-                HK_HIDE_ONLY => state.apply_hide(),
-                HK_SHOW_ONLY => state.apply_show(),
-                HK_HIDE_FOREGROUND => state.apply_hide_foreground(),
+                HK_HIDE => state.apply_toggle(Trigger::Hotkey),
+                HK_CLOSE => quit(state, hwnd, "关闭热键"),
+                HK_HIDE_ONLY => state.apply_hide(Trigger::Hotkey),
+                HK_SHOW_ONLY => state.apply_show(Trigger::Hotkey),
+                HK_HIDE_FOREGROUND => state.apply_hide_foreground(Trigger::Hotkey),
                 _ => {}
             }
             LRESULT(0)
@@ -878,7 +993,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 should_quit |= quit_flag;
             }
             if should_quit {
-                quit(state, hwnd);
+                quit(state, hwnd, "配置程序发来退出命令");
             }
             LRESULT(0)
         }
@@ -886,7 +1001,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             match lparam.0 as u32 {
                 WM_LBUTTONUP => {
                     if state.config.setting.click_to_hide {
-                        state.apply_toggle();
+                        state.apply_toggle(Trigger::TrayClick);
                     }
                 }
                 WM_RBUTTONUP => {
@@ -906,10 +1021,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_APP_FLOAT => {
             match wparam.0 {
-                // 双击悬浮窗触发老板键。
+                // 双击悬浮窗触发。
                 FLOAT_TOGGLE => {
                     if state.config.setting.click_to_hide {
-                        state.apply_toggle();
+                        state.apply_toggle(Trigger::FloatWindow);
                     }
                 }
                 // 右键菜单以代理窗口为宿主，经 WM_COMMAND 复用处理。
@@ -928,10 +1043,10 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 MENU_SETTINGS => launch_settings(state, None),
                 MENU_RESTORE => launch_settings(state, Some(ARG_RESTORE)),
                 MENU_ABOUT => launch_settings(state, Some(ARG_ABOUT)),
-                MENU_TOGGLE => state.apply_toggle(),
+                MENU_TOGGLE => state.apply_toggle(Trigger::TrayMenu),
                 MENU_AUTO_HIDE => toggle_auto_hide(state, hwnd),
                 MENU_AUTOSTART => toggle_autostart(state),
-                MENU_QUIT => quit(state, hwnd),
+                MENU_QUIT => quit(state, hwnd, "托盘菜单"),
                 _ => {}
             }
             LRESULT(0)
@@ -943,12 +1058,17 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             } else {
                 state.config.setting.mouse.allow_click_restore
             };
+            let trigger = if wparam.0 == TRIGGER_CORNER {
+                Trigger::Corner
+            } else {
+                Trigger::MouseButton
+            };
             if state.controller.is_hidden() {
                 if allow_restore {
-                    state.apply_show();
+                    state.apply_show(trigger);
                 }
             } else {
-                state.apply_hide();
+                state.apply_hide(trigger);
             }
             LRESULT(0)
         }
@@ -958,9 +1078,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     unsafe {
                         let _ = KillTimer(Some(hwnd), AUTO_QUIT_TIMER_ID);
                     }
-                    quit(state, hwnd);
+                    quit(state, hwnd, "冒烟测试计时到点");
                 }
-                // 停用心跳超时，恢复监控。
                 SUSPEND_GUARD_TIMER_ID => {
                     unsafe {
                         let _ = KillTimer(Some(hwnd), SUSPEND_GUARD_TIMER_ID);
@@ -991,7 +1110,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         state.config.setting.auto_hide_time,
                         state.controller.is_hidden(),
                     ) {
-                        state.apply_hide();
+                        state.apply_hide(Trigger::Idle);
                     }
                 }
                 _ => {}
@@ -1037,10 +1156,8 @@ fn create_agent_window() -> windows::core::Result<HWND> {
     }
 }
 
-/// 加载配置；无论损坏还是读取失败都回退默认配置以保证核心可用，但必须留下记录。
-///
-/// 静默回退会让用户的热键与规则「凭空失效」，且日志里毫无痕迹，故此处按 error 记录，
-/// 并写出配置路径与具体原因。
+/// 加载配置；损坏或读取失败都回退默认配置以保证核心可用。
+/// 回退会让用户的热键与规则凭空失效，故按 error 记录配置路径与原因。
 fn load_config_logging_fallback(path: &Path) -> Config {
     const FALLBACK: &str = "已按默认配置启动，原有热键与规则本次不生效";
     match Config::load_reporting(path) {
@@ -1059,32 +1176,60 @@ fn load_config_logging_fallback(path: &Path) -> Config {
     }
 }
 
+/// 启动时是否该拉起配置程序：首次启动（尚无配置文件），或程序版本与上次运行的不一致。
+///
+/// `recorded` 为空表示上个版本还没记过程序版本，一律当作版本已变，弹一次即归位。
+fn should_open_settings(config_missing: bool, recorded: &str, current: &str) -> bool {
+    config_missing || recorded != current
+}
+
 pub fn run(options: AgentOptions) {
-    // 是否首次启动（尚无配置文件）/ 更新后首次启动（配置里记录的版本与当前不一致）。
-    // load() 在文件缺失时也返回默认值，故须先按文件是否存在判断「首次」。
+    // load() 在文件缺失时也返回默认值，故「首次启动」须先按文件是否存在判断。
     let config_missing = !options.config_path.exists();
     let mut config = load_config_logging_fallback(&options.config_path);
     i18n::set_from_pref(&config.setting.language);
-    let version_changed = !config_missing && config.version != bosskey_common::APP_CONFIG_VERSION;
+    let open_settings = should_open_settings(
+        config_missing,
+        &config.app_version,
+        bosskey_common::APP_VERSION,
+    );
 
-    // 仅正常运行时（非冒烟测试）在这两种情况下默认拉起配置程序。
-    if options.auto_quit_ms.is_none() && (config_missing || version_changed) {
-        logging::info(if config_missing {
-            "首次启动，拉起配置程序"
+    // 冒烟测试不拉起配置程序。
+    if options.auto_quit_ms.is_none() && open_settings {
+        let reason = if config_missing {
+            "首次启动，拉起配置程序".to_string()
         } else {
-            "更新后首次启动，拉起配置程序"
-        });
+            let was = if config.app_version.is_empty() {
+                "未记录"
+            } else {
+                &config.app_version
+            };
+            format!(
+                "更新后首次启动（{was} → {}），拉起配置程序",
+                bosskey_common::APP_VERSION
+            )
+        };
+        logging::info(&reason);
         // 记录当前版本并落盘，避免下次启动重复弹出（首次启动时顺带创建配置文件）。
         config.version = bosskey_common::APP_CONFIG_VERSION.to_string();
+        config.app_version = bosskey_common::APP_VERSION.to_string();
         if let Err(e) = config.save(&options.config_path) {
-            log_warn!("写入配置版本失败: {e}");
+            log_warn!(
+                "写入程序版本到配置失败，下次启动会重复拉起配置程序: {} — {e}",
+                options.config_path.display()
+            );
         }
         if let Some(path) = find_config_exe() {
             if let Err(e) = std::process::Command::new(&path).spawn() {
-                log_warn!("启动配置程序失败: {e}");
+                log_warn!(
+                    "启动时拉起配置程序失败（可能被安全软件拦截）: {} — {e}",
+                    path.display()
+                );
             }
         } else {
-            log_warn!("未找到配置程序，无法在启动时拉起");
+            log_warn!(
+                "核心所在目录下找不到配置程序（config.exe / bosskey-config.exe），启动时无法拉起设置界面"
+            );
         }
     }
 
@@ -1144,6 +1289,14 @@ pub fn run(options: AgentOptions) {
     // 副作用由专职线程执行，消息循环不被慢操作阻塞。
     let effects_worker = EffectsWorker::spawn(WinEffects::new(exe_dir));
 
+    // 低级输入钩子挂在专职线程上：代理线程的枚举 / 落盘等重活不得拖慢全局输入。
+    let input_hooks = InputHooks::spawn(hwnd);
+    if input_hooks.is_none() {
+        log_error!(
+            "输入钩子线程未能就绪（失败原因见前一条记录），本次运行鼠标按键触发、四角触发与「不传递」热键均不可用"
+        );
+    }
+
     let state = Box::new(RefCell::new(AgentState {
         config,
         config_path: options.config_path.clone(),
@@ -1155,11 +1308,10 @@ pub fn run(options: AgentOptions) {
         tray,
         tray_icons,
         ipc_rx,
-        mouse_hook: None,
+        input_hooks,
         float_window: None,
         monitoring: true,
         hotkeys_armed: false,
-        keyboard_hook: None,
     }));
 
     // 恢复文件存在即上次异常退出仍有窗口被隐藏，先找回。
@@ -1167,23 +1319,19 @@ pub fn run(options: AgentOptions) {
         let mut state = state.borrow_mut();
         if let Some(snapshot) = recovery::load(&state.recovery_path) {
             if snapshot.is_restorable(recovery::current_boot_time_ms()) {
-                logging::warn(&format!(
-                    "检测到上次异常退出，开始找回 {} 个被隐藏的窗口（另需解冻 {} 个、取消静音 {} 个进程）",
+                let (hidden, frozen, muted) = (
                     snapshot.hidden.len(),
                     snapshot.frozen.len(),
-                    snapshot.muted.len()
-                ));
+                    snapshot.muted.len(),
+                );
                 let outcome = state.controller.restore_from(snapshot);
-                logging::info(&format!(
-                    "崩溃恢复完成：恢复 {} 个窗口，跳过 {} 条失效记录",
+                logging::warn(&format!(
+                    "检测到上次异常退出：{hidden} 个被隐藏的窗口中恢复 {} 个、跳过 {} 条失效记录（另解冻 {frozen} 个、取消静音 {muted} 个进程）",
                     outcome.shown, outcome.stale
                 ));
             } else {
-                // 跨重启（或旧版格式）快照中的句柄与 PID 已失效，只丢弃并留档。
-                log_warn!(
-                    "恢复文件来自上一次开机或旧版本，其中的窗口句柄已失效，跳过恢复: {}",
-                    state.recovery_path.display()
-                );
+                // 跨重启（或旧版格式）快照中的句柄与 PID 已失效，丢弃不恢复。
+                logging::debug("恢复文件来自上一次开机或旧版本，其中的窗口句柄已失效，跳过恢复");
             }
             recovery::clear(&state.recovery_path);
         }
@@ -1272,6 +1420,30 @@ mod tests {
     use super::*;
 
     #[test]
+    fn settings_open_on_first_run_and_after_every_version_change() {
+        assert!(
+            should_open_settings(true, "", "3.1.0"),
+            "首次启动（无配置文件）须拉起配置程序"
+        );
+        assert!(
+            should_open_settings(false, "3.0.0", "3.1.0"),
+            "程序版本变了须拉起配置程序"
+        );
+        assert!(
+            should_open_settings(false, "", "3.1.0"),
+            "更早的版本没记过程序版本，视为版本已变"
+        );
+        assert!(
+            !should_open_settings(false, "3.1.0", "3.1.0"),
+            "版本没变就别每次启动都弹窗"
+        );
+        assert!(
+            should_open_settings(false, "3.1.0", "3.1.0-rc.2"),
+            "回退到预发布版也是版本变动"
+        );
+    }
+
+    #[test]
     fn hotkey_occupied_is_named_explicitly() {
         let e = windows::core::Error::from_hresult(ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult());
         assert_eq!(
@@ -1321,6 +1493,25 @@ mod tests {
             let _ = UnregisterHotKey(Some(hwnd), HK_HIDE);
             let _ = DestroyWindow(hwnd);
         }
+    }
+
+    #[test]
+    fn rule_label_names_the_process_and_never_the_window_title() {
+        let mut rule = bosskey_common::WindowRule::from_window(&bosskey_common::WindowInfo::new(
+            "与某人的聊天",
+            10,
+            "WeChat.exe",
+            2001,
+            "C:\\WeChat.exe",
+        ));
+        let label = rule_label(0, &rule);
+        assert_eq!(label, "精确窗口规则 #1（WeChat.exe）");
+        assert!(!label.contains("与某人的聊天"), "标题属隐私，不得进日志");
+
+        rule.regex = Some("机密.*".to_string());
+        let label = rule_label(2, &rule);
+        assert_eq!(label, "正则窗口规则 #3（WeChat.exe）");
+        assert!(!label.contains("机密"), "正则本体也可能含标题片段，不写出");
     }
 
     #[test]

@@ -103,6 +103,22 @@ The settings window and the core's tray menu and notifications are available in 
 
 For the full feature list and usage guide, see the Boss-Key [guide](https://boss-key.ivan-hanloth.cn/en/guide/).
 
+## Where the data lives, and how to remove it
+
+The **portable edition** keeps its settings, logs, recovery file and cache **inside the program folder**, so copying the folder takes your whole setup with it. If that folder is not writable (it sits somewhere like `C:\Program Files`, or on read-only media), the program stores them in `%APPDATA%\BossKey` instead and says so in the settings window.
+
+The **installer edition** always uses `%APPDATA%\BossKey`: the installation folder may be `C:\Program Files`, which normal privileges cannot write to. The program tells the two apart by the `installed.marker` file the installer drops.
+
+Either way, the browser component used by the settings window keeps its own data in `%LOCALAPPDATA%\cn.hanloth.bosskey.config`, which deleting the program folder does not remove. The package ships a `cleanup.ps1`; open PowerShell in the program folder and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File cleanup.ps1
+```
+
+It lists what it is about to delete and waits for your confirmation, then removes `%LOCALAPPDATA%\cn.hanloth.bosskey.config`, any `%APPDATA%\BossKey`, and what autostart leaves behind: the scheduled task `BossKeyAutostart` and the registry entry `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Boss Key Application`. The program folder itself is left alone — delete it yourself once the script is done.
+
+The installer edition does not need this: the uninstaller already does the same, and asks whether to keep your settings file.
+
 ## Development and contributing
 
 For details on development and contributing, see the Boss-Key [development docs](https://boss-key.ivan-hanloth.cn/en/dev/).

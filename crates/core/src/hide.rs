@@ -8,7 +8,7 @@ use crate::effects::Effects;
 use crate::platform::WindowManager;
 use crate::recovery::{ProcRecord, Snapshot};
 
-/// 一条隐藏记录。`process_path` / `title` 供日志与排查使用；旧恢复文件缺省为空串。
+/// 一条隐藏记录。`process_path` / `title` 仅供日志；旧恢复文件缺省为空串。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Target {
     pub hwnd: i64,
@@ -20,7 +20,7 @@ pub struct Target {
 }
 
 impl Target {
-    /// 只有句柄与 PID 的记录（来源没有路径 / 标题信息时使用）。
+    /// 只有句柄与 PID 的记录。
     pub fn bare(hwnd: i64, pid: u32) -> Self {
         Self {
             hwnd,
@@ -39,20 +39,18 @@ impl Target {
         }
     }
 
-    /// 日志用的一行摘要：`进程名「标题」(hwnd=…, pid=…)`。
+    /// 日志用的一行摘要：`进程名(hwnd=…, pid=…)`。
+    /// 不含窗口标题——标题属隐私内容，不写入日志。
     pub fn describe(&self) -> String {
         let process = std::path::Path::new(&self.process_path)
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("未知进程");
-        format!(
-            "{process}「{}」(hwnd={}, pid={})",
-            self.title, self.hwnd, self.pid
-        )
+        format!("{process}(hwnd={}, pid={})", self.hwnd, self.pid)
     }
 }
 
-/// 一条窗口规则的解析结果摘要。
+/// 一条窗口规则的解析结果。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuleOutcome {
     Live,
@@ -115,10 +113,8 @@ pub fn resolve_targets(
     (result, outcomes)
 }
 
-/// 前台窗口对应的隐藏目标。
-///
-/// 只接受出现在枚举结果里且当前可见的顶层窗口：工具窗口不在枚举结果内，
-/// 已被隐藏的窗口 `visible` 为假，二者都不该再次成为隐藏目标。
+/// 前台窗口对应的隐藏目标。只接受出现在枚举结果里且当前可见的顶层窗口：
+/// 工具窗口不在枚举结果内，已被隐藏的窗口 `visible` 为假。
 pub fn foreground_target(windows: &[WindowInfo], foreground: i64) -> Option<Target> {
     if foreground == 0 {
         return None;
@@ -145,21 +141,19 @@ pub fn freezable_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
             .iter()
             .filter(|w| w.pid == *pid && w.visible)
             .peekable();
-        // 没有可见窗口时不冻结。
+        // all() 对空集恒为真，故须先确认存在可见窗口。
         visible.peek().is_some() && visible.all(|w| hidden.contains(&w.hwnd))
     });
     pids
 }
 
-/// 把一组根 PID 展开为「根 ∪ 全部后代」：按 `edges`（`(pid, 父 pid)`）建父子关系，
-/// 从每个根 BFS 收集整棵子进程树。用 visited 去重并防环 / 自指（如 pid 0 的父是 0）。
-/// 返回排序去重后的 PID 列表。
+/// 把一组根 PID 展开为「根 ∪ 全部后代」；`edges` 为 `(pid, 父 pid)`。
+/// visited 兼作防环与自指保护（pid 0 的父是 0）。返回排序去重后的列表。
 pub fn expand_descendants(roots: &[u32], edges: &[(u32, u32)]) -> Vec<u32> {
     use std::collections::VecDeque;
 
     let mut children: std::collections::HashMap<u32, Vec<u32>> = std::collections::HashMap::new();
     for &(pid, ppid) in edges {
-        // 忽略自指边，避免把自己当成自己的子进程。
         if pid != ppid {
             children.entry(ppid).or_default().push(pid);
         }
@@ -199,11 +193,11 @@ pub struct HidePlan {
     pub freeze: Vec<ProcRecord>,
     /// 是否发送媒体暂停键。
     pub send_pause: bool,
-    /// 本轮冻结方式（首轮跟随设置，之后沿用，保证解冻方式一致）。
+    /// 本轮冻结方式；首轮跟随设置，之后沿用。
     pub enhanced: bool,
 }
 
-/// [`HideController::show`] 的执行结果，供调用方如实记录日志。
+/// [`HideController::show`] 的执行结果。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ShowOutcome {
     /// 实际恢复显示的窗口数。
@@ -256,12 +250,10 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         !self.hidden.is_empty()
     }
 
-    /// 当前被隐藏的窗口数（供日志如实记录恢复了多少个窗口）。
     pub fn hidden_count(&self) -> usize {
         self.hidden.len()
     }
 
-    /// 枚举当前窗口（供上层解析目标；封装 wm 依赖）。
     pub fn enumerate(&self) -> Vec<WindowInfo> {
         self.wm.enumerate()
     }
@@ -270,26 +262,22 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.wm.foreground()
     }
 
-    /// 窗口当前标题（封装 wm 依赖，供事件追踪查询）。
     pub fn window_title(&self, hwnd: i64) -> String {
         self.wm.window_title(hwnd)
     }
 
-    /// 该句柄是否在隐藏记录里。
     pub fn tracks_window(&self, hwnd: i64) -> bool {
         self.hidden.iter().any(|t| t.hwnd == hwnd)
     }
 
-    /// 移除句柄对应的隐藏记录（窗口已销毁或被外部恢复显示时由事件追踪调用）。
-    /// 返回是否有记录被移除。
+    /// 移除句柄对应的隐藏记录，返回是否有记录被移除。
     pub fn forget_window(&mut self, hwnd: i64) -> bool {
         let before = self.hidden.len();
         self.hidden.retain(|t| t.hwnd != hwnd);
         self.hidden.len() != before
     }
 
-    /// 同步隐藏记录里的窗口标题（标题变化事件）；`NO_TITLE` 不参与同步。
-    /// 返回是否有记录被更新。
+    /// 同步隐藏记录里的窗口标题；`NO_TITLE` 不参与。返回是否有记录被更新。
     pub fn update_title(&mut self, hwnd: i64, title: &str) -> bool {
         if title == NO_TITLE {
             return false;
@@ -307,13 +295,12 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     }
 
     /// 计算一次隐藏的执行计划，不做任何窗口 / 副作用动作；顺带完成隐藏集剪枝
-    /// 与 PID 补查（仍查不到的目标剔除）。`freeze_pids` 为最终要冻结的 PID 集
-    /// （可能已含子进程树），仅在 `freeze_after_hide` 开启时生效。
+    /// 与 PID 补查（仍查不到的目标剔除）。`freeze_pids` 仅在 `freeze_after_hide`
+    /// 开启时生效。
     ///
-    /// 只有「由本程序从可见变为不可见」的窗口才进入隐藏集，恢复即逆转这次
-    /// 改变；本来就不可见的目标不入集。隐藏是累加的，`show` 时一并恢复。
-    /// 已在隐藏 / 静音 / 冻结集内的目标会被跳过——挂起是计数式的，重复施加
-    /// 会让解冻次数对不上。
+    /// 只有「由本程序从可见变为不可见」的窗口才进入隐藏集，恢复即逆转这次改变。
+    /// 隐藏是累加的，`show` 时一并恢复。已在隐藏 / 静音 / 冻结集内的目标会被
+    /// 跳过——挂起是计数式的，重复施加会让解冻次数对不上。
     pub fn plan_hide(
         &mut self,
         setting: &Setting,
@@ -325,8 +312,6 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
         let mut fresh: Vec<Target> = Vec::new();
         for t in targets {
-            // 只隐藏当前可见的窗口：本来就不可见的目标（如程序自行藏到托盘，
-            // Steam 的关闭按钮即是）不入集，恢复时也就不会被错误地弹出来。
             if known.contains(&t.hwnd)
                 || fresh.iter().any(|f| f.hwnd == t.hwnd)
                 || !self.wm.is_window(t.hwnd)
@@ -369,7 +354,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
         HidePlan {
             send_pause: setting.send_before_hide && !fresh.is_empty(),
-            // 解冻方式必须与冻结时一致：仅首轮冻结跟随设置，之后沿用。
+            // 解冻方式必须与冻结时一致。
             enhanced: if self.frozen.is_empty() {
                 setting.enhanced_freeze
             } else {
@@ -381,10 +366,10 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
     }
 
-    /// 执行计划：同步隐藏窗口（`SW_HIDE`），静音 / 冻结 / 暂停键经 [`Effects`] 施加
-    /// （生产实现为异步队列）。
+    /// 执行计划：同步隐藏窗口（`SW_HIDE`），静音 / 冻结 / 暂停键经 [`Effects`]
+    /// 施加。生产实现为异步队列，入队顺序即执行顺序。
     pub fn commit_hide(&mut self, plan: HidePlan) {
-        // 暂停键先入队：冻结后的进程收不到按键。
+        // 暂停键排在最前：冻结后的进程收不到按键。
         if plan.send_pause {
             self.effects.send_pause();
         }
@@ -400,6 +385,10 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.muted.sort_unstable_by_key(|r| r.pid);
 
         self.used_enhanced = plan.enhanced;
+        // 冻结前必须等屏幕画完，否则被冻结的窗口会留下残影。整批只等一次。
+        if !plan.freeze.is_empty() {
+            self.effects.settle_before_freeze();
+        }
         for r in &plan.freeze {
             self.effects.suspend(r.pid, plan.enhanced);
             self.frozen.push(*r);
@@ -409,7 +398,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.hidden.extend(plan.fresh);
     }
 
-    /// plan + commit 的便捷封装（不需要意图落盘的调用方使用）。
+    /// plan + commit 的便捷封装。
     pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
         let plan = self.plan_hide(setting, targets, freeze_pids);
         self.commit_hide(plan);
@@ -436,7 +425,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     fn proc_alive(&self, r: &ProcRecord) -> bool {
         let now = self.wm.process_start_time(r.pid);
         if now == 0 {
-            return false; // 进程已退出或查不到。
+            return false;
         }
         r.created_at == 0 || now == r.created_at
     }
@@ -617,7 +606,7 @@ mod tests {
         WindowInfo::new(title, hwnd, process, hwnd as u32, path)
     }
 
-    /// 与 `win` 相同，但可指定 PID（用于构造同一进程的多个窗口）。
+    /// 与 `win` 相同，但可指定 PID。
     fn win_pid(title: &str, hwnd: i64, process: &str, pid: u32, path: &str) -> WindowInfo {
         WindowInfo::new(title, hwnd, process, pid, path)
     }
@@ -673,7 +662,11 @@ mod tests {
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         assert_eq!(targets[0].process_path, "C:\\WeChat.exe");
         assert_eq!(targets[0].title, "微信");
-        assert_eq!(targets[0].describe(), "WeChat.exe「微信」(hwnd=10, pid=10)");
+        assert_eq!(
+            targets[0].describe(),
+            "WeChat.exe(hwnd=10, pid=10)",
+            "日志摘要不带窗口标题"
+        );
     }
 
     #[test]
@@ -855,7 +848,7 @@ mod tests {
         windows: Vec<WindowInfo>,
         foreground: i64,
         visible: RefCell<HashSet<i64>>,
-        /// 仍然存在的句柄集合（窗口销毁 = 从中移除；与 visible 是两回事）。
+        /// 仍然存在的句柄；与 visible 是两回事。
         exists: RefCell<HashSet<i64>>,
         /// 覆写某句柄当前所属的 PID（模拟句柄被别的窗口复用）。
         pid_overrides: RefCell<HashMap<i64, u32>>,
@@ -876,13 +869,12 @@ mod tests {
             }
         }
 
-        /// 模拟窗口被销毁：句柄失效且不可见。
         fn destroy(&self, hwnd: i64) {
             self.visible.borrow_mut().remove(&hwnd);
             self.exists.borrow_mut().remove(&hwnd);
         }
 
-        /// 模拟句柄被系统回收后分配给了新窗口。
+        /// 模拟句柄被回收后分配给新窗口。
         fn revive(&self, hwnd: i64) {
             self.exists.borrow_mut().insert(hwnd);
             self.visible.borrow_mut().insert(hwnd);
@@ -953,11 +945,15 @@ mod tests {
         suspends: RefCell<Vec<u32>>,
         resumes: RefCell<Vec<u32>>,
         pauses: RefCell<u32>,
+        settles: RefCell<u32>,
     }
 
     impl Effects for MockEffects {
         fn mute(&self, pid: u32, mute: bool) {
             self.mutes.borrow_mut().push((pid, mute));
+        }
+        fn settle_before_freeze(&self) {
+            *self.settles.borrow_mut() += 1;
         }
         fn suspend(&self, pid: u32, _enhanced: bool) {
             self.suspends.borrow_mut().push(pid);
@@ -995,6 +991,11 @@ mod tests {
         assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
         assert_eq!(*controller.effects.suspends.borrow(), vec![10]);
         assert_eq!(*controller.effects.pauses.borrow(), 1, "应发送一次暂停键");
+        assert_eq!(
+            *controller.effects.settles.borrow(),
+            1,
+            "冻结前须静置一次，等屏幕画完再让进程停摆"
+        );
 
         let outcome = controller.show();
         assert_eq!(
@@ -1013,6 +1014,28 @@ mod tests {
             vec![(10, true), (10, false)],
             "恢复后应取消静音"
         );
+    }
+
+    #[test]
+    fn nothing_to_freeze_means_nothing_to_wait_for() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.setting.mute_after_hide = true;
+        config.setting.freeze_after_hide = false;
+        config.setting.send_before_hide = true;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        do_hide(&mut controller, &mut config);
+
+        assert_eq!(
+            *controller.effects.settles.borrow(),
+            0,
+            "没有要冻结的进程就不该空等，静音不必为残影让路"
+        );
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
     }
 
     #[test]
@@ -1197,7 +1220,7 @@ mod tests {
         controller.commit_hide(plan);
         let actual = controller.snapshot();
 
-        // 意图快照与提交后的实际状态一致——落盘发生在动作前，两者必须等价。
+        // 落盘发生在动作前，故意图快照须与提交后的状态等价。
         assert_eq!(planned.hidden, actual.hidden);
         assert_eq!(planned.frozen, actual.frozen);
         assert_eq!(planned.muted, actual.muted);
@@ -1433,7 +1456,7 @@ mod tests {
             hide_current: false,
             ..Setting::default()
         };
-        // 99 是同进程同标题的新窗口（程序重建了窗口），当前不可见。
+        // 99 是同进程同标题的新窗口，当前不可见。
         let wm = MockWm::new(
             vec![
                 win_pid("微信", 10, "WeChat.exe", 500, "C:\\WeChat.exe"),
@@ -1500,8 +1523,7 @@ mod tests {
             mute_after_hide: true,
             ..Setting::default()
         };
-        // Steam 用关闭按钮把自己藏了起来（窗口仍存在但不可见），记事本可见；
-        // 两者都被规则命中。
+        // 10 存在但已不可见，20 可见；两者都被规则命中。
         let wm = MockWm::new(
             vec![
                 win_pid("Steam", 10, "steam.exe", 500, "C:\\steam.exe"),
@@ -1556,7 +1578,7 @@ mod tests {
             ],
             0,
         );
-        // 记录外的句柄：被别的途径隐藏，核心不知情。
+        // 30 被别的途径隐藏，不在隐藏记录里。
         wm.hide(30);
         let mut controller = HideController::new(wm, MockEffects::default());
         controller.apply_hide(
@@ -1565,7 +1587,6 @@ mod tests {
             &[500],
         );
 
-        // 只点选了一个窗口 + 一个记录外句柄。
         assert_eq!(controller.release_windows(&[10, 30]), 2);
         assert!(
             controller.wm.is_visible(10) && controller.wm.is_visible(11),

@@ -45,12 +45,11 @@ Once the tray icon is hidden you cannot click it to restore or open the settings
 Windows itself controls which tray icons are visible: you can choose which icons appear in the taskbar corner by hand. For detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the `ms-settings:taskbar` link works only on Windows; the browser asks for confirmation first).
 :::
 
-### Send the pause key before hiding (beta)
+### Send the pause key before hiding
 
 When on, Boss Key sends the **media pause key** to the window **before** hiding it, to try to pause any video or music playing inside.
 
 - **Off** by default.
-- This is experimental and adds roughly **0.2 seconds** of delay to hiding.
 - It differs from "mute after hiding": muting only silences the audio, whereas the pause key actually stops playback.
 - Boss Key's **process freezing** has the same pausing effect while also cutting resource usage — see [Process freezing](/en/guide/freeze).
 
@@ -88,6 +87,21 @@ Options: **Follow system / 简体中文 / English / 繁體中文**. Default **Fo
 Core runtime logs are stored per day in the **`logs` folder inside the program directory**, and older logs are cleaned up automatically when the core starts.
 
 Options: **Off / 3 days / 7 days / 14 days / 30 days**. Default **7 days**. Choosing "Off" disables logging entirely.
+
+### Log level
+
+Only entries at the selected level **or above** are recorded. Options: **Debug / Info / Warning / Error**. Default **Warning**.
+
+| Level | What gets recorded |
+| --- | --- |
+| Debug | Everything, including every hide/restore and hotkey registration result |
+| Info | Milestones beyond that routine activity, such as the first launch after an update |
+| Warning (default) | Warnings and errors only: hotkey registration failures, rules that matched no window, an unclean shutdown detected on the previous run |
+| Error | Errors only: the core failing to start, an unreadable config, crash reports |
+
+At the default "Warning", everyday hide and restore activity is **not written to the log**, leaving only entries that deserve attention. Before reporting an issue you can lower it to "Debug", reproduce the problem once, then set it back. The option is unavailable while log retention is set to "Off".
+
+Whatever the level, each run writes one session marker on startup and one on a clean exit, carrying the version and the data folder.
 
 ::: tip Check the logs first when troubleshooting
 When something goes wrong, the logs in the `logs` folder are the primary source for diagnosing it. Attaching the relevant log to a report greatly speeds up investigation. See also [Window recovery & crash self-healing](/en/guide/recovery).

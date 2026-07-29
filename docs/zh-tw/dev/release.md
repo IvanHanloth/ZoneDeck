@@ -30,30 +30,49 @@ dist/
 ├── Boss-Key/                    可攜版（複製走即可用，發布時整個資料夾壓成 zip）
 │   ├── Boss Key.exe               常駐核心（內嵌 DPI／長路徑 manifest + 版本資訊 + 圖示）
 │   ├── config.exe                 設定介面（前端已內嵌，自包含）
+│   ├── cleanup.ps1                殘留資料清理指令碼（可攜版沒有解除安裝程式）
 │   ├── LICENSE.txt
-│   └── README.md
+│   ├── README.md                  簡體中文
+│   ├── README.en.md               English
+│   └── README.zh-TW.md            繁體中文
 └── installer/                   安裝包（-Installer 時產生）
     └── Boss-Key-<版本>-Setup.exe  InnoSetup（安裝前自動結束執行中的核心）
 ```
 
-可攜版**不需安裝、無外部相依**（除系統內建的 WebView2）。兩個程式透過同資料夾的 `config.json` 與具名管道協作。
+可攜版**不需安裝、無外部相依**（除系統內建的 WebView2）。兩個程式透過[資料目錄](/zh-tw/dev/architecture#資料目錄)下的 `config.json` 與具名管道協作。
+
+三語 README 都要帶上：可攜版沒有安裝精靈，README 是唯一的隨附說明，其中「資料存放位置與清理」一節交代了程式在使用者資料夾下留了什麼、怎麼用 `cleanup.ps1` 清掉。
+
+::: danger 可攜資料夾裡不能出現 installed.marker
+程式憑它認出自己是安裝版並改用 `%APPDATA%\BossKey`（見[資料目錄](/zh-tw/dev/architecture#資料目錄)）。該檔案由 `.iss` 從指令碼資料夾直取，不經過 `dist\Boss-Key`——若混進可攜包，可攜版就不可攜了。
+:::
+
+安裝包預設走**一般權限**安裝（`%LocalAppData%\Programs\Boss Key`），使用者可在精靈首頁改選「為所有使用者安裝」裝進 `Program Files`。兩種模式下資料都在 `%APPDATA%\BossKey`，不在安裝資料夾裡。
 
 ## 版本號管理
 
 ::: info 版本號唯一真實來源
-版本號的唯一真實來源是 `Cargo.toml` 的 `[workspace.package] version`。另外三處必須與之一致：`apps/config/src-tauri/tauri.conf.json`、`apps/config/ui/package.json`、`Cargo.lock`。
+版本號只寫在 `Cargo.toml` 的 `[workspace.package] version` 一處，`Cargo.lock` 跟著它走。其餘地方**不再各存一份**，一律在建置時取真實版本號：
+
+| 位置 | 版本號從哪來 |
+| --- | --- |
+| 兩個 exe 的檔案版本資訊 | `CARGO_PKG_VERSION`（tauri-winres／tauri-build；`tauri.conf.json` 不寫 `version` 即回落到 Cargo.toml） |
+| 核心資訊清單的 `assemblyIdentity` | `crates/core/build.rs` 按 `CARGO_PKG_VERSION` 填入（換算成純數字四段號） |
+| 安裝包的 `MyAppVersion` | `scripts/package.ps1` 從 `Cargo.toml` 讀出後傳給 Inno；未傳則編譯報錯，不留過期的預設值 |
+| 程式內與回報給 Verhub 的版本 | `env!("CARGO_PKG_VERSION")` |
+| 設定檔的 `app_version` | 核心啟動時寫入 `bosskey_common::APP_VERSION` |
 :::
 
 `scripts/version.ps1` 負責寫入與驗證：
 
 ```powershell
-# 把版本號寫入四處檔案（並同步 Cargo.lock）
+# 把版本號寫入 Cargo.toml（並同步 Cargo.lock）
 powershell -File scripts/version.ps1 apply 3.0.1
 
-# 驗證四處與該 tag 一致，不一致則失敗
+# 驗證 Cargo.toml 與該 tag 一致，不一致則失敗
 powershell -File scripts/version.ps1 check 3.0.1
 
-# 不給 tag 時以 Cargo.toml 為基準驗證其餘檔案
+# 不給 tag 時只回顯目前版本號
 powershell -File scripts/version.ps1 check
 
 # 印出目前版本號
@@ -74,37 +93,24 @@ powershell -File scripts/version.ps1 show
 
 同一分支有新推送時會自動取消舊工作（`concurrency` + `cancel-in-progress`）。
 
-### `tag.yml` — 版本號寫入並打 tag
+### `release.yml` — 一鍵發版
 
-**觸發**：手動（`workflow_dispatch`），輸入要發布的版本號。**請從 `dev` 分支觸發**。
+**觸發**：手動（`workflow_dispatch`），輸入要發布的版本號。**請從 `main` 觸發**（待發布內容合併進 `main` 之後）。
 
 **做什麼**：
-1. 用 `version.ps1 apply` 把版本號寫入四處檔案；
-2. 提交到 `dev` 並打上 `v<版本>` tag，兩者一起推送；
-3. 確保有一個 `dev` → `main` 的 PR（已存在就沿用，沒有才新開）。
+1. 用 `version.ps1 apply` 把版本號寫入 `Cargo.toml` 並同步 `Cargo.lock`；
+2. 以 OIDC 身分向 [octo-sts](https://octo-sts.dev) 換取本儲存庫 `contents:write` 的短期 token；
+3. 經 GraphQL `createCommitOnBranch` 把版本號變更提交到觸發分支，並打上 `v<版本>` 附註 tag——API 建立的提交由 GitHub 伺服器端簽章，帶 **Verified** 徽章；
+4. 檢出該 tag → 驗證 tag 與程式碼版本一致 → 前端／Rust 測試；
+5. `package.ps1 -Installer` 組裝 `dist/Boss-Key` 與 `dist/installer` → 把 `dist/Boss-Key` 壓成可攜 zip；
+6. 產生**建置來源證明**（Sigstore attestation）→ 產生發布說明（自動產生的更新日誌，結尾附安全提示）→ 建立**草稿** Release 並上傳 zip 與安裝包。
 
-**這一步不建置**。用 GITHUB_TOKEN 推的 tag 不會觸發任何工作流程，正合本流程的意圖：等 PR 合併、tag 隨之進入 `main` 的歷史，`release.yml` 才開始生產建置。
+tag 已存在時跳過第 2、3 步，直接檢出該 tag 重新建置——重跑／補發就是再次執行並填入同一版本號。
 
-::: warning 用 merge commit 合併發版 PR
-tag 指向 `dev` 上的那個版本號提交。**squash／rebase 合併會另造提交**，tag 就進不了 `main` 的歷史，`release.yml` 偵測不到，**建置根本不會觸發**。請用 **merge commit**。
+::: info 憑證從哪來
+儲存庫不保存任何長期憑證。工作流程用 GitHub Actions 的 OIDC 身分向 octo-sts 換取短期 token，放行條件由 `.github/chainguard/tag-release.sts.yaml` 宣告（只允許 `main`／`dev` 上的執行），token 在 job 結束時自動撤銷。Octo STS App 在分支保護的 bypass 名單中，因此版本號提交無需發版 PR。
 
-真的誤用了 squash，可以手動觸發 `release.yml` 並指定 tag 來補救。
-:::
-
-::: tip PR 上沒有檢查記錄？
-GITHUB_TOKEN 建立的 PR 不會觸發 `pull_request` 事件，PR 頁面上不會有 CI 記錄（您點 Merge 時的 push 事件仍會正常觸發 `build-test.yml`）。若 `main` 的分支保護要求狀態檢查通過，請在儲存庫 secrets 中設定 `RELEASE_PAT`（repo 權限的 PAT），工作流程會優先使用它來開 PR。
-:::
-
-### `release.yml` — 建置並發布 Release
-
-**觸發**：推送到 `main`（偵測到有新的 `v*` tag 隨之進入 `main` 的歷史才繼續），或手動觸發並指定 tag。
-
-**做什麼**：偵測本次推送新帶進 `main` 的 tag → 檢出該 tag → 驗證 tag 與程式碼版本一致 → 前端／Rust 測試 → `package.ps1 -Installer` 組裝 `dist/Boss-Key` 與 `dist/installer` → 把 `dist/Boss-Key` 壓成可攜 zip → 產生**建置來源證明**（Sigstore attestation）→ 產生發布說明（自動產生的更新日誌，結尾附安全提示）→ 建立**草稿** Release 並上傳 zip 與安裝包。
-
-::: info 為什麼不監聽 `push: tags`
-tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不會觸發任何工作流程。而**合併 PR 並不產生 tag 推送事件**——tag 是獨立的 ref，合併只是讓它指向的提交變得可從 `main` 追溯。所以只能從 `main` 的 push 事件裡偵測。
-
-偵測方式是比較推送前後「可從 `main` 追溯的 `v*` tag」集合，取新增的那個。不能用「HEAD 上掛著的 tag」：merge commit 才是 HEAD，tag 指向的是它的父提交。
+提交能帶 Verified 徽章，是因為它經 GitHub API 建立、由 GitHub 伺服器端簽章；tag 沒有伺服器端簽章機制，是普通附註 tag。
 :::
 
 ### `deploy-docs.yml` — 文件站部署
@@ -120,20 +126,16 @@ tag 是 `tag.yml` 用 GITHUB_TOKEN 推到 `dev` 的，那次推送不會觸發�
 ### 發布一個新版本
 
 ```
-dev ──① Bump version and tag──▶ dev（版本號提交 + v3.0.1 tag）
-                                 │
-                                 ②  PR，用 merge commit 合併
-                                 ▼
-                               main ──③ release.yml 偵測到新 tag──▶ 建置 + 草稿 Release
-                                                                        │
-                                                                        ④ Publish
-                                                                        ▼
-                                                              文件站 + releases.json 刷新
+main ──① Release──▶ 版本號提交（Verified）+ v3.0.1 tag ──▶ 建置 + 草稿 Release
+                                                              │
+                                                              ② Publish
+                                                              ▼
+                                                    文件站 + releases.json 刷新
 ```
 
-1. 功能開發完畢、準備發版時，切到 `dev`，在 GitHub Actions 中執行 **「Bump version and tag」**，填入版本號（如 `3.0.1`）。工作流程把版本號提交與 tag 落在 `dev`，並確保有一個 `dev` → `main` 的 PR。
-2. 審查該 PR，用 **merge commit** 合併進 `main`。
-3. 合併觸發 `release.yml`：它偵測到 `v3.0.1` 隨之進入 `main`，檢出該 tag 開始生產建置，完成後留下一個**草稿** Release。
-4. 檢查產物與發布說明，點 **Publish release** 正式發布 —— 這一步同時會刷新文件站與 `releases.json`。
+1. 功能開發完畢，照常把 `dev` 經 PR 合併進 `main`。
+2. 在 `main` 上執行 **「Release」**，填入版本號（如 `3.0.1`）。工作流程把版本號提交與 tag 落在 `main`，隨後完成生產建置，留下一個**草稿** Release。
+3. 檢查產物與發布說明，點 **Publish release** 正式發布 —— 這一步同時會刷新文件站與 `releases.json`。
+4. 把 `main` 合回 `dev`（或在下次從 `dev` 開 PR 前先合併 `main`），讓版本號提交回到 `dev`。
 
-需要重跑或補發時，手動觸發 `release.yml` 並指定 tag 即可。
+需要重跑或補發時，再次執行 **「Release」** 並填入同一版本號即可。

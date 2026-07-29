@@ -1,3 +1,8 @@
+//! 低级鼠标钩子：承载鼠标按键绑定与四角触发。
+//!
+//! 回调只做判定与 `PostMessageW`，重活都在代理窗口的消息处理里；
+//! 由 [`crate::input_hooks`] 的专职线程安装，鼠标移动这条最热的路径上不加锁。
+
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI32, AtomicIsize, AtomicU32, AtomicU64, Ordering::Relaxed};
 
@@ -47,8 +52,11 @@ static CORNER_FLAGS: AtomicU32 = AtomicU32::new(0);
 static SCREEN_W: AtomicI32 = AtomicI32::new(0);
 static SCREEN_H: AtomicI32 = AtomicI32::new(0);
 static LAST_CORNER: AtomicU64 = AtomicU64::new(0);
-/// 上一个鼠标位置与时刻，用来估算甩入角落的速度。
-static LAST_MOVE: Mutex<Option<MoveSample>> = Mutex::new(None);
+/// 上一个鼠标位置与时刻，用来估算甩入角落的速度；时刻为 0 表示尚无采样。
+/// 分两个原子存而不用锁：该路径每次鼠标移动都要走，且只被钩子线程读写，
+/// 故不需要跨原子的一致性。
+static LAST_MOVE_POS: AtomicU64 = AtomicU64::new(0);
+static LAST_MOVE_MS: AtomicU64 = AtomicU64::new(0);
 static BUTTONS: Mutex<Buttons> = Mutex::new(Buttons::new());
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,6 +129,26 @@ struct MoveSample {
     x: i32,
     y: i32,
     ms: u64,
+}
+
+/// 把坐标打包进一个 `u64`：高 32 位 x、低 32 位 y。
+fn pack_pos(x: i32, y: i32) -> u64 {
+    ((x as u32 as u64) << 32) | y as u32 as u64
+}
+
+fn unpack_pos(v: u64) -> (i32, i32) {
+    ((v >> 32) as u32 as i32, v as u32 as i32)
+}
+
+/// 取出上一次采样并换上这一次；无上一次采样时返回 None。
+fn swap_last_move(sample: MoveSample) -> Option<MoveSample> {
+    let ms = LAST_MOVE_MS.swap(sample.ms, Relaxed);
+    let pos = LAST_MOVE_POS.swap(pack_pos(sample.x, sample.y), Relaxed);
+    if ms == 0 {
+        return None;
+    }
+    let (x, y) = unpack_pos(pos);
+    Some(MoveSample { x, y, ms })
 }
 
 /// 这一步移动是否算「甩」：位移 / 用时超过速度门槛，且采样间隔有效。
@@ -230,11 +258,8 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
             y: data.pt.y,
             ms: now,
         };
-        // 无论是否触发都先记下这次采样，供下次算速度。
-        let previous = LAST_MOVE
-            .lock()
-            .ok()
-            .and_then(|mut last| last.replace(sample));
+        // 须在下面的早退之前记下采样，供下次算速度。
+        let previous = swap_last_move(sample);
 
         if now.wrapping_sub(LAST_CORNER.load(Relaxed)) < CORNER_COOLDOWN_MS {
             return;
@@ -292,9 +317,12 @@ pub struct MouseHook {
 }
 
 impl MouseHook {
-    pub fn install(agent_hwnd: HWND, setting: &Setting) -> Option<MouseHook> {
-        set_flags(setting);
+    /// 安装钩子；须在 [`crate::input_hooks`] 的专职线程上调用。
+    /// 触发条件由 [`set_flags`] 单独设置，本函数不读配置。
+    pub fn install(agent_hwnd: HWND) -> Option<MouseHook> {
         HWND_RAW.store(agent_hwnd.0 as isize, Relaxed);
+        // 上一轮的采样已过时，不能拿来算速度。
+        LAST_MOVE_MS.store(0, Relaxed);
         unsafe {
             SCREEN_W.store(GetSystemMetrics(SM_CXSCREEN), Relaxed);
             SCREEN_H.store(GetSystemMetrics(SM_CYSCREEN), Relaxed);
@@ -320,7 +348,7 @@ mod tests {
     use super::*;
     use crate::hotkey::{MOD_CONTROL, MOD_SHIFT};
 
-    /// 默认配置是「中键单击隐藏」，这里要的是一张白纸，好逐项验证触发条件。
+    /// 关掉默认开启的中键，以便逐项验证触发条件。
     fn setting_with(mutate: impl FnOnce(&mut Setting)) -> Setting {
         let mut s = Setting::default();
         s.mouse.middle.enabled = false;
@@ -426,6 +454,29 @@ mod tests {
             sample(1870, 1050, 1000),
             sample(1900, 1070, 1200)
         ));
+    }
+
+    #[test]
+    fn positions_survive_the_atomic_round_trip() {
+        // 主屏左侧 / 上方的显示器坐标为负，打包不能丢符号。
+        for (x, y) in [(0, 0), (1919, 1079), (-1920, -300), (i32::MIN, i32::MAX)] {
+            assert_eq!(unpack_pos(pack_pos(x, y)), (x, y));
+        }
+    }
+
+    #[test]
+    fn swapping_yields_the_previous_sample_and_nothing_on_the_first() {
+        LAST_MOVE_MS.store(0, Relaxed);
+        assert_eq!(
+            swap_last_move(sample(-5, 1070, 1000)),
+            None,
+            "首次采样没有上一次"
+        );
+        assert_eq!(
+            swap_last_move(sample(1900, 3, 1200)),
+            Some(sample(-5, 1070, 1000))
+        );
+        LAST_MOVE_MS.store(0, Relaxed);
     }
 
     #[test]

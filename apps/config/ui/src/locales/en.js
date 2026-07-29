@@ -188,7 +188,7 @@ export default {
   "notify.statusElevated": "Running as administrator",
   "notify.statusMonitorPaused": "Hotkey monitoring is paused",
   "notify.trayPriorityNote":
-    "Bind a state to each colored dot badge; the badge appears in the bottom-right corner of the tray icon. When several bound states are active at once, only one dot is shown, in red > green > yellow > blue priority order. Choose “Do not show” to disable a color.",
+    "When several states are active at once, they are shown in red > green > yellow > blue priority order",
   "notify.trayTooltip": "Show the tray icon tooltip",
   "notify.trayTooltipDesc":
     "Show “Boss Key” when hovering over the tray icon; turn this off to show no text for extra discretion.",
@@ -205,17 +205,16 @@ export default {
   "options.hideIcon": "Also hide Boss Key's tray icon",
   "options.hideIconDesc":
     "Hide Boss Key's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "options.sendPause": "Send the pause key before hiding (beta)",
-  "options.sendPauseDesc":
-    "Send the media pause key before hiding (pausing any playing video or music); adds roughly 0.2 seconds of delay.",
+  "options.sendPause": "Send the pause key before hiding",
+  "options.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
 
   "options.freezeCard": "Process freezing",
-  "options.freezeAfterHide": "Freeze processes when hiding (beta)",
+  "options.freezeAfterHide": "Freeze processes when hiding",
   "options.freezeAfterHideDesc":
-    "Suspend the target process once hidden to lower its CPU and memory usage; it is resumed automatically when restored.",
+    "Suspend the target process once hidden to lower its CPU and memory usage; it is resumed automatically when restored. May add some delay when hiding and restoring.",
   "options.enhancedFreeze": "Use enhanced freezing",
   "options.enhancedFreezeDesc":
-    "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator.",
+    "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator. May add some delay when hiding and restoring.",
   "options.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
   "options.needFreezeFirst": "Enable “Freeze processes when hiding” first",
   "options.blockedCoreStopped": "the core is not running",
@@ -223,7 +222,7 @@ export default {
   "options.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
   "options.freezeWholeTree": "Freeze the whole process tree (beta)",
   "options.freezeWholeTreeDesc":
-    "Recursively freeze the entire child-process tree of the matched program for a more thorough freeze; applies to both normal and enhanced freezing. May affect background tasks of those child processes",
+    "Recursively freeze the entire child-process tree of the matched program for a more thorough freeze; applies to both normal and enhanced freezing. May affect background tasks of those child processes and adds more delay when hiding and restoring.",
   "options.freezeNoteBefore": "Enhanced freezing requires downloading",
   "options.freezeNoteAfter":
     "and placing pssuspend64.exe in the program folder, with the core running as administrator.",
@@ -253,6 +252,13 @@ export default {
     "Core logs are stored per day in the logs folder inside the program directory, and older logs are cleaned up on startup. Choose “Off” to disable logging.",
   "options.logOff": "Off",
   "options.logDays": "{n} days",
+  "options.logLevel": "Log level",
+  "options.logLevelDesc":
+    "Only records entries at the selected level or above. The default is “Warning”, which keeps warnings and errors while leaving out routine hide/restore activity. Lower it temporarily to collect more detail before reporting an issue.",
+  "options.logLevel.debug": "Debug (most detailed)",
+  "options.logLevel.info": "Info",
+  "options.logLevel.warn": "Warning (default)",
+  "options.logLevel.error": "Error (least detailed)",
 
   "options.languageCard": "Language",
   "options.language": "Display language",
@@ -291,10 +297,17 @@ export default {
   "about.ratingOptional": "Rating (optional)",
   "about.feedbackPlaceholder": "The developer reads every note left here — feel free to ask for a feature, report what went wrong, or just say something nice ヾ(≧▽≦*)o~\nThat said, if you can, please file bugs and feature requests as GitHub Issues so they can all be followed up in one place (which leaves this box for compliments only ( •̀ ω •́ )✧ — kidding, of course).",
   "about.contactPlaceholder": "Contact (optional — email, QQ, etc.)",
+  "about.contactPlaceholderGithub": "GitHub account (required — e.g. @IvanHanloth)",
+  "about.contactNotice": "Without a contact there is no way for us to reply to your feedback directly.",
+  "about.forwardToIssue": "Also convert into a GitHub issue",
+  "about.forwardToIssueDesc": "Once submitted, the Verhub bot turns this feedback into a GitHub issue automatically — no special network setup and no GitHub sign-in needed. A GitHub account is required when you choose this, so the issue can be followed up with you.",
+  "about.contactRequiredForIssue": "Converting into an issue requires a GitHub account",
   "about.submitting": "Submitting…",
   "about.submitFeedback": "Submit feedback",
+  "about.submitAsIssue": "Submit and convert into an issue",
   "about.writeSomething": "Write something first",
   "about.feedbackThanks": "Feedback submitted — thank you!",
+  "about.issueThanks": "Feedback submitted — it will be converted into an issue. Thank you!",
   "about.feedbackFailed": "Could not submit feedback: {err}",
   "about.licenseCard": "License",
   "about.licenseHint": "This project is open source under the MIT license:",
@@ -333,9 +346,19 @@ export default {
   "announce.pinned": "Pinned",
   "announce.gotIt": "Got it",
 
+  "dataNotice.title": "Where your settings are stored",
+  "dataNotice.heading": "The program folder is not writable",
+  "dataNotice.reason": "This account has no write permission for {dir} — usually because the program sits in a system folder such as Program Files, or on a read-only drive.",
+  "dataNotice.stored": "Your settings are stored in {dir} instead. Nothing else is affected.",
+  "dataNotice.fixTitle": "To keep the settings with the program folder, you can:",
+  "dataNotice.fixMove": "move the whole program folder somewhere writable — the desktop, your documents, or an ordinary folder on another drive;",
+  "dataNotice.fixPermission": "or right-click the folder → Properties → Security → Edit, and grant your account the “Write” permission (needs administrator approval);",
+  "dataNotice.fixKeep": "or do nothing — everything works the same, the settings just will not travel with a copy of the program folder.",
+  "dataNotice.gotIt": "Got it",
+
   "error.title": "Something went wrong",
   "error.summary":
-    "Expand to review what will be sent (the log may contain window titles and program paths — please check first)",
+    "Expand to review what will be sent (logs contain no window titles, and the user folder is replaced with %USERPROFILE%)",
   "error.hint": "The log is sent only when you click report; nothing is sent automatically.",
   "error.dontReport": "Don’t report",
   "error.reporting": "Reporting…",
@@ -345,7 +368,7 @@ export default {
   "error.reportFailed": "Could not report: {err}",
   "error.payloadError": "Error: {message}",
   "error.payloadDetail": "Details: {detail}",
-  "error.payloadLog": "Recent log:",
+  "error.payloadLog": "Log of the core's current run:",
 
   "state.suspendFailed": "Could not pause hotkey monitoring: {err}",
   "state.pssuspendFound": "pssuspend64.exe detected",

@@ -27,6 +27,16 @@
 
   const s = $derived(app.config.setting);
 
+  // 日志输出等级，由低到高；value 与核心 Setting::log_level 的取值一致。
+  // 文案键须为字面量，供 scripts/i18n-check.ps1 静态检查。
+  const LOG_LEVELS = [
+    { value: "debug", label: "options.logLevel.debug" },
+    { value: "info", label: "options.logLevel.info" },
+    { value: "warn", label: "options.logLevel.warn" },
+    { value: "error", label: "options.logLevel.error" },
+  ];
+  const logDisabled = $derived(s.log_retention_days === 0);
+
   // 自启注册方式的标注；仅在已开启自启时显示。
   const autostartMethodText = $derived(
     !app.autostart
@@ -198,6 +208,19 @@
           <option value={0}>{t("options.logOff")}</option>
           {#each [3, 7, 14, 30] as days (days)}
             <option value={days}>{t("options.logDays", { n: days })}</option>
+          {/each}
+        </select>
+      {/snippet}
+    </SettingRow>
+    <SettingRow
+      label={t("options.logLevel")}
+      description={t("options.logLevelDesc")}
+      disabled={logDisabled}
+    >
+      {#snippet control()}
+        <select class="sel" bind:value={s.log_level} disabled={logDisabled}>
+          {#each LOG_LEVELS as level (level.value)}
+            <option value={level.value}>{t(level.label)}</option>
           {/each}
         </select>
       {/snippet}

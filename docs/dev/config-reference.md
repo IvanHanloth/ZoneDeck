@@ -4,7 +4,7 @@ title: 配置文件字段
 
 # 配置文件字段参考
 
-Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中。**结构与旧版完全兼容**，旧用户配置可直接沿用。首次运行若不存在则使用默认值。字段定义见 `crates/common/src/config.rs`。
+Boss Key 的配置保存在 `config.json` 中，便携版存在程序目录，安装版存在 `%APPDATA%\BossKey`，详见[数据目录](/dev/architecture#数据目录)。位置变动时旧配置会自动迁移过去。**结构与旧版完全兼容**，旧用户配置可直接沿用。首次运行若不存在则使用默认值。字段定义见 `crates/common/src/config.rs`。
 
 ::: tip 一般无需手改
 配置由配置界面自动读写并保存，通常无需手动编辑。本页面向需要理解字段含义的开发者。
@@ -14,7 +14,8 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
-| `version` | string | 配置版本 |
+| `version` | string | 配置 schema 版本，结构变动时才动 |
+| `app_version` | string | 上次运行过的**程序**版本；与当前程序版本不符即「更新后首次启动」，核心据此自动弹出配置界面。缺省置空 |
 | `history` | number[] | 历史记录（时间戳） |
 | `frozen_pids` | number[] | 当前被冻结的进程 PID（用于恢复） |
 | `hotkey` | object | 键盘热键，见下 |
@@ -45,7 +46,7 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 | 字段 | 类型 | 默认 | 对应功能 |
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [隐藏后静音](/guide/options#隐藏窗口后静音) |
-| `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/options#隐藏前发送暂停键-beta) |
+| `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/options#隐藏前发送暂停键) |
 | `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/options#同时隐藏当前活动窗口) |
 | `click_to_hide` | bool | `true` | [单击托盘切换隐藏](/guide/options#单击托盘图标切换隐藏) |
 | `hide_icon_after_hide` | bool | `false` | [同时隐藏 Boss Key 托盘图标](/guide/options#同时隐藏-boss-key-托盘图标) |
@@ -62,12 +63,11 @@ Boss Key 的配置保存在与可执行文件**同目录**的 `config.json` 中�
 | `corner_fast_only` | bool | `true` | 仅快速移动触发 |
 | `allow_move_restore` | bool | `false` | 角落恢复 |
 | `log_retention_days` | number | `7` | [日志保留天数](/guide/options#日志保留天数)（0 = 关闭） |
+| `log_level` | string | `"warn"` | [日志输出等级](/guide/options#日志输出等级)：`debug`｜`info`｜`warn`｜`error` |
 | `autostart_admin` | bool | `false` | [以管理员身份自启](/guide/autostart)（仅计划任务方式生效） |
 | `language` | string | `"auto"` | [界面语言](/guide/options#界面语言)：`auto`｜`zh-CN`｜`en`｜`zh-TW` |
 
-::: info `language` 的取值与归一化
-`auto` 表示跟随系统显示语言。读取时会归一化：合法的 BCP-47 标签折叠为 `zh-CN`／`en`／`zh-TW`（如 `zh_TW`、`zh-Hant` → `zh-TW`；`en-US` → `en`），无对应翻译的值（如 `ja-JP`）一律回落为 `auto`。核心与配置程序共用该字段。
-:::
+
 
 ::: details 旧版扁平鼠标开关（已废弃）
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` 仅用于反序列化迁移，迁移后清零、不再写回文件。请使用 `mouse` 结构。

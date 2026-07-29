@@ -55,7 +55,7 @@ cargo build --release
 ```
 
 ::: warning Version consistency
-If you change the version number, keep `Cargo.toml`, `tauri.conf.json`, `ui/package.json` and `Cargo.lock` **consistent across all four**. CI verifies this with `scripts/version.ps1 check`. During ordinary feature work you should generally **not** change the version by hand — the release process manages it; see [Packaging & releasing](/en/dev/release).
+The version lives only in `[workspace.package] version` in `Cargo.toml`, with `Cargo.lock` following it; everywhere else picks it up at build time, so there is nothing to edit by hand. CI verifies this with `scripts/version.ps1 check`. During ordinary feature work you should generally **not** change the version by hand — the release process manages it; see [Packaging & releasing](/en/dev/release).
 :::
 
 ## Code style

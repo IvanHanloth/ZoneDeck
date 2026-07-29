@@ -1,14 +1,18 @@
 ﻿# Boss Key 版本号工具
 #
-# 版本号的唯一真源是 Cargo.toml 的 [workspace.package] version，
-# 另外三处（tauri.conf.json、ui/package.json、Cargo.lock）必须与之一致。
+# 版本号只写在 Cargo.toml 的 [workspace.package] version 一处，Cargo.lock 跟着它走。
+# 其余地方都取真实版本号，不再各存一份，从源头上没有「对不上」的可能：
+#   - 两个 exe 的文件版本信息：CARGO_PKG_VERSION（tauri-winres / tauri-build）
+#   - 核心清单的 assemblyIdentity：crates/core/build.rs 按 CARGO_PKG_VERSION 填
+#   - 安装包的 MyAppVersion：scripts/package.ps1 从 Cargo.toml 读出后传入
+#   - 程序内与上报给 Verhub 的版本：env!("CARGO_PKG_VERSION")
 # 发版流程（.github/workflows/tag.yml）先 apply 写入并提交，
 # 构建流程（release.yml）再 check 校验，防止 tag 与代码里的版本号对不上。
 #
 # 用法：
-#   powershell -File scripts/version.ps1 apply v3.0.1      # 写入四处文件
-#   powershell -File scripts/version.ps1 check v3.0.1      # 校验四处与该 tag 一致，不一致则失败
-#   powershell -File scripts/version.ps1 check             # 不给 tag 时以 Cargo.toml 为基准校验
+#   powershell -File scripts/version.ps1 apply v3.0.1      # 写入 Cargo.toml 并同步 Cargo.lock
+#   powershell -File scripts/version.ps1 check v3.0.1      # 校验与该 tag 一致，不一致则失败
+#   powershell -File scripts/version.ps1 check             # 不给 tag 时只回显当前版本号
 #   powershell -File scripts/version.ps1 show              # 打印当前版本号
 #
 # 在 GitHub Actions 中运行时，会把 version / version4 / is_prerelease
@@ -26,8 +30,6 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 
 $cargoToml = Join-Path $root "Cargo.toml"
-$tauriConf = Join-Path $root "apps\config\src-tauri\tauri.conf.json"
-$uiPackage = Join-Path $root "apps\config\ui\package.json"
 
 # 统一用 .NET 读写：Windows PowerShell 5.1 的 Get-Content/Set-Content 按 ANSI 处理，
 # 会把文件里的中文写成乱码。写回一律 UTF-8 无 BOM —— BOM 会让 cargo / node 解析失败。
@@ -85,21 +87,6 @@ function Set-CargoVersion([string]$Version) {
     Write-TextFile $cargoToml $updated
 }
 
-function Set-JsonVersion([string]$Path, [string]$Version) {
-    $content = Read-TextFile $Path
-    # 只改顶层第一处 "version": "..."，避免动到依赖项里的版本约束
-    $updated = [regex]::Replace(
-        $content,
-        '(?m)^(\s*"version"\s*:\s*")[^"]+(")',
-        { param($m) "$($m.Groups[1].Value)$Version$($m.Groups[2].Value)" },
-        1)
-    Write-TextFile $Path $updated
-}
-
-function Get-JsonVersion([string]$Path) {
-    return (Read-TextFile $Path | ConvertFrom-Json).version
-}
-
 # 把版本号回填到 Cargo.lock（workspace 成员），保持 lock 与 Cargo.toml 同步
 function Update-CargoLock {
     cargo update --workspace --quiet
@@ -129,31 +116,25 @@ switch ($Action) {
     'apply' {
         $version = Get-NormalizedVersion $Tag
         Set-CargoVersion $version
-        Set-JsonVersion $tauriConf $version
-        Set-JsonVersion $uiPackage $version
         Update-CargoLock
-        Write-Host "已写入 Cargo.toml / tauri.conf.json / package.json / Cargo.lock"
+        Write-Host "已写入 Cargo.toml，并同步 Cargo.lock"
         Export-Outputs $version
     }
 
     'check' {
-        # 不给 tag 时，以 Cargo.toml 为基准校验其余文件是否跟得上
-        $version = if ($Tag) { Get-NormalizedVersion $Tag } else { Get-CurrentVersion }
-        $actual = @{
-            'Cargo.toml'      = Get-CurrentVersion
-            'tauri.conf.json' = Get-JsonVersion $tauriConf
-            'package.json'    = Get-JsonVersion $uiPackage
-        }
-
-        $bad = $actual.GetEnumerator() | Where-Object { $_.Value -ne $version }
-        if ($bad) {
-            foreach ($entry in $bad) {
-                Write-Host "::error::$($entry.Key) 的版本号是 $($entry.Value)，与目标 $version 不符"
+        # 只需校验 Cargo.toml 与 tag 对得上：其余地方都取自它，无从漂移
+        $current = Get-CurrentVersion
+        if ($Tag) {
+            $version = Get-NormalizedVersion $Tag
+            if ($current -ne $version) {
+                Write-Host "::error::Cargo.toml 的版本号是 $current，与目标 $version 不符"
+                throw "版本号校验失败：请先运行 scripts/version.ps1 apply $version 并提交"
             }
-            throw "版本号校验失败：请先运行 scripts/version.ps1 apply $version 并提交"
+            Write-Host "版本号校验通过：Cargo.toml 为 $version"
         }
-
-        Write-Host "版本号校验通过：三处文件均为 $version"
+        else {
+            $version = $current
+        }
         Export-Outputs $version
     }
 }
