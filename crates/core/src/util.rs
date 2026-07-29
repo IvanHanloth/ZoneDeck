@@ -51,9 +51,8 @@ pub fn pressed_modifiers() -> u32 {
     m
 }
 
-/// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」，供日志同时记录可读原因与可检索的码值。
-///
-/// 只有消息文本时无法区分「拒绝访问」的来源，只有码值又难以直接判读，故两者都写出。
+/// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」。
+/// 只有消息文本时无法区分「拒绝访问」的来源，只有码值又难以判读，故两者都写出。
 pub fn win_err(e: &windows::core::Error) -> String {
     let message = e.message();
     let message = message.trim();

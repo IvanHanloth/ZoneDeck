@@ -1,5 +1,4 @@
 // MIT 协议全文，逐字取自仓库根目录的 LICENSE 文件。
-// 关于页直接展示它——开源软件应当把协议原文摆出来，而不只是写个「MIT」。
 
 export const MIT_LICENSE = `MIT License
 

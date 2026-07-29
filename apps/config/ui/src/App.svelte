@@ -59,12 +59,12 @@
   });
 
   onMount(() => {
-    // 主题：main.js 已在挂载前应用过一次（免得启动屏配色跳变），这里只负责跟随系统变化。
+    // main.js 已在挂载前应用过一次，这里只负责跟随系统变化。
     const media = matchMedia("(prefers-color-scheme: dark)");
     const onSystemTheme = () => applyTheme(loadPreference());
     media.addEventListener("change", onSystemTheme);
 
-    // 配置到手、界面有内容可看了，才把启动屏淡掉；失败时也得淡掉，否则永远卡在启动屏。
+    // 配置到手后才淡掉启动屏；失败时同样要淡掉，否则会一直卡住。
     loadAll()
       .then(() => {
         autoSaveReady = true;

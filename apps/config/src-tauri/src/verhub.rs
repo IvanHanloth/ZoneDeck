@@ -192,7 +192,7 @@ pub async fn upload_log(content: &str, device_info: serde_json::Value) -> Result
     Ok(())
 }
 
-/// 项目公开链接（主页 / 仓库 / 文档等）的缓存有效期。链接极少变动，一天刷新一次足够。
+/// 项目公开链接的缓存有效期。
 const PROJECT_CACHE_TTL_SECS: i64 = 24 * 60 * 60;
 
 /// 项目公开链接。所有字段都可能缺省（Verhub 上未填写）；前端须自备回退链接。
@@ -259,7 +259,7 @@ fn unix_now() -> i64 {
 }
 
 /// 项目公开链接：内存缓存 → 磁盘缓存（`cache_path`）→ Verhub API 逐级回退。
-/// API 拉取失败时退回过期缓存（有旧数据总比没有强），完全没有缓存才报错。
+/// API 拉取失败时退回过期缓存，完全没有缓存才报错。
 pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
     let now = unix_now();
     if let Some(cached) = cache_get()

@@ -48,7 +48,7 @@ fn default_language() -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    /// 带上出错的路径：用户据此才能判断是装在了不可写的目录，还是被杀软拦了。
+    /// 带上出错的路径，便于区分目录不可写与被拦截。
     #[error("配置文件读写错误: {source}（路径: {path}）")]
     Io {
         path: String,
@@ -283,7 +283,7 @@ impl Default for TrayBadges {
 }
 
 impl TrayBadges {
-    /// 未知状态源一律归一为置空（不显示），避免手改配置后角标行为不可预测。幂等。
+    /// 未知状态源归一为置空，避免手改配置后角标行为不可预测。幂等。
     pub fn normalize(&mut self) {
         for v in [
             &mut self.red,
@@ -525,9 +525,7 @@ impl Config {
     }
 
     /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
-    ///
-    /// 损坏文件回退默认值是刻意行为（保证核心总能启动），代价是用户的规则会「凭空消失」。
-    /// 调用方据第二个返回值把解析错误写进日志，否则这一幕无迹可循。
+    /// 回退保证核心总能启动，代价是用户的规则会凭空消失，故须由调用方记进日志。
     /// 返回 `(配置, 解析错误)`；解析成功或文件不存在时第二项为 `None`。
     pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
         match std::fs::read_to_string(path) {
@@ -557,8 +555,8 @@ impl Config {
         self.setting.normalize();
     }
 
-    /// 写入配置。先写同目录下的临时文件再原子替换：写到一半失败（磁盘满、
-    /// 杀软拦截）也不会把原文件截断成半截，用户的规则不会因此丢光。
+    /// 写入配置。先写同目录下的临时文件再原子替换，写到一半失败也不会
+    /// 把原文件截断成半截。
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
         let json = self.to_json()?;
         if let Some(parent) = path.parent()

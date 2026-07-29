@@ -15,7 +15,7 @@ export const MAX_CLICKS = 3;
 export const MIN_MULTI_CLICK_MS = 150;
 export const MAX_MULTI_CLICK_MS = 1000;
 
-/** 把一颗键的触发条件写成人话，如「Ctrl + 三击」。 */
+/** 把一颗键的触发条件格式化为可读文本，如「Ctrl + 三击」。 */
 export function describeTrigger(button) {
   if (!button?.enabled) return t("mouse.notEnabled");
   const clicks = t(

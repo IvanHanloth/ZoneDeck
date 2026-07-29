@@ -9,7 +9,7 @@
 
   const html = $derived(renderMarkdown(source));
 
-  // 链接一律交给系统浏览器：webview 里真导航走了就回不到配置界面了。
+  // 链接一律交给系统浏览器：webview 内真导航后回不到配置界面。
   function onClick(e) {
     const a = e.target.closest?.("a[href]");
     if (!a) return;
@@ -70,7 +70,6 @@
   .md :global(h6) {
     font-size: 13px;
   }
-  /* GitHub 的一二级标题带下边线 */
   .md :global(h1),
   .md :global(h2) {
     padding-bottom: 5px;

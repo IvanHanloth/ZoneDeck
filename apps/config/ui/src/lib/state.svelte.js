@@ -104,7 +104,7 @@ export function openRestoreTool() {
   app.restoreOpen = true;
 }
 
-/** 重新检测程序目录下的 pssuspend64.exe（放入文件后无需重启即可点亮增强冻结）。 */
+/** 重新检测 pssuspend64.exe；放入文件后无需重启即可启用增强冻结。 */
 export async function refreshPssuspend() {
   try {
     app.pssuspend = !!(await invoke("pssuspend_available"));
@@ -146,11 +146,11 @@ export async function loadAll() {
     invoke("pssuspend_available").then((v) => (app.pssuspend = !!v)),
     invoke("data_location").then((loc) => {
       app.dataLocation = loc;
-      // 便携版本该把设置放在程序目录里，回退了就说明那里写不进去，得让用户知道。
+      // 回退即程序目录写不进去，须提示用户。
       app.dataNoticeOpen = loc?.kind === "portable_fallback";
     }),
   ];
-  // 项目链接拉不到时静默——「关于」页有内置回退链接，不值得打扰用户。
+  // 拉取失败静默：「关于」页有内置回退链接。
   verhub
     .projectLinks()
     .then((p) => (app.project = p))
@@ -294,7 +294,7 @@ export async function loadAnnouncements({ popNew = false } = {}) {
   }
 }
 
-/** 记住这条公告已读——下次启动不再弹它。 */
+/** 记住这条公告已读，下次启动不再弹出。 */
 export function markAnnouncementSeen(id) {
   app.pendingAnnouncement = null;
   if (!app.config || !id) return;
