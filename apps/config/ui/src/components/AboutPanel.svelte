@@ -162,6 +162,7 @@
     <div
       class="stars"
       role="radiogroup"
+      tabindex="-1"
       aria-label={t("about.ratingAria")}
       onpointerleave={() => (hoverRating = 0)}
     >

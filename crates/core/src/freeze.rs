@@ -6,7 +6,7 @@ use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Threading::{OpenProcess, PROCESS_SUSPEND_RESUME};
 use windows::core::{PCSTR, s, w};
 
-const PSSUSPEND_EXE: &str = "pssuspend64.exe";
+pub const PSSUSPEND_EXE: &str = "pssuspend64.exe";
 
 type NtProc = unsafe extern "system" fn(HANDLE) -> i32;
 

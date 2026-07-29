@@ -88,6 +88,21 @@ Core runtime logs are stored per day in the **`logs` folder inside the program d
 
 Options: **Off / 3 days / 7 days / 14 days / 30 days**. Default **7 days**. Choosing "Off" disables logging entirely.
 
+### Log level
+
+Only entries at the selected level **or above** are recorded. Options: **Debug / Info / Warning / Error**. Default **Warning**.
+
+| Level | What gets recorded |
+| --- | --- |
+| Debug | Everything, including every hide/restore and hotkey registration result |
+| Info | Milestones beyond that routine activity, such as the first launch after an update |
+| Warning (default) | Warnings and errors only: hotkey registration failures, rules that matched no window, an unclean shutdown detected on the previous run |
+| Error | Errors only: the core failing to start, an unreadable config, crash reports |
+
+At the default "Warning", everyday hide and restore activity is **not written to the log**, leaving only entries that deserve attention. Before reporting an issue you can lower it to "Debug", reproduce the problem once, then set it back. The option is unavailable while log retention is set to "Off".
+
+Whatever the level, each run writes one session marker on startup and one on a clean exit, carrying the version and the data folder.
+
 ::: tip Check the logs first when troubleshooting
 When something goes wrong, the logs in the `logs` folder are the primary source for diagnosing it. Attaching the relevant log to a report greatly speeds up investigation. See also [Window recovery & crash self-healing](/en/guide/recovery).
 :::

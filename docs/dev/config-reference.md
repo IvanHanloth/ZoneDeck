@@ -63,12 +63,11 @@ Boss Key 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `corner_fast_only` | bool | `true` | 仅快速移动触发 |
 | `allow_move_restore` | bool | `false` | 角落恢复 |
 | `log_retention_days` | number | `7` | [日志保留天数](/guide/options#日志保留天数)（0 = 关闭） |
+| `log_level` | string | `"warn"` | [日志输出等级](/guide/options#日志输出等级)：`debug`｜`info`｜`warn`｜`error` |
 | `autostart_admin` | bool | `false` | [以管理员身份自启](/guide/autostart)（仅计划任务方式生效） |
 | `language` | string | `"auto"` | [界面语言](/guide/options#界面语言)：`auto`｜`zh-CN`｜`en`｜`zh-TW` |
 
-::: info `language` 的取值与归一化
-`auto` 表示跟随系统显示语言。读取时会归一化：合法的 BCP-47 标签折叠为 `zh-CN`／`en`／`zh-TW`（如 `zh_TW`、`zh-Hant` → `zh-TW`；`en-US` → `en`），无对应翻译的值（如 `ja-JP`）一律回落为 `auto`。核心与配置程序共用该字段。
-:::
+
 
 ::: details 旧版扁平鼠标开关（已废弃）
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` 仅用于反序列化迁移，迁移后清零、不再写回文件。请使用 `mouse` 结构。

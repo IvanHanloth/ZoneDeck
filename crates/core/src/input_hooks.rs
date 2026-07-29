@@ -161,8 +161,14 @@ impl InputHooks {
                         DispatchMessageW(&msg);
                     }
                 }
-            })
-            .ok()?;
+            });
+        let thread = match thread {
+            Ok(thread) => thread,
+            Err(e) => {
+                crate::log_error!("创建输入钩子线程失败，鼠标绑定与「不传递」热键将不可用: {e}");
+                return None;
+            }
+        };
 
         match rx.recv() {
             Ok(hwnd) if hwnd != 0 => Some(InputHooks {

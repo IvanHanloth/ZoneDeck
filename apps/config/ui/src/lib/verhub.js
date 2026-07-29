@@ -35,9 +35,9 @@ export function uploadLog(content) {
   return invoke("verhub_upload_log", { content });
 }
 
-/** 本地日志末尾若干行。 */
-export function recentLogTail(lines = 60) {
-  return invoke("recent_log_tail", { lines });
+/** 核心最近一次运行的日志（从该次运行的 [START] 起至今，后端已压到上报预算内）。 */
+export function currentSessionLog() {
+  return invoke("current_session_log");
 }
 
 /** 用系统浏览器打开外链。 */

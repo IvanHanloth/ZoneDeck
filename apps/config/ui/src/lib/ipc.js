@@ -53,6 +53,7 @@ const mockConfig = {
     allow_move_restore: false,
     corner_fast_only: true,
     log_retention_days: 7,
+    log_level: "warn",
     autostart_admin: false,
     language: "auto",
   },
@@ -189,8 +190,11 @@ function mockInvoke(cmd, args) {
     case "verhub_upload_log":
     case "open_external":
       return null;
-    case "recent_log_tail":
-      return "[mock] 2026-07-14 12:00:00 WARN 这是预览环境的假日志";
+    case "current_session_log":
+      return [
+        "[mock] 2026-07-14 12:00:00 [START] 核心启动 3.1.0（配置 schema v3.0.0.0，日志等级 warn）",
+        "[mock] 2026-07-14 12:00:05 [WARN] 这是预览环境的假日志",
+      ].join("\n");
     default:
       return null;
   }

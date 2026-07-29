@@ -3,7 +3,7 @@
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import Modal from "./Modal.svelte";
   import { app, toast } from "../lib/state.svelte.js";
-  import { recentLogTail, uploadLog } from "../lib/verhub.js";
+  import { currentSessionLog, uploadLog } from "../lib/verhub.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const report = $derived(app.errorReport);
@@ -12,12 +12,11 @@
   let sending = $state(false);
   let sent = $state(false);
 
-  // 弹框出现时取本地日志尾部供用户过目。
   $effect(() => {
     if (!report) return;
     sent = false;
     logTail = "";
-    recentLogTail(60)
+    currentSessionLog()
       .then((t) => (logTail = t))
       .catch(() => (logTail = ""));
   });

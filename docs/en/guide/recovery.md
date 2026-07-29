@@ -26,7 +26,7 @@ The Boss Key core has **three layers of crash self-healing**, so windows stay sa
 
 ### Layer 1: crash logs
 
-The core writes key events and panic information to log files in the `logs` folder of the data folder, rotated daily as `BossKey-YYYY-MM-DD.log`, and cleaned up automatically according to the [log retention setting](/en/guide/options) (set it to off to disable logging). **When troubleshooting, read the current day's log first.**
+The core writes key events and panic information to log files in the `logs` folder of the data folder, rotated daily as `BossKey-YYYY-MM-DD.log`, and cleaned up automatically according to the [log retention setting](/en/guide/options) (set it to off to disable logging). How much gets recorded depends on the [log level](/en/guide/options), which by default keeps warnings and errors only. **When troubleshooting, read the current day's log first.**
 
 ### Layer 2: crash recovery
 

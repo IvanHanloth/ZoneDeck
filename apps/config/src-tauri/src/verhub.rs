@@ -22,6 +22,8 @@ pub const PLATFORM: Platform = Platform::Windows;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
 const LOG_CONTENT_MAX: usize = 4096;
+/// 上报正文里留给日志摘录的预算，其余部分留给错误描述与详情。
+pub const LOG_EXCERPT_MAX: usize = LOG_CONTENT_MAX * 3 / 5;
 
 type Result<T> = verhub_sdk::Result<T>;
 
@@ -356,7 +358,10 @@ mod tests {
 
     #[test]
     fn normalize_contact_treats_blank_as_absent() {
-        assert_eq!(normalize_contact("  ivan@o5g.top "), Some("ivan@o5g.top".into()));
+        assert_eq!(
+            normalize_contact("  ivan@o5g.top "),
+            Some("ivan@o5g.top".into())
+        );
         assert_eq!(normalize_contact(""), None);
         assert_eq!(normalize_contact("   \t\n "), None);
     }

@@ -96,7 +96,7 @@ Boss-Key/
 │           autostart.rs  Startup (scheduled-task XML with restart-on-failure + registry fallback)
 │           elevation.rs  Administrator detection + UAC elevation restart
 │           i18n.rs       Catalog of user-visible core strings (tray menu / balloons / IPC errors; logs excluded)
-│           logging.rs    Levelled file logging (logs/BossKey-YYYY-MM-DD.log, rotated daily + panic hook)
+│           logging.rs    Levelled file logging (daily rotation + level filter + redaction + panic hook)
 │           recovery.rs   Crash recovery (intent persisted before acting + atomic writes; snapshots carry
 │                         boot time and process creation times, snapshots from a previous boot are discarded)
 │           icon.rs       Process icon extraction (HICON → hand-written PNG/base64 encoding)
@@ -150,7 +150,7 @@ Whenever the user folder is used, a `config.json` in the program folder is moved
 Following the identifier in `tauri.conf.json`, Tauri puts the WebView2 user data in `%LOCALAPPDATA%\cn.hanloth.bosskey.config`. It is not part of the data folder and is not managed by `paths.rs`. Both the installer's uninstaller and the `scripts/cleanup.ps1` shipped with the portable edition remove it.
 :::
 
-The data folder actually in use, and how it was chosen, are written to the log on every start; check that first when diagnosing read/write failures.
+The data folder actually in use, and how it was chosen, are written to the log's `[START]` marker on every start; check that first when diagnosing read/write failures (the user folder in the path is redacted to `%USERPROFILE%`).
 
 ## Inside the core: the agent message loop
 
@@ -187,11 +187,45 @@ When restoring (showing), every record is validated first: the handle must still
 
 ## Stability (three layers of crash self-healing)
 
-1. **Crash logs**: key events and panics are written to `logs/BossKey-YYYY-MM-DD.log` in the [data folder](#data-folder) (rotated daily, retained per `log_retention_days`; 0 disables logging; release builds drop the DEBUG level).
+1. **Crash logs**: key events and panics are written to `logs/BossKey-YYYY-MM-DD.log` in the [data folder](#data-folder) (rotated daily, retained per `log_retention_days`; 0 disables logging; filtered by `log_level`, which defaults to WARN and above — see [Log levels and redaction](#log-levels-and-redaction)).
 2. **Crash recovery**: before any hide action executes, what is *about to be* hidden / frozen / muted is written to `recovery.json` (tmp + rename atomic replace); windows are recovered automatically on the next start after an abnormal exit. Snapshots carry the boot time and process creation times, so stale snapshots from a previous boot are discarded instead of acting on unrelated windows / processes.
 3. **Watchdog**: the scheduled task's `RestartOnFailure` (restart within a minute of a crash, up to 3 times). Release builds use `panic = "abort"`, and the panic hook exits with a non-zero code once the log is written — exactly what triggers the scheduled-task restart.
 
 For the user-facing explanation see [Window recovery & crash self-healing](/en/guide/recovery).
+
+## Log levels and redaction
+
+`crates/core/src/logging.rs` provides four levels — `debug` / `info` / `warn` / `error` — plus two session markers, and redacts every entry before it is written. The `log_level` the user picks in the settings program is the **recording threshold**: anything below it is dropped, and the default `warn` keeps only warnings and errors. The level is applied on `reload_config`, so it takes effect without restarting the core.
+
+Classify new log entries as follows:
+
+| Level | What belongs here | Examples |
+| --- | --- | --- |
+| `error` | A feature is unavailable or data may be lost, and the user needs to know | Agent window creation failed, config parsing fell back to defaults, the recovery file could not be written |
+| `warn` | Degraded but still usable, or an anomaly the user will notice | Hotkey registration failed, a hook could not be installed, a rule matched no window, an unclean shutdown was detected |
+| `info` | Milestones that occur at most once or twice per run | First launch after an update, which also opens the settings program |
+| `debug` | Per-action activity and self-healing steps, needed only while troubleshooting | Details of each hide/restore, successful hotkey registration, tray icon re-attachment |
+
+The two **session markers** bypass the level filter, one of each per run: `[START]` records the version, config schema, effective level and data folder; `[EXIT]` records a clean exit and what caused it (close hotkey, tray menu, a quit command from the settings program, the smoke-test timer). A log that ends without `[EXIT]` means the previous run crashed or was killed, and `[START]` is the only thing that tells you which build an uploaded log excerpt came from.
+
+Hide and restore entries name their **trigger** (`Trigger`: hotkey, mouse button, screen corner, idle timer, tray, floating window, settings program). When a user reports that "windows disappeared out of nowhere", telling these apart is the first step.
+
+### Uploads cover the current run only
+
+`logging::latest_session` takes everything from the most recent `[START]` up to now, looking back one more log file when the run spans midnight; the settings program's `current_session_log` command returns exactly that. A fixed number of trailing lines is not used because it both mixes in earlier runs and drops the version and data folder recorded at the start of this one. When the excerpt exceeds the upload budget ([`verhub::LOG_EXCERPT_MAX`]), the first line and the tail are kept and the number of omitted lines is stated — the first line carries the version, the tail carries the failure, and neither can be lost.
+
+::: warning Logs may be uploaded by users
+The feedback feature in the settings program sends log lines to Verhub, so logs must **never contain window titles** (which may be file names, contacts, or page titles). Windows are referred to by process name, handle and PID; window rules by index and process name. The user folder is replaced with `%USERPROFILE%` centrally in `logging.rs`, so call sites do not need to handle it.
+:::
+
+### What an error entry carries
+
+- **Subject**: the path, PID, hotkey or pipe name involved; paths go in via `display()` (redaction is the logging layer's job).
+- **Cause**: `util::win_err` for Windows APIs (message plus hex code), `{e}` for IO and child-process errors.
+- **Consequence**: which feature is now unavailable, or whether data may be lost — not merely that something "failed".
+- **Location**: use the `log_error!` / `log_warn!` macros, which append `file:line` automatically.
+
+For example: `重新加载配置失败，本次改动未生效，核心仍在用上一次加载的配置: <path> — <cause> (agent.rs:123)`.
 
 ## Display language
 

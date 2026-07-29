@@ -17,7 +17,11 @@ pub fn set_mute(pid: u32, mute: bool) {
         let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
         let should_uninit = hr.is_ok();
         if let Err(e) = mute_matching_sessions(pid, mute) {
-            eprintln!("设置静音失败 (pid={pid}): {e}");
+            let action = if mute { "静音" } else { "取消静音" };
+            crate::log_warn!(
+                "{action}失败，该进程的声音未受影响 (pid={pid}): {}",
+                crate::util::win_err(&e)
+            );
         }
         if should_uninit {
             CoUninitialize();
@@ -68,7 +72,17 @@ pub fn is_audio_playing() -> bool {
     unsafe {
         let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
         let should_uninit = hr.is_ok();
-        let playing = any_active_session().unwrap_or(false);
+        // 查不出播放状态时按「没在播放」处理。
+        let playing = match any_active_session() {
+            Ok(playing) => playing,
+            Err(e) => {
+                crate::logging::debug(&format!(
+                    "枚举音频会话失败，本次按「无音频播放」处理，不发送媒体暂停键: {}",
+                    crate::util::win_err(&e)
+                ));
+                false
+            }
+        };
         if should_uninit {
             CoUninitialize();
         }

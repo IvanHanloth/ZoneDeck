@@ -63,12 +63,9 @@ The settings window reads and writes the configuration automatically. This page 
 | `corner_fast_only` | bool | `true` | Only trigger on fast movement |
 | `allow_move_restore` | bool | `false` | Restore from a corner |
 | `log_retention_days` | number | `7` | [Log retention](/en/guide/options) (0 = off) |
+| `log_level` | string | `"warn"` | [Log level](/en/guide/options): `debug` \| `info` \| `warn` \| `error` |
 | `autostart_admin` | bool | `false` | [Start as administrator](/en/guide/autostart) (scheduled-task method only) |
 | `language` | string | `"auto"` | [Display language](/en/guide/options): `auto` \| `zh-CN` \| `en` \| `zh-TW` |
-
-::: info Values and normalisation of `language`
-`auto` follows the system display language. Values are normalised on read: valid BCP-47 tags collapse to `zh-CN` / `en` / `zh-TW` (for example `zh_TW` and `zh-Hant` → `zh-TW`; `en-US` → `en`), and values with no matching translation (such as `ja-JP`) fall back to `auto`. The core and the settings program share this field.
-:::
 
 ::: details Legacy flat mouse switches (deprecated)
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` exist only for deserialisation and migration; they are cleared afterwards and never written back. Use the `mouse` structure instead.

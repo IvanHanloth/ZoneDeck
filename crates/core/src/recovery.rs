@@ -106,11 +106,15 @@ pub fn load(path: &Path) -> Option<Snapshot> {
         Ok(s) => s,
         Err(e) => {
             let corrupt = corrupt_path(path);
-            let _ = std::fs::rename(path, &corrupt);
-            log_warn!(
-                "恢复文件解析失败，本次不恢复；原文件已改名为 {}: {e}",
-                corrupt.display()
-            );
+            // 改名保留现场；改名失败时如实说明。
+            let kept = match std::fs::rename(path, &corrupt) {
+                Ok(()) => format!("原文件已改名为 {}", corrupt.display()),
+                Err(rename_err) => format!(
+                    "原文件改名保留失败（{rename_err}），仍在 {}",
+                    path.display()
+                ),
+            };
+            log_warn!("恢复文件解析失败，上次异常退出遗留的窗口本次不予恢复；{kept}: {e}");
             return None;
         }
     };
@@ -128,8 +132,16 @@ fn corrupt_path(path: &Path) -> PathBuf {
 }
 
 /// 删除恢复文件（不存在时静默成功）。
+/// 除「文件本就不存在」外，删除失败都会记录。
 pub fn clear(path: &Path) {
-    let _ = std::fs::remove_file(path);
+    if let Err(e) = std::fs::remove_file(path)
+        && e.kind() != std::io::ErrorKind::NotFound
+    {
+        log_warn!(
+            "删除恢复文件失败，下次启动可能误判为异常退出并重复执行恢复: {} — {e}",
+            path.display()
+        );
+    }
 }
 
 #[cfg(test)]

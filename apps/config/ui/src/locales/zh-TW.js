@@ -241,6 +241,13 @@ export default {
     "核心記錄檔會按日儲存在程式資料夾的 logs 資料夾內，啟動時自動清除更早的記錄檔；選擇「關閉」則不記錄。",
   "options.logOff": "關閉",
   "options.logDays": "{n} 天",
+  "options.logLevel": "記錄輸出等級",
+  "options.logLevelDesc":
+    "只記錄所選等級及以上的內容。預設「警告」，即僅記錄警告與錯誤；日常隱藏、還原等流水不寫入。回報問題前可暫時調低以取得更詳細的記錄。",
+  "options.logLevel.debug": "偵錯（最詳細）",
+  "options.logLevel.info": "資訊",
+  "options.logLevel.warn": "警告（預設）",
+  "options.logLevel.error": "錯誤（最精簡）",
 
   "options.languageCard": "語言",
   "options.language": "介面語言",
@@ -337,7 +344,7 @@ export default {
   "dataNotice.gotIt": "知道了",
 
   "error.title": "發生錯誤",
-  "error.summary": "展開檢視將要傳送的內容（記錄檔裡可能含視窗標題與程式路徑，請先檢查）",
+  "error.summary": "展開檢視將要傳送的內容（記錄檔不含視窗標題，使用者目錄已替換為 %USERPROFILE%）",
   "error.hint": "記錄檔僅在點按回報後才傳送，不會自動回報。",
   "error.dontReport": "不回報",
   "error.reporting": "回報中…",
@@ -347,7 +354,7 @@ export default {
   "error.reportFailed": "回報失敗：{err}",
   "error.payloadError": "錯誤：{message}",
   "error.payloadDetail": "詳細資料：{detail}",
-  "error.payloadLog": "最近的記錄：",
+  "error.payloadLog": "核心本次執行的記錄：",
 
   "state.suspendFailed": "暫停快速鍵監聽失敗：{err}",
   "state.pssuspendFound": "已偵測到 pssuspend64.exe",

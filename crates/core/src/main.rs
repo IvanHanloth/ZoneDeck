@@ -9,6 +9,8 @@ use bosskey_core::logging;
 use bosskey_core::single_instance::SingleInstance;
 
 const MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
+/// 提权重启时等待前一个实例退出的上限。
+const ELEVATED_HANDOVER_WAIT: Duration = Duration::from_secs(4);
 
 fn main() {
     // 数据目录只定位一次，配置、日志、恢复文件共用，避免两次定位得出不同结果。
@@ -16,20 +18,28 @@ fn main() {
     let data_dir = located.dir.clone();
     let config_path = data_dir.join(paths::CONFIG_FILE_NAME);
 
-    // 日志与 panic 钩子最先就位。日志保留天数取自配置（0 = 关闭日志）。
-    let retention_days = bosskey_common::Config::load(&config_path)
-        .map(|c| c.setting.log_retention_days)
-        .unwrap_or(bosskey_common::config::DEFAULT_LOG_RETENTION_DAYS);
-    logging::init(data_dir.join(logging::LOG_DIR_NAME), retention_days);
+    // 日志与 panic 钩子最先就位。保留天数与输出等级取自配置（0 天 = 关闭日志）。
+    let (retention_days, log_level) = bosskey_common::Config::load(&config_path)
+        .map(|c| (c.setting.log_retention_days, c.setting.log_level))
+        .unwrap_or_else(|_| {
+            (
+                bosskey_common::config::DEFAULT_LOG_RETENTION_DAYS,
+                bosskey_common::config::DEFAULT_LOG_LEVEL.to_string(),
+            )
+        });
+    let log_level = logging::Level::from_config(&log_level);
+    logging::init(
+        data_dir.join(logging::LOG_DIR_NAME),
+        retention_days,
+        log_level,
+    );
     logging::install_panic_hook();
-    logging::info(&format!(
-        "核心启动 {}（配置 schema {}）",
+    // 会话起始标记：不受输出等级过滤，每次启动一条。
+    logging::session_start(&format!(
+        "核心启动 {}（配置 schema {}，日志等级 {}）｜数据目录: {}（{}）",
         bosskey_common::APP_VERSION,
-        bosskey_common::APP_CONFIG_VERSION
-    ));
-    // 数据究竟落在哪里是排查读写失败的第一手信息，每次启动都记一笔。
-    logging::info(&format!(
-        "数据目录: {}（{}）",
+        bosskey_common::APP_CONFIG_VERSION,
+        log_level.as_config_str(),
         data_dir.display(),
         match located.kind {
             paths::DataDirKind::Installed => "安装版",
@@ -50,12 +60,19 @@ fn main() {
     // 以管理员身份重启时，等待旧实例释放互斥后再接管。
     let elevated_restart = args.iter().any(|a| a == "elevated");
     let instance = if elevated_restart {
-        SingleInstance::acquire_waiting(MUTEX_NAME, Duration::from_secs(4))
+        logging::debug("以管理员身份重启，等待前一个实例释放单实例互斥体");
+        SingleInstance::acquire_waiting(MUTEX_NAME, ELEVATED_HANDOVER_WAIT)
     } else {
         SingleInstance::acquire(MUTEX_NAME)
     };
     if instance.already_running() {
-        logging::warn("已有核心实例在运行，本次启动退出");
+        if elevated_restart {
+            logging::warn(&format!(
+                "以管理员身份重启失败：等待 {ELEVATED_HANDOVER_WAIT:?} 后前一个实例仍在运行，本次启动退出，核心仍以原权限运行"
+            ));
+        } else {
+            logging::warn("已有核心实例在运行，本次启动退出");
+        }
         return;
     }
 
