@@ -125,11 +125,23 @@ where
             let err = std::io::Error::last_os_error();
             let delay = retry_delay(failures);
             failures += 1;
-            log_error!(
-                "创建命名管道失败（第 {failures} 次），{delay:?} 后重试: {pipe_name} — {err}"
-            );
+            // 首次失败记 error，后续重试记 debug。
+            if failures == 1 {
+                log_error!(
+                    "创建命名管道失败，配置程序将无法连接核心，{delay:?} 后重试: {pipe_name} — {err}"
+                );
+            } else {
+                crate::logging::debug(&format!(
+                    "创建命名管道失败（第 {failures} 次），{delay:?} 后重试: {pipe_name} — {err}"
+                ));
+            }
             std::thread::sleep(delay);
             continue;
+        }
+        if failures > 0 {
+            crate::logging::warn(&format!(
+                "命名管道重试 {failures} 次后创建成功，配置程序已可连接"
+            ));
         }
         failures = 0;
 
@@ -165,9 +177,16 @@ where
         }
         let response = match Command::from_line(&line) {
             Ok(cmd) => executor(cmd),
-            Err(e) => Response::Error {
-                message: format!("无法解析命令: {e}"),
-            },
+            Err(e) => {
+                // 命令内容来路不明，只记开头一小段。
+                crate::log_warn!(
+                    "收到无法解析的 IPC 命令，已忽略: {} — {e}",
+                    crate::util::head_chars(&line, 120)
+                );
+                Response::Error {
+                    message: format!("无法解析命令: {e}"),
+                }
+            }
         };
         let Ok(mut out) = response.to_line() else {
             break;

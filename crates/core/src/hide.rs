@@ -39,16 +39,14 @@ impl Target {
         }
     }
 
-    /// 日志用的一行摘要：`进程名「标题」(hwnd=…, pid=…)`。
+    /// 日志用的一行摘要：`进程名(hwnd=…, pid=…)`。
+    /// 不含窗口标题——标题属隐私内容，不写入日志。
     pub fn describe(&self) -> String {
         let process = std::path::Path::new(&self.process_path)
             .file_name()
             .and_then(|s| s.to_str())
             .unwrap_or("未知进程");
-        format!(
-            "{process}「{}」(hwnd={}, pid={})",
-            self.title, self.hwnd, self.pid
-        )
+        format!("{process}(hwnd={}, pid={})", self.hwnd, self.pid)
     }
 }
 
@@ -664,7 +662,11 @@ mod tests {
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         assert_eq!(targets[0].process_path, "C:\\WeChat.exe");
         assert_eq!(targets[0].title, "微信");
-        assert_eq!(targets[0].describe(), "WeChat.exe「微信」(hwnd=10, pid=10)");
+        assert_eq!(
+            targets[0].describe(),
+            "WeChat.exe(hwnd=10, pid=10)",
+            "日志摘要不带窗口标题"
+        );
     }
 
     #[test]

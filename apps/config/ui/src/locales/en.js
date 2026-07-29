@@ -252,6 +252,13 @@ export default {
     "Core logs are stored per day in the logs folder inside the program directory, and older logs are cleaned up on startup. Choose “Off” to disable logging.",
   "options.logOff": "Off",
   "options.logDays": "{n} days",
+  "options.logLevel": "Log level",
+  "options.logLevelDesc":
+    "Only records entries at the selected level or above. The default is “Warning”, which keeps warnings and errors while leaving out routine hide/restore activity. Lower it temporarily to collect more detail before reporting an issue.",
+  "options.logLevel.debug": "Debug (most detailed)",
+  "options.logLevel.info": "Info",
+  "options.logLevel.warn": "Warning (default)",
+  "options.logLevel.error": "Error (least detailed)",
 
   "options.languageCard": "Language",
   "options.language": "Display language",
@@ -351,7 +358,7 @@ export default {
 
   "error.title": "Something went wrong",
   "error.summary":
-    "Expand to review what will be sent (the log may contain window titles and program paths — please check first)",
+    "Expand to review what will be sent (logs contain no window titles, and the user folder is replaced with %USERPROFILE%)",
   "error.hint": "The log is sent only when you click report; nothing is sent automatically.",
   "error.dontReport": "Don’t report",
   "error.reporting": "Reporting…",
@@ -361,7 +368,7 @@ export default {
   "error.reportFailed": "Could not report: {err}",
   "error.payloadError": "Error: {message}",
   "error.payloadDetail": "Details: {detail}",
-  "error.payloadLog": "Recent log:",
+  "error.payloadLog": "Log of the core's current run:",
 
   "state.suspendFailed": "Could not pause hotkey monitoring: {err}",
   "state.pssuspendFound": "pssuspend64.exe detected",

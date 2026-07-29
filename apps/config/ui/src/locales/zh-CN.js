@@ -242,6 +242,13 @@ export default {
     "核心日志按天保存在程序目录的 logs 文件夹内，启动时自动清理更早的日志；选择「关闭」则不记录日志。",
   "options.logOff": "关闭",
   "options.logDays": "{n} 天",
+  "options.logLevel": "日志输出等级",
+  "options.logLevelDesc":
+    "只记录所选等级及以上的日志。默认「警告」，即仅记录警告与错误；日常隐藏、恢复等流水不写入。反馈问题前可临时调低以取得更详细的记录。",
+  "options.logLevel.debug": "调试（最详细）",
+  "options.logLevel.info": "信息",
+  "options.logLevel.warn": "警告（默认）",
+  "options.logLevel.error": "错误（最精简）",
 
   "options.languageCard": "语言",
   "options.language": "界面语言",
@@ -336,7 +343,7 @@ export default {
   "dataNotice.gotIt": "知道了",
 
   "error.title": "出错了",
-  "error.summary": "展开查看将要发送的内容（日志里可能含窗口标题与程序路径，请先检查）",
+  "error.summary": "展开查看将要发送的内容（日志不含窗口标题，用户目录已替换为 %USERPROFILE%）",
   "error.hint": "日志仅在点击上报后发送，不会自动上报。",
   "error.dontReport": "不上报",
   "error.reporting": "上报中…",
@@ -346,7 +353,7 @@ export default {
   "error.reportFailed": "上报失败：{err}",
   "error.payloadError": "错误：{message}",
   "error.payloadDetail": "详情：{detail}",
-  "error.payloadLog": "最近日志：",
+  "error.payloadLog": "核心本次运行日志：",
 
   "state.suspendFailed": "暂停热键监控失败：{err}",
   "state.pssuspendFound": "已检测到 pssuspend64.exe",

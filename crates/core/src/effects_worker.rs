@@ -17,6 +17,21 @@ enum Task {
     Quit,
 }
 
+impl Task {
+    /// 日志里指代该任务的写法，含目标进程。
+    fn describe(&self) -> String {
+        match self {
+            Task::Mute { pid, mute: true } => format!("静音 (pid={pid})"),
+            Task::Mute { pid, mute: false } => format!("取消静音 (pid={pid})"),
+            Task::SettleBeforeFreeze => "冻结前静置".to_string(),
+            Task::Suspend { pid, enhanced } => format!("冻结 (pid={pid}, 增强={enhanced})"),
+            Task::Resume { pid, enhanced } => format!("解冻 (pid={pid}, 增强={enhanced})"),
+            Task::SendPause => "发送媒体暂停键".to_string(),
+            Task::Quit => "结束副作用线程".to_string(),
+        }
+    }
+}
+
 /// 副作用线程句柄。`shutdown` 排干队列后退出，保证退出前解冻 / 取消静音已生效。
 pub struct EffectsWorker {
     tx: Sender<Task>,
@@ -64,7 +79,9 @@ impl EffectsWorker {
         let deadline = Instant::now() + timeout;
         while !handle.is_finished() {
             if Instant::now() >= deadline {
-                log_warn!("副作用线程未在 {timeout:?} 内排干队列，放弃等待");
+                log_warn!(
+                    "副作用线程未在 {timeout:?} 内排干队列，放弃等待；本次退出可能残留未解冻或未取消静音的进程"
+                );
                 return;
             }
             std::thread::sleep(Duration::from_millis(10));
@@ -81,8 +98,11 @@ pub struct AsyncEffects {
 
 impl AsyncEffects {
     fn send(&self, task: Task) {
-        if self.tx.send(task).is_err() {
-            log_error!("副作用线程已退出，本次副作用未执行");
+        if let Err(e) = self.tx.send(task) {
+            log_error!(
+                "副作用线程已退出，以下副作用未执行，相关进程可能仍处于静音或冻结状态: {}",
+                e.0.describe()
+            );
         }
     }
 }

@@ -528,26 +528,11 @@ async fn verhub_upload_log(content: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 最新日志文件的末尾若干行。
+/// 核心最近一次运行的日志：从该次运行的 `[START]` 起至今，压到上报预算以内。
 #[tauri::command]
-async fn recent_log_tail(lines: usize) -> String {
-    blocking(move || {
-        let dir = log_dir();
-        let latest = std::fs::read_dir(&dir)
-            .ok()
-            .into_iter()
-            .flatten()
-            .flatten()
-            .filter(|e| e.path().is_file())
-            .max_by_key(|e| e.metadata().and_then(|m| m.modified()).ok());
-        let Some(entry) = latest else {
-            return String::new();
-        };
-        let content = std::fs::read_to_string(entry.path()).unwrap_or_default();
-        let tail: Vec<&str> = content.lines().rev().take(lines).collect();
-        tail.into_iter().rev().collect::<Vec<_>>().join("\n")
-    })
-    .await
+async fn current_session_log() -> String {
+    blocking(move || bosskey_core::logging::latest_session(&log_dir(), verhub::LOG_EXCERPT_MAX))
+        .await
 }
 
 /// 系统版本描述，形如 `Microsoft Windows [版本 10.0.26200.1234]`。
@@ -613,7 +598,7 @@ pub fn run() {
             verhub_feedback_options,
             verhub_submit_feedback,
             verhub_upload_log,
-            recent_log_tail,
+            current_session_log,
         ])
         // 兜底：前端起不来时，5 秒后强制显示窗口。
         .setup(|app| {

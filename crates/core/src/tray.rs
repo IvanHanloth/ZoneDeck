@@ -50,6 +50,9 @@ pub(crate) fn load_app_icon() -> HICON {
         return icon;
     }
 
+    logging::warn(
+        "未能加载程序图标（exe 内嵌资源与同目录 icon.ico 均不可用），托盘改用系统默认图标",
+    );
     unsafe { LoadIconW(None, IDI_APPLICATION).unwrap_or_default() }
 }
 
@@ -124,7 +127,7 @@ impl TrayIcon {
             callback_msg,
         };
         if !tray.try_add() {
-            logging::warn("托盘图标初始挂载失败（任务栏可能尚未就绪），将在任务栏就绪后自动补挂");
+            logging::debug("托盘图标初始挂载失败（任务栏可能尚未就绪），将在任务栏就绪后自动补挂");
         }
         tray
     }
@@ -179,7 +182,7 @@ impl TrayIcon {
         self.visible = false;
         self.retry_attempts = 0;
         if self.desired && self.try_add() {
-            logging::info("任务栏已就绪，托盘图标已重新挂载");
+            logging::debug("任务栏已就绪，托盘图标已重新挂载");
         }
     }
 
@@ -190,7 +193,7 @@ impl TrayIcon {
         }
         self.retry_attempts += 1;
         if self.try_add() {
-            logging::info("托盘图标重试挂载成功");
+            logging::debug("托盘图标重试挂载成功");
             return false;
         }
         if self.retry_attempts >= MAX_TRAY_RETRY {

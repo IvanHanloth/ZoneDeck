@@ -11,6 +11,20 @@ pub const DEFAULT_CLOSE_HOTKEY: &str = "Win+Esc";
 pub const DEFAULT_AUTO_HIDE_TIME: u32 = 5;
 /// 日志默认保留天数（`0` 表示关闭日志）。
 pub const DEFAULT_LOG_RETENTION_DAYS: u32 = 7;
+/// 日志输出等级的取值。低于所选等级的日志不写入文件。
+pub const LOG_LEVEL_DEBUG: &str = "debug";
+pub const LOG_LEVEL_INFO: &str = "info";
+pub const LOG_LEVEL_WARN: &str = "warn";
+pub const LOG_LEVEL_ERROR: &str = "error";
+/// 由低到高的全部合法等级。
+pub const LOG_LEVELS: [&str; 4] = [
+    LOG_LEVEL_DEBUG,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_WARN,
+    LOG_LEVEL_ERROR,
+];
+/// 默认输出等级：只记录警告及以上。
+pub const DEFAULT_LOG_LEVEL: &str = LOG_LEVEL_WARN;
 /// 连击判定窗口默认值（毫秒）：两次点击间隔不超过它才算连击。
 pub const DEFAULT_MULTI_CLICK_MS: u32 = 350;
 pub const MIN_MULTI_CLICK_MS: u32 = 150;
@@ -35,6 +49,24 @@ fn default_auto_hide_time() -> u32 {
 }
 fn default_log_retention_days() -> u32 {
     DEFAULT_LOG_RETENTION_DAYS
+}
+fn default_log_level() -> String {
+    DEFAULT_LOG_LEVEL.to_string()
+}
+
+/// 归一日志等级：忽略大小写与首尾空白，兼容 `warning`；无法识别时回落默认值。
+pub fn normalize_log_level(value: &str) -> String {
+    let v = value.trim().to_ascii_lowercase();
+    let v = if v == "warning" {
+        LOG_LEVEL_WARN.to_string()
+    } else {
+        v
+    };
+    if LOG_LEVELS.contains(&v.as_str()) {
+        v
+    } else {
+        DEFAULT_LOG_LEVEL.to_string()
+    }
 }
 fn default_clicks() -> u8 {
     1
@@ -356,6 +388,9 @@ pub struct Setting {
     /// 日志保留天数；`0` 表示关闭日志。
     #[serde(default = "default_log_retention_days")]
     pub log_retention_days: u32,
+    /// 日志输出等级：`debug`／`info`／`warn`／`error`，低于它的日志不写入文件。
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
     /// 开机自启是否以管理员身份启动：`true` 注册最高权限计划任务，`false` 用普通权限。
     /// 仅影响计划任务方式；注册表回退始终以普通权限运行。
     #[serde(default)]
@@ -392,6 +427,7 @@ impl Default for Setting {
             allow_move_restore: false,
             corner_fast_only: true,
             log_retention_days: DEFAULT_LOG_RETENTION_DAYS,
+            log_level: default_log_level(),
             autostart_admin: false,
             language: default_language(),
         }
@@ -412,6 +448,7 @@ impl Setting {
         self.tray_badges.normalize();
         self.mouse.normalize();
         self.language = crate::i18n::normalize_pref(&self.language);
+        self.log_level = normalize_log_level(&self.log_level);
     }
 }
 
@@ -784,7 +821,36 @@ mod tests {
         assert!(!c.setting.freeze_whole_tree);
         assert_eq!(c.setting.auto_hide_time, 5);
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
+        assert_eq!(c.setting.log_level, "warn", "日志等级默认只记警告及以上");
         assert!(!c.setting.autostart_admin, "自启默认普通权限");
+    }
+
+    #[test]
+    fn log_level_round_trips_and_normalizes() {
+        assert_eq!(Setting::default().log_level, LOG_LEVEL_WARN);
+
+        let c = Config::from_json(r#"{"setting": {"log_level": "debug"}}"#).unwrap();
+        assert_eq!(c.setting.log_level, LOG_LEVEL_DEBUG);
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.setting.log_level, LOG_LEVEL_DEBUG, "写回后应保留");
+
+        assert_eq!(
+            normalize_log_level(" INFO "),
+            LOG_LEVEL_INFO,
+            "忽略大小写与空白"
+        );
+        assert_eq!(
+            normalize_log_level("warning"),
+            LOG_LEVEL_WARN,
+            "兼容 warning"
+        );
+        assert_eq!(
+            normalize_log_level("verbose"),
+            DEFAULT_LOG_LEVEL,
+            "未知等级回落默认值"
+        );
+        let c = Config::from_json(r#"{"setting": {"log_level": "verbose"}}"#).unwrap();
+        assert_eq!(c.setting.log_level, DEFAULT_LOG_LEVEL);
     }
 
     #[test]
