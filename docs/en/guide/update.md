@@ -42,4 +42,16 @@ To help diagnose the problem, please include:
 - The relevant [log file](/en/guide/options).
 :::
 
-You can also open an [issue](https://github.com/IvanHanloth/Boss-Key/issues) on GitHub directly. The repository provides **bug report** and **feature request** templates; filling one in helps maintainers understand your problem faster, and **is the preferred route**.
+::: warning Please leave a contact
+Without a contact there is no way for us to reply to your feedback directly. So for feature requests and bugs we still recommend converting them into an issue.
+:::
+
+### Also converting feedback into a GitHub issue
+
+Below the feedback box there is an **Also convert into a GitHub issue** option (the server decides whether it is available; it is hidden when it is not). Tick it before submitting and the Verhub bot turns your feedback into a GitHub issue automatically:
+
+- **No special network setup** and **no GitHub sign-in** required;
+- The contact is **required, and should be your GitHub account** (in the form `@IvanHanloth`) — it is how the issue gets followed up with you;
+- If the issue cannot be created, the feedback is not recorded at all; file it manually in that case.
+
+You can also open an [issue](https://github.com/IvanHanloth/Boss-Key/issues) on GitHub directly. The repository provides **bug report** and **feature request** templates; filling one in helps maintainers understand your problem faster.

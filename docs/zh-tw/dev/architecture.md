@@ -103,6 +103,7 @@ Boss-Key/
 └── apps/config/                    設定介面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 後端命令 + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub 用戶端（版本／公告／回饋／日誌／專案連結，基於 verhub-sdk；
+    │                      回饋可選轉為 GitHub Issue，由 Verhub 機器人建立，此時須填 GitHub 帳號；
     │                      專案連結帶快取：記憶體 + 資料目錄下的 verhub_cache.json，有效期一天）
     ├── ui/         前端原始碼（Vite + Svelte 5）
     │   └── src/    lib/（純邏輯 + vitest 測試）+ components/（Svelte 元件）

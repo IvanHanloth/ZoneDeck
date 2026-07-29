@@ -481,23 +481,40 @@ async fn verhub_announcements(limit: u32) -> Result<Vec<verhub::Announcement>, S
         .map_err(|e| e.to_string())
 }
 
+/// 反馈提交选项，供前端决定是否显示「转换为 Issue」。
+#[tauri::command]
+async fn verhub_feedback_options() -> Result<verhub::FeedbackOptions, String> {
+    verhub::feedback_options().await.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn verhub_submit_feedback(
     content: String,
     rating: Option<u8>,
     contact: String,
+    forward_to_github: bool,
 ) -> Result<(), String> {
     if content.trim().is_empty() {
         return Err(i18n::t(Msg::ErrFeedbackEmpty).to_string());
     }
+    let contact = verhub::normalize_contact(&contact);
+    // 转换成 Issue 后要靠 GitHub 账号跟进，缺了服务端也不受理。
+    if forward_to_github && contact.is_none() {
+        return Err(i18n::t(Msg::ErrFeedbackContactRequired).to_string());
+    }
     let custom_data = serde_json::json!({
         "app_version": env!("CARGO_PKG_VERSION"),
         "os": os_description(),
-        "contact": contact.trim(),
     });
-    verhub::submit_feedback(content, rating.map(|r| r.clamp(1, 5)), custom_data)
-        .await
-        .map_err(|e| e.to_string())
+    verhub::submit_feedback(
+        content,
+        rating.map(|r| r.clamp(1, 5)),
+        contact,
+        forward_to_github,
+        custom_data,
+    )
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -593,6 +610,7 @@ pub fn run() {
             verhub_project_links,
             verhub_check_update,
             verhub_announcements,
+            verhub_feedback_options,
             verhub_submit_feedback,
             verhub_upload_log,
             recent_log_tail,

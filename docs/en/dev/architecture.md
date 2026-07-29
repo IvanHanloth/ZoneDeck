@@ -104,6 +104,8 @@ Boss-Key/
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
     ├── src-tauri/  Rust backend commands + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs/project links, built on verhub-sdk;
+    │                      feedback may optionally be converted into a GitHub issue by the Verhub bot,
+    │                      which makes the GitHub account mandatory;
     │                      project links are cached: in memory + verhub_cache.json in the data folder, valid for one day)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)

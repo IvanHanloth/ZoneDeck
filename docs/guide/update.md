@@ -42,4 +42,16 @@ Boss Key 支持展示来自服务端的**公告**（如重要更新提示、已�
 - 相关的 [日志文件](/guide/options#日志保留天数)。
 :::
 
-你也可以直接前往 GitHub 仓库提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。仓库提供了 **Bug 报告** 与 **功能建议** 两种 Issue 模板，按模板填写能让维护者更快理解你的问题，**这是更加推荐的做法**。
+::: warning 请留下联系方式
+如果不留联系方式，我们无法直接对反馈进行回复和响应。所以关于功能请求以及 bug 之类的问题，还是推荐将其转换为 Issue。
+:::
+
+### 同时转换为 GitHub Issue
+
+反馈框下方提供 **同时转换为 GitHub Issue** 选项（由服务端决定是否开放，未开放时不显示）。勾选后提交，这条反馈会由 Verhub 机器人自动转换为 GitHub Issue：
+
+- **不要求特别的网络环境**，也**不需要登录 GitHub 账号**；
+- 选择转换时联系方式**必填，且应填 GitHub 账号**（形如 `@IvanHanloth`）——机器人建好 Issue 后，后续跟进要靠它找到你；
+- Issue 创建失败时整条反馈不会被记录，此时请改用下面的手动方式。
+
+你也可以直接前往 GitHub 仓库提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。仓库提供了 **Bug 报告** 与 **功能建议** 两种 Issue 模板，按模板填写能让维护者更快理解你的问题。
