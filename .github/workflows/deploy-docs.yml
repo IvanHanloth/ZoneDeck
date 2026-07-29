@@ -8,7 +8,7 @@ name: Deploy Docs
 #   3. 手动触发（workflow_dispatch）—— 不受路径限制，可随时重新部署。
 on:
   push:
-    branches: ["main", "dev"]
+    branches: ["main"]
     paths:
       - "docs/**"
       - "scripts/i18n-check.ps1"
