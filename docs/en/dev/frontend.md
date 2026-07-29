@@ -31,7 +31,7 @@ apps/config/ui/
 │       ├── theme.js         Theme switching (with theme.test.js)
 │       ├── i18n.svelte.js   Display language: catalog lookup + language resolution (with i18n.test.js)
 │       ├── markdown.js      Markdown rendering for announcements/release notes (with markdown.test.js)
-│       └── verhub.js        Update checks / announcements / project links / opening external links
+│       └── verhub.js        Update checks / announcements / feedback (incl. issue conversion) / project links / opening external links
 ├── locales/                 Three-language catalogs (zh-CN.js / en.js / zh-TW.js)
 ├── vite.config.js
 └── svelte.config.js
@@ -45,7 +45,7 @@ The settings window is organised as tabs, one panel component each:
 | Hotkeys & Mouse | `HotkeysPanel` | Keyboard hotkeys, mouse clicks, corners, auto-hide on idle |
 | Alerts | `NotificationsPanel` | Per-event notification switches and tray icon badges |
 | Options | `OptionsPanel` | Muting/pausing/freezing/privileges/logs/tools |
-| About & Feedback | `AboutPanel` | Version, updates, announcements, feedback |
+| About & Feedback | `AboutPanel` | Version, updates, announcements, feedback (convertible into a GitHub issue) |
 
 ## A frameless, self-drawn window
 

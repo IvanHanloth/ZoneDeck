@@ -42,4 +42,16 @@ Boss Key 支援顯示來自伺服器的**公告**（如重要更新提示、已�
 - 相關的 [記錄檔](/zh-tw/guide/options)。
 :::
 
-您也可以直接前往 GitHub 儲存庫提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。儲存庫提供了 **Bug 回報** 與 **功能建議** 兩種 Issue 範本，按範本填寫能讓維護者更快理解您的問題，**這是更建議的做法**。
+::: warning 請留下聯絡方式
+如果不留聯絡方式，我們無法直接回覆與處理這則意見。因此關於功能請求以及 bug 之類的問題，仍建議將其轉換為 Issue。
+:::
+
+### 同時轉換為 GitHub Issue
+
+意見回饋框下方提供 **同時轉換為 GitHub Issue** 選項（由伺服器決定是否開放，未開放時不顯示）。勾選後送出，這則意見回饋會由 Verhub 機器人自動轉換為 GitHub Issue：
+
+- **不需要特別的網路環境**，也**不需要登入 GitHub 帳號**；
+- 選擇轉換時聯絡方式**為必填，且應填 GitHub 帳號**（形如 `@IvanHanloth`）——機器人建立 Issue 後，後續追蹤要靠它找到您；
+- Issue 建立失敗時整則意見回饋不會被記錄，此時請改用下方的手動方式。
+
+您也可以直接前往 GitHub 儲存庫提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。儲存庫提供了 **Bug 回報** 與 **功能建議** 兩種 Issue 範本，按範本填寫能讓維護者更快理解您的問題。

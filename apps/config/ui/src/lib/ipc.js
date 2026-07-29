@@ -183,6 +183,8 @@ function mockInvoke(cmd, args) {
           published_at: Date.now(),
         },
       ];
+    case "verhub_feedback_options":
+      return { github_forward_available: true, contact_required_for_forward: true };
     case "verhub_submit_feedback":
     case "verhub_upload_log":
     case "open_external":

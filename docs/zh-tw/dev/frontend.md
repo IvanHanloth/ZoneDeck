@@ -31,7 +31,7 @@ apps/config/ui/
 │       ├── theme.js         佈景主題切換（配 theme.test.js）
 │       ├── i18n.svelte.js   介面語言：catalog 查表 + 語言解析（配 i18n.test.js）
 │       ├── markdown.js      公告/更新記錄的 Markdown 算繪（配 markdown.test.js）
-│       └── verhub.js        檢查更新/公告/專案連結/開啟外部連結
+│       └── verhub.js        檢查更新/公告/意見回饋（含轉 Issue）/專案連結/開啟外部連結
 ├── locales/                 三語文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
 └── svelte.config.js
@@ -45,7 +45,7 @@ apps/config/ui/
 | 快速鍵與滑鼠 | `HotkeysPanel` | 鍵盤快速鍵、滑鼠連按、四角、閒置自動隱藏 |
 | 提示設定 | `NotificationsPanel` | 逐事件通知開關與圖示狀態角標 |
 | 其他選項 | `OptionsPanel` | 靜音/暫停/凍結/權限/記錄檔/工具 |
-| 關於與意見回饋 | `AboutPanel` | 版本、更新、公告、意見回饋 |
+| 關於與意見回饋 | `AboutPanel` | 版本、更新、公告、意見回饋（可轉為 GitHub Issue） |
 
 ## 無邊框自繪視窗
 

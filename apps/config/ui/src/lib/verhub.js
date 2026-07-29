@@ -17,9 +17,17 @@ export function announcements(limit = 20) {
   return invoke("verhub_announcements", { limit });
 }
 
-/** 提交反馈。rating 为 1..5 或 null；contact 可空。 */
-export function submitFeedback({ content, rating = null, contact = "" }) {
-  return invoke("verhub_submit_feedback", { content, rating, contact });
+/** 反馈提交选项。返回 { github_forward_available, contact_required_for_forward }。 */
+export function feedbackOptions() {
+  return invoke("verhub_feedback_options");
+}
+
+/**
+ * 提交反馈。rating 为 1..5 或 null；contact 可空。
+ * forwardToGithub 为 true 时由 Verhub 机器人转成 GitHub Issue，此时 contact 必填。
+ */
+export function submitFeedback({ content, rating = null, contact = "", forwardToGithub = false }) {
+  return invoke("verhub_submit_feedback", { content, rating, contact, forwardToGithub });
 }
 
 /** 上报日志。 */

@@ -163,15 +163,45 @@ pub async fn announcements(limit: u32) -> Result<Vec<Announcement>> {
         .collect())
 }
 
+/// 反馈提交选项：服务端决定本项目能否把反馈转换为 GitHub Issue。
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct FeedbackOptions {
+    /// 是否开放「转换为 Issue」。为假时前端不显示该选项。
+    pub github_forward_available: bool,
+    /// 选择转换时联系方式是否必填；转换不可用时恒为假。
+    pub contact_required_for_forward: bool,
+}
+
+pub async fn feedback_options() -> Result<FeedbackOptions> {
+    let resp = client()?.public().get_feedback_options().await?;
+    Ok(FeedbackOptions {
+        github_forward_available: resp.github_forward_available,
+        contact_required_for_forward: resp.contact_required_for_forward,
+    })
+}
+
+/// 规整联系方式：只有空白等同于未填写。
+pub fn normalize_contact(contact: &str) -> Option<String> {
+    let trimmed = contact.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// 提交客户端反馈。`rating` 为 1..=5；`custom_data` 携带附加信息。
+///
+/// `forward_to_github` 为真时由 Verhub 侧的机器人把这条反馈建成 GitHub Issue：
+/// 联系方式必填（SDK 本地即拒绝），且 Issue 创建失败时整条反馈不会被记录。
 pub async fn submit_feedback(
     content: String,
     rating: Option<u8>,
+    contact: Option<String>,
+    forward_to_github: bool,
     custom_data: serde_json::Value,
 ) -> Result<()> {
     let input = CreateFeedbackInput {
         content,
         rating,
+        contact,
+        forward_to_github: forward_to_github.then_some(true),
         platform: Some(PLATFORM),
         custom_data: json_object(custom_data),
         ..Default::default()
@@ -322,6 +352,13 @@ mod tests {
     #[test]
     fn truncate_leaves_short_content_alone() {
         assert_eq!(truncate_log("崩了"), "崩了");
+    }
+
+    #[test]
+    fn normalize_contact_treats_blank_as_absent() {
+        assert_eq!(normalize_contact("  ivan@o5g.top "), Some("ivan@o5g.top".into()));
+        assert_eq!(normalize_contact(""), None);
+        assert_eq!(normalize_contact("   \t\n "), None);
     }
 
     #[test]
