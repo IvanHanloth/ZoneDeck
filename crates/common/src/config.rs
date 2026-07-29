@@ -48,10 +48,23 @@ fn default_language() -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    #[error("配置文件读写错误: {0}")]
-    Io(#[from] std::io::Error),
+    /// 带上出错的路径：用户据此才能判断是装在了不可写的目录，还是被杀软拦了。
+    #[error("配置文件读写错误: {source}（路径: {path}）")]
+    Io {
+        path: String,
+        source: std::io::Error,
+    },
     #[error("配置文件 JSON 解析错误: {0}")]
     Json(#[from] serde_json::Error),
+}
+
+impl ConfigError {
+    fn io(path: &Path, source: std::io::Error) -> Self {
+        Self::Io {
+            path: path.display().to_string(),
+            source,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -447,8 +460,14 @@ pub struct Verhub {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Config {
+    /// 配置 schema 版本（[`APP_CONFIG_VERSION`]），结构变动时才动。
     #[serde(default = "default_version")]
     pub version: String,
+    /// 上次运行过的**程序**版本（[`crate::APP_VERSION`]）。
+    /// 与之不符即「更新后首次启动」，核心据此自动拉起配置程序。
+    /// 缺省置空：老配置与全新配置都会被判为版本已变，各弹一次。
+    #[serde(default)]
+    pub app_version: String,
     #[serde(default)]
     pub history: Vec<i64>,
     #[serde(default)]
@@ -476,6 +495,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: default_version(),
+            app_version: String::new(),
             history: Vec::new(),
             frozen_pids: Vec::new(),
             hotkey: Hotkey::default(),
@@ -520,7 +540,7 @@ impl Config {
                 Ok((config, parse_error))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Config::default(), None)),
-            Err(e) => Err(ConfigError::Io(e)),
+            Err(e) => Err(ConfigError::io(path, e)),
         }
     }
 
@@ -537,15 +557,30 @@ impl Config {
         self.setting.normalize();
     }
 
+    /// 写入配置。先写同目录下的临时文件再原子替换：写到一半失败（磁盘满、
+    /// 杀软拦截）也不会把原文件截断成半截，用户的规则不会因此丢光。
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
+        let json = self.to_json()?;
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(|e| ConfigError::io(parent, e))?;
         }
-        std::fs::write(path, self.to_json()?)?;
-        Ok(())
+        let tmp = tmp_path(path);
+        std::fs::write(&tmp, json).map_err(|e| ConfigError::io(&tmp, e))?;
+        // Windows 下 rename 走 MOVEFILE_REPLACE_EXISTING，同目录替换是原子的。
+        std::fs::rename(&tmp, path).map_err(|e| {
+            let _ = std::fs::remove_file(&tmp);
+            ConfigError::io(path, e)
+        })
     }
+}
+
+/// 原子写入用的临时文件路径（与目标同目录，rename 才是原子的）。
+fn tmp_path(path: &Path) -> std::path::PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".tmp");
+    path.with_file_name(name)
 }
 
 #[cfg(test)]
@@ -803,6 +838,31 @@ mod tests {
             c.setting.tray_badges.blue, TRAY_STATUS_FREEZE,
             "其余颜色不受影响"
         );
+    }
+
+    #[test]
+    fn app_version_is_recorded_and_defaults_to_empty() {
+        assert_eq!(
+            Config::default().app_version,
+            "",
+            "默认值不写死当前版本：全新配置也要走一次「首次启动」流程"
+        );
+        let c = Config::from_json(r#"{"setting": {}}"#).unwrap();
+        assert_eq!(c.app_version, "", "老配置没有该字段，视为未记录过");
+
+        let c = Config {
+            app_version: "3.1.0".to_string(),
+            ..Config::default()
+        };
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.app_version, "3.1.0", "写回后应保留");
+    }
+
+    #[test]
+    fn schema_version_and_app_version_are_separate_fields() {
+        let json = Config::default().to_json().unwrap();
+        assert!(json.contains("\"version\""), "配置 schema 版本仍要写出");
+        assert!(json.contains("\"app_version\""), "程序版本单独记一份");
     }
 
     #[test]

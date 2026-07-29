@@ -23,7 +23,7 @@ Boss Key v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通�
 │  │ • 枚举/隐藏/显示窗口       │        └────────────┬───────────┘ │
 │  │ • Core Audio 静音         │                     │ 读写         │
 │  │ • NtSuspend 进程冻结       │        ┌────────────▼───────────┐ │
-│  │ • 托盘图标 / 气泡通知      │        │ config.json（与 exe 同目录）│
+│  │ • 托盘图标 / 气泡通知      │        │ config.json（数据目录）     │
 │  │ • 开机自启（计划任务/注册表）        │ 核心收到 reload 后热重载 │ │
 │  └──────────────────────────┘        └────────────────────────┘ │
 │         ▲ 随登录自启                                             │
@@ -68,10 +68,11 @@ Boss-Key/
 ├── Cargo.toml                      workspace（含 release profile 调优）
 ├── crates/
 │   ├── common/                     共享库（无平台依赖，可跨平台编译）
-│   │   └── src/{model,config,matching,ipc,i18n}.rs
+│   │   └── src/{model,config,matching,ipc,i18n,paths}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule（serde 兼容旧 config.json，PID 大写）
-│   │       config    Config/Setting/Hotkey（兼容读取旧配置 + 迁移）
+│   │       config    Config/Setting/Hotkey（兼容读取旧配置 + 迁移；保存走 tmp + rename 原子替换）
 │   │       matching  窗口匹配逻辑
+│   │       paths     数据目录定位（安装版走 %APPDATA%，便携版就地，见下）
 │   │       ipc       Command/Response 协议 + PipeClient 客户端
 │   │       i18n      界面语言标签（Lang）与语言偏好解析，核心与配置程序共用
 │   └── core/                       常驻核心（lib + bin）
@@ -102,7 +103,7 @@ Boss-Key/
 └── apps/config/                    配置界面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 后端命令 + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub 客户端（版本/公告/反馈/日志/项目链接，基于 verhub-sdk；
-    │                      项目链接带缓存：内存 + 同目录 verhub_cache.json，有效期一天）
+    │                      项目链接带缓存：内存 + 数据目录下的 verhub_cache.json，有效期一天）
     ├── ui/         前端源码（Vite + Svelte 5）
     │   └── src/    lib/（纯逻辑 + vitest 测试）+ components/（Svelte 组件）
     │                + locales/（三语文案 catalog，以 zh-CN.js 为基准）
@@ -112,6 +113,41 @@ Boss-Key/
 ::: tip common 为什么无平台依赖
 `crates/common` 刻意不依赖 Windows API，因此可以跨平台编译，其纯逻辑（配置解析、匹配、协议）也更易做单元测试。平台相关代码集中在 `crates/core`。
 :::
+
+## 数据目录
+
+配置 `config.json`、日志 `logs/`、恢复文件 `recovery.json`、缓存 `verhub_cache.json` 共处一个**数据目录**，由 `crates/common/src/paths.rs` 定位。安装版与便携版分开对待：
+
+| 情形 | 数据目录 | `DataDirKind` |
+| --- | --- | --- |
+| 安装版 | `%APPDATA%\BossKey` | `Installed` |
+| 便携版，程序目录可写 | 程序目录 | `Portable` |
+| 便携版，程序目录写不进去 | `%APPDATA%\BossKey` | `PortableFallback` |
+
+便携版把数据留在程序目录，拷走整个文件夹就带走了全部设置；安装版则不能这么做——安装包可以装进 `Program Files`，那里普通权限进程不可写，配置程序每次保存都会得到 `os error 5`。
+
+### 怎么分辨是哪一种
+
+看程序目录里有没有安装痕迹（`paths::is_installed`）：
+
+1. 安装包放的标记文件 `installed.marker`（`[Files]` 里装，卸载时随之移除）；
+2. 卸载程序 `unins*.exe` —— 兜底，标记文件被误删时仍认得出是安装版，不至于把数据写回 `Program Files`。序号随重复安装递增，故按前缀匹配。
+
+::: warning 判据必须是文件，不能是进程权限
+核心可能以管理员身份运行、配置程序不会：核心在 `Program Files` 下写得进去，配置程序写不进去。若两边各按自己能否写入来选目录，就会各读一份配置，用户改了设置却不生效。看文件则两边必然一致。也因此，安装版根本不做可写性探测——结果一样是用户目录。
+:::
+
+### 回退与迁移
+
+便携版探测到程序目录不可写时退回用户目录，`kind` 记为 `PortableFallback`。核心把它写进日志，配置程序通过 `data_location` 命令读到后弹出提示，说明这是权限问题以及怎么改（见 `DataNoticeModal.svelte`）。程序功能不受影响。
+
+用到用户目录时，程序目录里的 `config.json` 会搬过来：先复制，再尽力删掉原文件。目标已有配置就不动它——那是当前在用的一份，旧文件不得覆盖，也不去删。删不掉（没有写权限、文件被占用）就留在原处，反正不会再被读到。
+
+::: tip 配置界面的浏览器数据另有一处
+Tauri 按 `tauri.conf.json` 里的 identifier 把 WebView2 用户数据放在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，不在数据目录里，也不由 `paths.rs` 管。安装包的卸载程序与便携版随包的 `scripts/cleanup.ps1` 都会清理它。
+:::
+
+每次启动的实际数据目录与判定结果会写进日志首屏，排查读写失败先看它。
 
 ## 核心内部：Agent 消息循环
 
@@ -130,6 +166,8 @@ Boss-Key/
 
 当触发隐藏 / 显示时，交由 `HideController` 编排，流程为「意图先行」两段式：`plan_hide` 算出执行计划（剪掉失效记录、补齐 PID）→ 把计划后的快照写入 `recovery.json`（先落盘再动手，隐藏中途崩溃不丢记录）→ `commit_hide` 同步隐藏窗口（`SW_HIDE`），并把静音 / 冻结 / 暂停键交给副作用专职线程（`effects_worker.rs`）按 FIFO 异步执行——消息循环不被慢操作（音频枚举、pssuspend 等待）阻塞，热键与界面保持响应。
 
+队列内的先后有讲究：暂停键→静音→静置→冻结。冻结让进程彻底停止响应消息，隐藏若还没在屏幕上画完就冻结，被冻结的窗口会留下残影；发出去的暂停键同样要有时间被目标程序处理掉。故冻结前统一静置一次（`FREEZE_SETTLE_DELAY`，整批只等一次，没有要冻结的进程就不等）。静音不排在这道等待之后——它走音频会话，与目标进程是否在跑无关。
+
 恢复（显示）时逐条校验记录的有效性：句柄须仍存在且仍属于当初的进程（`IsWindow` + PID 比对），冻结 / 静音记录须匹配进程创建时刻——句柄与 PID 都会被系统回收复用，校验不过的记录跳过并如实计入日志。
 
 ::: info 可测试性设计
@@ -138,7 +176,7 @@ Boss-Key/
 
 ## 稳定性设计（崩溃自愈三层防线）
 
-1. **崩溃日志**：关键事件与 panic 写入 exe 同目录的 `logs/BossKey-YYYY-MM-DD.log`（按天切割，按 `log_retention_days` 保留，0 表示关闭日志；release 构建丢弃 DEBUG 级）。
+1. **崩溃日志**：关键事件与 panic 写入[数据目录](#数据目录)下的 `logs/BossKey-YYYY-MM-DD.log`（按天切割，按 `log_retention_days` 保留，0 表示关闭日志；release 构建丢弃 DEBUG 级）。
 2. **崩溃恢复**：隐藏动作执行前先把"将要隐藏 / 冻结 / 静音什么"写入 `recovery.json`（tmp + rename 原子替换），异常退出后重启自动找回；快照带开机时刻与进程创建时刻，跨重启的过期快照直接丢弃，不会对无关窗口 / 进程做恢复动作。
 3. **看门狗**：计划任务 `RestartOnFailure`（崩溃后 1 分钟内重启，最多 3 次）。release 构建 `panic = "abort"`，panic 钩子写完日志后以非零码退出，正好触发计划任务重启。
 

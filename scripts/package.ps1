@@ -59,7 +59,13 @@ Copy-Item "target\release\core.exe" (Join-Path $portableDir "Boss Key.exe")
 Copy-Item "target\release\bosskey-config.exe" (Join-Path $portableDir "config.exe")
 # LICENSE 带上 .txt 后缀：Windows 上双击才有默认打开方式；安装包的许可协议页也复用这份
 Copy-Item "LICENSE" (Join-Path $portableDir "LICENSE.txt")
+# 三语 README 全带上：便携版没有安装向导，README 是唯一的随包说明，
+# 其中「清理残留数据」一节交代了程序在用户目录下留了什么。
 Copy-Item "README.md" (Join-Path $portableDir "README.md")
+Copy-Item "README.en.md" (Join-Path $portableDir "README.en.md")
+Copy-Item "README.zh-TW.md" (Join-Path $portableDir "README.zh-TW.md")
+# 便携版没有卸载程序，用户目录下的数据得靠它清
+Copy-Item "scripts\cleanup.ps1" (Join-Path $portableDir "cleanup.ps1")
 
 Write-Host "==> 便携版组装完成：$portableDir" -ForegroundColor Green
 Get-ChildItem $portableDir | Select-Object Name, @{Name = "Size"; Expression = { "{0:N0} KB" -f ($_.Length / 1KB) } } | Format-Table -AutoSize

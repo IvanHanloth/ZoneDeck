@@ -9,16 +9,21 @@ use crate::{audio, freeze, input, log_warn, logging};
 /// 不得依赖「方法返回即动作已生效」，只能依赖调用顺序与执行顺序一致（FIFO）。
 pub trait Effects {
     fn mute(&self, pid: u32, mute: bool);
+    /// 冻结整批进程前静置一次，见 [`FREEZE_SETTLE_DELAY`]。
+    fn settle_before_freeze(&self);
     fn suspend(&self, pid: u32, enhanced: bool);
     fn resume(&self, pid: u32, enhanced: bool);
-    /// 发送媒体「播放/暂停」键（仅在检测到有音视频正在播放时才发送），
-    /// 并等待其生效。检测与等待都由实现负责。
+    /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。检测由实现负责。
     fn send_pause(&self);
 }
 
-/// 暂停键发出后等待媒体程序响应的时长。冻结须在这之后（FIFO 保证），
-/// 否则被冻结的进程收不到按键。
-const SEND_PAUSE_DELAY: Duration = Duration::from_millis(200);
+/// 冻结前的静置时长。
+///
+/// 冻结让进程彻底停止响应消息：隐藏动作若还没在屏幕上画完就冻结，被冻结的窗口
+/// 会留下残影。发出去的媒体暂停键同样需要这段时间被目标程序处理掉，冻结早了就收不到。
+///
+/// 只在冻结前等，静音不受影响——静音走音频会话，与目标进程是否在跑无关。
+const FREEZE_SETTLE_DELAY: Duration = Duration::from_millis(200);
 
 pub struct WinEffects {
     exe_dir: PathBuf,
@@ -33,6 +38,10 @@ impl WinEffects {
 impl Effects for WinEffects {
     fn mute(&self, pid: u32, mute: bool) {
         audio::set_mute(pid, mute);
+    }
+
+    fn settle_before_freeze(&self) {
+        std::thread::sleep(FREEZE_SETTLE_DELAY);
     }
 
     fn suspend(&self, pid: u32, enhanced: bool) {
@@ -72,7 +81,6 @@ impl Effects for WinEffects {
         // 没有音视频在播放时不发键，避免把静止的播放器切成播放。
         if audio::is_audio_playing() {
             input::send_media_pause();
-            std::thread::sleep(SEND_PAUSE_DELAY);
         }
     }
 }

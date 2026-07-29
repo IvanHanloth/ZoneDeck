@@ -197,17 +197,16 @@ export default {
   "options.hideIcon": "一併隱藏 Boss Key 通知區域圖示",
   "options.hideIconDesc":
     "隱藏視窗時連 Boss Key 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
-  "options.sendPause": "隱藏前傳送暫停鍵（Beta）",
-  "options.sendPauseDesc":
-    "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂），會造成約 0.2 秒延遲。",
+  "options.sendPause": "隱藏前傳送暫停鍵",
+  "options.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
 
   "options.freezeCard": "程序凍結",
-  "options.freezeAfterHide": "隱藏視窗時凍結程序（Beta）",
+  "options.freezeAfterHide": "隱藏視窗時凍結程序",
   "options.freezeAfterHideDesc":
-    "隱藏後暫停目標程序，降低其 CPU／記憶體佔用；復原顯示時自動解除凍結。",
+    "隱藏後暫停目標程序，降低其 CPU／記憶體佔用；復原顯示時自動解除凍結。可能造成一定的隱藏／復原延遲。",
   "options.enhancedFreeze": "使用增強凍結",
   "options.enhancedFreezeDesc":
-    "改用 pssuspend64.exe 凍結。需在程式資料夾放置該檔案，且核心以系統管理員身分執行。",
+    "改用 pssuspend64.exe 凍結。需在程式資料夾放置該檔案，且核心以系統管理員身分執行。可能造成一定的隱藏／復原延遲。",
   "options.enhancedFreezeBlocked": "目前無法使用：{reasons}。",
   "options.needFreezeFirst": "需先開啟「隱藏視窗時凍結程序」",
   "options.blockedCoreStopped": "核心未執行",
@@ -215,7 +214,7 @@ export default {
   "options.blockedNoPssuspend": "程式資料夾缺少 pssuspend64.exe",
   "options.freezeWholeTree": "凍結完整程序（Beta）",
   "options.freezeWholeTreeDesc":
-    "遞迴凍結命中程式的整棵子程序樹，凍結更徹底；對一般與增強凍結均生效。可能影響這些子程序的背景工作",
+    "遞迴凍結命中程式的整棵子程序樹，凍結更徹底；對一般與增強凍結均生效。可能影響這些子程序的背景工作，並造成更高的隱藏／復原延遲。",
   "options.freezeNoteBefore": "增強凍結需下載",
   "options.freezeNoteAfter": "並將 pssuspend64.exe 放入程式資料夾，且核心以系統管理員身分執行。",
   "options.recheck": "重新偵測",
@@ -320,6 +319,16 @@ export default {
   "announce.title": "公告",
   "announce.pinned": "置頂",
   "announce.gotIt": "知道了",
+
+  "dataNotice.title": "設定的存放位置",
+  "dataNotice.heading": "程式所在資料夾無法寫入",
+  "dataNotice.reason": "目前帳戶對 {dir} 沒有寫入權限，多半是程式放在了 Program Files 等系統資料夾下，或所在磁碟是唯讀的。",
+  "dataNotice.stored": "設定已改存到 {dir}，程式功能不受影響。",
+  "dataNotice.fixTitle": "想讓設定跟著程式資料夾走，可以：",
+  "dataNotice.fixMove": "把整個程式資料夾移到有寫入權限的位置，例如桌面、文件或另一個磁碟的一般資料夾；",
+  "dataNotice.fixPermission": "或在該資料夾按右鍵 → 內容 → 安全性 → 編輯，為目前使用者勾選「寫入」權限（需要系統管理員確認）；",
+  "dataNotice.fixKeep": "也可以什麼都不做——設定留在使用者資料夾同樣正常使用，只是複製程式資料夾時不會一起帶走。",
+  "dataNotice.gotIt": "知道了",
 
   "error.title": "發生錯誤",
   "error.summary": "展開檢視將要傳送的內容（記錄檔裡可能含視窗標題與程式路徑，請先檢查）",

@@ -94,11 +94,10 @@ jobs:
         run: |
           $headers = @{ Authorization = "Bearer $env:STS_TOKEN"; 'Content-Type' = 'application/json' }
 
+          # 版本号只落在这两处，其余地方构建时取自 Cargo.toml（见 scripts/version.ps1）
           $files = @(
             'Cargo.toml',
-            'Cargo.lock',
-            'apps/config/src-tauri/tauri.conf.json',
-            'apps/config/ui/package.json'
+            'Cargo.lock'
           )
           $additions = foreach ($f in $files) {
             @{ path = $f; contents = [Convert]::ToBase64String([IO.File]::ReadAllBytes($f)) }

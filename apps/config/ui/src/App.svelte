@@ -12,6 +12,7 @@
   import UpdateModal from "./components/UpdateModal.svelte";
   import AnnouncementModal from "./components/AnnouncementModal.svelte";
   import ErrorReportModal from "./components/ErrorReportModal.svelte";
+  import DataNoticeModal from "./components/DataNoticeModal.svelte";
   import Toast from "./components/Toast.svelte";
   import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
@@ -141,6 +142,7 @@
 
   <RestoreWindowsModal bind:open={app.restoreOpen} />
   <AnnouncementModal />
+  <DataNoticeModal />
   <ErrorReportModal />
   <!-- 放最后：强制更新的遮罩层级最高，压住其它一切弹窗 -->
   <UpdateModal />

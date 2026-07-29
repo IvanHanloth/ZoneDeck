@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Boss Key",
-  "version": "3.1.0-rc.1",
   "identifier": "cn.hanloth.bosskey.config",
   "build": {
     "frontendDist": "../dist",

@@ -1,0 +1,16 @@
+This file marks an installed copy of Boss Key.
+
+Because of it, the program stores its settings in %APPDATA%\BossKey instead of
+this folder: an installation may live under C:\Program Files, which normal
+privileges cannot write to.
+
+Do not delete it. The uninstaller removes it for you.
+
+---
+
+此文件标记这是 Boss Key 的安装版。
+
+程序据此把设置存到 %APPDATA%\BossKey，而不是本目录：安装目录可能位于
+C:\Program Files，普通权限写不进去。
+
+请勿删除，卸载时会自动移除。

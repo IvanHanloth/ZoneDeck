@@ -205,17 +205,16 @@ export default {
   "options.hideIcon": "Also hide Boss Key's tray icon",
   "options.hideIconDesc":
     "Hide Boss Key's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "options.sendPause": "Send the pause key before hiding (beta)",
-  "options.sendPauseDesc":
-    "Send the media pause key before hiding (pausing any playing video or music); adds roughly 0.2 seconds of delay.",
+  "options.sendPause": "Send the pause key before hiding",
+  "options.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
 
   "options.freezeCard": "Process freezing",
-  "options.freezeAfterHide": "Freeze processes when hiding (beta)",
+  "options.freezeAfterHide": "Freeze processes when hiding",
   "options.freezeAfterHideDesc":
-    "Suspend the target process once hidden to lower its CPU and memory usage; it is resumed automatically when restored.",
+    "Suspend the target process once hidden to lower its CPU and memory usage; it is resumed automatically when restored. May add some delay when hiding and restoring.",
   "options.enhancedFreeze": "Use enhanced freezing",
   "options.enhancedFreezeDesc":
-    "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator.",
+    "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator. May add some delay when hiding and restoring.",
   "options.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
   "options.needFreezeFirst": "Enable “Freeze processes when hiding” first",
   "options.blockedCoreStopped": "the core is not running",
@@ -223,7 +222,7 @@ export default {
   "options.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
   "options.freezeWholeTree": "Freeze the whole process tree (beta)",
   "options.freezeWholeTreeDesc":
-    "Recursively freeze the entire child-process tree of the matched program for a more thorough freeze; applies to both normal and enhanced freezing. May affect background tasks of those child processes",
+    "Recursively freeze the entire child-process tree of the matched program for a more thorough freeze; applies to both normal and enhanced freezing. May affect background tasks of those child processes and adds more delay when hiding and restoring.",
   "options.freezeNoteBefore": "Enhanced freezing requires downloading",
   "options.freezeNoteAfter":
     "and placing pssuspend64.exe in the program folder, with the core running as administrator.",
@@ -332,6 +331,16 @@ export default {
   "announce.title": "Announcement",
   "announce.pinned": "Pinned",
   "announce.gotIt": "Got it",
+
+  "dataNotice.title": "Where your settings are stored",
+  "dataNotice.heading": "The program folder is not writable",
+  "dataNotice.reason": "This account has no write permission for {dir} — usually because the program sits in a system folder such as Program Files, or on a read-only drive.",
+  "dataNotice.stored": "Your settings are stored in {dir} instead. Nothing else is affected.",
+  "dataNotice.fixTitle": "To keep the settings with the program folder, you can:",
+  "dataNotice.fixMove": "move the whole program folder somewhere writable — the desktop, your documents, or an ordinary folder on another drive;",
+  "dataNotice.fixPermission": "or right-click the folder → Properties → Security → Edit, and grant your account the “Write” permission (needs administrator approval);",
+  "dataNotice.fixKeep": "or do nothing — everything works the same, the settings just will not travel with a copy of the program folder.",
+  "dataNotice.gotIt": "Got it",
 
   "error.title": "Something went wrong",
   "error.summary":

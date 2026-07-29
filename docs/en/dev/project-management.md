@@ -51,7 +51,7 @@ Try to link **issue – pull request – project** together for unified tracking
 
 ## Versioning and releases
 
-- The **single source of truth** for the version is `[workspace.package] version` in `Cargo.toml`; the other three files must match it.
+- The **single source of truth** for the version is `[workspace.package] version` in `Cargo.toml`; everywhere else takes it at build time.
 - Releases are made through a manually triggered GitHub Actions workflow: write the version → tag → build and publish the release.
 - See [Packaging & releasing](/en/dev/release).
 

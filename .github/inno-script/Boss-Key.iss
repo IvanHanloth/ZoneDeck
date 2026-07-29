@@ -6,11 +6,12 @@
 ; 依赖 package.ps1 先组装好便携文件夹 dist\Boss-Key，安装包的文件与许可协议都取自那里。
 ; 需要 Inno Setup 7+：简繁中文语言包自 7.0 起才随官方安装包分发（见 scripts/install-inno.ps1）。
 
+; 不设默认值：写死的版本号迟早会过期，装出一个版本号对不上的包比编译失败更难发现。
 #ifndef MyAppVersion
-  #define MyAppVersion "3.0.0"
+  #error "缺少 MyAppVersion：请用 scripts/package.ps1 -Installer 编译，由它从 Cargo.toml 取版本号传入"
 #endif
 #ifndef MyAppVersion4
-  #define MyAppVersion4 "3.0.0.0"
+  #error "缺少 MyAppVersion4：请用 scripts/package.ps1 -Installer 编译"
 #endif
 
 #define MyAppName "Boss Key"
@@ -19,6 +20,8 @@
 #define CoreExe "Boss Key.exe"
 #define ConfigExe "config.exe"
 #define SourceDir "..\..\dist\Boss-Key"
+; 文件名须与 crates/common/src/paths.rs 的 INSTALLED_MARKER 一致
+#define InstalledMarker "installed.marker"
 
 [Setup]
 AppId={{BA8E9784-B92D-48EE-B447-99709232260B}
@@ -34,6 +37,11 @@ DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 ; 复用便携版里的那份，避免和仓库根 LICENSE 各自漂移
 LicenseFile={#SourceDir}\LICENSE.txt
+; 默认普通权限安装（{autopf} 此时为 %LocalAppData%\Programs）：不必为装个隐藏窗口的小工具
+; 弹 UAC。仍允许在启动对话框改选「为所有用户安装」装进 Program Files。
+; 两种模式下数据都在 %APPDATA%\BossKey，与安装目录无关，见 crates/common/src/paths.rs。
+; 升级时 Inno 沿用上次的安装模式（UsePreviousPrivileges 默认开），旧的按机器安装原地升级。
+PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 OutputDir=..\..\dist\installer
 OutputBaseFilename=Boss-Key-{#MyAppVersion}-Setup
@@ -52,9 +60,9 @@ Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [CustomMessages]
-chinesesimplified.KeepConfigPrompt=是否保留配置文件（config.json）？%n%n选择“是”将保留你的设置，重新安装后可继续使用；%n选择“否”将删除包括配置文件在内的整个安装目录。
-chinesetraditional.KeepConfigPrompt=是否保留設定檔（config.json）？%n%n選擇「是」將保留你的設定，重新安裝後可繼續使用；%n選擇「否」將刪除包括設定檔在內的整個安裝目錄。
-english.KeepConfigPrompt=Do you want to keep your settings file (config.json)?%n%nChoose "Yes" to keep your settings for a future reinstall;%nchoose "No" to delete the entire installation folder, including the settings file.
+chinesesimplified.KeepConfigPrompt=是否保留配置文件（config.json）？%n%n选择“是”将保留你的设置，重新安装后可继续使用；%n选择“否”将删除包括配置文件在内的全部数据。
+chinesetraditional.KeepConfigPrompt=是否保留設定檔（config.json）？%n%n選擇「是」將保留你的設定，重新安裝後可繼續使用；%n選擇「否」將刪除包括設定檔在內的全部資料。
+english.KeepConfigPrompt=Do you want to keep your settings file (config.json)?%n%nChoose "Yes" to keep your settings for a future reinstall;%nchoose "No" to delete all data, including the settings file.
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -63,6 +71,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\{#CoreExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\{#ConfigExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "static\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
+; 安装版标记：程序据它把数据存到 %APPDATA%\BossKey 而非安装目录（见 crates/common/src/paths.rs）。
+; 不放在便携文件夹 dist\Boss-Key 里，故直接从脚本目录取——便携版有了它就不便携了。
+Source: "{#InstalledMarker}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"
@@ -79,6 +90,8 @@ const
   AutostartTaskName = 'BossKeyAutostart';
   RunSubkey = 'Software\Microsoft\Windows\CurrentVersion\Run';
   RunValueName = 'Boss Key Application';
+  // 配置界面（Tauri）的 WebView2 用户数据目录名，等于 tauri.conf.json 里的 identifier。
+  WebViewDataDirName = 'cn.hanloth.bosskey.config';
 
 // 强制结束核心与配置进程。核心是无窗口常驻进程，CloseApplications 关不掉它；
 // 且映像名 "Boss Key.exe" 含空格，taskkill 的 /IM 值必须加引号，否则参数被拆断而失败。
@@ -111,13 +124,42 @@ begin
   Result := '';
 end;
 
+// 清理一个数据目录里的运行时产物（日志、恢复文件、缓存、写入残留），配置文件除外。
+// config.json.tmp 是原子保存的中间文件，写到一半崩溃会留下；
+// .BossKey-write-probe-* 是可写性探测的探针文件，进程被强杀时会留下。
+// 二者都不该留在磁盘上，且留着会让空目录删不掉。
+procedure RemoveRuntimeFiles(Dir: string);
+begin
+  DelTree(Dir + '\logs', True, True, True);
+  DeleteFile(Dir + '\recovery.json');
+  DeleteFile(Dir + '\verhub_cache.json');
+  DeleteFile(Dir + '\config.json.tmp');
+  DelTree(Dir + '\.BossKey-write-probe-*', False, True, False);
+end;
+
+// 清理配置界面的 WebView2 用户数据目录（%LOCALAPPDATA%\<identifier>\EBWebView）。
+// 它不在数据目录里，位置由 Tauri 按 identifier 决定，不删会残留几十 MB 的浏览器缓存。
+// 里面只有缓存与本地存储，用户设置在 config.json 中，故不受「是否保留配置」影响。
+procedure RemoveWebViewData;
+begin
+  DelTree(ExpandConstant('{localappdata}\' + WebViewDataDirName), True, True, True);
+end;
+
 // 卸载时清理：
 // - usUninstall（删文件前）：摘掉自启看门狗并结束进程，确保核心不会被重新拉起、文件不被占用。
-// - usPostUninstall（删文件后）：清理运行时产物（日志、恢复文件），并询问是否保留配置文件；
-//   保留则只留下 config.json，不保留则连同整个安装目录一起删除。静默卸载不弹窗，默认保留配置。
+// - usPostUninstall（删文件后）：清理运行时产物（日志、恢复文件、缓存、WebView2 用户数据），
+//   并询问是否保留配置文件；保留则只留下 config.json，不保留则连同整个目录一起删除。
+//   静默卸载不弹窗，默认保留配置。
+//
+// 安装版的数据在 %APPDATA%\BossKey（见 crates/common/src/paths.rs）。安装目录里也扫一遍：
+// 早期版本把数据放在那里，迁移时删不掉的原文件会留下。
+//
+// 提权卸载（按机器安装）时 {userappdata} / {localappdata} 指向执行卸载的账户：与当初安装的是
+// 同一账户（UAC 提权自己）时正确，由另一个管理员账户授权时则指向错误的用户目录，那里找不到
+// 文件、什么也不会删。宁可留下也不去遍历所有用户目录误删别人的数据。
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  AppDir: string;
+  AppDir, UserDir: string;
   KeepConfig: Boolean;
 begin
   if CurUninstallStep = usUninstall then
@@ -130,15 +172,24 @@ begin
   if CurUninstallStep <> usPostUninstall then
     Exit;
   AppDir := ExpandConstant('{app}');
-  DelTree(AppDir + '\logs', True, True, True);
-  DeleteFile(AppDir + '\recovery.json');
-  if FileExists(AppDir + '\config.json') then
+  UserDir := ExpandConstant('{userappdata}\BossKey');
+  RemoveRuntimeFiles(AppDir);
+  RemoveRuntimeFiles(UserDir);
+  RemoveWebViewData;
+
+  if FileExists(AppDir + '\config.json') or FileExists(UserDir + '\config.json') then
   begin
     KeepConfig := UninstallSilent or
       (MsgBox(CustomMessage('KeepConfigPrompt'), mbConfirmation, MB_YESNO) = IDYES);
     if not KeepConfig then
+    begin
       DelTree(AppDir, True, True, True);
-  end
-  else
-    RemoveDir(AppDir);
+      DelTree(UserDir, True, True, True);
+      Exit;
+    end;
+  end;
+
+  // 只在目录已空时收尾，留着配置的目录会被跳过。
+  RemoveDir(AppDir);
+  RemoveDir(UserDir);
 end;

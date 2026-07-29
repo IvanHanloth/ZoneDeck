@@ -82,10 +82,10 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
 
     let pipe = r"\\.\pipe\bosskey_test_agent_recovery";
     let options = AgentOptions {
-        config_path,
         pipe_name: pipe.to_string(),
         enable_tray: false,
         auto_quit_ms: Some(15_000),
+        ..AgentOptions::standard(config_path)
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
 
@@ -143,10 +143,10 @@ fn agent_discards_snapshot_from_a_previous_boot() {
 
     let pipe = r"\\.\pipe\bosskey_test_agent_recovery_stale";
     let options = AgentOptions {
-        config_path,
         pipe_name: pipe.to_string(),
         enable_tray: false,
         auto_quit_ms: Some(15_000),
+        ..AgentOptions::standard(config_path)
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
 

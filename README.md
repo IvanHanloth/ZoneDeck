@@ -105,6 +105,22 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 
 完整功能介绍及使用指南，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
+## 数据存放位置与清理
+
+**便携版**把配置、日志、恢复文件与缓存放在**程序文件夹里**，拷走整个文件夹就带走了全部设置。若该文件夹不可写（放在了 `C:\Program Files` 之类的地方，或只读介质上），程序会改存到 `%APPDATA%\BossKey` 并在界面上说明原因。
+
+**安装版**一律存到 `%APPDATA%\BossKey`：安装目录可能在 `C:\Program Files`，普通权限写不进去。程序凭安装包放的 `installed.marker` 分辨自己是哪一种。
+
+无论哪种，配置界面用到的浏览器组件另有一份数据在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，删程序文件夹清不掉它。随包附有 `cleanup.ps1`，在程序目录里打开 PowerShell 执行即可：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File cleanup.ps1
+```
+
+它会列出将要删除的内容并等你确认，随后清理 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`、可能存在的 `%APPDATA%\BossKey`，以及开机自启留下的计划任务 `BossKeyAutostart` 和注册表项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Boss Key Application`。程序文件夹本身不会被删，跑完后自行删除即可。
+
+安装版无需这一步：卸载程序已经做了同样的事，并会询问是否保留配置文件。
+
 ## 开发及贡献指南
 
 有关开发和贡献的详细信息，请参阅 Boss-Key [开发文档](https://boss-key.ivan-hanloth.cn/dev)

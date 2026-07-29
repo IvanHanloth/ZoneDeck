@@ -34,7 +34,9 @@ cargo test -p bosskey-core -- --test-threads=1
 - Compatibility of the uppercase `PID` field, and round-trip serialisation of regex rules;
 - Clamping of click counts and the multi-click interval;
 - Round-tripping of `Command` / `Response` and their snake_case tags;
-- Language tag parsing and preference normalisation (`zh-Hant` → `zh-TW`, untranslated languages falling back to `auto`, and so on).
+- Language tag parsing and preference normalisation (`zh-Hant` → `zh-TW`, untranslated languages falling back to `auto`, and so on);
+- Data folder resolution and migration (portable copies staying in place / installed copies using the user folder / falling back with a stated reason when not writable / recognising the marker file and the uninstaller / the old configuration being moved across, an original that cannot be deleted, an existing config at the destination not being overwritten);
+- Atomicity of configuration writes (a failed write neither truncates the previous file nor leaves a temporary one behind, and the error names the path).
 
 ### `bosskey-core`
 

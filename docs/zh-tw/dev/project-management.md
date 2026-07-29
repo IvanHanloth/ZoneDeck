@@ -51,7 +51,7 @@ feat/* · fix/* · doc/* ──PR──▶ dev ──PR（發版時）──▶ 
 
 ## 版本與發布管理
 
-- 版本號的**唯一真實來源**是 `Cargo.toml` 的 `[workspace.package] version`，其餘三處檔案必須與之一致。
+- 版本號的**唯一真實來源**是 `Cargo.toml` 的 `[workspace.package] version`，其餘地方在建置時取自它。
 - 發布透過 GitHub Actions 手動觸發的工作流程完成：寫入版本號 → 打 tag → 建置並發布 Release。
 - 詳見 [打包與發布](/zh-tw/dev/release)。
 

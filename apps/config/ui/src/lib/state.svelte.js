@@ -47,6 +47,10 @@ export const app = $state({
   pendingAnnouncement: null,
   /** 出错报告 { message, detail }；有值即弹出错误框。 */
   errorReport: null,
+  /** 数据目录 { dir, program_dir, kind }；kind 为 portable_fallback 时提示权限问题。 */
+  dataLocation: null,
+  /** 便携版回退提示弹窗是否打开。 */
+  dataNoticeOpen: false,
 });
 
 // 按「理由」计数暂停核心监控，最后一个理由撤销后才恢复。
@@ -140,6 +144,11 @@ export async function loadAll() {
       app.info = info;
     }),
     invoke("pssuspend_available").then((v) => (app.pssuspend = !!v)),
+    invoke("data_location").then((loc) => {
+      app.dataLocation = loc;
+      // 便携版本该把设置放在程序目录里，回退了就说明那里写不进去，得让用户知道。
+      app.dataNoticeOpen = loc?.kind === "portable_fallback";
+    }),
   ];
   // 项目链接拉不到时静默——「关于」页有内置回退链接，不值得打扰用户。
   verhub

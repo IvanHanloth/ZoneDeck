@@ -23,7 +23,7 @@ Boss Key v3 uses a **two-process architecture** that separates the **core from t
 │  │ • Enumerate/hide/show     │        └────────────┬───────────┘ │
 │  │ • Core Audio muting       │                     │ read/write   │
 │  │ • NtSuspend freezing      │        ┌────────────▼───────────┐ │
-│  │ • Tray icon / balloons    │        │ config.json (next to exe) │
+│  │ • Tray icon / balloons    │        │ config.json (data folder) │
 │  │ • Startup (task/registry) │        │ hot-reloaded on reload │ │
 │  └──────────────────────────┘        └────────────────────────┘ │
 │         ▲ starts at logon                                        │
@@ -68,10 +68,11 @@ Boss-Key/
 ├── Cargo.toml                      workspace (including release profile tuning)
 ├── crates/
 │   ├── common/                     Shared library (no platform dependency; builds cross-platform)
-│   │   └── src/{model,config,matching,ipc,i18n}.rs
+│   │   └── src/{model,config,matching,ipc,i18n,paths}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule (serde-compatible with the old config.json; PID uppercase)
-│   │       config    Config/Setting/Hotkey (reads old configurations + migration)
+│   │       config    Config/Setting/Hotkey (reads old configurations + migration; saves via tmp + rename)
 │   │       matching  Window matching logic
+│   │       paths     Data folder resolution (%APPDATA% when installed, in place when portable; see below)
 │   │       ipc       Command/Response protocol + PipeClient
 │   │       i18n      Language tags (Lang) and preference resolution, shared by core and settings
 │   └── core/                       Resident core (lib + bin)
@@ -102,7 +103,7 @@ Boss-Key/
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
     ├── src-tauri/  Rust backend commands + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs/project links, built on verhub-sdk;
-    │                      project links are cached: in memory + verhub_cache.json next to the exe, valid for one day)
+    │                      project links are cached: in memory + verhub_cache.json in the data folder, valid for one day)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)
@@ -112,6 +113,41 @@ Boss-Key/
 ::: tip Why common has no platform dependency
 `crates/common` deliberately avoids the Windows API so it can be compiled cross-platform, and its pure logic (configuration parsing, matching, protocol) is easier to unit test. Platform-specific code lives in `crates/core`.
 :::
+
+## Data folder
+
+The configuration (`config.json`), logs (`logs/`), the recovery snapshot (`recovery.json`) and the cache (`verhub_cache.json`) all live in a single **data folder**, resolved by `crates/common/src/paths.rs`. Installed and portable copies are treated differently:
+
+| Case | Data folder | `DataDirKind` |
+| --- | --- | --- |
+| Installed copy | `%APPDATA%\BossKey` | `Installed` |
+| Portable copy, program folder writable | The program folder | `Portable` |
+| Portable copy, program folder not writable | `%APPDATA%\BossKey` | `PortableFallback` |
+
+A portable copy keeps its data in the program folder, so copying that folder takes the whole setup along. An installed copy cannot do the same: the installer may land in `Program Files`, which normal privileges cannot write to, so every save from the settings program would fail with `os error 5`.
+
+### Telling the two apart
+
+By looking for traces of an installation in the program folder (`paths::is_installed`):
+
+1. `installed.marker`, dropped by the installer (shipped via `[Files]`, removed on uninstall);
+2. the uninstaller `unins*.exe` — a fallback, so that a deleted marker does not send the data back into `Program Files`. The number increases with repeated installs, hence the prefix match.
+
+::: warning The test must be a file, never a privilege check
+The core may run as administrator while the settings program does not: the core can write inside `Program Files`, the settings program cannot. If each side picked a folder based on what it could write to, the two would read different configs and the user's changes would appear to have no effect. Looking at files makes both sides agree by construction — which is also why an installed copy never probes for writability at all; the answer is the user folder either way.
+:::
+
+### Fallback and migration
+
+When a portable copy finds the program folder unwritable it falls back to the user folder and records `PortableFallback`. The core writes that to the log; the settings program reads it through the `data_location` command and shows a notice explaining that this is a permissions problem and how to change it (see `DataNoticeModal.svelte`). Nothing else is affected.
+
+Whenever the user folder is used, a `config.json` in the program folder is moved across: copied first, then the original is deleted on a best-effort basis. An existing config at the destination is left untouched — that is the one currently in use — and the old file is left alone as well. If the original cannot be deleted (no write permission, or the file is in use) it simply stays; it is never read again.
+
+::: tip The settings window's browser data lives elsewhere
+Following the identifier in `tauri.conf.json`, Tauri puts the WebView2 user data in `%LOCALAPPDATA%\cn.hanloth.bosskey.config`. It is not part of the data folder and is not managed by `paths.rs`. Both the installer's uninstaller and the `scripts/cleanup.ps1` shipped with the portable edition remove it.
+:::
+
+The data folder actually in use, and how it was chosen, are written to the log on every start; check that first when diagnosing read/write failures.
 
 ## Inside the core: the agent message loop
 
@@ -130,6 +166,8 @@ Window events keep the hidden records maintained in real time: when a hidden win
 
 When hiding or showing is triggered, `HideController` orchestrates it with a two-phase, intent-first flow: `plan_hide` computes the execution plan (pruning stale records and backfilling PIDs) → the planned snapshot is written to `recovery.json` (persist first, act second — a crash mid-hide loses no records) → `commit_hide` hides the windows synchronously (`SW_HIDE`) and hands muting / freezing / the pause key to the dedicated side-effect thread (`effects_worker.rs`), executed asynchronously in FIFO order — the message loop is never blocked by slow operations (audio enumeration, waiting on pssuspend), so hotkeys and the UI stay responsive.
 
+The order within the queue matters: pause key → mute → settle → freeze. Freezing stops a process from responding to messages at all, so freezing before the hide has finished painting leaves a ghost of the window on screen; the pause key likewise needs time to be handled by the target program. Hence a single settle before the batch of freezes (`FREEZE_SETTLE_DELAY`, once per batch, skipped when there is nothing to freeze). Muting is deliberately not placed behind that wait — it goes through the audio session and does not care whether the target process is running.
+
 When restoring (showing), every record is validated first: the handle must still exist and still belong to the original process (`IsWindow` + PID comparison), and frozen / muted records must match the process creation time — both handles and PIDs are recycled by the system, and records that fail validation are skipped and reported truthfully in the log.
 
 ::: info Designed for testability
@@ -138,7 +176,7 @@ When restoring (showing), every record is validated first: the handle must still
 
 ## Stability (three layers of crash self-healing)
 
-1. **Crash logs**: key events and panics are written to `logs/BossKey-YYYY-MM-DD.log` next to the exe (rotated daily, retained per `log_retention_days`; 0 disables logging; release builds drop the DEBUG level).
+1. **Crash logs**: key events and panics are written to `logs/BossKey-YYYY-MM-DD.log` in the [data folder](#data-folder) (rotated daily, retained per `log_retention_days`; 0 disables logging; release builds drop the DEBUG level).
 2. **Crash recovery**: before any hide action executes, what is *about to be* hidden / frozen / muted is written to `recovery.json` (tmp + rename atomic replace); windows are recovered automatically on the next start after an abnormal exit. Snapshots carry the boot time and process creation times, so stale snapshots from a previous boot are discarded instead of acting on unrelated windows / processes.
 3. **Watchdog**: the scheduled task's `RestartOnFailure` (restart within a minute of a crash, up to 3 times). Release builds use `panic = "abort"`, and the panic hook exits with a non-zero code once the log is written — exactly what triggers the scheduled-task restart.
 

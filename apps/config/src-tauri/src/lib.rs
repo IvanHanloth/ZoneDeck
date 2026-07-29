@@ -12,15 +12,23 @@ mod verhub;
 
 const CORE_EXE: &str = "Boss Key.exe";
 
+/// 程序自身所在目录：只用来找同目录下的可执行文件（核心、pssuspend）。
+/// 数据文件一律走 [`bosskey_common::paths`]——安装版存到用户目录，便携版才在这里。
 fn exe_dir() -> PathBuf {
-    std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."))
+    bosskey_common::paths::exe_dir()
+}
+
+/// 数据目录（配置、日志、恢复文件、缓存）；与核心得出的结果一致。
+fn data_dir() -> PathBuf {
+    bosskey_common::paths::data_dir()
 }
 
 fn config_path() -> PathBuf {
-    exe_dir().join("config.json")
+    bosskey_common::paths::config_path()
+}
+
+fn log_dir() -> PathBuf {
+    data_dir().join(bosskey_core::logging::LOG_DIR_NAME)
 }
 
 /// 定位同目录下的核心程序，不存在时报错。
@@ -59,6 +67,15 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
     tauri::async_runtime::spawn_blocking(f)
         .await
         .expect("阻塞任务执行失败")
+}
+
+/// 数据目录的位置与由来，供界面在便携版回退时提示用户。
+#[derive(Serialize)]
+struct DataLocation {
+    dir: String,
+    program_dir: String,
+    /// `installed` / `portable` / `portable_fallback`。
+    kind: &'static str,
 }
 
 #[derive(Serialize)]
@@ -389,15 +406,31 @@ fn startup_action() -> Option<String> {
         .find(|a| a == bosskey_common::ARG_RESTORE || a == bosskey_common::ARG_ABOUT)
 }
 
-/// 打开日志目录（`<exe 同目录>/logs`）；目录不存在时先创建，再用资源管理器打开。
+/// 打开日志目录（`<数据目录>/logs`）；目录不存在时先创建，再用资源管理器打开。
 #[tauri::command]
 async fn open_log_dir() -> Result<(), String> {
     blocking(|| {
-        let dir = exe_dir().join(bosskey_core::logging::LOG_DIR_NAME);
+        let dir = log_dir();
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         bosskey_core::shell::open(&dir.to_string_lossy())
     })
     .await
+}
+
+/// 数据目录及其由来。界面据 `kind` 判断是否要提示便携版写不进程序目录。
+#[tauri::command]
+fn data_location() -> DataLocation {
+    use bosskey_common::paths::DataDirKind;
+    let located = bosskey_common::paths::locate();
+    DataLocation {
+        dir: located.dir.display().to_string(),
+        program_dir: located.program_dir.display().to_string(),
+        kind: match located.kind {
+            DataDirKind::Installed => "installed",
+            DataDirKind::Portable => "portable",
+            DataDirKind::PortableFallback => "portable_fallback",
+        },
+    }
 }
 
 #[tauri::command]
@@ -423,11 +456,11 @@ async fn open_external(url: String) -> Result<(), String> {
     blocking(move || bosskey_core::shell::open(&url)).await
 }
 
-/// 项目公开链接（主页 / 仓库 / 文档等）。带缓存（内存 + exe 同目录磁盘文件，
+/// 项目公开链接（主页 / 仓库 / 文档等）。带缓存（内存 + 数据目录下的磁盘文件，
 /// 有效期一天），过期才请求 Verhub；请求失败退回过期缓存。
 #[tauri::command]
 async fn verhub_project_links() -> Result<verhub::ProjectLinks, String> {
-    verhub::project_links(&exe_dir().join("verhub_cache.json"))
+    verhub::project_links(&data_dir().join("verhub_cache.json"))
         .await
         .map_err(|e| e.to_string())
 }
@@ -484,7 +517,7 @@ async fn verhub_upload_log(content: String) -> Result<(), String> {
 #[tauri::command]
 async fn recent_log_tail(lines: usize) -> String {
     blocking(move || {
-        let dir = exe_dir().join(bosskey_core::logging::LOG_DIR_NAME);
+        let dir = log_dir();
         let latest = std::fs::read_dir(&dir)
             .ok()
             .into_iter()
@@ -557,6 +590,7 @@ pub fn run() {
             pssuspend_available,
             startup_action,
             app_info,
+            data_location,
             open_external,
             verhub_project_links,
             verhub_check_update,
