@@ -31,8 +31,9 @@ use crate::hide::{
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
-use crate::keyboard_hook::{self, KeyboardHook, WM_KEY_TRIGGER};
-use crate::mouse_hook::{self, MouseHook, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
+use crate::input_hooks::InputHooks;
+use crate::keyboard_hook::{self, WM_KEY_TRIGGER};
+use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
 use crate::tray_badge::TrayIconSet;
@@ -102,14 +103,13 @@ struct AgentState {
     /// 托盘图标的角标变体缓存；未启用托盘时为 None。
     tray_icons: Option<TrayIconSet>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
-    mouse_hook: Option<MouseHook>,
+    /// 承载两个低级输入钩子的专职线程；起不来时为 None，鼠标绑定与「不传递」失效。
+    input_hooks: Option<InputHooks>,
     float_window: Option<FloatWindow>,
     /// 是否正在监听热键与鼠标（见 `Command::SetHotkeys`）。
     monitoring: bool,
     /// 热键当前是否已注册（避免重复 RegisterHotKey）。
     hotkeys_armed: bool,
-    /// 承载「不传递」热键的键盘钩子；没有热键开启「不传递」时不安装。
-    keyboard_hook: Option<KeyboardHook>,
 }
 
 impl AgentState {
@@ -175,16 +175,13 @@ impl AgentState {
     ) {
         if intercepts.is_empty() {
             keyboard_hook::set_hotkeys(&[]);
-            self.keyboard_hook = None;
+            self.set_keyboard_hook(false);
             return;
         }
         let parsed: Vec<(i32, ParsedHotkey)> =
             intercepts.iter().map(|(id, _, _, hk)| (*id, *hk)).collect();
         keyboard_hook::set_hotkeys(&parsed);
-        if self.keyboard_hook.is_none() {
-            self.keyboard_hook = KeyboardHook::install(hwnd);
-        }
-        if self.keyboard_hook.is_some() {
+        if self.set_keyboard_hook(true) {
             for (_, label, raw, _) in &intercepts {
                 logging::debug(&format!("{label}热键已由键盘钩子拦截（不传递）: {raw}"));
             }
@@ -202,6 +199,14 @@ impl AgentState {
         }
     }
 
+    /// 请求钩子线程把键盘钩子对齐 `on`，返回对齐后是否已装上。
+    /// 钩子线程起不来时恒为未装上，由调用方回退。
+    fn set_keyboard_hook(&self, on: bool) -> bool {
+        self.input_hooks
+            .as_ref()
+            .is_some_and(|hooks| hooks.set_keyboard(on))
+    }
+
     fn unregister_hotkeys(&mut self, hwnd: HWND) {
         unsafe {
             for id in [
@@ -215,7 +220,7 @@ impl AgentState {
             }
         }
         keyboard_hook::set_hotkeys(&[]);
-        self.keyboard_hook = None;
+        self.set_keyboard_hook(false);
     }
 
     /// 让热键与鼠标钩子对齐 `self.monitoring`。幂等：已是目标状态时什么都不做。
@@ -232,13 +237,16 @@ impl AgentState {
 
     fn refresh_runtime(&mut self, hwnd: HWND) {
         // 监控停用期间不装鼠标钩子。
-        if self.monitoring && mouse_hook::wants_hook(&self.config.setting) {
+        let want_mouse = self.monitoring && mouse_hook::wants_hook(&self.config.setting);
+        if want_mouse {
             mouse_hook::set_flags(&self.config.setting);
-            if self.mouse_hook.is_none() {
-                self.mouse_hook = MouseHook::install(hwnd, &self.config.setting);
-            }
-        } else {
-            self.mouse_hook = None;
+        }
+        let mouse_armed = self
+            .input_hooks
+            .as_ref()
+            .is_some_and(|hooks| hooks.set_mouse(want_mouse));
+        if want_mouse && !mouse_armed {
+            log_warn!("鼠标钩子安装失败，鼠标按键绑定与四角触发不生效");
         }
 
         unsafe {
@@ -273,7 +281,7 @@ impl AgentState {
         self.update_tray_icon();
     }
 
-    /// 让托盘图标的状态角标与悬浮提示对齐当前配置与运行状态。均未变化时开销为零。
+    /// 让托盘图标的状态角标与悬浮提示对齐当前配置与运行状态。
     fn update_tray_icon(&mut self) {
         let (Some(tray), Some(icons)) = (&mut self.tray, &mut self.tray_icons) else {
             return;
@@ -571,7 +579,7 @@ fn log_hide(config: &Config, outcomes: &[RuleOutcome], plan: &HidePlan) {
     }
 }
 
-/// 记录恢复结果；失效与找回的数量如实写出。
+/// 记录恢复结果。
 fn log_show(outcome: ShowOutcome) {
     if outcome.stale > 0 {
         logging::info(&format!(
@@ -605,10 +613,8 @@ unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> windows::core::Res
     }
 }
 
-/// 热键注册失败的日志文案。
-///
-/// 「已被占用」（1409）是最常见的原因，但并非唯一，故按系统错误码区分：
-/// 命中 1409 才断言被占用，其余情况如实报告错误码，不作猜测。
+/// 热键注册失败的日志文案。「已被占用」（1409）常见但非唯一原因，
+/// 故只在命中 1409 时断言被占用，其余如实报告错误码。
 fn hotkey_failure_message(label: &str, raw: &str, e: &windows::core::Error) -> String {
     if e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult() {
         format!("{label}热键注册失败，已被其他程序占用，该热键不生效: {raw}")
@@ -655,7 +661,6 @@ fn toggle_auto_hide(state: &mut AgentState, hwnd: HWND) {
     if let Err(e) = state.config.save(&state.config_path) {
         log_warn!("自动隐藏开关写入配置失败，核心重启后将丢失本次切换: {e}");
     }
-    // 重新武装/停掉空闲检测定时器，并刷新托盘角标。
     state.refresh_runtime(hwnd);
 }
 
@@ -820,6 +825,8 @@ fn quit(state: &mut AgentState, hwnd: HWND) {
     }
     state.persist_recovery();
     state.unregister_hotkeys(hwnd);
+    // 先摘钩子再收尾，退出过程中不再有输入事件进来。
+    state.input_hooks = None;
     // 排干副作用队列，确保退出前解冻 / 取消静音已生效。
     if let Some(worker) = state.effects_worker.take() {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
@@ -906,7 +913,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         WM_APP_FLOAT => {
             match wparam.0 {
-                // 双击悬浮窗触发老板键。
+                // 双击悬浮窗触发。
                 FLOAT_TOGGLE => {
                     if state.config.setting.click_to_hide {
                         state.apply_toggle();
@@ -960,7 +967,6 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     }
                     quit(state, hwnd);
                 }
-                // 停用心跳超时，恢复监控。
                 SUSPEND_GUARD_TIMER_ID => {
                     unsafe {
                         let _ = KillTimer(Some(hwnd), SUSPEND_GUARD_TIMER_ID);
@@ -1037,10 +1043,8 @@ fn create_agent_window() -> windows::core::Result<HWND> {
     }
 }
 
-/// 加载配置；无论损坏还是读取失败都回退默认配置以保证核心可用，但必须留下记录。
-///
-/// 静默回退会让用户的热键与规则「凭空失效」，且日志里毫无痕迹，故此处按 error 记录，
-/// 并写出配置路径与具体原因。
+/// 加载配置；损坏或读取失败都回退默认配置以保证核心可用。
+/// 回退会让用户的热键与规则凭空失效，故按 error 记录配置路径与原因。
 fn load_config_logging_fallback(path: &Path) -> Config {
     const FALLBACK: &str = "已按默认配置启动，原有热键与规则本次不生效";
     match Config::load_reporting(path) {
@@ -1067,8 +1071,7 @@ fn should_open_settings(config_missing: bool, recorded: &str, current: &str) -> 
 }
 
 pub fn run(options: AgentOptions) {
-    // 是否首次启动（尚无配置文件）/ 更新后首次启动（配置里记录的程序版本与当前不一致）。
-    // load() 在文件缺失时也返回默认值，故须先按文件是否存在判断「首次」。
+    // load() 在文件缺失时也返回默认值，故「首次启动」须先按文件是否存在判断。
     let config_missing = !options.config_path.exists();
     let mut config = load_config_logging_fallback(&options.config_path);
     i18n::set_from_pref(&config.setting.language);
@@ -1078,7 +1081,7 @@ pub fn run(options: AgentOptions) {
         bosskey_common::APP_VERSION,
     );
 
-    // 仅正常运行时（非冒烟测试）才拉起配置程序。
+    // 冒烟测试不拉起配置程序。
     if options.auto_quit_ms.is_none() && open_settings {
         let reason = if config_missing {
             "首次启动，拉起配置程序".to_string()
@@ -1165,6 +1168,12 @@ pub fn run(options: AgentOptions) {
     // 副作用由专职线程执行，消息循环不被慢操作阻塞。
     let effects_worker = EffectsWorker::spawn(WinEffects::new(exe_dir));
 
+    // 低级输入钩子挂在专职线程上：代理线程的枚举 / 落盘等重活不得拖慢全局输入。
+    let input_hooks = InputHooks::spawn(hwnd);
+    if input_hooks.is_none() {
+        log_error!("输入钩子线程启动失败，鼠标绑定与「不传递」热键本次不可用");
+    }
+
     let state = Box::new(RefCell::new(AgentState {
         config,
         config_path: options.config_path.clone(),
@@ -1176,11 +1185,10 @@ pub fn run(options: AgentOptions) {
         tray,
         tray_icons,
         ipc_rx,
-        mouse_hook: None,
+        input_hooks,
         float_window: None,
         monitoring: true,
         hotkeys_armed: false,
-        keyboard_hook: None,
     }));
 
     // 恢复文件存在即上次异常退出仍有窗口被隐藏，先找回。

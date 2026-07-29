@@ -86,6 +86,7 @@ Boss-Key/
 │           effects_worker.rs  副作用專職執行緒（FIFO 佇列；訊息迴圈只做 SW_HIDE）
 │           audio.rs      Core Audio 工作階段靜音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增強凍結
+│           input_hooks.rs 輸入掛鉤專職執行緒（承載兩個低階掛鉤，優先權 above normal）
 │           mouse_hook.rs WH_MOUSE_LL（中鍵/側鍵/四角）
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
@@ -160,6 +161,14 @@ Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在
 - 通知區域圖示互動。
 
 訊息迴圈狀態由 `RefCell` 承載：通知區域／懸浮窗選單的強制回應迴圈（`TrackPopupMenu`）會重入 `wndproc`，重入期間的事件借用失敗即被安全丟棄，避免出現兩個可變參考的別名。IPC 執行緒建立具名管道失敗時按退避（1s → 5s → 30s）重試，不會結束。
+
+### 低階輸入掛鉤不與訊息迴圈同執行緒
+
+`WH_MOUSE_LL`／`WH_KEYBOARD_LL` 的回呼由**安裝執行緒的訊息幫浦**派送，且系統的輸入執行緒要等掛鉤鏈返回才繼續投遞事件。若與 agent 同執行緒，列舉視窗、寫入復原檔案、處理全系統視窗事件這類操作會直接拖慢全域滑鼠與鍵盤輸入，單次超過 `LowLevelHooksTimeout`（預設 300ms）時系統還會丟棄該事件。
+
+故 `input_hooks.rs` 單獨啟動一條只跑訊息幫浦的執行緒承載這兩個掛鉤，執行緒優先權提到 above normal，回呼裡只做純記憶體判定與 `PostMessageW`（滑鼠移動這條最熱的路徑上不加鎖，取樣存在不可分割變數裡）。agent 執行緒透過一個僅訊息視窗向它同步下達裝卸請求，並依返回值決定是否回退（鍵盤掛鉤裝不上時「不傳遞」快速鍵退化為 `RegisterHotKey`）。
+
+agent 執行緒本身**不**提優先權：它做的是列舉／凍結／寫入磁碟這類重活，抬高只會從前景程式手裡搶 CPU。
 
 視窗事件驅動隱藏紀錄的即時維護：被隱藏的視窗自行銷毀或被外部復原顯示時，紀錄即刻移除並寫入磁碟；標題變化同步進隱藏紀錄與精確視窗規則（僅記憶體，隨下次正常寫入時落盤），使「標題 + 程序路徑」的追溯與找回始終基於最新資訊。復原時若控制代碼已失效，還會按「程序路徑 + 標題」在目前不可見視窗中嘗試重新找回。
 

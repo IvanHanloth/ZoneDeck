@@ -12,6 +12,7 @@ pub mod i18n;
 pub mod icon;
 pub mod idle;
 pub mod input;
+pub mod input_hooks;
 pub mod ipc_server;
 pub mod keyboard_hook;
 pub mod logging;

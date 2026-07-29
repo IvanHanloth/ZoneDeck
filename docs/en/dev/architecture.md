@@ -86,6 +86,7 @@ Boss-Key/
 │           effects_worker.rs  Dedicated side-effect thread (FIFO queue; the message loop only does SW_HIDE)
 │           audio.rs      Core Audio session muting
 │           freeze.rs     NtSuspend/Resume + pssuspend64 enhanced freezing
+│           input_hooks.rs Dedicated input-hook thread (owns both low-level hooks, above-normal priority)
 │           mouse_hook.rs WH_MOUSE_LL (middle/side buttons, corners)
 │           keyboard_hook.rs WH_KEYBOARD_LL ("don't pass through" hotkey interception)
 │           idle.rs       GetLastInputInfo idle detection + auto-hide decision
@@ -161,6 +162,14 @@ The data folder actually in use, and how it was chosen, are written to the log o
 - Tray icon interaction.
 
 Message-loop state lives in a `RefCell`: the modal loops of the tray / floating-window menus (`TrackPopupMenu`) re-enter `wndproc`, and events arriving during re-entry fail the borrow and are safely dropped, so no aliased mutable references can exist. The IPC thread retries pipe creation with backoff (1s → 5s → 30s) instead of exiting.
+
+### Low-level input hooks do not share the message loop's thread
+
+`WH_MOUSE_LL` / `WH_KEYBOARD_LL` callbacks are dispatched by the **installing thread's message pump**, and the system's input thread waits for the hook chain to return before delivering the event onward. Sharing a thread with the agent means enumerating windows, writing the recovery file, or handling system-wide window events would directly slow down global mouse and keyboard input; a single callback exceeding `LowLevelHooksTimeout` (300ms by default) also makes the system drop that event.
+
+`input_hooks.rs` therefore runs a dedicated thread that does nothing but pump messages for these two hooks, at above-normal priority. The callbacks only perform in-memory checks and `PostMessageW` (the hottest path, mouse movement, takes no lock — samples live in atomics). The agent thread issues install/uninstall requests synchronously through a message-only window and uses the return value to decide whether to fall back (when the keyboard hook cannot be installed, "do not pass through" hotkeys degrade to `RegisterHotKey`).
+
+The agent thread's own priority is **not** raised: it does the heavy work — enumeration, freezing, persistence — and raising it would only steal CPU from foreground programs.
 
 Window events keep the hidden records maintained in real time: when a hidden window is destroyed or shown externally, its record is removed and persisted immediately; title changes are synced into hidden records and exact window rules (in memory only, written out with the next regular persist), so reacquisition and refinding by "title + process path" always work on fresh data. On restore, records with dead handles are additionally refound among currently invisible windows by "process path + title".
 

@@ -118,7 +118,7 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
         let data = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         // 注入的按键（自家的媒体键模拟等）不参与判定，避免反馈回路。
         if data.flags.0 & LLKHF_INJECTED.0 == 0 {
-            // GetKeyState 在锁外调用，锁内只剩纯内存判定。
+            // 在锁外取修饰键状态，锁内只剩纯内存判定。
             let pressed = pressed_modifiers();
             let decision = HOTKEYS
                 .lock()
@@ -142,7 +142,7 @@ pub struct KeyboardHook {
 }
 
 impl KeyboardHook {
-    /// 安装钩子；须在有消息循环的线程（代理窗口线程）上调用。
+    /// 安装钩子；须在 [`crate::input_hooks`] 的专职线程上调用。
     pub fn install(agent_hwnd: HWND) -> Option<KeyboardHook> {
         HWND_RAW.store(agent_hwnd.0 as isize, Relaxed);
         unsafe {

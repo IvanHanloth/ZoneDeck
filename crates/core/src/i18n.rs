@@ -200,7 +200,6 @@ pub fn set_from_pref(pref: &str) {
     }
 }
 
-/// 当前生效语言。
 pub fn lang() -> Lang {
     LANG.read().map(|g| *g).unwrap_or_default()
 }

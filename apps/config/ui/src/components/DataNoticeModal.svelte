@@ -1,5 +1,5 @@
 <script>
-  // 便携版写不进程序目录时的提示：说明设置存到了哪里，以及怎么改回去。
+  // 便携版写不进程序目录时的提示：设置存到了哪里、如何改回去。
   import IconAlert from "~icons/lucide/triangle-alert";
   import Modal from "./Modal.svelte";
   import { app } from "../lib/state.svelte.js";

@@ -481,7 +481,6 @@ async fn verhub_announcements(limit: u32) -> Result<Vec<verhub::Announcement>, S
         .map_err(|e| e.to_string())
 }
 
-/// `contact` 可空——留了才好回复用户。
 #[tauri::command]
 async fn verhub_submit_feedback(
     content: String,
@@ -501,7 +500,6 @@ async fn verhub_submit_feedback(
         .map_err(|e| e.to_string())
 }
 
-/// 上报一段日志
 #[tauri::command]
 async fn verhub_upload_log(content: String) -> Result<(), String> {
     let device_info = serde_json::json!({

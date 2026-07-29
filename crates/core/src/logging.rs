@@ -9,9 +9,8 @@ use std::sync::{Mutex, OnceLock};
 
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
-/// 日志目录名（位于 exe 同目录下）。
 pub const LOG_DIR_NAME: &str = "logs";
-/// 日志文件名前缀（面向用户，使用品牌大小写）。
+/// 日志文件名前缀；面向用户，用品牌大小写。
 const LOG_FILE_PREFIX: &str = "BossKey-";
 const LOG_FILE_SUFFIX: &str = ".log";
 
@@ -218,7 +217,7 @@ macro_rules! log_error {
     };
 }
 
-/// 格式化 panic 信息为单条日志（便于单元测试）。
+/// 格式化 panic 信息为单条日志。
 fn format_panic(message: &str, location: Option<&str>) -> String {
     match location {
         Some(loc) => format!("程序发生崩溃 (panic): {message} @ {loc}"),

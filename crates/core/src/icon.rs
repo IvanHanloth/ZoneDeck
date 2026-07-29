@@ -218,7 +218,7 @@ fn zlib_stored(data: &[u8]) -> Vec<u8> {
     let mut blocks = data.chunks(MAX_BLOCK).peekable();
     loop {
         let Some(block) = blocks.next() else {
-            // data 为空时也要输出一个空的最终块
+            // data 为空时也要输出一个空的最终块。
             out.extend_from_slice(&[0x01, 0x00, 0x00, 0xFF, 0xFF]);
             break;
         };
@@ -343,7 +343,7 @@ mod tests {
         chunks
     }
 
-    /// 测试用 stored-deflate 解压（只支持我们自己产生的未压缩块）。
+    /// 测试用 stored-deflate 解压，只支持本模块产生的未压缩块。
     fn inflate_stored(zlib: &[u8]) -> Vec<u8> {
         assert_eq!(zlib[0], 0x78, "zlib CMF 头");
         let mut out = Vec::new();

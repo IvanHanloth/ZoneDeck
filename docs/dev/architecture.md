@@ -86,6 +86,7 @@ Boss-Key/
 │           effects_worker.rs  副作用专职线程（FIFO 队列；消息循环只做 SW_HIDE）
 │           audio.rs      Core Audio 会话静音
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增强冻结
+│           input_hooks.rs 输入钩子专职线程（承载两个低级钩子，优先级 above normal）
 │           mouse_hook.rs WH_MOUSE_LL（中键/侧键/四角）
 │           keyboard_hook.rs WH_KEYBOARD_LL（「不传递」热键拦截）
 │           idle.rs       GetLastInputInfo 空闲 + 自动隐藏判定
@@ -161,6 +162,14 @@ Tauri 按 `tauri.conf.json` 里的 identifier 把 WebView2 用户数据放在 `%
 - 托盘图标交互。
 
 消息循环状态由 `RefCell` 承载：托盘 / 悬浮窗菜单的模态循环（`TrackPopupMenu`）会重入 `wndproc`，重入期间的事件借用失败即被安全丢弃，避免出现两个可变引用的别名。IPC 线程创建命名管道失败时按退避（1s → 5s → 30s）重试，不会退出。
+
+### 低级输入钩子不与消息循环同线程
+
+`WH_MOUSE_LL` / `WH_KEYBOARD_LL` 的回调由**安装线程的消息泵**派发，且系统的输入线程要等钩子链返回才继续投递事件。若与 agent 同线程，枚举窗口、写恢复文件、处理全系统窗口事件这类操作会直接拖慢全局鼠标与键盘输入，单次超过 `LowLevelHooksTimeout`（默认 300ms）时系统还会丢弃该事件。
+
+故 `input_hooks.rs` 单起一条只跑消息泵的线程承载这两个钩子，线程优先级提到 above normal，回调里只做纯内存判定与 `PostMessageW`（鼠标移动这条最热的路径上不加锁，采样存在原子里）。agent 线程通过一个仅消息窗口向它同步下发装卸请求，并据返回值决定是否回退（键盘钩子装不上时「不传递」热键退化为 `RegisterHotKey`）。
+
+agent 线程本身**不**提优先级：它干的是枚举 / 冻结 / 落盘这类重活，抬高只会从前台程序手里抢 CPU。
 
 窗口事件驱动隐藏记录的实时维护：被隐藏的窗口自行销毁或被外部恢复显示时，记录即刻移除并落盘；标题变化同步进隐藏记录与精确窗口规则（仅内存，随下次正常落盘写出），使「标题 + 进程路径」的追溯与找回始终基于最新信息。恢复时若句柄已失效，还会按「进程路径 + 标题」在当前不可见窗口中尝试重新找回。
 

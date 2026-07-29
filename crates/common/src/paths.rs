@@ -4,8 +4,7 @@
 //!
 //! - **安装版**用 `%APPDATA%\BossKey`。安装包可以装进 `Program Files`，那里普通权限
 //!   进程不可写，配置程序每次保存都会得到 `os error 5`。
-//! - **便携版**用 exe 同目录，拷走整个文件夹就带走了全部设置。
-//!   目录写不进去时退回 `%APPDATA%\BossKey`，程序照常能用，界面据此提示这是权限问题。
+//! - **便携版**用 exe 同目录；写不进去时退回 `%APPDATA%\BossKey`，界面据此提示权限问题。
 //!
 //! 靠程序目录里有没有安装痕迹来分辨：安装包会放一份 [`INSTALLED_MARKER`]，
 //! 卸载程序 `unins*.exe` 也在同一目录，便携版压缩包里两者都没有。
@@ -15,9 +14,7 @@
 
 use std::path::{Path, PathBuf};
 
-/// 配置文件名。
 pub const CONFIG_FILE_NAME: &str = "config.json";
-/// 数据目录在 `%APPDATA%` 下的名字。
 pub const USER_DIR_NAME: &str = "BossKey";
 /// 安装版标记文件，由安装包放进程序目录，卸载时随之移除。
 pub const INSTALLED_MARKER: &str = "installed.marker";
@@ -59,11 +56,8 @@ pub fn user_data_dir() -> PathBuf {
     }
 }
 
-/// 程序目录里有没有安装痕迹。
-///
-/// 认两样东西：安装包放的 [`INSTALLED_MARKER`]，以及卸载程序 `unins*.exe`。
-/// 后者是兜底——标记文件被误删时仍认得出是安装版，不至于把数据写回 `Program Files`。
-/// 卸载程序的序号会随重复安装递增（`unins000` / `unins001`…），故按前缀匹配。
+/// 程序目录里有没有安装痕迹：安装包放的 [`INSTALLED_MARKER`]，或卸载程序 `unins*.exe`。
+/// 后者是标记文件被误删时的兜底；其序号随重复安装递增，故按前缀匹配。
 pub fn is_installed(program_dir: &Path) -> bool {
     if program_dir.join(INSTALLED_MARKER).exists() {
         return true;
@@ -92,9 +86,8 @@ pub fn dir_writable(dir: &Path) -> bool {
 
 /// 把程序目录里的旧配置搬到用户目录：先复制，再尽力删掉原文件。
 ///
-/// 目标已有配置就不动它——那是当前在用的一份，旧文件不得覆盖，也不去删。
-/// 删不掉（`Program Files` 下没有写权限、文件被占用）就留在原处：安装版只认用户目录，
-/// 旧文件不会再被读到。
+/// 目标已有配置就不动它，那是当前在用的一份。删不掉就留在原处：
+/// 安装版只认用户目录，旧文件不会再被读到。
 fn migrate_config(program_dir: &Path, user_dir: &Path) {
     let old = program_dir.join(CONFIG_FILE_NAME);
     let new = user_dir.join(CONFIG_FILE_NAME);
@@ -146,12 +139,10 @@ pub fn locate() -> DataDir {
     resolve_data_dir(&program_dir, &user_data_dir(), installed, portable_writable)
 }
 
-/// 本次运行使用的数据目录路径。
 pub fn data_dir() -> PathBuf {
     locate().dir
 }
 
-/// 配置文件路径。
 pub fn config_path() -> PathBuf {
     data_dir().join(CONFIG_FILE_NAME)
 }
