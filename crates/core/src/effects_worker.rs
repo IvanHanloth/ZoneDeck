@@ -10,6 +10,7 @@ use crate::{log_error, log_warn};
 
 enum Task {
     Mute { pid: u32, mute: bool },
+    SettleBeforeFreeze,
     Suspend { pid: u32, enhanced: bool },
     Resume { pid: u32, enhanced: bool },
     SendPause,
@@ -32,6 +33,7 @@ impl EffectsWorker {
                 while let Ok(task) = rx.recv() {
                     match task {
                         Task::Mute { pid, mute } => inner.mute(pid, mute),
+                        Task::SettleBeforeFreeze => inner.settle_before_freeze(),
                         Task::Suspend { pid, enhanced } => inner.suspend(pid, enhanced),
                         Task::Resume { pid, enhanced } => inner.resume(pid, enhanced),
                         Task::SendPause => inner.send_pause(),
@@ -89,6 +91,9 @@ impl Effects for AsyncEffects {
     fn mute(&self, pid: u32, mute: bool) {
         self.send(Task::Mute { pid, mute });
     }
+    fn settle_before_freeze(&self) {
+        self.send(Task::SettleBeforeFreeze);
+    }
     fn suspend(&self, pid: u32, enhanced: bool) {
         self.send(Task::Suspend { pid, enhanced });
     }
@@ -118,6 +123,9 @@ mod tests {
                 .unwrap()
                 .push(format!("mute:{pid}:{mute}"));
         }
+        fn settle_before_freeze(&self) {
+            self.calls.lock().unwrap().push("settle".into());
+        }
         fn suspend(&self, pid: u32, _enhanced: bool) {
             self.calls.lock().unwrap().push(format!("suspend:{pid}"));
         }
@@ -135,9 +143,10 @@ mod tests {
         let worker = EffectsWorker::spawn(recorder.clone());
         let effects = worker.effects();
 
-        // 暂停键必须先于冻结执行（冻结后的进程收不到按键）。
+        // 暂停键必须先于冻结执行（冻结后的进程收不到按键）；静置须紧挨在冻结前。
         effects.send_pause();
         effects.mute(100, true);
+        effects.settle_before_freeze();
         effects.suspend(100, false);
         effects.resume(100, false);
 
@@ -145,7 +154,13 @@ mod tests {
 
         assert_eq!(
             *recorder.calls.lock().unwrap(),
-            vec!["pause", "mute:100:true", "suspend:100", "resume:100"],
+            vec![
+                "pause",
+                "mute:100:true",
+                "settle",
+                "suspend:100",
+                "resume:100"
+            ],
             "任务应按入队顺序全部执行完毕（shutdown 排干队列）"
         );
     }

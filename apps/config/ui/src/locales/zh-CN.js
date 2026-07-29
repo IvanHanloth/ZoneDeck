@@ -198,14 +198,16 @@ export default {
   "options.hideIcon": "同时隐藏 Boss Key 托盘图标",
   "options.hideIconDesc":
     "隐藏窗口时连 Boss Key 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
-  "options.sendPause": "隐藏前发送暂停键（Beta）",
-  "options.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐），会带来约 0.2 秒延迟。",
+  "options.sendPause": "隐藏前发送暂停键",
+  "options.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
 
   "options.freezeCard": "进程冻结",
-  "options.freezeAfterHide": "隐藏窗口时冻结进程（Beta）",
-  "options.freezeAfterHideDesc": "隐藏后挂起目标进程，降低其 CPU / 内存占用；恢复显示时自动解冻。",
+  "options.freezeAfterHide": "隐藏窗口时冻结进程",
+  "options.freezeAfterHideDesc":
+    "隐藏后挂起目标进程，降低其 CPU / 内存占用；恢复显示时自动解冻。可能会带来一定的隐藏 / 恢复延迟。",
   "options.enhancedFreeze": "使用增强冻结",
-  "options.enhancedFreezeDesc": "改用 pssuspend64.exe 冻结。需在程序目录放置该文件，且核心以管理员身份运行。",
+  "options.enhancedFreezeDesc":
+    "改用 pssuspend64.exe 冻结。需在程序目录放置该文件，且核心以管理员身份运行。可能会带来一定的隐藏 / 恢复延迟。",
   "options.enhancedFreezeBlocked": "当前不可用：{reasons}。",
   "options.needFreezeFirst": "需先开启「隐藏窗口时冻结进程」",
   "options.blockedCoreStopped": "核心未运行",
@@ -213,7 +215,7 @@ export default {
   "options.blockedNoPssuspend": "程序目录缺少 pssuspend64.exe",
   "options.freezeWholeTree": "冻结完整进程（Beta）",
   "options.freezeWholeTreeDesc":
-    "递归冻结命中程序的整棵子进程树，冻结更彻底；对普通与增强冻结均生效。可能影响这些子进程的后台任务",
+    "递归冻结命中程序的整棵子进程树，冻结更彻底；对普通与增强冻结均生效。可能影响这些子进程的后台任务，并带来更高的隐藏 / 恢复延迟。",
   "options.freezeNoteBefore": "增强冻结需下载",
   "options.freezeNoteAfter": "并将 pssuspend64.exe 放入程序目录，且核心以管理员身份运行。",
   "options.recheck": "重新检测",
@@ -316,6 +318,16 @@ export default {
   "announce.title": "公告",
   "announce.pinned": "置顶",
   "announce.gotIt": "知道了",
+
+  "dataNotice.title": "设置的存放位置",
+  "dataNotice.heading": "程序所在目录无法写入",
+  "dataNotice.reason": "当前账户对 {dir} 没有写入权限，多半是程序放在了 Program Files 等系统目录下，或所在磁盘是只读的。",
+  "dataNotice.stored": "设置已改存到 {dir}，程序功能不受影响。",
+  "dataNotice.fixTitle": "想让设置跟着程序目录走，可以：",
+  "dataNotice.fixMove": "把整个程序文件夹移到有写入权限的位置，例如桌面、文档或另一个磁盘的普通目录；",
+  "dataNotice.fixPermission": "或右键该文件夹 → 属性 → 安全 → 编辑，为当前用户勾选「写入」权限（需要管理员确认）；",
+  "dataNotice.fixKeep": "也可以什么都不做——设置留在用户目录同样正常使用，只是复制程序文件夹时不会一起带走。",
+  "dataNotice.gotIt": "知道了",
 
   "error.title": "出错了",
   "error.summary": "展开查看将要发送的内容（日志里可能含窗口标题与程序路径，请先检查）",

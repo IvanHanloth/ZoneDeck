@@ -30,30 +30,49 @@ dist/
 ├── Boss-Key/                    Portable edition (copy and run; zipped whole for release)
 │   ├── Boss Key.exe               Resident core (embedded DPI/long-path manifest + version info + icon)
 │   ├── config.exe                 Settings window (frontend embedded; self-contained)
+│   ├── cleanup.ps1                Leftover-data cleanup script (the portable edition has no uninstaller)
 │   ├── LICENSE.txt
-│   └── README.md
+│   ├── README.md                  Simplified Chinese
+│   ├── README.en.md               English
+│   └── README.zh-TW.md            Traditional Chinese
 └── installer/                   Installer (produced with -Installer)
     └── Boss-Key-<version>-Setup.exe  Inno Setup (terminates a running core before installing)
 ```
 
-The portable edition **needs no installation and has no external dependencies** (beyond the system's WebView2). The two programs cooperate through `config.json` in the same folder and a named pipe.
+The portable edition **needs no installation and has no external dependencies** (beyond the system's WebView2). The two programs cooperate through `config.json` in the [data folder](/en/dev/architecture#data-folder) and a named pipe.
+
+All three READMEs must ship: the portable edition has no installation wizard, so the README is the only documentation in the package, and its "Where the data lives, and how to remove it" section explains what the program leaves in the user folder and how `cleanup.ps1` removes it.
+
+::: danger installed.marker must never end up in the portable folder
+The program uses it to recognise an installed copy and switch to `%APPDATA%\BossKey` (see [Data folder](/en/dev/architecture#data-folder)). The `.iss` takes the file straight from the script folder, bypassing `dist\Boss-Key` — if it slipped into the portable package, the portable edition would stop being portable.
+:::
+
+The installer runs with **normal privileges** by default (`%LocalAppData%\Programs\Boss Key`); on the wizard's first page the user can switch to "Install for all users" and land in `Program Files`. Either way the data goes to `%APPDATA%\BossKey`, not the installation folder.
 
 ## Version management
 
 ::: info The single source of truth
-The single source of truth for the version is `[workspace.package] version` in `Cargo.toml`. Three other places must match it: `apps/config/src-tauri/tauri.conf.json`, `apps/config/ui/package.json` and `Cargo.lock`.
+The version is written in exactly one place, `[workspace.package] version` in `Cargo.toml`, with `Cargo.lock` following it. Nowhere else keeps its own copy; every other place takes the real version at build time:
+
+| Place | Where the version comes from |
+| --- | --- |
+| The version resources of both exes | `CARGO_PKG_VERSION` (tauri-winres / tauri-build; leaving `version` out of `tauri.conf.json` falls back to Cargo.toml) |
+| The core's manifest `assemblyIdentity` | Filled in by `crates/core/build.rs` from `CARGO_PKG_VERSION` (converted to a numeric four-part version) |
+| The installer's `MyAppVersion` | `scripts/package.ps1` reads it from `Cargo.toml` and passes it to Inno; compilation fails if it is missing, rather than falling back to a stale default |
+| The version shown in the app and reported to Verhub | `env!("CARGO_PKG_VERSION")` |
+| `app_version` in the configuration file | Written by the core on start from `bosskey_common::APP_VERSION` |
 :::
 
 `scripts/version.ps1` writes and verifies it:
 
 ```powershell
-# Write the version into all four files (and sync Cargo.lock)
+# Write the version into Cargo.toml (and sync Cargo.lock)
 powershell -File scripts/version.ps1 apply 3.0.1
 
-# Verify all four match this tag; fail if not
+# Verify Cargo.toml matches this tag; fail if not
 powershell -File scripts/version.ps1 check 3.0.1
 
-# Without a tag, verify the other files against Cargo.toml
+# Without a tag, just print the current version
 powershell -File scripts/version.ps1 check
 
 # Print the current version
@@ -79,7 +98,7 @@ A new push on the same branch cancels the previous run automatically (`concurren
 **Trigger**: manual (`workflow_dispatch`), taking the version to release as input. **Run it from `main`** (after the release content has been merged into `main`).
 
 **What it does**:
-1. Writes the version into the four files with `version.ps1 apply`;
+1. Writes the version into `Cargo.toml` and syncs `Cargo.lock` with `version.ps1 apply`;
 2. Federates the workflow's OIDC identity through [octo-sts](https://octo-sts.dev) into a short-lived `contents:write` token for this repository;
 3. Commits the version change onto the triggering branch via GraphQL `createCommitOnBranch` and creates the `v<version>` annotated tag — commits created through the API are signed by GitHub server-side and carry the **Verified** badge;
 4. Checks that tag out → verifies the tag matches the code version → frontend / Rust tests;

@@ -72,6 +72,55 @@ fn load_reporting_is_quiet_for_healthy_and_missing_files() {
 }
 
 #[test]
+fn save_leaves_no_temp_file_behind() {
+    let dir = tempfile::tempdir().unwrap();
+    Config::default()
+        .save(&dir.path().join("config.json"))
+        .unwrap();
+
+    let names: Vec<String> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, vec!["config.json".to_string()], "临时文件须已改名");
+}
+
+#[test]
+fn a_failed_save_keeps_the_previous_file_intact() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+
+    let mut cfg = Config::default();
+    cfg.hotkey.hide_hotkey = "Ctrl+Shift+B".to_string();
+    cfg.save(&path).unwrap();
+
+    // 占住临时文件名（这里用目录），逼真地模拟写入中途失败（磁盘满、杀软拦截）。
+    std::fs::create_dir(dir.path().join("config.json.tmp")).unwrap();
+    let err = Config::default().save(&path).unwrap_err();
+
+    let kept = Config::load(&path).unwrap();
+    assert_eq!(
+        kept.hotkey.hide_hotkey, "Ctrl+Shift+B",
+        "写入失败不得把原配置截断，用户的规则不能因此丢光: {err}"
+    );
+}
+
+#[test]
+fn io_errors_name_the_path_they_failed_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("locked").join("config.json");
+    // 父路径是个文件，创建目录必然失败。
+    std::fs::write(dir.path().join("locked"), "occupied").unwrap();
+
+    let err = Config::default().save(&path).unwrap_err().to_string();
+    assert!(
+        err.contains("locked"),
+        "报错须带上实际路径，否则用户无从判断问题出在哪个目录: {err}"
+    );
+}
+
+#[test]
 fn save_creates_missing_parent_directories() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("nested").join("deeper").join("config.json");

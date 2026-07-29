@@ -45,12 +45,11 @@ Once the tray icon is hidden you cannot click it to restore or open the settings
 Windows itself controls which tray icons are visible: you can choose which icons appear in the taskbar corner by hand. For detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the `ms-settings:taskbar` link works only on Windows; the browser asks for confirmation first).
 :::
 
-### Send the pause key before hiding (beta)
+### Send the pause key before hiding
 
 When on, Boss Key sends the **media pause key** to the window **before** hiding it, to try to pause any video or music playing inside.
 
 - **Off** by default.
-- This is experimental and adds roughly **0.2 seconds** of delay to hiding.
 - It differs from "mute after hiding": muting only silences the audio, whereas the pause key actually stops playback.
 - Boss Key's **process freezing** has the same pausing effect while also cutting resource usage — see [Process freezing](/en/guide/freeze).
 

@@ -61,10 +61,10 @@ fn destroying_a_hidden_window_clears_the_record_in_real_time() {
 
     let pipe = r"\\.\pipe\bosskey_test_window_tracking";
     let options = AgentOptions {
-        config_path,
         pipe_name: pipe.to_string(),
         enable_tray: false,
         auto_quit_ms: Some(15_000),
+        ..AgentOptions::standard(config_path)
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
     let client = PipeClient::new(pipe);

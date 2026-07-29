@@ -4,7 +4,7 @@ title: 設定檔欄位
 
 # 設定檔欄位參考
 
-Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。**結構與舊版完全相容**，舊使用者設定可直接沿用。首次執行若不存在則使用預設值。欄位定義見 `crates/common/src/config.rs`。
+Boss Key 的設定儲存在 `config.json` 中，可攜版存在程式資料夾，安裝版存在 `%APPDATA%\BossKey`，詳見[資料目錄](/zh-tw/dev/architecture#資料目錄)。位置變動時舊設定會自動移轉過去。**結構與舊版完全相容**，舊使用者設定可直接沿用。首次執行若不存在則使用預設值。欄位定義見 `crates/common/src/config.rs`。
 
 ::: tip 一般不需手動修改
 設定由設定介面自動讀寫並儲存，通常不需手動編輯。本頁面向需要理解欄位含義的開發者。
@@ -14,7 +14,8 @@ Boss Key 的設定儲存在與執行檔**同資料夾**的 `config.json` 中。*
 
 | 欄位 | 型別 | 說明 |
 | --- | --- | --- |
-| `version` | string | 設定版本 |
+| `version` | string | 設定 schema 版本，結構變動時才動 |
+| `app_version` | string | 上次執行過的**程式**版本；與目前程式版本不符即「更新後首次啟動」，核心據此自動開啟設定介面。預設留空 |
 | `history` | number[] | 歷史記錄（時間戳記） |
 | `frozen_pids` | number[] | 目前被凍結的程序 PID（用於復原） |
 | `hotkey` | object | 鍵盤快速鍵，見下 |

@@ -23,7 +23,7 @@ Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 │  │ • 列舉/隱藏/顯示視窗       │        └────────────┬───────────┘ │
 │  │ • Core Audio 靜音         │                     │ 讀寫         │
 │  │ • NtSuspend 程序凍結       │        ┌────────────▼───────────┐ │
-│  │ • 通知區域圖示／通知       │        │ config.json（與 exe 同資料夾）│
+│  │ • 通知區域圖示／通知       │        │ config.json（資料目錄）    │
 │  │ • 開機自動啟動（排程/登錄檔）        │ 核心收到 reload 後熱重新載入 │
 │  └──────────────────────────┘        └────────────────────────┘ │
 │         ▲ 隨登入自動啟動                                         │
@@ -68,10 +68,11 @@ Boss-Key/
 ├── Cargo.toml                      workspace（含 release profile 調校）
 ├── crates/
 │   ├── common/                     共用程式庫（無平台相依，可跨平台編譯）
-│   │   └── src/{model,config,matching,ipc,i18n}.rs
+│   │   └── src/{model,config,matching,ipc,i18n,paths}.rs
 │   │       model     WindowInfo / WindowRule / ProcessRule（serde 相容舊 config.json，PID 大寫）
-│   │       config    Config/Setting/Hotkey（相容讀取舊設定 + 移轉）
+│   │       config    Config/Setting/Hotkey（相容讀取舊設定 + 移轉；儲存走 tmp + rename 原子取代）
 │   │       matching  視窗比對邏輯
+│   │       paths     資料目錄定位（安裝版走 %APPDATA%，可攜版就地，見下）
 │   │       ipc       Command/Response 協定 + PipeClient 用戶端
 │   │       i18n      介面語言標籤（Lang）與語言偏好解析，核心與設定程式共用
 │   └── core/                       常駐核心（lib + bin）
@@ -101,7 +102,7 @@ Boss-Key/
 └── apps/config/                    設定介面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 後端命令 + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub 用戶端（版本／公告／回饋／日誌／專案連結，基於 verhub-sdk；
-    │                      專案連結帶快取：記憶體 + 同目錄 verhub_cache.json，有效期一天）
+    │                      專案連結帶快取：記憶體 + 資料目錄下的 verhub_cache.json，有效期一天）
     ├── ui/         前端原始碼（Vite + Svelte 5）
     │   └── src/    lib/（純邏輯 + vitest 測試）+ components/（Svelte 元件）
     │                + locales/（三語文案 catalog，以 zh-CN.js 為基準）
@@ -111,6 +112,41 @@ Boss-Key/
 ::: tip common 為什麼無平台相依
 `crates/common` 刻意不相依於 Windows API，因此可以跨平台編譯，其純邏輯（設定解析、比對、協定）也更易做單元測試。平台相關程式碼集中在 `crates/core`。
 :::
+
+## 資料目錄
+
+設定 `config.json`、記錄檔 `logs/`、復原檔 `recovery.json`、快取 `verhub_cache.json` 共處一個**資料目錄**，由 `crates/common/src/paths.rs` 定位。安裝版與可攜版分開對待：
+
+| 情形 | 資料目錄 | `DataDirKind` |
+| --- | --- | --- |
+| 安裝版 | `%APPDATA%\BossKey` | `Installed` |
+| 可攜版，程式資料夾可寫入 | 程式資料夾 | `Portable` |
+| 可攜版，程式資料夾寫不進去 | `%APPDATA%\BossKey` | `PortableFallback` |
+
+可攜版把資料留在程式資料夾，複製走整個資料夾就帶走了全部設定；安裝版則不能這麼做——安裝程式可以裝進 `Program Files`，那裡一般權限程序不可寫入，設定程式每次儲存都會得到 `os error 5`。
+
+### 怎麼分辨是哪一種
+
+看程式資料夾裡有沒有安裝痕跡（`paths::is_installed`）：
+
+1. 安裝程式放的標記檔案 `installed.marker`（`[Files]` 裡裝，解除安裝時隨之移除）；
+2. 解除安裝程式 `unins*.exe` —— 兜底，標記檔案被誤刪時仍認得出是安裝版，不至於把資料寫回 `Program Files`。序號隨重複安裝遞增，故按前綴比對。
+
+::: warning 判據必須是檔案，不能是程序權限
+核心可能以系統管理員身分執行、設定程式不會：核心在 `Program Files` 下寫得進去，設定程式寫不進去。若兩邊各按自己能否寫入來選資料夾，就會各讀一份設定，使用者改了設定卻不生效。看檔案則兩邊必然一致。也因此，安裝版根本不做可寫性探測——結果一樣是使用者資料夾。
+:::
+
+### 回退與移轉
+
+可攜版探測到程式資料夾不可寫入時退回使用者資料夾，`kind` 記為 `PortableFallback`。核心把它寫進記錄檔，設定程式透過 `data_location` 命令讀到後彈出提示，說明這是權限問題以及怎麼改（見 `DataNoticeModal.svelte`）。程式功能不受影響。
+
+用到使用者資料夾時，程式資料夾裡的 `config.json` 會搬過來：先複製，再盡力刪掉原檔案。目標已有設定就不動它——那是目前在用的一份，舊檔案不得覆蓋，也不去刪。刪不掉（沒有寫入權限、檔案被占用）就留在原處，反正不會再被讀到。
+
+::: tip 設定介面的瀏覽器資料另有一處
+Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，不在資料目錄裡，也不由 `paths.rs` 管。安裝程式的解除安裝程式與可攜版隨附的 `scripts/cleanup.ps1` 都會清理它。
+:::
+
+每次啟動的實際資料目錄與判定結果會寫進記錄檔開頭，排查讀寫失敗先看它。
 
 ## 核心內部：Agent 訊息迴圈
 
@@ -129,6 +165,8 @@ Boss-Key/
 
 當觸發隱藏／顯示時，交由 `HideController` 編排，流程為「意圖先行」兩段式：`plan_hide` 算出執行計畫（剪掉失效紀錄、補齊 PID）→ 把計畫後的快照寫入 `recovery.json`（先寫入再動手，隱藏中途當機不丟紀錄）→ `commit_hide` 同步隱藏視窗（`SW_HIDE`），並把靜音／凍結／暫停鍵交給副作用專職執行緒（`effects_worker.rs`）按 FIFO 非同步執行——訊息迴圈不被慢操作（音訊列舉、pssuspend 等待）阻塞，快速鍵與介面保持回應。
 
+佇列內的先後有講究：暫停鍵→靜音→靜置→凍結。凍結讓程序徹底停止回應訊息，隱藏若還沒在螢幕上畫完就凍結，被凍結的視窗會留下殘影；發出去的暫停鍵同樣要有時間被目標程式處理掉。故凍結前統一靜置一次（`FREEZE_SETTLE_DELAY`，整批只等一次，沒有要凍結的程序就不等）。靜音不排在這道等待之後——它走音訊工作階段，與目標程序是否在跑無關。
+
 復原（顯示）時逐條校驗紀錄的有效性：控制代碼須仍存在且仍屬於當初的處理程序（`IsWindow` + PID 比對），凍結／靜音紀錄須符合處理程序建立時刻——控制代碼與 PID 都會被系統回收重複使用，校驗不過的紀錄跳過並如實計入日誌。
 
 ::: info 可測試性設計
@@ -137,7 +175,7 @@ Boss-Key/
 
 ## 穩定性設計（當機自癒三層防線）
 
-1. **當機記錄**：關鍵事件與 panic 寫入 exe 同資料夾的 `logs/BossKey-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；release 建置丟棄 DEBUG 級）。
+1. **當機記錄**：關鍵事件與 panic 寫入[資料目錄](#資料目錄)下的 `logs/BossKey-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；release 建置丟棄 DEBUG 級）。
 2. **當機復原**：隱藏動作執行前先把「將要隱藏／凍結／靜音什麼」寫入 `recovery.json`（tmp + rename 原子替換），異常結束後重新啟動自動找回；快照帶開機時刻與處理程序建立時刻，跨重新開機的過期快照直接丟棄，不會對無關視窗／處理程序做復原動作。
 3. **監控程式**：排程工作 `RestartOnFailure`（當機後 1 分鐘內重新啟動，最多 3 次）。release 建置 `panic = "abort"`，panic 掛鉤寫完記錄後以非零碼結束，正好觸發排程工作重新啟動。
 

@@ -382,9 +382,9 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     }
 
     /// 执行计划：同步隐藏窗口（`SW_HIDE`），静音 / 冻结 / 暂停键经 [`Effects`] 施加
-    /// （生产实现为异步队列）。
+    /// （生产实现为异步队列，故入队顺序即执行顺序）。
     pub fn commit_hide(&mut self, plan: HidePlan) {
-        // 暂停键先入队：冻结后的进程收不到按键。
+        // 暂停键排在最前：冻结后的进程收不到按键。
         if plan.send_pause {
             self.effects.send_pause();
         }
@@ -400,6 +400,11 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.muted.sort_unstable_by_key(|r| r.pid);
 
         self.used_enhanced = plan.enhanced;
+        // 静置排在静音之后、冻结之前：静音不必等，冻结必须等屏幕画完，
+        // 否则被冻结的窗口会留下残影。整批只等一次。
+        if !plan.freeze.is_empty() {
+            self.effects.settle_before_freeze();
+        }
         for r in &plan.freeze {
             self.effects.suspend(r.pid, plan.enhanced);
             self.frozen.push(*r);
@@ -953,11 +958,15 @@ mod tests {
         suspends: RefCell<Vec<u32>>,
         resumes: RefCell<Vec<u32>>,
         pauses: RefCell<u32>,
+        settles: RefCell<u32>,
     }
 
     impl Effects for MockEffects {
         fn mute(&self, pid: u32, mute: bool) {
             self.mutes.borrow_mut().push((pid, mute));
+        }
+        fn settle_before_freeze(&self) {
+            *self.settles.borrow_mut() += 1;
         }
         fn suspend(&self, pid: u32, _enhanced: bool) {
             self.suspends.borrow_mut().push(pid);
@@ -995,6 +1004,11 @@ mod tests {
         assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
         assert_eq!(*controller.effects.suspends.borrow(), vec![10]);
         assert_eq!(*controller.effects.pauses.borrow(), 1, "应发送一次暂停键");
+        assert_eq!(
+            *controller.effects.settles.borrow(),
+            1,
+            "冻结前须静置一次，等屏幕画完再让进程停摆"
+        );
 
         let outcome = controller.show();
         assert_eq!(
@@ -1013,6 +1027,28 @@ mod tests {
             vec![(10, true), (10, false)],
             "恢复后应取消静音"
         );
+    }
+
+    #[test]
+    fn nothing_to_freeze_means_nothing_to_wait_for() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.setting.mute_after_hide = true;
+        config.setting.freeze_after_hide = false;
+        config.setting.send_before_hide = true;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        do_hide(&mut controller, &mut config);
+
+        assert_eq!(
+            *controller.effects.settles.borrow(),
+            0,
+            "没有要冻结的进程就不该空等，静音不必为残影让路"
+        );
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(10, true)]);
     }
 
     #[test]

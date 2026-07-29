@@ -45,12 +45,11 @@ title: 其他选项
 Windows 自带控制托盘图标显隐的功能，可手动设置哪些程序的图标显示在任务栏角落，具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（`ms-settings:taskbar` 链接仅在 Windows 上有效，浏览器会先请求确认）。
 :::
 
-### 隐藏前发送暂停键（Beta）
+### 隐藏前发送暂停键
 
 开启后，隐藏窗口**前**会先向窗口发送**媒体暂停键**，尝试暂停其中正在播放的视频 / 音乐。
 
 - 默认**关闭**。
-- 属于实验性功能，启用后会带来约 **0.2 秒**的隐藏延迟。
 - 与"隐藏后静音"侧重点不同：静音只是消音，暂停键会真正暂停播放。
 - 除了此功能外，Boss Key 提供的**进程冻结**功能，也有相同的暂停效果，同时还能降低资源消耗，详见 [进程冻结](/guide/freeze)。
 

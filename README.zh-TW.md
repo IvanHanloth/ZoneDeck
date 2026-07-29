@@ -103,6 +103,22 @@ Boss-Key 支援以滑鼠中鍵、側鍵 1、側鍵 2 切換隱藏狀態，並可
 
 完整功能介紹及使用指南，請參閱 Boss-Key [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
 
+## 資料存放位置與清理
+
+**可攜版**把設定、記錄檔、復原檔與快取放在**程式資料夾裡**，複製走整個資料夾就帶走了全部設定。若該資料夾不可寫入（放在了 `C:\Program Files` 之類的地方，或唯讀媒體上），程式會改存到 `%APPDATA%\BossKey` 並在介面上說明原因。
+
+**安裝版**一律存到 `%APPDATA%\BossKey`：安裝資料夾可能在 `C:\Program Files`，一般權限寫不進去。程式憑安裝程式放的 `installed.marker` 分辨自己是哪一種。
+
+無論哪種，設定介面用到的瀏覽器元件另有一份資料在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，刪程式資料夾清不掉它。隨附有 `cleanup.ps1`，在程式資料夾裡開啟 PowerShell 執行即可：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File cleanup.ps1
+```
+
+它會列出將要刪除的內容並等你確認，隨後清理 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`、可能存在的 `%APPDATA%\BossKey`，以及開機自動啟動留下的排程工作 `BossKeyAutostart` 與登錄項目 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Boss Key Application`。程式資料夾本身不會被刪，跑完後自行刪除即可。
+
+安裝版不需要這一步：解除安裝程式已經做了同樣的事，並會詢問是否保留設定檔。
+
 ## 開發及貢獻指南
 
 有關開發和貢獻的詳細資訊，請參閱 Boss-Key [開發文件](https://boss-key.ivan-hanloth.cn/zh-tw/dev/)。

@@ -16,6 +16,8 @@ Freezing stops the target process entirely, so its background work (downloads, i
 
 This is the **master switch** for freezing. When on, Boss Key suspends the matching process each time it hides its windows, and resumes it when they are restored. It uses normal freezing by default, which works on the current user's processes **without administrator rights**.
 
+Suspending and resuming take time, so turning this on may add some delay when hiding and restoring.
+
 ## Use enhanced freezing
 
 Normal freezing may not be thorough enough for complex programs (multi-process architectures, renderer subprocesses). **Enhanced freezing** suspends processes with Microsoft's official `pssuspend64.exe` tool instead, which is more effective.
@@ -33,12 +35,14 @@ Enhanced freezing requires **all** of the following, otherwise the option is gre
 3. Find **`pssuspend64.exe`** inside and copy it into Boss Key's **installation root folder**.
 4. Return to the settings window and click **Check again** in the "Process freezing" section so Boss Key picks the file up.
 
+Enhanced freezing invokes an external program, so it likewise adds some delay when hiding and restoring.
+
 ## Freeze the whole process tree
 
 By default freezing affects only the matched process itself. With **Freeze the whole process tree** on, Boss Key **recursively freezes that process's entire child-process tree** (including differently named child `exe` files, renderer processes, and so on) for a more thorough freeze.
 
 ::: warning
-This option is still in testing and may cause problems with some programs. Enable it only once you understand the impact.
+This option is still in testing, may cause problems with some programs, and adds more delay when hiding and restoring because the whole process tree has to be walked. Enable it only once you understand the impact.
 :::
 
 ## Prerequisites at a glance

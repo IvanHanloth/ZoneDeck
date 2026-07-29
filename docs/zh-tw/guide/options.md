@@ -45,12 +45,11 @@ title: 其他選項
 Windows 內建控制通知區域圖示顯示與否的功能，可手動設定哪些程式的圖示顯示在工作列角落，詳細步驟參見微軟官方教學 [在 Windows 中自訂工作列 · 系統匣](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接開啟 [工作列設定](ms-settings:taskbar)（`ms-settings:taskbar` 連結僅在 Windows 上有效，瀏覽器會先要求確認）。
 :::
 
-### 隱藏前傳送暫停鍵（Beta）
+### 隱藏前傳送暫停鍵
 
 開啟後，隱藏視窗**前**會先向視窗傳送**媒體暫停鍵**，嘗試暫停其中正在播放的影片／音樂。
 
 - 預設**關閉**。
-- 屬於實驗性功能，啟用後會造成約 **0.2 秒**的隱藏延遲。
 - 與「隱藏後靜音」側重點不同：靜音只是消音，暫停鍵會真正暫停播放。
 - 除了此功能外，Boss Key 提供的**程序凍結**功能，也有相同的暫停效果，同時還能降低資源消耗，詳見 [程序凍結](/zh-tw/guide/freeze)。
 

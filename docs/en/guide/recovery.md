@@ -26,7 +26,7 @@ The Boss Key core has **three layers of crash self-healing**, so windows stay sa
 
 ### Layer 1: crash logs
 
-The core writes key events and panic information to log files in the `logs` folder of the program directory, rotated daily as `BossKey-YYYY-MM-DD.log`, and cleaned up automatically according to the [log retention setting](/en/guide/options) (set it to off to disable logging). **When troubleshooting, read the current day's log first.**
+The core writes key events and panic information to log files in the `logs` folder of the data folder, rotated daily as `BossKey-YYYY-MM-DD.log`, and cleaned up automatically according to the [log retention setting](/en/guide/options) (set it to off to disable logging). **When troubleshooting, read the current day's log first.**
 
 ### Layer 2: crash recovery
 
@@ -42,9 +42,13 @@ When [startup](/en/guide/autostart) is registered as a scheduled task, it carrie
 
 | File | Location | Purpose |
 | --- | --- | --- |
-| `config.json` | Program directory | All your settings and bindings |
-| `logs/BossKey-YYYY-MM-DD.log` | Program directory | Crash / event logs (rotated daily, cleaned up per the retention setting) |
-| `recovery.json` | Program directory | Snapshot of the hidden state, used for crash recovery (deleted on a normal exit) |
+| `config.json` | Data folder | All your settings and bindings |
+| `logs/BossKey-YYYY-MM-DD.log` | Data folder | Crash / event logs (rotated daily, cleaned up per the retention setting) |
+| `recovery.json` | Data folder | Snapshot of the hidden state, used for crash recovery (deleted on a normal exit) |
+
+::: info Where the data folder is
+Inside the program folder for a portable copy, in `%APPDATA%\BossKey` for an installed one (see [Where the data lives](/en/guide/installation#where-the-data-lives)). A portable copy also switches to `%APPDATA%\BossKey` when its folder is not writable. The **Open log folder** button in the settings window's status bar always opens the folder actually in use, and the log records it on every start.
+:::
 
 ::: warning Do not delete recovery.json while it is in use
 Deleting `recovery.json` by hand while windows are hidden loses that snapshot, and with it the crash recovery for this run.

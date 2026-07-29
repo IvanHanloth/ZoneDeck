@@ -4,7 +4,7 @@ title: Configuration fields
 
 # Configuration field reference
 
-Boss Key stores its configuration in `config.json`, in the **same folder** as the executable. The structure is **fully compatible with older versions**, so existing configurations carry over. If the file is missing on first run, defaults are used. The field definitions live in `crates/common/src/config.rs`.
+Boss Key stores its configuration in `config.json` — in the program folder for a portable copy, in `%APPDATA%\BossKey` for an installed one; see [Data folder](/en/dev/architecture#data-folder). When the location changes, the old configuration is migrated across automatically. The structure is **fully compatible with older versions**, so existing configurations carry over. If the file is missing on first run, defaults are used. The field definitions live in `crates/common/src/config.rs`.
 
 ::: tip You normally do not edit this by hand
 The settings window reads and writes the configuration automatically. This page is for developers who need to understand the fields.
@@ -14,7 +14,8 @@ The settings window reads and writes the configuration automatically. This page 
 
 | Field | Type | Description |
 | --- | --- | --- |
-| `version` | string | Configuration version |
+| `version` | string | Configuration schema version; only changes when the structure does |
+| `app_version` | string | The program version last seen; when it differs from the current one this is the first run after an update, and the core opens the settings window automatically. Empty by default |
 | `history` | number[] | History (timestamps) |
 | `frozen_pids` | number[] | PIDs of currently frozen processes (used for recovery) |
 | `hotkey` | object | Keyboard hotkeys; see below |

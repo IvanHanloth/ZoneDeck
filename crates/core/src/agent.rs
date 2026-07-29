@@ -1059,23 +1059,44 @@ fn load_config_logging_fallback(path: &Path) -> Config {
     }
 }
 
+/// 启动时是否该拉起配置程序：首次启动（尚无配置文件），或程序版本与上次运行的不一致。
+///
+/// `recorded` 为空表示上个版本还没记过程序版本，一律当作版本已变，弹一次即归位。
+fn should_open_settings(config_missing: bool, recorded: &str, current: &str) -> bool {
+    config_missing || recorded != current
+}
+
 pub fn run(options: AgentOptions) {
-    // 是否首次启动（尚无配置文件）/ 更新后首次启动（配置里记录的版本与当前不一致）。
+    // 是否首次启动（尚无配置文件）/ 更新后首次启动（配置里记录的程序版本与当前不一致）。
     // load() 在文件缺失时也返回默认值，故须先按文件是否存在判断「首次」。
     let config_missing = !options.config_path.exists();
     let mut config = load_config_logging_fallback(&options.config_path);
     i18n::set_from_pref(&config.setting.language);
-    let version_changed = !config_missing && config.version != bosskey_common::APP_CONFIG_VERSION;
+    let open_settings = should_open_settings(
+        config_missing,
+        &config.app_version,
+        bosskey_common::APP_VERSION,
+    );
 
-    // 仅正常运行时（非冒烟测试）在这两种情况下默认拉起配置程序。
-    if options.auto_quit_ms.is_none() && (config_missing || version_changed) {
-        logging::info(if config_missing {
-            "首次启动，拉起配置程序"
+    // 仅正常运行时（非冒烟测试）才拉起配置程序。
+    if options.auto_quit_ms.is_none() && open_settings {
+        let reason = if config_missing {
+            "首次启动，拉起配置程序".to_string()
         } else {
-            "更新后首次启动，拉起配置程序"
-        });
+            let was = if config.app_version.is_empty() {
+                "未记录"
+            } else {
+                &config.app_version
+            };
+            format!(
+                "更新后首次启动（{was} → {}），拉起配置程序",
+                bosskey_common::APP_VERSION
+            )
+        };
+        logging::info(&reason);
         // 记录当前版本并落盘，避免下次启动重复弹出（首次启动时顺带创建配置文件）。
         config.version = bosskey_common::APP_CONFIG_VERSION.to_string();
+        config.app_version = bosskey_common::APP_VERSION.to_string();
         if let Err(e) = config.save(&options.config_path) {
             log_warn!("写入配置版本失败: {e}");
         }
@@ -1270,6 +1291,30 @@ pub fn run(options: AgentOptions) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn settings_open_on_first_run_and_after_every_version_change() {
+        assert!(
+            should_open_settings(true, "", "3.1.0"),
+            "首次启动（无配置文件）须拉起配置程序"
+        );
+        assert!(
+            should_open_settings(false, "3.0.0", "3.1.0"),
+            "程序版本变了须拉起配置程序"
+        );
+        assert!(
+            should_open_settings(false, "", "3.1.0"),
+            "更早的版本没记过程序版本，视为版本已变"
+        );
+        assert!(
+            !should_open_settings(false, "3.1.0", "3.1.0"),
+            "版本没变就别每次启动都弹窗"
+        );
+        assert!(
+            should_open_settings(false, "3.1.0", "3.1.0-rc.2"),
+            "回退到预发布版也是版本变动"
+        );
+    }
 
     #[test]
     fn hotkey_occupied_is_named_explicitly() {

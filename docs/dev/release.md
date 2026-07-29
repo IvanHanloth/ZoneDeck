@@ -30,30 +30,49 @@ dist/
 ├── Boss-Key/                    便携版（拷走即用，发布时整个文件夹压成 zip）
 │   ├── Boss Key.exe               常驻核心（内嵌 DPI/长路径 manifest + 版本信息 + 图标）
 │   ├── config.exe                 配置界面（前端已内嵌，自包含）
+│   ├── cleanup.ps1                残留数据清理脚本（便携版没有卸载程序）
 │   ├── LICENSE.txt
-│   └── README.md
+│   ├── README.md                  简体中文
+│   ├── README.en.md               English
+│   └── README.zh-TW.md            繁體中文
 └── installer/                   安装包（-Installer 时生成）
     └── Boss-Key-<版本>-Setup.exe  InnoSetup（安装前自动结束运行中的核心）
 ```
 
-便携版**无需安装、无外部依赖**（除系统自带的 WebView2）。两个程序通过同目录的 `config.json` 与命名管道协作。
+便携版**无需安装、无外部依赖**（除系统自带的 WebView2）。两个程序通过[数据目录](/dev/architecture#数据目录)下的 `config.json` 与命名管道协作。
+
+三语 README 都要带上：便携版没有安装向导，README 是唯一的随包说明，其中「数据存放位置与清理」一节交代了程序在用户目录下留了什么、怎么用 `cleanup.ps1` 清掉。
+
+::: danger 便携文件夹里不能出现 installed.marker
+程序凭它认出自己是安装版并改用 `%APPDATA%\BossKey`（见[数据目录](/dev/architecture#数据目录)）。该文件由 `.iss` 从脚本目录直取，不经过 `dist\Boss-Key`——若混进便携包，便携版就不便携了。
+:::
+
+安装包默认走**普通权限**安装（`%LocalAppData%\Programs\Boss Key`），用户可在向导首屏改选「为所有用户安装」装进 `Program Files`。两种模式下数据都在 `%APPDATA%\BossKey`，不在安装目录里。
 
 ## 版本号管理
 
 ::: info 版本号唯一真源
-版本号的唯一真源是 `Cargo.toml` 的 `[workspace.package] version`。另外三处必须与之一致：`apps/config/src-tauri/tauri.conf.json`、`apps/config/ui/package.json`、`Cargo.lock`。
+版本号只写在 `Cargo.toml` 的 `[workspace.package] version` 一处，`Cargo.lock` 跟着它走。其余地方**不再各存一份**，一律在构建时取真实版本号：
+
+| 位置 | 版本号从哪来 |
+| --- | --- |
+| 两个 exe 的文件版本信息 | `CARGO_PKG_VERSION`（tauri-winres / tauri-build；`tauri.conf.json` 不写 `version` 即回落到 Cargo.toml） |
+| 核心清单的 `assemblyIdentity` | `crates/core/build.rs` 按 `CARGO_PKG_VERSION` 填入（换算成纯数字四段号） |
+| 安装包的 `MyAppVersion` | `scripts/package.ps1` 从 `Cargo.toml` 读出后传给 Inno；未传则编译报错，不留过期的默认值 |
+| 程序内与上报给 Verhub 的版本 | `env!("CARGO_PKG_VERSION")` |
+| 配置文件的 `app_version` | 核心启动时写入 `bosskey_common::APP_VERSION` |
 :::
 
 `scripts/version.ps1` 负责写入与校验：
 
 ```powershell
-# 把版本号写入四处文件（并同步 Cargo.lock）
+# 把版本号写入 Cargo.toml（并同步 Cargo.lock）
 powershell -File scripts/version.ps1 apply 3.0.1
 
-# 校验四处与该 tag 一致，不一致则失败
+# 校验 Cargo.toml 与该 tag 一致，不一致则失败
 powershell -File scripts/version.ps1 check 3.0.1
 
-# 不给 tag 时以 Cargo.toml 为基准校验其余文件
+# 不给 tag 时只回显当前版本号
 powershell -File scripts/version.ps1 check
 
 # 打印当前版本号
@@ -79,7 +98,7 @@ powershell -File scripts/version.ps1 show
 **触发**：手动（`workflow_dispatch`），输入要发布的版本号。**请从 `main` 触发**（待发布内容合并进 `main` 之后）。
 
 **做什么**：
-1. 用 `version.ps1 apply` 把版本号写入四处文件；
+1. 用 `version.ps1 apply` 把版本号写入 `Cargo.toml` 并同步 `Cargo.lock`；
 2. 以 OIDC 身份向 [octo-sts](https://octo-sts.dev) 换取本仓库 `contents:write` 的短期 token；
 3. 经 GraphQL `createCommitOnBranch` 把版本号变更提交到触发分支，并打上 `v<版本>` 附注 tag——API 创建的提交由 GitHub 服务端签名，带 **Verified** 徽章；
 4. 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试；
