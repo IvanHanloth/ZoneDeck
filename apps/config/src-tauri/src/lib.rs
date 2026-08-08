@@ -96,9 +96,12 @@ fn load_config() -> Result<Config, String> {
     Ok(config)
 }
 
+/// 入参用 JSON 值而非 `Config`：经 [`Config::from_value`] 剥离 `null` 后再反序列化，
+/// 界面上被清空的输入框（提交 `null`）不会导致整份配置保存失败。
 #[tauri::command]
-async fn save_config(config: Config) -> Result<(), String> {
+async fn save_config(config: serde_json::Value) -> Result<(), String> {
     blocking(move || {
+        let config = Config::from_value(config).map_err(|e| e.to_string())?;
         i18n::set_from_pref(&config.setting.language);
         config.save(&config_path()).map_err(|e| e.to_string())?;
         // 通知核心热重载；核心据此同步语言。核心未运行时忽略错误。

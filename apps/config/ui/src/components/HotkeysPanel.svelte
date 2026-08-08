@@ -8,9 +8,34 @@
   import SettingRow from "./SettingRow.svelte";
   import Toggle from "./Toggle.svelte";
   import { MAX_MULTI_CLICK_MS, MIN_MULTI_CLICK_MS } from "../lib/pointer.js";
+  import {
+    clampInt,
+    DEFAULT_AUTO_HIDE_TIME,
+    DEFAULT_MULTI_CLICK_MS,
+    MAX_AUTO_HIDE_TIME,
+    MIN_AUTO_HIDE_TIME,
+  } from "../lib/sanitize.js";
   import { app, resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
 
   const s = $derived(app.config.setting);
+
+  // 数字输入框清空或越界时失焦归位，避免 null 留在配置里。
+  function fixMultiClickMs() {
+    s.mouse.multi_click_ms = clampInt(
+      s.mouse.multi_click_ms,
+      MIN_MULTI_CLICK_MS,
+      MAX_MULTI_CLICK_MS,
+      DEFAULT_MULTI_CLICK_MS,
+    );
+  }
+  function fixAutoHideTime() {
+    s.auto_hide_time = clampInt(
+      s.auto_hide_time,
+      MIN_AUTO_HIDE_TIME,
+      MAX_AUTO_HIDE_TIME,
+      DEFAULT_AUTO_HIDE_TIME,
+    );
+  }
 
   // 鼠标进入本页设置区时暂停核心监控，离开时恢复。
   const REASON = { area: "hotkeys-panel" };
@@ -87,6 +112,7 @@
             step="50"
             aria-label={t("hotkeys.multiClickWindowAria")}
             bind:value={s.mouse.multi_click_ms}
+            onblur={fixMultiClickMs}
           />
           <span>{t("hotkeys.milliseconds")}</span>
         </div>
@@ -121,9 +147,10 @@
         <div class="num-ctl">
           <input
             type="number"
-            min="1"
-            max="120"
+            min={MIN_AUTO_HIDE_TIME}
+            max={MAX_AUTO_HIDE_TIME}
             bind:value={s.auto_hide_time}
+            onblur={fixAutoHideTime}
             disabled={!s.auto_hide_enabled}
           />
           <span>{t("hotkeys.minutes")}</span>

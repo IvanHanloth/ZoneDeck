@@ -3,6 +3,7 @@
 import { invoke } from "./ipc.js";
 import { setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
+import { sanitizeConfig } from "./sanitize.js";
 import * as verhub from "./verhub.js";
 
 export const app = $state({
@@ -206,7 +207,7 @@ async function saveConfig() {
   if (!app.config || app.saving) return;
   app.saving = true;
   try {
-    await invoke("save_config", { config: $state.snapshot(app.config) });
+    await invoke("save_config", { config: sanitizeConfig($state.snapshot(app.config)) });
   } catch (err) {
     reportError(t("state.saveFailed"), err);
   } finally {
