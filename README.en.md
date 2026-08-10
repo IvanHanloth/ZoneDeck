@@ -17,11 +17,11 @@
 
 <div align="center">
     <h3>
-        <a href="https://boss-key.ivan-hanloth.cn/en/">Website</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/en/">Website</a>
         <span> • </span>
-        <a href="https://boss-key.ivan-hanloth.cn/en/guide/">Guide</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/en/guide/">Guide</a>
         <span> • </span>
-        <a href="https://boss-key.ivan-hanloth.cn/en/dev/">Development</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/en/dev/">Development</a>
         <span> • </span>
         <a href="https://github.com/IvanHanloth/Boss-Key/releases">Download</a>
     </h3>
@@ -63,7 +63,7 @@ Since v3.0.0 every release ships two kinds of package, both available from the [
 
 Some releases provide a package for Windows 7; those marked `win7` run on Windows 7.
 
-For the complete illustrated documentation, see the ZoneDeck [guide](https://boss-key.ivan-hanloth.cn/en/guide/).
+For the complete illustrated documentation, see the ZoneDeck [guide](https://zonedeck.ivan-hanloth.cn/en/guide/).
 
 ### Basics
 
@@ -101,7 +101,7 @@ The settings window and the core's tray menu and notifications are available in 
 
 ### More
 
-For the full feature list and usage guide, see the ZoneDeck [guide](https://boss-key.ivan-hanloth.cn/en/guide/).
+For the full feature list and usage guide, see the ZoneDeck [guide](https://zonedeck.ivan-hanloth.cn/en/guide/).
 
 ## Where the data lives, and how to remove it
 
@@ -121,7 +121,7 @@ The installer edition does not need this: the uninstaller already does the same,
 
 ## Development and contributing
 
-For details on development and contributing, see the ZoneDeck [development docs](https://boss-key.ivan-hanloth.cn/en/dev/).
+For details on development and contributing, see the ZoneDeck [development docs](https://zonedeck.ivan-hanloth.cn/en/dev/).
 
 ## Credits
 
@@ -129,4 +129,4 @@ Thanks to HsFreezer for the approach to process freezing.
 
 ## Changelog
 
-For the full changelog, see the ZoneDeck [changelog](https://boss-key.ivan-hanloth.cn/en/changelog/).
+For the full changelog, see the ZoneDeck [changelog](https://zonedeck.ivan-hanloth.cn/en/changelog/).

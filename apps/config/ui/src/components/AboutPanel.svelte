@@ -23,9 +23,9 @@
 
   // 链接以 Verhub 项目信息为准（后端带缓存），拉不到时退回内置地址。
   const links = $derived(app.project);
-  const homepageUrl = $derived(links?.website_url || "https://boss-key.ivan-hanloth.cn/");
+  const homepageUrl = $derived(links?.website_url || "https://zonedeck.ivan-hanloth.cn/");
   const repoUrl = $derived(links?.repo_url || info?.website || "https://github.com/IvanHanloth/Boss-Key");
-  const docsUrl = $derived(links?.docs_url || "https://boss-key.ivan-hanloth.cn/guide/");
+  const docsUrl = $derived(links?.docs_url || "https://zonedeck.ivan-hanloth.cn/guide/");
   const authorUrl = $derived(links?.author_homepage_url || info?.blog || "https://www.ivan-hanloth.cn/");
   const authorName = $derived(links?.author || info?.author || "Ivan Hanloth");
 

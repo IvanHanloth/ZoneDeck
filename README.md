@@ -17,11 +17,11 @@
 
 <div align="center">
     <h3>
-        <a href="https://boss-key.ivan-hanloth.cn/">项目官网</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/">项目官网</a>
         <span> • </span>
-        <a href="https://boss-key.ivan-hanloth.cn/guide/">使用文档</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/guide/">使用文档</a>
         <span> • </span>
-        <a href="https://boss-key.ivan-hanloth.cn/dev/">开发文档</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/dev/">开发文档</a>
         <span> • </span>
         <a href="https://github.com/IvanHanloth/Boss-Key/releases">下载地址</a>
     </h3>
@@ -63,7 +63,7 @@
 
 部分版本会提供win7系统的软件包，带有win7标识的可以在Windows 7系统上运行
 
-完整的图文使用说明，请参阅 ZoneDeck [使用文档](https://boss-key.ivan-hanloth.cn/guide)
+完整的图文使用说明，请参阅 ZoneDeck [使用文档](https://zonedeck.ivan-hanloth.cn/guide)
 
 ### 基础使用
 
@@ -103,7 +103,7 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 
 ### 更多功能
 
-完整功能介绍及使用指南，请参阅 ZoneDeck [使用文档](https://boss-key.ivan-hanloth.cn/guide)
+完整功能介绍及使用指南，请参阅 ZoneDeck [使用文档](https://zonedeck.ivan-hanloth.cn/guide)
 
 ## 数据存放位置与清理
 
@@ -123,7 +123,7 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 
 ## 开发及贡献指南
 
-有关开发和贡献的详细信息，请参阅 ZoneDeck [开发文档](https://boss-key.ivan-hanloth.cn/dev)
+有关开发和贡献的详细信息，请参阅 ZoneDeck [开发文档](https://zonedeck.ivan-hanloth.cn/dev)
 
 ## 鸣谢
 
@@ -131,4 +131,4 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 
 ## 更新日志
 
-完整的更新日志请参阅 ZoneDeck [更新日志](https://boss-key.ivan-hanloth.cn/changelog)
+完整的更新日志请参阅 ZoneDeck [更新日志](https://zonedeck.ivan-hanloth.cn/changelog)

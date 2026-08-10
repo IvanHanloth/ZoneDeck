@@ -156,9 +156,9 @@ function mockInvoke(cmd, args) {
     case "verhub_project_links":
       return {
         name: "ZoneDeck",
-        website_url: "https://boss-key.ivan-hanloth.cn/",
+        website_url: "https://zonedeck.ivan-hanloth.cn/",
         repo_url: "https://github.com/IvanHanloth/Boss-Key",
-        docs_url: "https://boss-key.ivan-hanloth.cn/guide/",
+        docs_url: "https://zonedeck.ivan-hanloth.cn/guide/",
         author: "Ivan Hanloth",
         author_homepage_url: "https://www.ivan-hanloth.cn/",
         fetched_at: Math.floor(Date.now() / 1000),
@@ -177,7 +177,7 @@ function mockInvoke(cmd, args) {
         {
           id: "mock-1",
           title: "ZoneDeck 3.0 发布",
-          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://boss-key.ivan-hanloth.cn/changelog/)。",
+          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://zonedeck.ivan-hanloth.cn/changelog/)。",
           is_pinned: true,
           is_hidden: false,
           author: "Ivan Hanloth",

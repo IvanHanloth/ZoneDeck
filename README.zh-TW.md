@@ -17,11 +17,11 @@
 
 <div align="center">
     <h3>
-        <a href="https://boss-key.ivan-hanloth.cn/zh-tw/">專案官網</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/zh-tw/">專案官網</a>
         <span> • </span>
-        <a href="https://boss-key.ivan-hanloth.cn/zh-tw/guide/">使用說明</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/zh-tw/guide/">使用說明</a>
         <span> • </span>
-        <a href="https://boss-key.ivan-hanloth.cn/zh-tw/dev/">開發文件</a>
+        <a href="https://zonedeck.ivan-hanloth.cn/zh-tw/dev/">開發文件</a>
         <span> • </span>
         <a href="https://github.com/IvanHanloth/Boss-Key/releases">下載位址</a>
     </h3>
@@ -63,7 +63,7 @@
 
 部分版本會提供 Windows 7 系統的軟體包，帶有 win7 標示的可以在 Windows 7 系統上執行。
 
-完整的圖文使用說明，請參閱 ZoneDeck [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
+完整的圖文使用說明，請參閱 ZoneDeck [使用說明](https://zonedeck.ivan-hanloth.cn/zh-tw/guide/)。
 
 ### 基礎使用
 
@@ -101,7 +101,7 @@ ZoneDeck 支援以滑鼠中鍵、側鍵 1、側鍵 2 切換隱藏狀態，並可
 
 ### 更多功能
 
-完整功能介紹及使用指南，請參閱 ZoneDeck [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
+完整功能介紹及使用指南，請參閱 ZoneDeck [使用說明](https://zonedeck.ivan-hanloth.cn/zh-tw/guide/)。
 
 ## 資料存放位置與清理
 
@@ -121,7 +121,7 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 
 ## 開發及貢獻指南
 
-有關開發和貢獻的詳細資訊，請參閱 ZoneDeck [開發文件](https://boss-key.ivan-hanloth.cn/zh-tw/dev/)。
+有關開發和貢獻的詳細資訊，請參閱 ZoneDeck [開發文件](https://zonedeck.ivan-hanloth.cn/zh-tw/dev/)。
 
 ## 鳴謝
 
@@ -129,4 +129,4 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 
 ## 更新日誌
 
-完整的更新日誌請參閱 ZoneDeck [更新日誌](https://boss-key.ivan-hanloth.cn/zh-tw/changelog/)。
+完整的更新日誌請參閱 ZoneDeck [更新日誌](https://zonedeck.ivan-hanloth.cn/zh-tw/changelog/)。
