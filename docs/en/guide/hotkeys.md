@@ -4,9 +4,9 @@ title: Hotkeys & mouse gestures
 
 # Hotkeys & mouse gestures
 
-Boss Key offers several ways to trigger hiding and restoring: global keyboard hotkeys, mouse button clicks, fast movement into a screen corner, and auto-hide on idle. All are configured on the **Hotkeys & Mouse** tab of the settings window.
+ZoneDeck offers several ways to trigger hiding and restoring: global keyboard hotkeys, mouse button clicks, fast movement into a screen corner, and auto-hide on idle. All are configured on the **Hotkeys & Mouse** tab of the settings window.
 
-![Boss Key hotkeys and mouse settings page](/static/screenshot-2.png)
+![ZoneDeck hotkeys and mouse settings page](/static/screenshot-2.png)
 
 ::: tip Listening pauses automatically while editing
 When the pointer enters the "Hotkeys & Mouse" settings area, the core **temporarily pauses** hotkey and mouse monitoring so you do not trigger hiding while recording or adjusting settings. It resumes when you leave the area or the window loses focus. The monitoring state is shown at the bottom right of the window.
@@ -47,7 +47,7 @@ Hiding is **cumulative**: no matter how a window was hidden, it goes into the sa
 Each hotkey has its own **don't pass through** switch (off by default), at the right end of that hotkey's row. When enabled, both the key press and release of the triggering combination never reach the foreground app, so games or chat input boxes won't receive the keys.
 
 ::: info About global hotkeys
-By default Boss Key registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one.
+By default ZoneDeck registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one.
 
 A hotkey with "don't pass through" enabled is handled by a low-level keyboard hook (`WH_KEYBOARD_LL`) instead of `RegisterHotKey`, so it is not affected by hotkey-occupancy conflicts. If installing the hook fails, the hotkey falls back to normal registration: it still works, but the keys can no longer be withheld from other apps. A few programs that read Raw Input directly bypass keyboard hooks and may still observe the keys.
 :::
@@ -74,7 +74,7 @@ When assigning the **left or right button**, always combine it with a multi-clic
 
 ## Hiding by moving to a screen corner
 
-![Boss Key mouse button and corner settings](/static/screenshot-3.png)
+![ZoneDeck mouse button and corner settings](/static/screenshot-3.png)
 
 Once enabled, moving the pointer **into a corner of the screen** triggers hiding / restoring. Each of the four corners (top-left, top-right, bottom-left, bottom-right) can be enabled separately.
 
@@ -89,7 +89,7 @@ Corner hiding relies on a low-level mouse hook (`WH_MOUSE_LL`), installed only w
 
 ## Auto-hide when idle
 
-With **Enable auto-hide** on, Boss Key hides the bound windows automatically once the keyboard and mouse have been **idle** for the configured time.
+With **Enable auto-hide** on, ZoneDeck hides the bound windows automatically once the keyboard and mouse have been **idle** for the configured time.
 
 - **Idle time**: the period without input (in minutes) that triggers it. Default **5 minutes**.
 - **Quick toggle from the tray menu**: right-click the tray icon and click **Auto Hide** to pause / resume auto-hide without opening the settings window. A check mark means it is currently enabled, and the change stays in sync with the settings window. The tray icon can also show this state as a badge — see [Tray icon status](/en/guide/notifications#tray-icon-status).

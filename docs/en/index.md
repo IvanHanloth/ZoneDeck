@@ -3,12 +3,12 @@
 layout: home
 
 hero:
-  name: "Boss Key"
+  name: "ZoneDeck"
   text: "Hide instantly, with one key"
   tagline: Boss coming? Hide, mute and freeze your windows with a single key.
   image:
-    src: /static/icon.png
-    alt: Boss Key
+    src: /static/logo.svg
+    alt: ZoneDeck
   actions:
     - theme: brand
       text: Quick start

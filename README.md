@@ -1,10 +1,10 @@
 <p align="center">
 
-![Boss-Key logo bannar](/docs/public/static/bannar.jpg)
+![ZoneDeck logo banner](/docs/public/static/banner.svg)
 
 </p>
 
-<h1 align="center">Boss-Key</h1>
+<h1 align="center">ZoneDeck</h1>
 
 <p align="center">
 
@@ -36,7 +36,7 @@
 </p>
 
 <div align="center">
-    <strong>老板来了？快用Boss-Key老板键一键隐藏窗口！上班摸鱼必备神器。</strong><br>
+    <strong>老板来了？快用 ZoneDeck 老板键一键隐藏窗口！上班摸鱼必备神器。</strong><br>
 
 支持多窗口隐藏、多进程隐藏、自定义热键、隐藏活动窗口、静音窗口、暂停视频播放、进程冻结等超多功能。
 
@@ -46,34 +46,34 @@
 
 ## 应用截图
 
-![Boss-Key设置窗口绑定页](/docs/public/static/screenshot-1.png)
+![ZoneDeck 设置窗口绑定页](/docs/public/static/screenshot-1.png)
 
-![Boss-Key设置鼠标热键设置页-1](/docs/public/static/screenshot-2.png)
+![ZoneDeck 设置鼠标热键设置页-1](/docs/public/static/screenshot-2.png)
 
-![Boss-Key设置鼠标热键设置页-2](/docs/public/static/screenshot-3.png)
+![ZoneDeck 设置鼠标热键设置页-2](/docs/public/static/screenshot-3.png)
 
-![Boss-Key设置窗口其他选项页](/docs/public/static/screenshot-4.png)
+![ZoneDeck 设置窗口其他选项页](/docs/public/static/screenshot-4.png)
 
 ## 使用说明
 
 从v3.0.0版本开始，每个版本都会提供两种类型的程序，可以从[Release页面](https://github.com/IvanHanloth/Boss-Key/releases)下载
 
-- installer - 安装程序（推荐），完整封装的Boss-Key程序安装程序，提供一键安装、更新、卸载，可以更高效安全的管理Boss-Key程序
-- portable - 便携版，包含Boss-Key的核心程序和配置程序的压缩包，解压后可以运行
+- installer - 安装程序（推荐），完整封装的 ZoneDeck 程序安装程序，提供一键安装、更新、卸载，可以更高效安全的管理 ZoneDeck 程序
+- portable - 便携版，包含 ZoneDeck 的核心程序和配置程序的压缩包，解压后可以运行
 
 部分版本会提供win7系统的软件包，带有win7标识的可以在Windows 7系统上运行
 
-完整的图文使用说明，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
+完整的图文使用说明，请参阅 ZoneDeck [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
 ### 基础使用
 
-安装或更新后首次打开Boss-Key，会自动弹出设置页面，可以在其中进行热键修改、进程及窗口绑定的等操作。
+安装或更新后首次打开 ZoneDeck，会自动弹出设置页面，可以在其中进行热键修改、进程及窗口绑定的等操作。
 
 而一般使用时，可以通过右键点击托盘图标打开菜单。点击菜单中的“设置”即可打开设置页面。
 
 右键点击托盘图标还有退出程序、检查更新、设置开机自启等功能。
 
-按下隐藏/显示窗口热键可以一键隐藏所绑定的窗口。按下关闭核心热键可以一键关闭Boss-Key程序
+按下隐藏/显示窗口热键可以一键隐藏所绑定的窗口。按下关闭核心热键可以一键关闭 ZoneDeck 程序
 
 ### 绑定窗口
 
@@ -103,27 +103,27 @@ v2.1.0版本加入了鼠标相关操作隐藏绑定，可以选择鼠标中键�
 
 ### 更多功能
 
-完整功能介绍及使用指南，请参阅 Boss-Key [使用文档](https://boss-key.ivan-hanloth.cn/guide)
+完整功能介绍及使用指南，请参阅 ZoneDeck [使用文档](https://boss-key.ivan-hanloth.cn/guide)
 
 ## 数据存放位置与清理
 
-**便携版**把配置、日志、恢复文件与缓存放在**程序文件夹里**，拷走整个文件夹就带走了全部设置。若该文件夹不可写（放在了 `C:\Program Files` 之类的地方，或只读介质上），程序会改存到 `%APPDATA%\BossKey` 并在界面上说明原因。
+**便携版**把配置、日志、恢复文件与缓存放在**程序文件夹里**，拷走整个文件夹就带走了全部设置。若该文件夹不可写（放在了 `C:\Program Files` 之类的地方，或只读介质上），程序会改存到 `%APPDATA%\ZoneDeck` 并在界面上说明原因。
 
-**安装版**一律存到 `%APPDATA%\BossKey`：安装目录可能在 `C:\Program Files`，普通权限写不进去。程序凭安装包放的 `installed.marker` 分辨自己是哪一种。
+**安装版**一律存到 `%APPDATA%\ZoneDeck`：安装目录可能在 `C:\Program Files`，普通权限写不进去。程序凭安装包放的 `installed.marker` 分辨自己是哪一种。
 
-无论哪种，配置界面用到的浏览器组件另有一份数据在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，删程序文件夹清不掉它。随包附有 `cleanup.ps1`，在程序目录里打开 PowerShell 执行即可：
+无论哪种，配置界面用到的浏览器组件另有一份数据在 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`，删程序文件夹清不掉它。随包附有 `cleanup.ps1`，在程序目录里打开 PowerShell 执行即可：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File cleanup.ps1
 ```
 
-它会列出将要删除的内容并等你确认，随后清理 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`、可能存在的 `%APPDATA%\BossKey`，以及开机自启留下的计划任务 `BossKeyAutostart` 和注册表项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Boss Key Application`。程序文件夹本身不会被删，跑完后自行删除即可。
+它会列出将要删除的内容并等你确认，随后清理 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`、可能存在的 `%APPDATA%\ZoneDeck`，以及开机自启留下的计划任务 `ZoneDeckAutostart` 和注册表项 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ZoneDeck Application`。程序文件夹本身不会被删，跑完后自行删除即可。
 
 安装版无需这一步：卸载程序已经做了同样的事，并会询问是否保留配置文件。
 
 ## 开发及贡献指南
 
-有关开发和贡献的详细信息，请参阅 Boss-Key [开发文档](https://boss-key.ivan-hanloth.cn/dev)
+有关开发和贡献的详细信息，请参阅 ZoneDeck [开发文档](https://boss-key.ivan-hanloth.cn/dev)
 
 ## 鸣谢
 
@@ -131,4 +131,4 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 
 ## 更新日志
 
-完整的更新日志请参阅 Boss-Key [更新日志](https://boss-key.ivan-hanloth.cn/changelog)
+完整的更新日志请参阅 ZoneDeck [更新日志](https://boss-key.ivan-hanloth.cn/changelog)

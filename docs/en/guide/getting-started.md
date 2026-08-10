@@ -4,11 +4,11 @@ title: Quick start
 
 # Quick start
 
-This chapter covers the basics: opening the settings window, controlling Boss Key from the tray menu, and the default hotkeys.
+This chapter covers the basics: opening the settings window, controlling ZoneDeck from the tray menu, and the default hotkeys.
 
 ## First run
 
-The **first time** you open Boss Key after installing or updating, the **settings window** appears automatically so you can change hotkeys, bind windows and processes, and so on right away.
+The **first time** you open ZoneDeck after installing or updating, the **settings window** appears automatically so you can change hotkeys, bind windows and processes, and so on right away.
 
 ## The settings window
 
@@ -67,7 +67,7 @@ The left side shows whether the core is running and offers matching shortcuts.
 
 Day to day, **right-click the tray icon** to open the menu. It offers:
 
-![Boss Key core tray menu](/static/screenshot-5.png)
+![ZoneDeck core tray menu](/static/screenshot-5.png)
 
 - **Settings**: open the settings window.
 - **Hide Windows / Show Windows**: quickly hide or show the bound windows.
@@ -82,12 +82,12 @@ With [“Toggle hiding by clicking the tray icon”](/en/guide/options) enabled,
 
 ## Default hotkeys
 
-Boss Key ships with two keyboard hotkeys, both customisable under [Hotkeys & mouse gestures](/en/guide/hotkeys):
+ZoneDeck ships with two keyboard hotkeys, both customisable under [Hotkeys & mouse gestures](/en/guide/hotkeys):
 
 | Function | Default hotkey | Description |
 | --- | --- | --- |
 | **Hide / show windows** | `Ctrl + Q` | Press once to hide the bound windows, again to restore them |
-| **Close the core** | `Win + Esc` | Immediately ends the Boss Key core process |
+| **Close the core** | `Win + Esc` | Immediately ends the ZoneDeck core process |
 
 A fresh installation also enables **hide on middle mouse button click** by default; you can adjust or disable it in the settings.
 

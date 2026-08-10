@@ -4,7 +4,7 @@ title: 設定檔欄位
 
 # 設定檔欄位參考
 
-Boss Key 的設定儲存在 `config.json` 中，可攜版存在程式資料夾，安裝版存在 `%APPDATA%\BossKey`，詳見[資料目錄](/zh-tw/dev/architecture#資料目錄)。位置變動時舊設定會自動移轉過去。**結構與舊版完全相容**，舊使用者設定可直接沿用。首次執行若不存在則使用預設值。欄位定義見 `crates/common/src/config.rs`。
+ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾，安裝版存在 `%APPDATA%\ZoneDeck`，詳見[資料目錄](/zh-tw/dev/architecture#資料目錄)。位置變動時舊設定會自動移轉過去。**結構與舊版完全相容**，舊使用者設定可直接沿用。首次執行若不存在則使用預設值。欄位定義見 `crates/common/src/config.rs`。
 
 ::: tip 一般不需手動修改
 設定由設定介面自動讀寫並儲存，通常不需手動編輯。本頁面向需要理解欄位含義的開發者。
@@ -49,7 +49,7 @@ Boss Key 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/options) |
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/options) |
 | `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [一併隱藏 Boss Key 通知區域圖示](/zh-tw/guide/options) |
+| `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/options) |
 | `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |

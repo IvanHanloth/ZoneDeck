@@ -4,7 +4,7 @@ title: Architecture
 
 # Architecture
 
-Boss Key v3 uses a **two-process architecture** that separates the **core from the settings program**, connected by a **named pipe**. This chapter covers the overall design and the project layout.
+ZoneDeck v3 uses a **two-process architecture** that separates the **core from the settings program**, connected by a **named pipe**. This chapter covers the overall design and the project layout.
 
 ## Two-process overview
 
@@ -13,7 +13,7 @@ Boss Key v3 uses a **two-process architecture** that separates the **core from t
 │ Interactive user session (Session 1+)                            │
 │                                                                  │
 │  ┌──────────────────────────┐        ┌────────────────────────┐ │
-│  │ Boss Key.exe (resident)   │        │ config.exe             │ │
+│  │ ZoneDeck.exe (resident)   │        │ config.exe             │ │
 │  │ Pure native Rust, ~350KB  │◀─IPC──▶│ Tauri (Rust + WebView) │ │
 │  │ Hidden message window     │ named  │ Opened on demand,      │ │
 │  │ + wndproc                 │ pipe   │ exits when closed      │ │
@@ -39,7 +39,7 @@ The core **cannot** be a Session 0 Windows service, or it could not enumerate an
 
 ### Inter-process communication (IPC)
 
-- Uses the named pipe `\\.\pipe\bosskey`, with **one JSON object per line** (`Command` / `Response`).
+- Uses the named pipe `\\.\pipe\zonedeck`, with **one JSON object per line** (`Command` / `Response`).
 - After the settings are saved, the settings window sends `reload_config`; the core **hot-reloads** and re-registers hotkeys, hooks and timers, **without restarting**.
 - For protocol details see [IPC protocol](/en/dev/ipc-protocol).
 
@@ -123,9 +123,9 @@ The configuration (`config.json`), logs (`logs/`), the recovery snapshot (`recov
 
 | Case | Data folder | `DataDirKind` |
 | --- | --- | --- |
-| Installed copy | `%APPDATA%\BossKey` | `Installed` |
+| Installed copy | `%APPDATA%\ZoneDeck` | `Installed` |
 | Portable copy, program folder writable | The program folder | `Portable` |
-| Portable copy, program folder not writable | `%APPDATA%\BossKey` | `PortableFallback` |
+| Portable copy, program folder not writable | `%APPDATA%\ZoneDeck` | `PortableFallback` |
 
 A portable copy keeps its data in the program folder, so copying that folder takes the whole setup along. An installed copy cannot do the same: the installer may land in `Program Files`, which normal privileges cannot write to, so every save from the settings program would fail with `os error 5`.
 
@@ -146,8 +146,10 @@ When a portable copy finds the program folder unwritable it falls back to the us
 
 Whenever the user folder is used, a `config.json` in the program folder is moved across: copied first, then the original is deleted on a best-effort basis. An existing config at the destination is left untouched — that is the one currently in use — and the old file is left alone as well. If the original cannot be deleted (no write permission, or the file is in use) it simply stays; it is never read again.
 
+Data left behind by the brand rename (Boss Key → ZoneDeck) migrates automatically as well: whenever the data folder is located, an existing `%APPDATA%\BossKey` is renamed wholesale to `%APPDATA%\ZoneDeck` if the latter does not exist yet; if the rename is blocked because the old folder is in use, only `config.json` and `recovery.json` are copied, and the leftovers are handled by the uninstaller or `cleanup.ps1`. The old log prefix `BossKey-` is still recognised by retention cleanup and session lookback (on the same date the new prefix sorts first). Autostart entries registered under the old names (the `BossKeyAutostart` scheduled task and the `Boss Key Application` registry value) are migrated at core startup: the new name is registered first, with the original privilege preference, and only then are the old entries cleaned up. During an installer upgrade the installer has to delete the old watchdog task before it can replace files, so it writes a migration marker (`HKCU\Software\ZoneDeck\MigrateAutostart`) beforehand for the core to pick up on first launch. Before starting, the core also probes the old mutex `BossKey_SingleInstance_Mutex`: if the old core is still running it shows a warning and exits, avoiding two cores running at once and avoiding moving the data folder out from under the running old core.
+
 ::: tip The settings window's browser data lives elsewhere
-Following the identifier in `tauri.conf.json`, Tauri puts the WebView2 user data in `%LOCALAPPDATA%\cn.hanloth.bosskey.config`. It is not part of the data folder and is not managed by `paths.rs`. Both the installer's uninstaller and the `scripts/cleanup.ps1` shipped with the portable edition remove it.
+Following the identifier in `tauri.conf.json`, Tauri puts the WebView2 user data in `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`. It is not part of the data folder and is not managed by `paths.rs`. Both the installer's uninstaller and the `scripts/cleanup.ps1` shipped with the portable edition remove it.
 :::
 
 The data folder actually in use, and how it was chosen, are written to the log's `[START]` marker on every start; check that first when diagnosing read/write failures (the user folder in the path is redacted to `%USERPROFILE%`).
@@ -187,7 +189,7 @@ When restoring (showing), every record is validated first: the handle must still
 
 ## Stability (three layers of crash self-healing)
 
-1. **Crash logs**: key events and panics are written to `logs/BossKey-YYYY-MM-DD.log` in the [data folder](#data-folder) (rotated daily, retained per `log_retention_days`; 0 disables logging; filtered by `log_level`, which defaults to WARN and above — see [Log levels and redaction](#log-levels-and-redaction)).
+1. **Crash logs**: key events and panics are written to `logs/ZoneDeck-YYYY-MM-DD.log` in the [data folder](#data-folder) (rotated daily, retained per `log_retention_days`; 0 disables logging; filtered by `log_level`, which defaults to WARN and above — see [Log levels and redaction](#log-levels-and-redaction)).
 2. **Crash recovery**: before any hide action executes, what is *about to be* hidden / frozen / muted is written to `recovery.json` (tmp + rename atomic replace); windows are recovered automatically on the next start after an abnormal exit. Snapshots carry the boot time and process creation times, so stale snapshots from a previous boot are discarded instead of acting on unrelated windows / processes.
 3. **Watchdog**: the scheduled task's `RestartOnFailure` (restart within a minute of a crash, up to 3 times). Release builds use `panic = "abort"`, and the panic hook exits with a non-zero code once the log is written — exactly what triggers the scheduled-task restart.
 

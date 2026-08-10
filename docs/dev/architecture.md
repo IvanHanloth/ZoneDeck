@@ -4,7 +4,7 @@ title: 系统架构
 
 # 系统架构
 
-Boss Key v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通过**命名管道**通信。本章介绍整体设计与工程结构。
+ZoneDeck v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通过**命名管道**通信。本章介绍整体设计与工程结构。
 
 ## 双进程总览
 
@@ -13,7 +13,7 @@ Boss Key v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通�
 │ 用户交互会话（Session 1+）                                       │
 │                                                                  │
 │  ┌──────────────────────────┐        ┌────────────────────────┐ │
-│  │ Boss Key.exe（常驻）      │        │ config.exe             │ │
+│  │ ZoneDeck.exe（常驻）      │        │ config.exe             │ │
 │  │ 纯 Rust 原生，~350KB      │◀─IPC──▶│ Tauri（Rust + WebView）│ │
 │  │ 隐藏的消息窗口 + wndproc  │ 命名   │ 按需打开，关闭即退出   │ │
 │  │                          │ 管道   │                        │ │
@@ -39,7 +39,7 @@ Boss Key v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通�
 
 ### 进程间通信（IPC）
 
-- 使用命名管道 `\\.\pipe\bosskey`，**一行一条 JSON**（`Command` / `Response`）。
+- 使用命名管道 `\\.\pipe\zonedeck`，**一行一条 JSON**（`Command` / `Response`）。
 - 配置保存后，配置界面发送 `reload_config`，核心**热重载**并重新注册热键 / 钩子 / 定时器，**无需重启核心**。
 - 协议细节见 [IPC 协议](/dev/ipc-protocol)。
 
@@ -122,9 +122,9 @@ Boss-Key/
 
 | 情形 | 数据目录 | `DataDirKind` |
 | --- | --- | --- |
-| 安装版 | `%APPDATA%\BossKey` | `Installed` |
+| 安装版 | `%APPDATA%\ZoneDeck` | `Installed` |
 | 便携版，程序目录可写 | 程序目录 | `Portable` |
-| 便携版，程序目录写不进去 | `%APPDATA%\BossKey` | `PortableFallback` |
+| 便携版，程序目录写不进去 | `%APPDATA%\ZoneDeck` | `PortableFallback` |
 
 便携版把数据留在程序目录，拷走整个文件夹就带走了全部设置；安装版则不能这么做——安装包可以装进 `Program Files`，那里普通权限进程不可写，配置程序每次保存都会得到 `os error 5`。
 
@@ -145,8 +145,10 @@ Boss-Key/
 
 用到用户目录时，程序目录里的 `config.json` 会搬过来：先复制，再尽力删掉原文件。目标已有配置就不动它——那是当前在用的一份，旧文件不得覆盖，也不去删。删不掉（没有写权限、文件被占用）就留在原处，反正不会再被读到。
 
+品牌改名（Boss Key → ZoneDeck）留下的旧数据同样自动迁移：每次定位数据目录时，`%APPDATA%\BossKey` 若还在而 `%APPDATA%\ZoneDeck` 尚不存在，就整体重命名过去；旧目录被占用重命名失败时退回只复制 `config.json` 与 `recovery.json`，残余交给卸载程序或 `cleanup.ps1`。旧日志前缀 `BossKey-` 仍被保留天数清理与会话回溯识别（同日期时新前缀排前）。旧名称注册的开机自启（`BossKeyAutostart` 计划任务、`Boss Key Application` 注册表值）由核心启动时迁移：先按原权限偏好在新名称下注册成功，再清理旧残留；安装版升级时安装器须先删掉旧看门狗任务才能替换文件，删除前会写一个迁移标记（`HKCU\Software\ZoneDeck\MigrateAutostart`）供核心首启接力。核心启动前还会探测旧互斥体 `BossKey_SingleInstance_Mutex`：旧版核心仍在运行时弹窗提示并退出，避免双实例以及从运行中的旧核心脚下搬走数据目录。
+
 ::: tip 配置界面的浏览器数据另有一处
-Tauri 按 `tauri.conf.json` 里的 identifier 把 WebView2 用户数据放在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，不在数据目录里，也不由 `paths.rs` 管。安装包的卸载程序与便携版随包的 `scripts/cleanup.ps1` 都会清理它。
+Tauri 按 `tauri.conf.json` 里的 identifier 把 WebView2 用户数据放在 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`，不在数据目录里，也不由 `paths.rs` 管。安装包的卸载程序与便携版随包的 `scripts/cleanup.ps1` 都会清理它。
 :::
 
 每次启动的实际数据目录与判定结果会写进日志的 `[START]` 标记，排查读写失败先看它（路径中的用户目录已脱敏为 `%USERPROFILE%`）。
@@ -186,7 +188,7 @@ agent 线程本身**不**提优先级：它干的是枚举 / 冻结 / 落盘这�
 
 ## 稳定性设计（崩溃自愈三层防线）
 
-1. **崩溃日志**：关键事件与 panic 写入[数据目录](#数据目录)下的 `logs/BossKey-YYYY-MM-DD.log`（按天切割，按 `log_retention_days` 保留，0 表示关闭日志；按 `log_level` 过滤，默认只记 WARN 及以上，详见[日志分级与脱敏](#日志分级与脱敏)）。
+1. **崩溃日志**：关键事件与 panic 写入[数据目录](#数据目录)下的 `logs/ZoneDeck-YYYY-MM-DD.log`（按天切割，按 `log_retention_days` 保留，0 表示关闭日志；按 `log_level` 过滤，默认只记 WARN 及以上，详见[日志分级与脱敏](#日志分级与脱敏)）。
 2. **崩溃恢复**：隐藏动作执行前先把"将要隐藏 / 冻结 / 静音什么"写入 `recovery.json`（tmp + rename 原子替换），异常退出后重启自动找回；快照带开机时刻与进程创建时刻，跨重启的过期快照直接丢弃，不会对无关窗口 / 进程做恢复动作。
 3. **看门狗**：计划任务 `RestartOnFailure`（崩溃后 1 分钟内重启，最多 3 次）。release 构建 `panic = "abort"`，panic 钩子写完日志后以非零码退出，正好触发计划任务重启。
 

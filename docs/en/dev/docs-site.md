@@ -116,6 +116,6 @@ The workflow runs `pnpm install` → `pnpm docs:build` → upload and deploy to 
 ## Writing conventions
 
 - Use **professional, objective** descriptions.
-- Always call the product **Boss Key** in user-facing text (never lowercase `bosskey`).
+- Always call the product **ZoneDeck** in user-facing text (never lowercase `zonedeck`).
 - When adding a feature, document it in the [user guide](/en/guide/) and, where relevant, update [Configuration fields](/en/dev/config-reference).
 - **Update all three languages together** when changing documentation. Traditional Chinese uses Taiwanese terminology (視窗, 程式, 檔案, 滑鼠, 快速鍵); do not simply convert Simplified characters to Traditional ones.

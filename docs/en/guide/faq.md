@@ -19,13 +19,13 @@ A settings window that will not open **does not affect the core's hiding feature
 
 ## Will restoring pop up programs I "closed" to the tray?
 
-No. Hiding only records windows that were **visible at the time**, and restoring only reverses Boss Key's own hiding; windows an app hid by itself (Steam's close button, for example, merely hides its window) are untouched and will not be shown on restore.
+No. Hiding only records windows that were **visible at the time**, and restoring only reverses ZoneDeck's own hiding; windows an app hid by itself (Steam's close button, for example, merely hides its window) are untouched and will not be shown on restore.
 
-## Antivirus flags or blocks Boss Key — what now?
+## Antivirus flags or blocks ZoneDeck — what now?
 
-Boss Key listens for global hotkeys and hides windows, behaviour that antivirus software sometimes misreads. v3 uses a native single-file Rust implementation, which considerably reduces false positives. If it is still blocked:
+ZoneDeck listens for global hotkeys and hides windows, behaviour that antivirus software sometimes misreads. v3 uses a native single-file Rust implementation, which considerably reduces false positives. If it is still blocked:
 
-- Add Boss Key's **program folder** to your antivirus allowlist;
+- Add ZoneDeck's **program folder** to your antivirus allowlist;
 - Download from the [official Releases page](https://github.com/IvanHanloth/Boss-Key/releases) rather than third-party sources.
 
 ::: tip Verifying build provenance
@@ -43,11 +43,11 @@ Check in order:
 
 ## A window was hidden and won't come back
 
-Use the [window recovery tool](/en/guide/recovery) (Options → Tools) to tick and restore it. If you enabled "Also hide Boss Key's tray icon", use your **restore hotkey**.
+Use the [window recovery tool](/en/guide/recovery) (Options → Tools) to tick and restore it. If you enabled "Also hide ZoneDeck's tray icon", use your **restore hotkey**.
 
-## Can Boss Key hide other programs' tray icons?
+## Can ZoneDeck hide other programs' tray icons?
 
-Boss Key can only hide [its own tray icon](/en/guide/options); it cannot touch tray icons owned by other programs. Windows provides this itself: for detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the link works only on Windows) and choose which icons appear in the taskbar corner.
+ZoneDeck can only hide [its own tray icon](/en/guide/options); it cannot touch tray icons owned by other programs. Windows provides this itself: for detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the link works only on Windows) and choose which icons appear in the taskbar corner.
 
 ## The enhanced freezing switch is greyed out
 
@@ -61,11 +61,11 @@ The settings window states which one is missing. See [Process freezing](/en/guid
 
 ## "Could not save the configuration" (access denied / os error 5)
 
-Update to v3.1.0 or later first. Older versions always kept the settings next to the program, and "Install for all users" puts the program in `C:\Program Files`, which normal privileges cannot write to — so every change failed to save. In newer versions the installer edition always stores the settings in `%APPDATA%\BossKey` and migrates the existing `config.json` there — nothing to do by hand. A portable copy still keeps them in the program folder, and switches to `%APPDATA%\BossKey` with an explanatory notice if that folder is not writable.
+Update to v3.1.0 or later first. Older versions always kept the settings next to the program, and "Install for all users" puts the program in `C:\Program Files`, which normal privileges cannot write to — so every change failed to save. In newer versions the installer edition always stores the settings in `%APPDATA%\ZoneDeck` and migrates the existing `config.json` there — nothing to do by hand. A portable copy still keeps them in the program folder, and switches to `%APPDATA%\ZoneDeck` with an explanatory notice if that folder is not writable.
 
 If it still fails after updating, it is usually one of these:
 
-- **Antivirus interference**: add the Boss Key program folder and `%APPDATA%\BossKey` to your antivirus allowlist. Windows Security's "Controlled folder access" blocks writes the same way.
+- **Antivirus interference**: add the ZoneDeck program folder and `%APPDATA%\ZoneDeck` to your antivirus allowlist. Windows Security's "Controlled folder access" blocks writes the same way.
 - **The configuration file is read-only**: right-click `config.json` → Properties and clear "Read-only".
 
 The error message names the path it failed on, which tells you which folder is at fault.
@@ -74,7 +74,7 @@ The error message names the path it failed on, which tells you which folder is a
 
 No. The `config.json` structure is **fully compatible** with older versions, so your bindings, hotkeys and options are preserved. The flat bindings from v2 are migrated to the new rule format automatically.
 
-## Which systems does Boss Key support?
+## Which systems does ZoneDeck support?
 
 Windows 10 and later work out of the box. On Windows 7 you must ensure WebView2 is available to open the settings window; some releases provide a Windows 7 package that works directly. macOS and Linux are not supported.
 

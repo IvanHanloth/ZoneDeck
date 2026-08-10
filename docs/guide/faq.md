@@ -19,13 +19,13 @@ v3 的配置程序（`config.exe`）使用 Tauri 编写，其运行依赖系统�
 
 ## 恢复时会把已"关闭"到托盘的程序弹出来吗？
 
-不会。隐藏时只记录**当时可见**的窗口，恢复只逆转 Boss Key 自己的隐藏动作；程序自行藏到托盘的窗口（如 Steam 的关闭按钮只是隐藏窗口）不受影响，恢复时不会被弹出。
+不会。隐藏时只记录**当时可见**的窗口，恢复只逆转 ZoneDeck 自己的隐藏动作；程序自行藏到托盘的窗口（如 Steam 的关闭按钮只是隐藏窗口）不受影响，恢复时不会被弹出。
 
 ## 杀毒软件报毒 / 拦截怎么办？
 
-Boss Key 会监听全局热键、隐藏窗口，这类行为有时会被杀软误判。v3 已改用 Rust 原生单文件实现，显著降低了误报概率。若仍被拦截：
+ZoneDeck 会监听全局热键、隐藏窗口，这类行为有时会被杀软误判。v3 已改用 Rust 原生单文件实现，显著降低了误报概率。若仍被拦截：
 
-- 将 Boss Key 的**程序目录**加入杀软信任区 / 白名单；
+- 将 ZoneDeck 的**程序目录**加入杀软信任区 / 白名单；
 - 从 [官方 Release 页面](https://github.com/IvanHanloth/Boss-Key/releases) 下载，避免第三方来源。
 
 ::: tip 校验产物来源
@@ -43,11 +43,11 @@ Boss Key 会监听全局热键、隐藏窗口，这类行为有时会被杀软�
 
 ## 窗口被隐藏后显示不回来了？
 
-使用 [窗口恢复工具](/guide/recovery#窗口恢复工具)（其他选项 → 工具）勾选并恢复。若开启了"同时隐藏 Boss Key 托盘图标"，请用你的**恢复热键**恢复。
+使用 [窗口恢复工具](/guide/recovery#窗口恢复工具)（其他选项 → 工具）勾选并恢复。若开启了"同时隐藏 ZoneDeck 托盘图标"，请用你的**恢复热键**恢复。
 
 ## 能隐藏其他程序的托盘图标吗？
 
-Boss Key 只能隐藏[自身的托盘图标](/guide/options#同时隐藏-boss-key-托盘图标)，无法操作其他程序的托盘图标。可使用 Windows 自带的功能手动设置：具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（该链接仅在 Windows 上有效），选择哪些图标显示在任务栏角落。
+ZoneDeck 只能隐藏[自身的托盘图标](/guide/options#同时隐藏-zonedeck-托盘图标)，无法操作其他程序的托盘图标。可使用 Windows 自带的功能手动设置：具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（该链接仅在 Windows 上有效），选择哪些图标显示在任务栏角落。
 
 ## 增强冻结的开关是灰的，点不了？
 
@@ -61,11 +61,11 @@ Boss Key 只能隐藏[自身的托盘图标](/guide/options#同时隐藏-boss-ke
 
 ## 提示"保存配置失败"（拒绝访问 / os error 5）怎么办？
 
-先升级到 v3.1.0 或更高版本。旧版本把设置固定存在程序所在目录，而选了「为所有用户安装」时程序装在 `C:\Program Files`，普通权限写不进去，于是每次改设置都保存失败。新版本的安装版一律把设置存到 `%APPDATA%\BossKey`，并把已有的 `config.json` 迁过去，无需手动处理。便携版仍存在程序目录里，若那里不可写也会自动改用 `%APPDATA%\BossKey` 并弹出说明。
+先升级到 v3.1.0 或更高版本。旧版本把设置固定存在程序所在目录，而选了「为所有用户安装」时程序装在 `C:\Program Files`，普通权限写不进去，于是每次改设置都保存失败。新版本的安装版一律把设置存到 `%APPDATA%\ZoneDeck`，并把已有的 `config.json` 迁过去，无需手动处理。便携版仍存在程序目录里，若那里不可写也会自动改用 `%APPDATA%\ZoneDeck` 并弹出说明。
 
 升级后仍然报错，多半是另外两种情况：
 
-- **被杀软拦截**：把 Boss Key 的程序目录与 `%APPDATA%\BossKey` 加入杀软信任区。Windows 安全中心的"受控文件夹访问"也会以同样的方式拦截写入。
+- **被杀软拦截**：把 ZoneDeck 的程序目录与 `%APPDATA%\ZoneDeck` 加入杀软信任区。Windows 安全中心的"受控文件夹访问"也会以同样的方式拦截写入。
 - **配置文件被设为只读**：在资源管理器中右键 `config.json` → 属性，取消"只读"。
 
 报错信息里带有实际路径，据此可判断问题出在哪个目录。
@@ -74,7 +74,7 @@ Boss Key 只能隐藏[自身的托盘图标](/guide/options#同时隐藏-boss-ke
 
 不会。`config.json` 结构与旧版**完全兼容**，更新后你的绑定、热键、选项都会保留。V2版的扁平绑定也会自动迁移到新的规则格式。
 
-## Boss Key 支持哪些系统？
+## ZoneDeck 支持哪些系统？
 
 Windows 10 及以上开箱即用；Windows 7 需自行确保 WebView2 可用才能打开配置界面。部分版本提供 Windows 7 软件包可直接在win7版本中使用。目前不支持 macOS / Linux。
 

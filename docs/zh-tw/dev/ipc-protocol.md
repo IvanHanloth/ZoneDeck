@@ -4,11 +4,11 @@ title: IPC 協定
 
 # IPC 協定
 
-設定介面（`config.exe`）與常駐核心（`Boss Key.exe`）透過**具名管道**通訊。協定定義在 `crates/common/src/ipc.rs`。
+設定介面（`config.exe`）與常駐核心（`ZoneDeck.exe`）透過**具名管道**通訊。協定定義在 `crates/common/src/ipc.rs`。
 
 ## 傳輸
 
-- 管道名稱：`\\.\pipe\bosskey`。
+- 管道名稱：`\\.\pipe\zonedeck`。
 - 編碼：**一行一條 JSON**，以 `\n` 分隔。用戶端傳送一條 `Command`，伺服端回一條 `Response`。
 - 用戶端封裝為 `PipeClient`：預設帶重試（25 次、40ms 間隔）；`.fast()` 為**快速失敗**模式（只嘗試一次），用於狀態輪詢等不希望阻塞的情境。
 

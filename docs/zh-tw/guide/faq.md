@@ -19,13 +19,13 @@ v3 的設定程式（`config.exe`）使用 Tauri 撰寫，其執行相依於系�
 
 ## 復原時會把已「關閉」到通知區域的程式彈出來嗎？
 
-不會。隱藏時只記錄**當時可見**的視窗，復原只逆轉 Boss Key 自己的隱藏動作；程式自行藏到通知區域的視窗（如 Steam 的關閉按鈕只是隱藏視窗）不受影響，復原時不會被彈出。
+不會。隱藏時只記錄**當時可見**的視窗，復原只逆轉 ZoneDeck 自己的隱藏動作；程式自行藏到通知區域的視窗（如 Steam 的關閉按鈕只是隱藏視窗）不受影響，復原時不會被彈出。
 
 ## 防毒軟體誤判／攔截怎麼辦？
 
-Boss Key 會監聽全域快速鍵、隱藏視窗，這類行為有時會被防毒軟體誤判。v3 已改用 Rust 原生單一檔案實作，顯著降低了誤判機率。若仍被攔截：
+ZoneDeck 會監聽全域快速鍵、隱藏視窗，這類行為有時會被防毒軟體誤判。v3 已改用 Rust 原生單一檔案實作，顯著降低了誤判機率。若仍被攔截：
 
-- 將 Boss Key 的**程式資料夾**加入防毒軟體信任區／白名單；
+- 將 ZoneDeck 的**程式資料夾**加入防毒軟體信任區／白名單；
 - 從 [官方 Release 頁面](https://github.com/IvanHanloth/Boss-Key/releases) 下載，避免第三方來源。
 
 ::: tip 驗證產物來源
@@ -43,11 +43,11 @@ Boss Key 會監聽全域快速鍵、隱藏視窗，這類行為有時會被防�
 
 ## 視窗被隱藏後顯示不回來了？
 
-使用 [視窗復原工具](/zh-tw/guide/recovery)（其他選項 → 工具）勾選並復原。若開啟了「一併隱藏 Boss Key 通知區域圖示」，請用您的**復原快速鍵**復原。
+使用 [視窗復原工具](/zh-tw/guide/recovery)（其他選項 → 工具）勾選並復原。若開啟了「一併隱藏 ZoneDeck 通知區域圖示」，請用您的**復原快速鍵**復原。
 
 ## 能隱藏其他程式的通知區域圖示嗎？
 
-Boss Key 只能隱藏[自身的通知區域圖示](/zh-tw/guide/options)，無法操作其他程式的通知區域圖示。可使用 Windows 內建的功能手動設定：詳細步驟參見微軟官方教學 [在 Windows 中自訂工作列 · 系統匣](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接開啟 [工作列設定](ms-settings:taskbar)（該連結僅在 Windows 上有效），選擇哪些圖示顯示在工作列角落。
+ZoneDeck 只能隱藏[自身的通知區域圖示](/zh-tw/guide/options)，無法操作其他程式的通知區域圖示。可使用 Windows 內建的功能手動設定：詳細步驟參見微軟官方教學 [在 Windows 中自訂工作列 · 系統匣](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接開啟 [工作列設定](ms-settings:taskbar)（該連結僅在 Windows 上有效），選擇哪些圖示顯示在工作列角落。
 
 ## 增強凍結的開關是灰的，按不了？
 
@@ -61,11 +61,11 @@ Boss Key 只能隱藏[自身的通知區域圖示](/zh-tw/guide/options)，無�
 
 ## 提示「儲存設定失敗」（拒絕存取／os error 5）怎麼辦？
 
-先升級到 v3.1.0 或更高版本。舊版本把設定固定存在程式所在資料夾，而選了「為所有使用者安裝」時程式裝在 `C:\Program Files`，一般權限寫不進去，於是每次改設定都儲存失敗。新版本的安裝版一律把設定存到 `%APPDATA%\BossKey`，並把已有的 `config.json` 移轉過去，不需手動處理。可攜版仍存在程式資料夾裡，若那裡不可寫入也會自動改用 `%APPDATA%\BossKey` 並彈出說明。
+先升級到 v3.1.0 或更高版本。舊版本把設定固定存在程式所在資料夾，而選了「為所有使用者安裝」時程式裝在 `C:\Program Files`，一般權限寫不進去，於是每次改設定都儲存失敗。新版本的安裝版一律把設定存到 `%APPDATA%\ZoneDeck`，並把已有的 `config.json` 移轉過去，不需手動處理。可攜版仍存在程式資料夾裡，若那裡不可寫入也會自動改用 `%APPDATA%\ZoneDeck` 並彈出說明。
 
 升級後仍然報錯，多半是另外兩種情況：
 
-- **被防毒軟體攔截**：把 Boss Key 的程式資料夾與 `%APPDATA%\BossKey` 加入防毒軟體信任區。Windows 安全性中心的「受控資料夾存取權」也會以同樣的方式攔截寫入。
+- **被防毒軟體攔截**：把 ZoneDeck 的程式資料夾與 `%APPDATA%\ZoneDeck` 加入防毒軟體信任區。Windows 安全性中心的「受控資料夾存取權」也會以同樣的方式攔截寫入。
 - **設定檔被設為唯讀**：在檔案總管中右鍵 `config.json` → 內容，取消「唯讀」。
 
 錯誤訊息裡帶有實際路徑，據此可判斷問題出在哪個資料夾。
@@ -74,7 +74,7 @@ Boss Key 只能隱藏[自身的通知區域圖示](/zh-tw/guide/options)，無�
 
 不會。`config.json` 結構與舊版**完全相容**，更新後您的綁定、快速鍵、選項都會保留。v2 版的扁平綁定也會自動移轉到新的規則格式。
 
-## Boss Key 支援哪些系統？
+## ZoneDeck 支援哪些系統？
 
 Windows 10 以上開箱即用；Windows 7 需自行確保 WebView2 可用才能開啟設定介面。部分版本提供 Windows 7 軟體包可直接在 Win7 版本中使用。目前不支援 macOS／Linux。
 

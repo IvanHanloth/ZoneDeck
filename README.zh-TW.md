@@ -1,10 +1,10 @@
 <p align="center">
 
-![Boss-Key logo bannar](/docs/public/static/bannar.jpg)
+![ZoneDeck logo banner](/docs/public/static/banner.svg)
 
 </p>
 
-<h1 align="center">Boss-Key</h1>
+<h1 align="center">ZoneDeck</h1>
 
 <p align="center">
 
@@ -36,7 +36,7 @@
 </p>
 
 <div align="center">
-    <strong>老闆來了？快用 Boss-Key 老闆鍵一鍵隱藏視窗！上班摸魚必備神器。</strong><br>
+    <strong>老闆來了？快用 ZoneDeck 老闆鍵一鍵隱藏視窗！上班摸魚必備神器。</strong><br>
 
 支援多視窗隱藏、多程序隱藏、自訂快速鍵、隱藏使用中視窗、靜音視窗、暫停影片播放、程序凍結等超多功能。
 
@@ -46,34 +46,34 @@
 
 ## 應用程式螢幕擷取畫面
 
-![Boss-Key 設定視窗綁定頁](/docs/public/static/screenshot-1.png)
+![ZoneDeck 設定視窗綁定頁](/docs/public/static/screenshot-1.png)
 
-![Boss-Key 設定滑鼠快速鍵設定頁-1](/docs/public/static/screenshot-2.png)
+![ZoneDeck 設定滑鼠快速鍵設定頁-1](/docs/public/static/screenshot-2.png)
 
-![Boss-Key 設定滑鼠快速鍵設定頁-2](/docs/public/static/screenshot-3.png)
+![ZoneDeck 設定滑鼠快速鍵設定頁-2](/docs/public/static/screenshot-3.png)
 
-![Boss-Key 設定視窗其他選項頁](/docs/public/static/screenshot-4.png)
+![ZoneDeck 設定視窗其他選項頁](/docs/public/static/screenshot-4.png)
 
 ## 使用說明
 
 從 v3.0.0 版本開始，每個版本都會提供兩種類型的程式，可以從 [Release 頁面](https://github.com/IvanHanloth/Boss-Key/releases) 下載：
 
-- installer - 安裝程式（建議），完整封裝的 Boss-Key 程式安裝程式，提供一鍵安裝、更新、解除安裝，可以更有效率且安全地管理 Boss-Key 程式
-- portable - 可攜版，包含 Boss-Key 的核心程式和設定程式的壓縮檔，解壓縮後可以執行
+- installer - 安裝程式（建議），完整封裝的 ZoneDeck 程式安裝程式，提供一鍵安裝、更新、解除安裝，可以更有效率且安全地管理 ZoneDeck 程式
+- portable - 可攜版，包含 ZoneDeck 的核心程式和設定程式的壓縮檔，解壓縮後可以執行
 
 部分版本會提供 Windows 7 系統的軟體包，帶有 win7 標示的可以在 Windows 7 系統上執行。
 
-完整的圖文使用說明，請參閱 Boss-Key [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
+完整的圖文使用說明，請參閱 ZoneDeck [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
 
 ### 基礎使用
 
-安裝或更新後首次開啟 Boss-Key，會自動開啟設定頁面，可以在其中進行快速鍵修改、程序及視窗綁定等操作。
+安裝或更新後首次開啟 ZoneDeck，會自動開啟設定頁面，可以在其中進行快速鍵修改、程序及視窗綁定等操作。
 
 而一般使用時，可以透過以滑鼠右鍵按一下通知區域圖示開啟選單。按一下選單中的「設定」即可開啟設定頁面。
 
 以滑鼠右鍵按一下通知區域圖示還有結束程式、檢查更新、設定開機自動啟動等功能。
 
-按下隱藏／顯示視窗快速鍵可以一鍵隱藏所綁定的視窗。按下關閉核心快速鍵可以一鍵關閉 Boss-Key 程式。
+按下隱藏／顯示視窗快速鍵可以一鍵隱藏所綁定的視窗。按下關閉核心快速鍵可以一鍵關閉 ZoneDeck 程式。
 
 ### 綁定視窗
 
@@ -91,7 +91,7 @@
 
 ### 滑鼠隱藏
 
-Boss-Key 支援以滑鼠中鍵、側鍵 1、側鍵 2 切換隱藏狀態，並可搭配連按次數與輔助按鍵。
+ZoneDeck 支援以滑鼠中鍵、側鍵 1、側鍵 2 切換隱藏狀態，並可搭配連按次數與輔助按鍵。
 
 也可以啟用快速移動滑鼠至四角隱藏視窗（啟用角落復原功能以允許透過快速移動滑鼠至四角復原視窗）。
 
@@ -101,27 +101,27 @@ Boss-Key 支援以滑鼠中鍵、側鍵 1、側鍵 2 切換隱藏狀態，並可
 
 ### 更多功能
 
-完整功能介紹及使用指南，請參閱 Boss-Key [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
+完整功能介紹及使用指南，請參閱 ZoneDeck [使用說明](https://boss-key.ivan-hanloth.cn/zh-tw/guide/)。
 
 ## 資料存放位置與清理
 
-**可攜版**把設定、記錄檔、復原檔與快取放在**程式資料夾裡**，複製走整個資料夾就帶走了全部設定。若該資料夾不可寫入（放在了 `C:\Program Files` 之類的地方，或唯讀媒體上），程式會改存到 `%APPDATA%\BossKey` 並在介面上說明原因。
+**可攜版**把設定、記錄檔、復原檔與快取放在**程式資料夾裡**，複製走整個資料夾就帶走了全部設定。若該資料夾不可寫入（放在了 `C:\Program Files` 之類的地方，或唯讀媒體上），程式會改存到 `%APPDATA%\ZoneDeck` 並在介面上說明原因。
 
-**安裝版**一律存到 `%APPDATA%\BossKey`：安裝資料夾可能在 `C:\Program Files`，一般權限寫不進去。程式憑安裝程式放的 `installed.marker` 分辨自己是哪一種。
+**安裝版**一律存到 `%APPDATA%\ZoneDeck`：安裝資料夾可能在 `C:\Program Files`，一般權限寫不進去。程式憑安裝程式放的 `installed.marker` 分辨自己是哪一種。
 
-無論哪種，設定介面用到的瀏覽器元件另有一份資料在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，刪程式資料夾清不掉它。隨附有 `cleanup.ps1`，在程式資料夾裡開啟 PowerShell 執行即可：
+無論哪種，設定介面用到的瀏覽器元件另有一份資料在 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`，刪程式資料夾清不掉它。隨附有 `cleanup.ps1`，在程式資料夾裡開啟 PowerShell 執行即可：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File cleanup.ps1
 ```
 
-它會列出將要刪除的內容並等你確認，隨後清理 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`、可能存在的 `%APPDATA%\BossKey`，以及開機自動啟動留下的排程工作 `BossKeyAutostart` 與登錄項目 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Boss Key Application`。程式資料夾本身不會被刪，跑完後自行刪除即可。
+它會列出將要刪除的內容並等你確認，隨後清理 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`、可能存在的 `%APPDATA%\ZoneDeck`，以及開機自動啟動留下的排程工作 `ZoneDeckAutostart` 與登錄項目 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ZoneDeck Application`。程式資料夾本身不會被刪，跑完後自行刪除即可。
 
 安裝版不需要這一步：解除安裝程式已經做了同樣的事，並會詢問是否保留設定檔。
 
 ## 開發及貢獻指南
 
-有關開發和貢獻的詳細資訊，請參閱 Boss-Key [開發文件](https://boss-key.ivan-hanloth.cn/zh-tw/dev/)。
+有關開發和貢獻的詳細資訊，請參閱 ZoneDeck [開發文件](https://boss-key.ivan-hanloth.cn/zh-tw/dev/)。
 
 ## 鳴謝
 
@@ -129,4 +129,4 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 
 ## 更新日誌
 
-完整的更新日誌請參閱 Boss-Key [更新日誌](https://boss-key.ivan-hanloth.cn/zh-tw/changelog/)。
+完整的更新日誌請參閱 ZoneDeck [更新日誌](https://boss-key.ivan-hanloth.cn/zh-tw/changelog/)。

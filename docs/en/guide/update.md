@@ -28,7 +28,7 @@ Preview releases may contain features that are not fully tested and are less sta
 
 ## Announcements
 
-Boss Key can display **announcements** from the server (important update notices, known issues, and so on). New announcements pop up automatically; ones you have already read are not shown again.
+ZoneDeck can display **announcements** from the server (important update notices, known issues, and so on). New announcements pop up automatically; ones you have already read are not shown again.
 
 ## Feedback and reporting
 
@@ -36,7 +36,7 @@ You can send **feedback or a problem report** directly from the "About & Feedbac
 
 ::: tip Include details in your report
 To help diagnose the problem, please include:
-- The Boss Key version;
+- The ZoneDeck version;
 - Your operating system version;
 - Steps to reproduce;
 - The relevant [log file](/en/guide/options).

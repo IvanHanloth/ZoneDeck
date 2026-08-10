@@ -19,7 +19,7 @@ powershell -File scripts/package.ps1 -Installer
 powershell -File scripts/package.ps1 -SkipFrontend
 ```
 
-What `package.ps1` does: build the frontend (Vite + Svelte) → release-build the Rust workspace (the Tauri build script embeds the frontend `dist` into `bosskey-config.exe`) → assemble the portable folder → optionally produce the installer.
+What `package.ps1` does: build the frontend (Vite + Svelte) → release-build the Rust workspace (the Tauri build script embeds the frontend `dist` into `zonedeck-config.exe`) → assemble the portable folder → optionally produce the installer.
 
 ### Artefact layout
 
@@ -27,8 +27,8 @@ The portable edition and the installer each occupy their own subfolder of `dist/
 
 ```
 dist/
-├── Boss-Key/                    Portable edition (copy and run; zipped whole for release)
-│   ├── Boss Key.exe               Resident core (embedded DPI/long-path manifest + version info + icon)
+├── ZoneDeck/                    Portable edition (copy and run; zipped whole for release)
+│   ├── ZoneDeck.exe               Resident core (embedded DPI/long-path manifest + version info + icon)
 │   ├── config.exe                 Settings window (frontend embedded; self-contained)
 │   ├── cleanup.ps1                Leftover-data cleanup script (the portable edition has no uninstaller)
 │   ├── LICENSE.txt
@@ -36,7 +36,7 @@ dist/
 │   ├── README.en.md               English
 │   └── README.zh-TW.md            Traditional Chinese
 └── installer/                   Installer (produced with -Installer)
-    └── Boss-Key-<version>-Setup.exe  Inno Setup (terminates a running core before installing)
+    └── ZoneDeck-<version>-Setup.exe  Inno Setup (terminates a running core before installing)
 ```
 
 The portable edition **needs no installation and has no external dependencies** (beyond the system's WebView2). The two programs cooperate through `config.json` in the [data folder](/en/dev/architecture#data-folder) and a named pipe.
@@ -44,10 +44,10 @@ The portable edition **needs no installation and has no external dependencies** 
 All three READMEs must ship: the portable edition has no installation wizard, so the README is the only documentation in the package, and its "Where the data lives, and how to remove it" section explains what the program leaves in the user folder and how `cleanup.ps1` removes it.
 
 ::: danger installed.marker must never end up in the portable folder
-The program uses it to recognise an installed copy and switch to `%APPDATA%\BossKey` (see [Data folder](/en/dev/architecture#data-folder)). The `.iss` takes the file straight from the script folder, bypassing `dist\Boss-Key` — if it slipped into the portable package, the portable edition would stop being portable.
+The program uses it to recognise an installed copy and switch to `%APPDATA%\ZoneDeck` (see [Data folder](/en/dev/architecture#data-folder)). The `.iss` takes the file straight from the script folder, bypassing `dist\ZoneDeck` — if it slipped into the portable package, the portable edition would stop being portable.
 :::
 
-The installer runs with **normal privileges** by default (`%LocalAppData%\Programs\Boss Key`); on the wizard's first page the user can switch to "Install for all users" and land in `Program Files`. Either way the data goes to `%APPDATA%\BossKey`, not the installation folder.
+The installer runs with **normal privileges** by default (`%LocalAppData%\Programs\ZoneDeck`); on the wizard's first page the user can switch to "Install for all users" and land in `Program Files`. Either way the data goes to `%APPDATA%\ZoneDeck`, not the installation folder.
 
 ## Version management
 
@@ -60,7 +60,7 @@ The version is written in exactly one place, `[workspace.package] version` in `C
 | The core's manifest `assemblyIdentity` | Filled in by `crates/core/build.rs` from `CARGO_PKG_VERSION` (converted to a numeric four-part version) |
 | The installer's `MyAppVersion` | `scripts/package.ps1` reads it from `Cargo.toml` and passes it to Inno; compilation fails if it is missing, rather than falling back to a stale default |
 | The version shown in the app and reported to Verhub | `env!("CARGO_PKG_VERSION")` |
-| `app_version` in the configuration file | Written by the core on start from `bosskey_common::APP_VERSION` |
+| `app_version` in the configuration file | Written by the core on start from `zonedeck_common::APP_VERSION` |
 :::
 
 `scripts/version.ps1` writes and verifies it:
@@ -102,7 +102,7 @@ A new push on the same branch cancels the previous run automatically (`concurren
 2. Federates the workflow's OIDC identity through [octo-sts](https://octo-sts.dev) into a short-lived `contents:write` token for this repository;
 3. Commits the version change onto the triggering branch via GraphQL `createCommitOnBranch` and creates the `v<version>` annotated tag — commits created through the API are signed by GitHub server-side and carry the **Verified** badge;
 4. Checks that tag out → verifies the tag matches the code version → frontend / Rust tests;
-5. `package.ps1 -Installer` to assemble `dist/Boss-Key` and `dist/installer` → zip `dist/Boss-Key` as the portable archive;
+5. `package.ps1 -Installer` to assemble `dist/ZoneDeck` and `dist/installer` → zip `dist/ZoneDeck` as the portable archive;
 6. Generates **build provenance** (a Sigstore attestation) → composes the release notes (the auto-generated changelog with a security notice appended) → creates a **draft** Release and uploads the zip and the installer.
 
 If the tag already exists, steps 2 and 3 are skipped and that tag is checked out and rebuilt — rerunning / re-publishing is just running again with the same version.

@@ -4,7 +4,7 @@ title: 测试策略
 
 # 测试策略
 
-Boss Key 覆盖了从纯逻辑单元测试到系统级集成测试的多层测试。CI 会在每次 PR / 推送时运行全部测试。
+ZoneDeck 覆盖了从纯逻辑单元测试到系统级集成测试的多层测试。CI 会在每次 PR / 推送时运行全部测试。
 
 ## 运行测试
 
@@ -17,16 +17,16 @@ npm --prefix apps/config/ui test
 ```
 
 ::: warning 核心并行测试可能因 COM 崩溃
-`bosskey-core` 的部分测试涉及 COM（如静音链路）初始化，多线程并行运行可能崩溃。遇到此类问题时改用单线程：
+`zonedeck-core` 的部分测试涉及 COM（如静音链路）初始化，多线程并行运行可能崩溃。遇到此类问题时改用单线程：
 
 ```bash
-cargo test -p bosskey-core -- --test-threads=1
+cargo test -p zonedeck-core -- --test-threads=1
 ```
 :::
 
 ## Rust 测试覆盖
 
-### `bosskey-common`
+### `zonedeck-common`
 
 模型 / 配置 / 匹配 / 协议的**纯逻辑单元测试**，以及配置文件读写的集成测试。例如：
 
@@ -38,7 +38,7 @@ cargo test -p bosskey-core -- --test-threads=1
 - 数据目录定位与迁移（便携版就地 / 安装版走用户目录 / 不可写时回退并报明原因 / 标记文件与卸载程序的识别 / 旧配置搬过去、原文件删不掉、目标已有配置不覆盖）；
 - 配置写入的原子性（写失败不截断原文件、不留临时文件，错误信息带路径）。
 
-### `bosskey-core`
+### `zonedeck-core`
 
 系统行为的集成测试（多为创建真实资源往返验证）：
 

@@ -14,7 +14,7 @@ Freezing stops the target process entirely, so its background work (downloads, i
 
 ## Freeze processes when hiding
 
-This is the **master switch** for freezing. When on, Boss Key suspends the matching process each time it hides its windows, and resumes it when they are restored. It uses normal freezing by default, which works on the current user's processes **without administrator rights**.
+This is the **master switch** for freezing. When on, ZoneDeck suspends the matching process each time it hides its windows, and resumes it when they are restored. It uses normal freezing by default, which works on the current user's processes **without administrator rights**.
 
 Suspending and resuming take time, so turning this on may add some delay when hiding and restoring.
 
@@ -32,14 +32,14 @@ Enhanced freezing requires **all** of the following, otherwise the option is gre
 
 1. Open Microsoft Sysinternals' [PSTools download page](https://download.sysinternals.com/files/PSTools.zip).
 2. Extract the downloaded `PSTools.zip`.
-3. Find **`pssuspend64.exe`** inside and copy it into Boss Key's **installation root folder**.
-4. Return to the settings window and click **Check again** in the "Process freezing" section so Boss Key picks the file up.
+3. Find **`pssuspend64.exe`** inside and copy it into ZoneDeck's **installation root folder**.
+4. Return to the settings window and click **Check again** in the "Process freezing" section so ZoneDeck picks the file up.
 
 Enhanced freezing invokes an external program, so it likewise adds some delay when hiding and restoring.
 
 ## Freeze the whole process tree
 
-By default freezing affects only the matched process itself. With **Freeze the whole process tree** on, Boss Key **recursively freezes that process's entire child-process tree** (including differently named child `exe` files, renderer processes, and so on) for a more thorough freeze.
+By default freezing affects only the matched process itself. With **Freeze the whole process tree** on, ZoneDeck **recursively freezes that process's entire child-process tree** (including differently named child `exe` files, renderer processes, and so on) for a more thorough freeze.
 
 ::: warning
 This option is still in testing, may cause problems with some programs, and adds more delay when hiding and restoring because the whole process tree has to be walked. Enable it only once you understand the impact.
@@ -55,7 +55,7 @@ This option is still in testing, may cause problems with some programs, and adds
 
 ## Crash safety
 
-Boss Key records which processes are currently frozen in `recovery.json`. Even if the core exits abnormally, the previously suspended processes are **resumed automatically** on the next start.
+ZoneDeck records which processes are currently frozen in `recovery.json`. Even if the core exits abnormally, the previously suspended processes are **resumed automatically** on the next start.
 
 See [Window recovery & crash self-healing](/en/guide/recovery) for how to resume frozen processes manually.
 

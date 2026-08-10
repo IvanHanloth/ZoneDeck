@@ -82,7 +82,7 @@ t("restore.frozen", { n: 3 });        // → 已凍結 3 個程序
 - `lib/` 裡的純邏輯模組（`pointer.js`、`grouping.js`、`theme.js`）也經由 `t()` 取文案；因預設語言為簡體中文，它們的既有單元測試不需改動。
 
 ::: warning NO_TITLE 不是文案
-`grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）與核心 `bosskey_common::NO_TITLE` 一致，是寫進 `config.json` 的跨程序哨兵值，**不可翻譯**；僅在顯示時用 `t("common.noTitleWindow")` 換成目前語言。
+`grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）與核心 `zonedeck_common::NO_TITLE` 一致，是寫進 `config.json` 的跨程序哨兵值，**不可翻譯**；僅在顯示時用 `t("common.noTitleWindow")` 換成目前語言。
 :::
 
 ## 公告與更新記錄的 Markdown 算繪
@@ -108,10 +108,10 @@ Verhub 回傳的內容不可信。`renderMarkdown()` 先整體逸出 `& < > "` �
 
 ## 前端不相依於 dev server
 
-最終產物中，前端在**編譯期被內嵌**進 `bosskey-config.exe`，靜態執行，**不需要任何本機伺服器**。
+最終產物中，前端在**編譯期被內嵌**進 `zonedeck-config.exe`，靜態執行，**不需要任何本機伺服器**。
 
 - 開發前端 UI：`npm run dev` 在瀏覽器裡預覽（mock 資料、熱重新載入）。
-- 驗證 Tauri 整合：`npm run build` 後 `cargo run -p bosskey-config`。
+- 驗證 Tauri 整合：`npm run build` 後 `cargo run -p zonedeck-config`。
 
 ## 與核心的連動範例
 

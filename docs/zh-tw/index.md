@@ -3,12 +3,12 @@
 layout: home
 
 hero:
-  name: "Boss Key"
+  name: "ZoneDeck"
   text: "快速隱藏，只需一鍵"
-  tagline: 老闆來了？快用 Boss Key 老闆鍵一鍵隱藏、靜音、凍結視窗，摸魚必備神器
+  tagline: 老闆來了？快用 ZoneDeck 老闆鍵一鍵隱藏、靜音、凍結視窗，摸魚必備神器
   image:
-    src: /static/icon.png
-    alt: Boss Key
+    src: /static/logo.svg
+    alt: ZoneDeck
   actions:
     - theme: brand
       text: 快速上手

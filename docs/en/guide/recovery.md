@@ -4,7 +4,7 @@ title: Window recovery & crash protection
 
 # Window recovery & crash protection
 
-Hiding a window essentially makes it invisible. If something goes wrong — you forget the hotkey, or the core exits unexpectedly — could a window be lost "forever"? Boss Key prevents that with both a **manual tool** and **automatic safeguards**.
+Hiding a window essentially makes it invisible. If something goes wrong — you forget the hotkey, or the core exits unexpectedly — could a window be lost "forever"? ZoneDeck prevents that with both a **manual tool** and **automatic safeguards**.
 
 ## The window recovery tool
 
@@ -22,11 +22,11 @@ While the core is running, the tool's show / hide operations are carried out by 
 
 ## Three layers of defence
 
-The Boss Key core has **three layers of crash self-healing**, so windows stay safe even if the program crashes.
+The ZoneDeck core has **three layers of crash self-healing**, so windows stay safe even if the program crashes.
 
 ### Layer 1: crash logs
 
-The core writes key events and panic information to log files in the `logs` folder of the data folder, rotated daily as `BossKey-YYYY-MM-DD.log`, and cleaned up automatically according to the [log retention setting](/en/guide/options) (set it to off to disable logging). How much gets recorded depends on the [log level](/en/guide/options), which by default keeps warnings and errors only. **When troubleshooting, read the current day's log first.**
+The core writes key events and panic information to log files in the `logs` folder of the data folder, rotated daily as `ZoneDeck-YYYY-MM-DD.log`, and cleaned up automatically according to the [log retention setting](/en/guide/options) (set it to off to disable logging). How much gets recorded depends on the [log level](/en/guide/options), which by default keeps warnings and errors only. **When troubleshooting, read the current day's log first.**
 
 ### Layer 2: crash recovery
 
@@ -43,11 +43,11 @@ When [startup](/en/guide/autostart) is registered as a scheduled task, it carrie
 | File | Location | Purpose |
 | --- | --- | --- |
 | `config.json` | Data folder | All your settings and bindings |
-| `logs/BossKey-YYYY-MM-DD.log` | Data folder | Crash / event logs (rotated daily, cleaned up per the retention setting) |
+| `logs/ZoneDeck-YYYY-MM-DD.log` | Data folder | Crash / event logs (rotated daily, cleaned up per the retention setting) |
 | `recovery.json` | Data folder | Snapshot of the hidden state, used for crash recovery (deleted on a normal exit) |
 
 ::: info Where the data folder is
-Inside the program folder for a portable copy, in `%APPDATA%\BossKey` for an installed one (see [Where the data lives](/en/guide/installation#where-the-data-lives)). A portable copy also switches to `%APPDATA%\BossKey` when its folder is not writable. The **Open log folder** button in the settings window's status bar always opens the folder actually in use, and the log records it on every start.
+Inside the program folder for a portable copy, in `%APPDATA%\ZoneDeck` for an installed one (see [Where the data lives](/en/guide/installation#where-the-data-lives)). A portable copy also switches to `%APPDATA%\ZoneDeck` when its folder is not writable. The **Open log folder** button in the settings window's status bar always opens the folder actually in use, and the log records it on every start.
 :::
 
 ::: warning Do not delete recovery.json while it is in use

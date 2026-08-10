@@ -17,7 +17,7 @@ title: 本地运行
 | **pssuspend64.exe** | *可选*，测试增强冻结时需要 | [Microsoft PSTools](https://download.sysinternals.com/files/PSTools.zip) |
 
 ::: tip 配置界面不依赖 dev server
-前端在编译期被**内嵌**进 `bosskey-config.exe`，最终产物静态运行。开发前端时用 `npm run dev` 在浏览器里预览（mock 数据、热重载），改完 `npm run build` 后用 `cargo run -p bosskey-config` 验证 Tauri 集成。
+前端在编译期被**内嵌**进 `zonedeck-config.exe`，最终产物静态运行。开发前端时用 `npm run dev` 在浏览器里预览（mock 数据、热重载），改完 `npm run build` 后用 `cargo run -p zonedeck-config` 验证 Tauri 集成。
 :::
 
 ## 克隆项目
@@ -31,14 +31,14 @@ cd Boss-Key
 
 在**仓库根目录**执行：
 
-### 核心（bosskey-core）
+### 核心（zonedeck-core）
 
 ```bash
 # 运行核心（开发）
-cargo run -p bosskey-core
+cargo run -p zonedeck-core
 
 # 核心冒烟自测：N 毫秒后自动退出
-cargo run -p bosskey-core -- smoke 3000
+cargo run -p zonedeck-core -- smoke 3000
 ```
 
 ### 前端（apps/config/ui）
@@ -57,11 +57,11 @@ npm --prefix apps/config/ui test
 npm --prefix apps/config/ui run dev
 ```
 
-### 配置界面（bosskey-config，Tauri）
+### 配置界面（zonedeck-config，Tauri）
 
 ```bash
 # 运行配置界面（需先构建前端）
-npm --prefix apps/config/ui run build && cargo run -p bosskey-config
+npm --prefix apps/config/ui run build && cargo run -p zonedeck-config
 ```
 
 ### 质量检查与测试
@@ -84,7 +84,7 @@ cargo fmt --all -- --check
 # 生产编译（体积最小化）
 cargo build --release
 
-# 一键生产打包（前端 + Rust + 便携文件夹 dist/Boss-Key）
+# 一键生产打包（前端 + Rust + 便携文件夹 dist/ZoneDeck）
 powershell -File scripts/package.ps1
 
 # 一键打包 + 安装包（dist/installer，首次会自动装 Inno Setup 7）
@@ -97,13 +97,13 @@ powershell -File scripts/package.ps1 -Installer
 
 | 目的 | 命令 |
 | --- | --- |
-| 运行核心 | `cargo run -p bosskey-core` |
-| 核心冒烟自测 | `cargo run -p bosskey-core -- smoke 3000` |
+| 运行核心 | `cargo run -p zonedeck-core` |
+| 核心冒烟自测 | `cargo run -p zonedeck-core -- smoke 3000` |
 | 前端装依赖 | `npm --prefix apps/config/ui install` |
 | 前端构建 | `npm --prefix apps/config/ui run build` |
 | 前端测试 | `npm --prefix apps/config/ui test` |
 | 前端浏览器预览 | `npm --prefix apps/config/ui run dev` |
-| 运行配置界面 | `npm --prefix apps/config/ui run build && cargo run -p bosskey-config` |
+| 运行配置界面 | `npm --prefix apps/config/ui run build && cargo run -p zonedeck-config` |
 | 生产编译 | `cargo build --release` |
 | 全部 Rust 测试 | `cargo test --workspace` |
 | Clippy | `cargo clippy --workspace --all-targets -- -D warnings` |
@@ -118,5 +118,5 @@ powershell -File scripts/package.ps1 -Installer
 :::
 
 ::: tip 核心测试需单线程运行
-部分核心测试涉及 COM 初始化，多线程并行可能导致崩溃。若遇到此类问题，使用 `cargo test -p bosskey-core -- --test-threads=1` 单线程运行。详见 [测试策略](/dev/testing)。
+部分核心测试涉及 COM 初始化，多线程并行可能导致崩溃。若遇到此类问题，使用 `cargo test -p zonedeck-core -- --test-threads=1` 单线程运行。详见 [测试策略](/dev/testing)。
 :::

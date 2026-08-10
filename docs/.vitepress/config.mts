@@ -31,7 +31,7 @@ export default defineConfig(async () => {
         pageData.title = String(pageData.params.title)
       }
     },
-    title: 'Boss Key',
+    title: 'ZoneDeck',
 
     base: '/',
     lastUpdated: true,
@@ -39,11 +39,12 @@ export default defineConfig(async () => {
     ignoreDeadLinks: true,
 
     head: [
-      ['link', { rel: 'icon', href: '/static/icon.png' }],
+      ['link', { rel: 'icon', href: '/static/logo.svg', type: 'image/svg+xml' }],
+      ['link', { rel: 'icon', href: '/static/icon.png', sizes: 'any' }],
     ],
 
     themeConfig: {
-      logo: '/static/icon.png',
+      logo: '/static/logo.svg',
       socialLinks: [{ icon: 'github', link: REPO }],
       search: { provider: 'local' },
     },
@@ -52,7 +53,7 @@ export default defineConfig(async () => {
       root: {
         label: '简体中文',
         lang: 'zh-CN',
-        description: '老板来了？快用 Boss Key 老板键一键隐藏静音当前窗口！上班摸鱼必备神器',
+        description: '老板来了？快用 ZoneDeck 老板键一键隐藏静音当前窗口！上班摸鱼必备神器',
         themeConfig: {
           nav: [
             { text: '首页', link: '/' },
@@ -160,7 +161,7 @@ export default defineConfig(async () => {
         lang: 'en',
         link: '/en/',
         description:
-          'Boss coming? Hide, mute and freeze the current window with a single key — Boss Key.',
+          'Boss coming? Hide, mute and freeze the current window with a single key — ZoneDeck.',
         themeConfig: {
           nav: [
             { text: 'Home', link: '/en/' },
@@ -258,7 +259,7 @@ export default defineConfig(async () => {
         label: '繁體中文',
         lang: 'zh-TW',
         link: '/zh-tw/',
-        description: '老闆來了？快用 Boss Key 老闆鍵一鍵隱藏靜音目前視窗！上班摸魚必備神器',
+        description: '老闆來了？快用 ZoneDeck 老闆鍵一鍵隱藏靜音目前視窗！上班摸魚必備神器',
         themeConfig: {
           nav: [
             { text: '首頁', link: '/zh-tw/' },

@@ -4,7 +4,7 @@ title: Testing strategy
 
 # Testing strategy
 
-Boss Key is covered by several layers of tests, from pure-logic unit tests to system-level integration tests. CI runs the whole suite on every PR and push.
+ZoneDeck is covered by several layers of tests, from pure-logic unit tests to system-level integration tests. CI runs the whole suite on every PR and push.
 
 ## Running the tests
 
@@ -17,16 +17,16 @@ npm --prefix apps/config/ui test
 ```
 
 ::: warning Parallel core tests can crash on COM
-Some `bosskey-core` tests initialise COM (the muting path, for example) and can crash when run in parallel. When that happens, run them single-threaded:
+Some `zonedeck-core` tests initialise COM (the muting path, for example) and can crash when run in parallel. When that happens, run them single-threaded:
 
 ```bash
-cargo test -p bosskey-core -- --test-threads=1
+cargo test -p zonedeck-core -- --test-threads=1
 ```
 :::
 
 ## Rust coverage
 
-### `bosskey-common`
+### `zonedeck-common`
 
 **Pure-logic unit tests** for the models, configuration, matching and protocol, plus integration tests for reading and writing the configuration file. For example:
 
@@ -38,7 +38,7 @@ cargo test -p bosskey-core -- --test-threads=1
 - Data folder resolution and migration (portable copies staying in place / installed copies using the user folder / falling back with a stated reason when not writable / recognising the marker file and the uninstaller / the old configuration being moved across, an original that cannot be deleted, an existing config at the destination not being overwritten);
 - Atomicity of configuration writes (a failed write neither truncates the previous file nor leaves a temporary one behind, and the error names the path).
 
-### `bosskey-core`
+### `zonedeck-core`
 
 Integration tests of system behaviour (mostly creating real resources and verifying a round trip):
 

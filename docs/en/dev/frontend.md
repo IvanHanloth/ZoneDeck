@@ -82,7 +82,7 @@ t("restore.frozen", { n: 3 });        // → Froze 3 processes
 - The pure-logic modules in `lib/` (`pointer.js`, `grouping.js`, `theme.js`) also fetch strings through `t()`; since the default language is Simplified Chinese, their existing unit tests needed no changes.
 
 ::: warning NO_TITLE is not a translatable string
-`grouping.js`'s `NO_TITLE` (`"无标题窗口"`) matches the core's `bosskey_common::NO_TITLE`. It is a cross-process sentinel written into `config.json` and **must not be translated**; only the display swaps it for the current language via `t("common.noTitleWindow")`.
+`grouping.js`'s `NO_TITLE` (`"无标题窗口"`) matches the core's `zonedeck_common::NO_TITLE`. It is a cross-process sentinel written into `config.json` and **must not be translated**; only the display swaps it for the current language via `t("common.noTitleWindow")`.
 :::
 
 ## Markdown in announcements and release notes
@@ -108,10 +108,10 @@ Two further trade-offs follow from the runtime environment:
 
 ## The frontend needs no dev server
 
-In the final artefact the frontend is **embedded at build time** into `bosskey-config.exe` and runs statically, with **no local server**.
+In the final artefact the frontend is **embedded at build time** into `zonedeck-config.exe` and runs statically, with **no local server**.
 
 - Working on the frontend UI: `npm run dev` previews it in a browser (mock data, hot reload).
-- Verifying the Tauri integration: `npm run build`, then `cargo run -p bosskey-config`.
+- Verifying the Tauri integration: `npm run build`, then `cargo run -p zonedeck-config`.
 
 ## Examples of core interaction
 
