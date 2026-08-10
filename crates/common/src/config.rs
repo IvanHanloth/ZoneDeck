@@ -565,18 +565,27 @@ impl Config {
         Ok(serde_json::to_string_pretty(self)?)
     }
 
+    /// 无副作用的加载：解析失败回退默认值，原文件保持原样，回退原因被丢弃。
+    /// 适合顺带读取配置的场景（如启动早期读日志参数）；把结果作为本次生效
+    /// 配置时应使用 [`Config::load_reporting`]，以便隔离损坏文件并记录原因。
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
-        Self::load_reporting(path).map(|(config, _)| config)
+        match std::fs::read_to_string(path) {
+            Ok(s) => Ok(Self::from_json(&s).unwrap_or_default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+            Err(e) => Err(ConfigError::io(path, e)),
+        }
     }
 
     /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
-    /// 回退保证核心总能启动，代价是用户的规则会凭空消失，故须由调用方记进日志。
-    /// 返回 `(配置, 解析错误)`；解析成功或文件不存在时第二项为 `None`。
+    /// 回退保证核心总能启动；解析失败的原文件先改名为同目录 `*.bad` 备份，
+    /// 随后写入的默认配置才不会把用户数据永久覆写。备份去向包含在报告里，
+    /// 须由调用方记进日志。
+    /// 返回 `(配置, 回退原因)`；解析成功或文件不存在时第二项为 `None`。
     pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
         match std::fs::read_to_string(path) {
             Ok(s) => match Self::from_json(&s) {
                 Ok(config) => Ok((config, None)),
-                Err(e) => Ok((Config::default(), Some(e.to_string()))),
+                Err(e) => Ok((Config::default(), Some(quarantine_corrupt(path, &e)))),
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Config::default(), None)),
             Err(e) => Err(ConfigError::io(path, e)),
@@ -639,6 +648,27 @@ fn strip_nulls(value: &mut serde_json::Value) {
 fn tmp_path(path: &Path) -> std::path::PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
+    path.with_file_name(name)
+}
+
+/// 把解析失败的配置文件改名为同目录 `*.bad` 备份，返回供调用方记日志的完整
+/// 回退原因。备份失败不阻断回退（核心必须能启动），但原因里须注明数据仍会
+/// 被随后的保存覆写。
+fn quarantine_corrupt(path: &Path, parse_error: &ConfigError) -> String {
+    let backup = bad_path(path);
+    // Windows 下 rename 覆盖已存在的目标文件（与 save() 的原子替换同一前提），
+    // 旧备份直接被顶替；多个进程同时加载同一份损坏文件时，后完成改名的一方
+    // 以 NotFound 失败，不会动先到者刚建立的备份。
+    match std::fs::rename(path, &backup) {
+        Ok(()) => format!("{parse_error}（原文件已备份为 {}）", backup.display()),
+        Err(e) => format!("{parse_error}（备份原文件失败，随后的保存会将其覆盖: {e}）"),
+    }
+}
+
+/// 损坏配置的备份路径（与原文件同目录，文件名追加 `.bad`）。
+fn bad_path(path: &Path) -> std::path::PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".bad");
     path.with_file_name(name)
 }
 

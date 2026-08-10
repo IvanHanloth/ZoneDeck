@@ -362,6 +362,7 @@ export default {
   "state.detectFailed": "偵測失敗：{err}",
   "state.partialLoadFailed": "部分資料載入失敗：{reason}",
   "state.saveFailed": "儲存設定失敗，您的變更可能沒有寫入磁碟。",
+  "state.configFallback": "設定檔解析失敗，已恢復預設設定；原檔案的備份情況見詳細資訊。",
   "state.elevationCancelled": "已取消提升權限",
   "state.coreStartingAdmin": "核心正在以系統管理員身分啟動…",
   "state.coreStarting": "核心正在啟動…",

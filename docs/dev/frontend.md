@@ -58,7 +58,9 @@ Tauri 配置 `decorations: false`，标题栏由前端自绘：
 
 ## 配置自动保存
 
-`App.svelte` 中用 `$effect` 深度追踪配置对象（含 `window_rules` / `process_rules`）的任何变化，停顿后经 `scheduleSave`（内部 debounce）自动写盘。加载阶段不触发保存，`loadAll` 完成后才"武装"自动保存。
+`App.svelte` 中用 `$effect` 深度追踪配置对象（含 `window_rules` / `process_rules`）的任何变化，停顿后经 `scheduleSave`（内部 debounce）自动写盘。加载阶段不触发保存，`loadAll` 完成后才"武装"自动保存。调度逻辑在 `lib/autosave.js`：连续改动合并为一次写盘，写盘互不并发，写盘途中的新改动在上一笔完成后补写。
+
+关窗请求（标题栏按钮、Alt+F4）会先把未落盘的改动写完再关闭；写盘失败时窗口保持打开并弹出错误框，再次关闭不再阻拦。
 
 保存后前端通过 IPC 通知核心 `reload_config`，核心热重载配置。
 

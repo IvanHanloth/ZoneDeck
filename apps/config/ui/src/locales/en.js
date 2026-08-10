@@ -376,6 +376,7 @@ export default {
   "state.detectFailed": "Detection failed: {err}",
   "state.partialLoadFailed": "Some data failed to load: {reason}",
   "state.saveFailed": "Could not save the configuration — your changes may not have been written to disk.",
+  "state.configFallback": "The configuration file failed to parse; default settings have been restored. See the details for what happened to the original file.",
   "state.elevationCancelled": "Elevation cancelled",
   "state.coreStartingAdmin": "The core is starting as administrator…",
   "state.coreStarting": "The core is starting…",

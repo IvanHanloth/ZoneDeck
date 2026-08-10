@@ -4,6 +4,7 @@ import { invoke } from "./ipc.js";
 import { setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
 import { sanitizeConfig } from "./sanitize.js";
+import { createAutosave } from "./autosave.js";
 import * as verhub from "./verhub.js";
 
 export const app = $state({
@@ -134,10 +135,13 @@ export function toast(message, error = false) {
 export async function loadAll() {
   // 各项并行加载；核心状态由轮询单独负责。
   const tasks = [
-    invoke("load_config").then((c) => {
-      app.config = c;
+    invoke("load_config").then((loaded) => {
+      app.config = loaded.config;
       // 界面语言先于首帧生效，避免加载后文案跳变。
-      setLangPref(c?.setting?.language);
+      setLangPref(loaded.config?.setting?.language);
+      // 配置损坏已回退默认值：原因（含备份去向）必须让用户看到，
+      // 否则规则凭空消失且第一次改动就会把默认值写回原文件。
+      if (loaded.fallback) reportError(t("state.configFallback"), loaded.fallback);
       return refreshWindows();
     }),
     refreshAutostart(),
@@ -187,32 +191,35 @@ async function loadIcons(windows) {
   }
 }
 
-// 自动保存：改动即存，带 debounce。
+// 自动保存：改动即存，带 debounce；关窗前由 flushSave 兜底。
 
-let saveTimer = null;
-/** 有改动排队待存（debounce 期间为 true）；状态回读不得覆盖未保存的改动。 */
-let savePending = false;
-
-/** 安排一次自动保存；连续改动只在停顿后写一次盘。 */
-export function scheduleSave(delayMs = 600) {
-  savePending = true;
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
-    savePending = false;
-    saveConfig();
-  }, delayMs);
-}
-
-async function saveConfig() {
-  if (!app.config || app.saving) return;
+const autosave = createAutosave(async () => {
+  if (!app.config) return true;
   app.saving = true;
   try {
     await invoke("save_config", { config: sanitizeConfig($state.snapshot(app.config)) });
+    return true;
   } catch (err) {
     reportError(t("state.saveFailed"), err);
+    return false;
   } finally {
     app.saving = false;
   }
+});
+
+/** 安排一次自动保存；连续改动只在停顿后写一次盘。 */
+export function scheduleSave(delayMs) {
+  autosave.schedule(delayMs);
+}
+
+/** 立即写盘全部未落盘的改动；返回是否成功。关窗前调用。 */
+export function flushSave() {
+  return autosave.flush();
+}
+
+/** 是否还有未落盘的改动（排队中或写盘中）；状态回读不得覆盖它们。 */
+export function hasUnsavedChanges() {
+  return autosave.dirty;
 }
 
 export async function startCore(elevated) {
@@ -311,7 +318,7 @@ export function reportError(message, detail = "") {
 /** 托盘菜单也能切换自动隐藏；以核心回报为准回读界面，但不覆盖用户尚未保存的改动。 */
 function syncAutoHideFromCore() {
   if (!app.config || !app.status.running) return;
-  if (savePending || app.saving) return;
+  if (autosave.dirty) return;
   if (app.config.setting.auto_hide_enabled !== app.status.auto_hide_enabled) {
     app.config.setting.auto_hide_enabled = app.status.auto_hide_enabled;
   }

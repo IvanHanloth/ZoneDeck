@@ -58,7 +58,9 @@ Tauri sets `decorations: false`, and the frontend draws the title bar:
 
 ## Automatic saving
 
-`App.svelte` uses `$effect` to deep-track any change to the configuration object (including `window_rules` / `process_rules`) and writes it to disk through `scheduleSave` (internally debounced) once you pause. Saving is not triggered during loading; auto-save is only "armed" after `loadAll` completes.
+`App.svelte` uses `$effect` to deep-track any change to the configuration object (including `window_rules` / `process_rules`) and writes it to disk through `scheduleSave` (internally debounced) once you pause. Saving is not triggered during loading; auto-save is only "armed" after `loadAll` completes. The scheduling logic lives in `lib/autosave.js`: consecutive changes coalesce into a single write, writes never run concurrently, and a change made while a write is in flight is written right after it completes.
+
+A close request (title-bar button, Alt+F4) first flushes any unsaved changes before the window closes; if the write fails, the window stays open and an error dialog appears, and a second close attempt is not blocked.
 
 After saving, the frontend tells the core to `reload_config` over IPC, and the core hot-reloads the configuration.
 

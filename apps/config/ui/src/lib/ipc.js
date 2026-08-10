@@ -107,7 +107,7 @@ let mockAutostart = false;
 function mockInvoke(cmd, args) {
   switch (cmd) {
     case "load_config":
-      return structuredClone(mockConfig);
+      return { config: structuredClone(mockConfig), fallback: null };
     case "list_windows":
       return structuredClone(mockWindows);
     case "window_icons":
@@ -226,6 +226,9 @@ export const win = {
   minimize: () => IN_TAURI && getCurrentWindow().minimize(),
   toggleMaximize: () => IN_TAURI && getCurrentWindow().toggleMaximize(),
   close: () => IN_TAURI && getCurrentWindow().close(),
+  /** 拦截关窗请求（含标题栏按钮与 Alt+F4）；浏览器预览时不拦截。 */
+  onCloseRequested: (handler) =>
+    IN_TAURI ? getCurrentWindow().onCloseRequested(handler) : Promise.resolve(() => {}),
   isMaximized: async () => (IN_TAURI ? getCurrentWindow().isMaximized() : false),
   startResize: (direction) =>
     IN_TAURI && getCurrentWindow().startResizeDragging(direction),

@@ -89,11 +89,19 @@ struct AppInfo {
     license: &'static str,
 }
 
+#[derive(Serialize)]
+struct LoadedConfig {
+    config: Config,
+    /// 解析失败回退默认值时的原因（含备份去向），由前端提示用户；正常加载为 `None`。
+    fallback: Option<String>,
+}
+
 #[tauri::command]
-fn load_config() -> Result<Config, String> {
-    let config = Config::load(&config_path()).map_err(|e| e.to_string())?;
+fn load_config() -> Result<LoadedConfig, String> {
+    let (config, fallback) =
+        Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
     i18n::set_from_pref(&config.setting.language);
-    Ok(config)
+    Ok(LoadedConfig { config, fallback })
 }
 
 /// 入参用 JSON 值而非 `Config`：经 [`Config::from_value`] 剥离 `null` 后再反序列化，

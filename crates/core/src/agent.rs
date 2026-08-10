@@ -474,8 +474,14 @@ impl AgentState {
 
     fn execute(&mut self, hwnd: HWND, cmd: Command) -> (Response, bool) {
         match cmd {
-            Command::ReloadConfig => match Config::load(&self.config_path) {
-                Ok(config) => {
+            Command::ReloadConfig => match Config::load_reporting(&self.config_path) {
+                Ok((config, fallback)) => {
+                    if let Some(reason) = fallback {
+                        log_error!(
+                            "重载时配置解析失败，已按默认配置生效: {} — {reason}",
+                            self.config_path.display()
+                        );
+                    }
                     // 先摘掉旧热键，能否重装由 sync_monitoring 决定。
                     if self.hotkeys_armed {
                         self.unregister_hotkeys(hwnd);

@@ -147,5 +147,6 @@ Coarse-grained rules that hide every window of a program, matched by executable.
 
 - **Unknown fields are ignored**: fields added later do not break parsing in an older core.
 - **Missing fields use defaults**: any missing field falls back to its default.
+- **Corrupt files are backed up first**: if the whole file fails to parse, it is renamed to `config.json.bad` in the same directory before defaults take over, so rules can be recovered manually; the backup location is recorded in the log.
 - **Old bindings migrate automatically**: `hide_binding` → `window_rules`; the old mouse switches → `mouse` click triggers. Migration is **idempotent**.
 - **Uppercase `PID`**: serialisation emits an uppercase `PID`, compatible with the old Python versions.

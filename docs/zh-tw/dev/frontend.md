@@ -58,7 +58,9 @@ Tauri 設定 `decorations: false`，標題列由前端自繪：
 
 ## 設定自動儲存
 
-`App.svelte` 中用 `$effect` 深度追蹤設定物件（含 `window_rules`／`process_rules`）的任何變化，停頓後經 `scheduleSave`（內部 debounce）自動寫入磁碟。載入階段不觸發儲存，`loadAll` 完成後才「啟用」自動儲存。
+`App.svelte` 中用 `$effect` 深度追蹤設定物件（含 `window_rules`／`process_rules`）的任何變化，停頓後經 `scheduleSave`（內部 debounce）自動寫入磁碟。載入階段不觸發儲存，`loadAll` 完成後才「啟用」自動儲存。排程邏輯在 `lib/autosave.js`：連續變更合併為一次寫入，寫入互不並行，寫入途中的新變更在上一筆完成後補寫。
+
+關窗請求（標題列按鈕、Alt+F4）會先把未寫入磁碟的變更寫完再關閉；寫入失敗時視窗保持開啟並彈出錯誤框，再次關閉不再阻攔。
 
 儲存後前端透過 IPC 通知核心 `reload_config`，核心熱重新載入設定。
 

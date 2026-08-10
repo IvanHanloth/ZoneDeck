@@ -8,7 +8,7 @@ repository.workspace = true
 
 [lib]
 name = "bosskey_config_lib"
-crate-type = ["lib", "cdylib", "staticlib"]
+crate-type = ["lib"]
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
