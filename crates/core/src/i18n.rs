@@ -4,8 +4,8 @@
 
 use std::sync::RwLock;
 
-use bosskey_common::i18n::{Lang, resolve};
 use windows::Win32::Globalization::GetUserDefaultLocaleName;
+use zonedeck_common::i18n::{Lang, resolve};
 
 /// 用户可见文案的键。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +34,8 @@ pub enum Msg {
     StartBody,
     QuitTitle,
     QuitBody,
+    LegacyCoreRunningTitle,
+    LegacyCoreRunningBody,
     ErrReloadConfig,
     ErrCoreExited,
     ErrNotifyCore,
@@ -71,23 +73,27 @@ impl Msg {
             Msg::ConfigExeMissing => "未找到配置程序",
             Msg::RecoveryPersistFailedBody => "无法写入崩溃恢复文件，异常退出后将无法自动找回窗口",
             Msg::AutostartOffTitle => "开机自启已关闭",
-            Msg::AutostartOffBody => "Boss Key 将不再随系统启动",
+            Msg::AutostartOffBody => "ZoneDeck 将不再随系统启动",
             Msg::AutostartOnTitle => "开机自启已开启",
             Msg::AutostartOnTaskAdmin => "已注册计划任务（管理员权限）",
             Msg::AutostartOnTaskUser => "已注册计划任务（普通权限）",
             Msg::AutostartOnRegistry => "已写入注册表启动项",
             Msg::AutostartFailTitle => "开机自启设置失败",
             Msg::AutostartFailBody => "计划任务与注册表方式均失败",
-            Msg::StartTitle => "Boss Key 正在运行！",
-            Msg::StartBody => "Boss Key 正在为您服务，您可通过托盘图标看到我",
-            Msg::QuitTitle => "Boss Key 已停止服务",
-            Msg::QuitBody => "Boss Key 已成功退出",
+            Msg::StartTitle => "ZoneDeck 正在运行！",
+            Msg::StartBody => "ZoneDeck 正在为您服务，您可通过托盘图标看到我",
+            Msg::QuitTitle => "ZoneDeck 已停止服务",
+            Msg::QuitBody => "ZoneDeck 已成功退出",
+            Msg::LegacyCoreRunningTitle => "检测到旧版本正在运行",
+            Msg::LegacyCoreRunningBody => {
+                "旧版本核心（Boss Key）仍在运行。请先退出旧版本（托盘图标，或任务管理器中的 Boss Key.exe），再启动 ZoneDeck。"
+            }
             Msg::ErrReloadConfig => "重载配置失败：{err}",
             Msg::ErrCoreExited => "核心已退出",
             Msg::ErrNotifyCore => "无法通知核心",
             Msg::ErrCoreTimeout => "核心响应超时",
             Msg::ErrCoreExeMissing => {
-                "未找到核心程序 {exe}。它很可能被杀毒软件拦截或隔离了：请尝试将 Boss Key 的程序目录加入杀毒软件的白名单 / 信任区，再从隔离区恢复该文件；若无法恢复，请重新下载完整程序包。"
+                "未找到核心程序 {exe}。它很可能被杀毒软件拦截或隔离了：请尝试将 ZoneDeck 的程序目录加入杀毒软件的白名单 / 信任区，再从隔离区恢复该文件；若无法恢复，请重新下载完整程序包。"
             }
             Msg::ErrFreezePartial => "{failed}/{total} 个进程冻结失败",
             Msg::ErrResumePartial => "{failed}/{total} 个进程解冻失败",
@@ -114,23 +120,27 @@ impl Msg {
                 "Cannot write the crash-recovery file; windows cannot be restored automatically after an abnormal exit"
             }
             Msg::AutostartOffTitle => "Startup disabled",
-            Msg::AutostartOffBody => "Boss Key will no longer start with Windows",
+            Msg::AutostartOffBody => "ZoneDeck will no longer start with Windows",
             Msg::AutostartOnTitle => "Startup enabled",
             Msg::AutostartOnTaskAdmin => "Scheduled task registered (administrator)",
             Msg::AutostartOnTaskUser => "Scheduled task registered (standard user)",
             Msg::AutostartOnRegistry => "Registry startup entry written",
             Msg::AutostartFailTitle => "Could not configure startup",
             Msg::AutostartFailBody => "Both the scheduled task and the registry method failed",
-            Msg::StartTitle => "Boss Key is running",
-            Msg::StartBody => "Boss Key is active — find it in the notification area",
-            Msg::QuitTitle => "Boss Key has stopped",
-            Msg::QuitBody => "Boss Key exited successfully",
+            Msg::StartTitle => "ZoneDeck is running",
+            Msg::StartBody => "ZoneDeck is active — find it in the notification area",
+            Msg::QuitTitle => "ZoneDeck has stopped",
+            Msg::QuitBody => "ZoneDeck exited successfully",
+            Msg::LegacyCoreRunningTitle => "An old version is still running",
+            Msg::LegacyCoreRunningBody => {
+                "The previous Boss Key core is still running. Quit it first (via its tray icon, or Boss Key.exe in Task Manager), then start ZoneDeck."
+            }
             Msg::ErrReloadConfig => "Failed to reload configuration: {err}",
             Msg::ErrCoreExited => "The core has exited",
             Msg::ErrNotifyCore => "Cannot reach the core",
             Msg::ErrCoreTimeout => "The core did not respond in time",
             Msg::ErrCoreExeMissing => {
-                "Core program {exe} not found. It was most likely blocked or quarantined by antivirus software: add the Boss Key program folder to your antivirus allowlist, then restore the file from quarantine; if that is not possible, download the full package again."
+                "Core program {exe} not found. It was most likely blocked or quarantined by antivirus software: add the ZoneDeck program folder to your antivirus allowlist, then restore the file from quarantine; if that is not possible, download the full package again."
             }
             Msg::ErrFreezePartial => "Failed to freeze {failed} of {total} processes",
             Msg::ErrResumePartial => "Failed to resume {failed} of {total} processes",
@@ -157,23 +167,27 @@ impl Msg {
             Msg::ConfigExeMissing => "找不到設定程式",
             Msg::RecoveryPersistFailedBody => "無法寫入當機復原檔案，異常結束後將無法自動找回視窗",
             Msg::AutostartOffTitle => "已關閉開機自動啟動",
-            Msg::AutostartOffBody => "Boss Key 將不再隨系統啟動",
+            Msg::AutostartOffBody => "ZoneDeck 將不再隨系統啟動",
             Msg::AutostartOnTitle => "已開啟開機自動啟動",
             Msg::AutostartOnTaskAdmin => "已註冊排程工作（系統管理員權限）",
             Msg::AutostartOnTaskUser => "已註冊排程工作（一般權限）",
             Msg::AutostartOnRegistry => "已寫入登錄檔啟動項目",
             Msg::AutostartFailTitle => "開機自動啟動設定失敗",
             Msg::AutostartFailBody => "排程工作與登錄檔方式均失敗",
-            Msg::StartTitle => "Boss Key 正在執行！",
-            Msg::StartBody => "Boss Key 正在為您服務，您可透過通知區域圖示找到我",
-            Msg::QuitTitle => "Boss Key 已停止服務",
-            Msg::QuitBody => "Boss Key 已成功結束",
+            Msg::StartTitle => "ZoneDeck 正在執行！",
+            Msg::StartBody => "ZoneDeck 正在為您服務，您可透過通知區域圖示找到我",
+            Msg::QuitTitle => "ZoneDeck 已停止服務",
+            Msg::QuitBody => "ZoneDeck 已成功結束",
+            Msg::LegacyCoreRunningTitle => "偵測到舊版本正在執行",
+            Msg::LegacyCoreRunningBody => {
+                "舊版本核心（Boss Key）仍在執行。請先結束舊版本（通知區域圖示，或工作管理員中的 Boss Key.exe），再啟動 ZoneDeck。"
+            }
             Msg::ErrReloadConfig => "重新載入設定失敗：{err}",
             Msg::ErrCoreExited => "核心已結束",
             Msg::ErrNotifyCore => "無法通知核心",
             Msg::ErrCoreTimeout => "核心回應逾時",
             Msg::ErrCoreExeMissing => {
-                "找不到核心程式 {exe}。它很可能被防毒軟體攔截或隔離了：請將 Boss Key 的程式資料夾加入防毒軟體的信任區／白名單，再從隔離區還原該檔案；若無法還原，請重新下載完整程式包。"
+                "找不到核心程式 {exe}。它很可能被防毒軟體攔截或隔離了：請將 ZoneDeck 的程式資料夾加入防毒軟體的信任區／白名單，再從隔離區還原該檔案；若無法還原，請重新下載完整程式包。"
             }
             Msg::ErrFreezePartial => "{failed}/{total} 個程序凍結失敗",
             Msg::ErrResumePartial => "{failed}/{total} 個程序解除凍結失敗",
@@ -231,7 +245,7 @@ mod tests {
     use super::*;
 
     /// 全部文案键；新增 Msg 变体后必须同步登记，否则跨语言校验会漏掉它。
-    const ALL_MSGS: [Msg; 34] = [
+    const ALL_MSGS: [Msg; 36] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -256,6 +270,8 @@ mod tests {
         Msg::StartBody,
         Msg::QuitTitle,
         Msg::QuitBody,
+        Msg::LegacyCoreRunningTitle,
+        Msg::LegacyCoreRunningBody,
         Msg::ErrReloadConfig,
         Msg::ErrCoreExited,
         Msg::ErrNotifyCore,

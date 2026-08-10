@@ -1,7 +1,7 @@
 //! 分级文件日志 + panic 钩子。
 //!
-//! 按天切割（`BossKey-YYYY-MM-DD.log`）、按天保留，按用户所选的
-//! [输出等级](bosskey_common::config::LOG_LEVELS)过滤。
+//! 按天切割（`ZoneDeck-YYYY-MM-DD.log`）、按天保留，按用户所选的
+//! [输出等级](zonedeck_common::config::LOG_LEVELS)过滤。
 //!
 //! 写入前统一脱敏（见 [`redact_user_dir`]）；调用方不得把窗口标题一类的内容交给日志。
 
@@ -11,12 +11,14 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Mutex, OnceLock};
 
-use bosskey_common::config;
 use windows::Win32::System::SystemInformation::GetLocalTime;
+use zonedeck_common::config;
 
 pub const LOG_DIR_NAME: &str = "logs";
 /// 日志文件名前缀；面向用户，用品牌大小写。
-const LOG_FILE_PREFIX: &str = "BossKey-";
+const LOG_FILE_PREFIX: &str = "ZoneDeck-";
+/// 改名（Boss Key → ZoneDeck）前的日志文件前缀，仅用于识别旧文件。
+const LEGACY_LOG_FILE_PREFIX: &str = "BossKey-";
 const LOG_FILE_SUFFIX: &str = ".log";
 /// 用户目录在日志中的替代写法。
 const USER_DIR_PLACEHOLDER: &str = "%USERPROFILE%";
@@ -141,15 +143,17 @@ impl Logger {
     }
 }
 
-/// 当天日志文件名：`BossKey-YYYY-MM-DD.log`。
+/// 当天日志文件名：`ZoneDeck-YYYY-MM-DD.log`。
 fn log_file_name(year: u16, month: u16, day: u16) -> String {
     format!("{LOG_FILE_PREFIX}{year:04}-{month:02}-{day:02}{LOG_FILE_SUFFIX}")
 }
 
 /// 从日志文件名解析出年月日；不符合命名规则时返回 `None`。
+/// 兼容改名前的旧前缀，保留天数清理与会话回溯因此继续覆盖旧文件。
 fn parse_log_date(name: &str) -> Option<(i64, u32, u32)> {
     let date = name
-        .strip_prefix(LOG_FILE_PREFIX)?
+        .strip_prefix(LOG_FILE_PREFIX)
+        .or_else(|| name.strip_prefix(LEGACY_LOG_FILE_PREFIX))?
         .strip_suffix(LOG_FILE_SUFFIX)?;
     let mut parts = date.split('-');
     let y: i64 = parts.next()?.parse().ok()?;
@@ -245,16 +249,18 @@ fn log_files_newest_first(dir: &std::path::Path) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(dir) else {
         return Vec::new();
     };
-    let mut files: Vec<(i64, PathBuf)> = entries
+    let mut files: Vec<(i64, String, PathBuf)> = entries
         .flatten()
         .filter_map(|e| {
-            let name = e.file_name();
-            let (y, m, d) = parse_log_date(name.to_str()?)?;
-            Some((days_from_civil(y, m, d), e.path()))
+            let name = e.file_name().to_str()?.to_string();
+            let (y, m, d) = parse_log_date(&name)?;
+            Some((days_from_civil(y, m, d), name, e.path()))
         })
         .collect();
-    files.sort_by(|a, b| b.0.cmp(&a.0));
-    files.into_iter().map(|(_, path)| path).collect()
+    // 同日期时按文件名降序：改名当天迁来的旧前缀文件（BossKey- < ZoneDeck-）
+    // 必须排在新文件之后，否则升级当天的会话摘录会取到旧版本的日志。
+    files.sort_by(|a, b| (b.0, &b.1).cmp(&(a.0, &a.1)));
+    files.into_iter().map(|(_, _, path)| path).collect()
 }
 
 /// 跨零点的会话最多回溯几个日志文件。
@@ -482,16 +488,46 @@ mod tests {
 
     #[test]
     fn log_file_name_uses_brand_prefix_and_date() {
-        assert_eq!(log_file_name(2026, 7, 4), "BossKey-2026-07-04.log");
+        assert_eq!(log_file_name(2026, 7, 4), "ZoneDeck-2026-07-04.log");
+    }
+
+    #[test]
+    fn same_day_new_prefix_sorts_before_legacy() {
+        let dir = temp_dir();
+        std::fs::write(dir.join("BossKey-2026-08-10.log"), "旧版会话").unwrap();
+        std::fs::write(dir.join("ZoneDeck-2026-08-10.log"), "新版会话").unwrap();
+        std::fs::write(dir.join("ZoneDeck-2026-08-09.log"), "前一天").unwrap();
+        let files = log_files_newest_first(&dir);
+        let names: Vec<_> = files
+            .iter()
+            .filter_map(|p| p.file_name()?.to_str().map(str::to_string))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "ZoneDeck-2026-08-10.log",
+                "BossKey-2026-08-10.log",
+                "ZoneDeck-2026-08-09.log"
+            ],
+            "同日期时新前缀在前，升级当天的会话摘录才不会取到旧版本日志"
+        );
     }
 
     #[test]
     fn parse_log_date_round_trips_and_rejects_others() {
-        assert_eq!(parse_log_date("BossKey-2026-07-04.log"), Some((2026, 7, 4)));
-        assert_eq!(parse_log_date("recovery.json"), None);
-        assert_eq!(parse_log_date("BossKey-2026-07.log"), None);
         assert_eq!(
-            parse_log_date("BossKey-2026-13-04.log"),
+            parse_log_date("ZoneDeck-2026-07-04.log"),
+            Some((2026, 7, 4))
+        );
+        assert_eq!(
+            parse_log_date("BossKey-2026-07-04.log"),
+            Some((2026, 7, 4)),
+            "改名前的旧日志同样纳入清理与回溯"
+        );
+        assert_eq!(parse_log_date("recovery.json"), None);
+        assert_eq!(parse_log_date("ZoneDeck-2026-07.log"), None);
+        assert_eq!(
+            parse_log_date("ZoneDeck-2026-13-04.log"),
             None,
             "非法月份应拒绝"
         );
@@ -509,18 +545,18 @@ mod tests {
     fn expiry_respects_retention_window() {
         let today = days_from_civil(2026, 7, 14);
         assert!(
-            !is_expired("BossKey-2026-07-14.log", today, 7),
+            !is_expired("ZoneDeck-2026-07-14.log", today, 7),
             "今天不应过期"
         );
         assert!(
-            !is_expired("BossKey-2026-07-08.log", today, 7),
+            !is_expired("ZoneDeck-2026-07-08.log", today, 7),
             "6 天前不应过期"
         );
         assert!(
-            is_expired("BossKey-2026-07-07.log", today, 7),
+            is_expired("ZoneDeck-2026-07-07.log", today, 7),
             "7 天前应过期"
         );
-        assert!(is_expired("BossKey-2026-06-01.log", today, 7));
+        assert!(is_expired("ZoneDeck-2026-06-01.log", today, 7));
         assert!(
             !is_expired("config.json", today, 7),
             "非日志文件不应被判过期"
@@ -549,7 +585,7 @@ mod tests {
     fn cleanup_removes_only_expired_logs() {
         let dir = temp_dir();
         let logger = Logger::new(dir.clone(), 7);
-        fs::write(dir.join("BossKey-2000-01-01.log"), b"old").unwrap();
+        fs::write(dir.join("ZoneDeck-2000-01-01.log"), b"old").unwrap();
         let now = unsafe { GetLocalTime() };
         let recent = log_file_name(now.wYear, now.wMonth, now.wDay);
         fs::write(dir.join(&recent), b"recent").unwrap();
@@ -558,7 +594,7 @@ mod tests {
         logger.cleanup();
 
         assert!(
-            !dir.join("BossKey-2000-01-01.log").exists(),
+            !dir.join("ZoneDeck-2000-01-01.log").exists(),
             "过期日志应删除"
         );
         assert!(dir.join(&recent).exists(), "当天日志应保留");
@@ -584,7 +620,7 @@ mod tests {
             "未知取值回落默认等级"
         );
         assert_eq!(
-            Level::from_config(bosskey_common::config::DEFAULT_LOG_LEVEL),
+            Level::from_config(zonedeck_common::config::DEFAULT_LOG_LEVEL),
             Level::Warn,
             "默认等级即「仅记录警告及以上」"
         );
@@ -662,7 +698,7 @@ mod tests {
     fn latest_session_spans_midnight_and_skips_older_runs() {
         let dir = temp_dir();
         fs::write(
-            dir.join("BossKey-2026-07-28.log"),
+            dir.join("ZoneDeck-2026-07-28.log"),
             "2026-07-28 08:00:00 [START] 更早的一次运行\n\
              2026-07-28 09:00:00 [EXIT] 核心正常退出\n\
              2026-07-28 23:59:00 [START] 跨零点这次运行\n\
@@ -671,7 +707,7 @@ mod tests {
         .unwrap();
         // 当天文件里没有起始标记：本次运行是昨晚开始的。
         fs::write(
-            dir.join("BossKey-2026-07-29.log"),
+            dir.join("ZoneDeck-2026-07-29.log"),
             "2026-07-29 00:00:10 [ERROR] 零点后的错误\n",
         )
         .unwrap();
@@ -688,7 +724,7 @@ mod tests {
     fn latest_session_falls_back_when_no_marker_exists() {
         let dir = temp_dir();
         fs::write(
-            dir.join("BossKey-2026-07-29.log"),
+            dir.join("ZoneDeck-2026-07-29.log"),
             "2026-07-29 08:00:00 [WARN] 旧格式日志，没有会话标记\n",
         )
         .unwrap();
@@ -723,10 +759,10 @@ mod tests {
     fn user_dir_is_redacted_before_writing() {
         assert_eq!(
             redact_user_dir(
-                r"配置: C:\Users\张三\AppData\Roaming\BossKey",
+                r"配置: C:\Users\张三\AppData\Roaming\ZoneDeck",
                 r"C:\Users\张三"
             ),
-            r"配置: %USERPROFILE%\AppData\Roaming\BossKey"
+            r"配置: %USERPROFILE%\AppData\Roaming\ZoneDeck"
         );
         assert_eq!(
             redact_user_dir(r"c:\users\Ivan\logs", r"C:\Users\Ivan"),

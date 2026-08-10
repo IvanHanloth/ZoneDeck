@@ -97,8 +97,8 @@
 
 <div class="panel-stack">
   <div class="hero">
-    <img class="logo" src="/icon.ico" alt="Boss Key" />
-    <h2>{info?.name ?? "Boss Key"}</h2>
+    <img class="logo" src="/logo.svg" alt="ZoneDeck" />
+    <h2>{info?.name ?? "ZoneDeck"}</h2>
     <p class="muted">{t("about.version", { version: info?.version ?? "…" })}</p>
     <p>{t("about.tagline")}</p>
     <p>

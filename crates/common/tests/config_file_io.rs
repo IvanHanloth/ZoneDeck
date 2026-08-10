@@ -1,4 +1,4 @@
-use bosskey_common::{Config, ProcessRule, WindowInfo, WindowRule};
+use zonedeck_common::{Config, ProcessRule, WindowInfo, WindowRule};
 
 #[test]
 fn save_then_load_round_trips_through_a_real_file() {
@@ -154,7 +154,11 @@ fn a_failed_backup_still_falls_back_and_reports() {
     std::fs::create_dir(dir.path().join("config.json.bad")).unwrap();
 
     let (loaded, parse_error) = Config::load_reporting(&path).unwrap();
-    assert_eq!(loaded, Config::default(), "备份失败不得阻断回退，核心必须能启动");
+    assert_eq!(
+        loaded,
+        Config::default(),
+        "备份失败不得阻断回退，核心必须能启动"
+    );
     assert!(path.exists(), "备份失败时原文件留在原地");
     let msg = parse_error.unwrap();
     assert!(

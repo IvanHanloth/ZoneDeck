@@ -3,28 +3,65 @@
 
 use std::time::Duration;
 
-use bosskey_common::paths;
-use bosskey_core::agent::{self, AgentOptions};
-use bosskey_core::logging;
-use bosskey_core::single_instance::SingleInstance;
+use zonedeck_common::paths;
+use zonedeck_core::agent::{self, AgentOptions};
+use zonedeck_core::i18n::{self, Msg};
+use zonedeck_core::logging;
+use zonedeck_core::single_instance::SingleInstance;
 
-const MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
+const MUTEX_NAME: &str = "ZoneDeck_SingleInstance_Mutex";
+/// 改名（Boss Key → ZoneDeck）前的互斥体名，用于探测仍在运行的旧版核心。
+const LEGACY_MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
 /// 提权重启时等待前一个实例退出的上限。
 const ELEVATED_HANDOVER_WAIT: Duration = Duration::from_secs(4);
 
+/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用——初始化日志就要定位数据目录，
+/// 而定位会触发迁移，恰是此场景下必须避免的。语言跟随系统（配置同样还不能读）。
+fn warn_legacy_core_running() {
+    use windows::Win32::UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK, MessageBoxW};
+    use windows::core::PCWSTR;
+    i18n::set_from_pref("");
+    let to_wide = |s: &str| {
+        s.encode_utf16()
+            .chain(std::iter::once(0))
+            .collect::<Vec<u16>>()
+    };
+    let title = to_wide(i18n::t(Msg::LegacyCoreRunningTitle));
+    let body = to_wide(i18n::t(Msg::LegacyCoreRunningBody));
+    unsafe {
+        MessageBoxW(
+            None,
+            PCWSTR(body.as_ptr()),
+            PCWSTR(title.as_ptr()),
+            MB_OK | MB_ICONWARNING,
+        );
+    }
+}
+
 fn main() {
+    // 旧品牌核心还在运行时不得继续：两个核心会抢热键、双托盘，数据目录迁移还会把
+    // %APPDATA%\BossKey 从运行中的旧核心脚下搬走。探测必须先于 paths::locate()，
+    // 后者一执行就触发迁移。
+    let legacy_probe = SingleInstance::acquire(LEGACY_MUTEX_NAME);
+    let legacy_running = legacy_probe.already_running();
+    drop(legacy_probe);
+    if legacy_running {
+        warn_legacy_core_running();
+        return;
+    }
+
     // 数据目录只定位一次，配置、日志、恢复文件共用，避免两次定位得出不同结果。
     let located = paths::locate();
     let data_dir = located.dir.clone();
     let config_path = data_dir.join(paths::CONFIG_FILE_NAME);
 
     // 日志与 panic 钩子最先就位。保留天数与输出等级取自配置（0 天 = 关闭日志）。
-    let (retention_days, log_level) = bosskey_common::Config::load(&config_path)
+    let (retention_days, log_level) = zonedeck_common::Config::load(&config_path)
         .map(|c| (c.setting.log_retention_days, c.setting.log_level))
         .unwrap_or_else(|_| {
             (
-                bosskey_common::config::DEFAULT_LOG_RETENTION_DAYS,
-                bosskey_common::config::DEFAULT_LOG_LEVEL.to_string(),
+                zonedeck_common::config::DEFAULT_LOG_RETENTION_DAYS,
+                zonedeck_common::config::DEFAULT_LOG_LEVEL.to_string(),
             )
         });
     let log_level = logging::Level::from_config(&log_level);
@@ -37,8 +74,8 @@ fn main() {
     // 会话起始标记：不受输出等级过滤，每次启动一条。
     logging::session_start(&format!(
         "核心启动 {}（配置 schema {}，日志等级 {}）｜数据目录: {}（{}）",
-        bosskey_common::APP_VERSION,
-        bosskey_common::APP_CONFIG_VERSION,
+        zonedeck_common::APP_VERSION,
+        zonedeck_common::APP_CONFIG_VERSION,
         log_level.as_config_str(),
         data_dir.display(),
         match located.kind {

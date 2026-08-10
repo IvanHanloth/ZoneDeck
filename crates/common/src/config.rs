@@ -345,7 +345,7 @@ pub struct Setting {
     /// 托盘图标状态角标的颜色绑定，见 [`TrayBadges`]。
     #[serde(default)]
     pub tray_badges: TrayBadges,
-    /// 是否显示托盘图标的悬浮名称（Boss Key）；关闭后悬停不显示任何文字。
+    /// 是否显示托盘图标的悬浮名称（ZoneDeck）；关闭后悬停不显示任何文字。
     #[serde(default = "default_true")]
     pub tray_show_tooltip: bool,
     #[serde(default)]

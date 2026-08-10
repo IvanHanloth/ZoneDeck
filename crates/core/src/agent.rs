@@ -3,8 +3,6 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
-use bosskey_common::ipc::{Command, Response};
-use bosskey_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, Setting};
 use windows::Win32::Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -21,6 +19,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
+use zonedeck_common::ipc::{Command, Response};
+use zonedeck_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, Setting};
 
 use crate::effects::WinEffects;
 use crate::effects_worker::{AsyncEffects, EffectsWorker};
@@ -114,7 +114,7 @@ impl AgentOptions {
     pub fn standard(config_path: PathBuf) -> Self {
         Self {
             config_path,
-            pipe_name: bosskey_common::ipc::PIPE_NAME.to_string(),
+            pipe_name: zonedeck_common::ipc::PIPE_NAME.to_string(),
             enable_tray: true,
             auto_quit_ms: None,
         }
@@ -553,7 +553,7 @@ impl AgentState {
                         SetTimer(
                             Some(hwnd),
                             SUSPEND_GUARD_TIMER_ID,
-                            bosskey_common::ipc::SUSPEND_TIMEOUT_MS,
+                            zonedeck_common::ipc::SUSPEND_TIMEOUT_MS,
                             None,
                         );
                     }
@@ -599,7 +599,7 @@ impl AgentState {
 
 /// 日志中指代一条窗口规则的写法：序号 + 进程名。
 /// 不含规则标题——标题即窗口标题，不写入日志。
-fn rule_label(index: usize, rule: &bosskey_common::WindowRule) -> String {
+fn rule_label(index: usize, rule: &zonedeck_common::WindowRule) -> String {
     let kind = if rule.is_regex() { "正则" } else { "精确" };
     let process = if rule.process.is_empty() {
         "未知进程"
@@ -887,19 +887,19 @@ fn release_config_windows(state: &mut AgentState, exe: &Path) {
     let released = state.controller.release_pids(&pids);
     if released > 0 {
         logging::debug(&format!(
-            "配置窗口此前被 Boss Key 隐藏，已先释放 {released} 个窗口再拉起设置"
+            "配置窗口此前被 ZoneDeck 隐藏，已先释放 {released} 个窗口再拉起设置"
         ));
         state.persist_recovery();
         state.sync_tray();
     }
 }
 
-/// 定位同目录下的配置程序：生产名 config.exe，开发名 bosskey-config.exe。
+/// 定位同目录下的配置程序：生产名 config.exe，开发名 zonedeck-config.exe。
 fn find_config_exe() -> Option<PathBuf> {
     let dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(PathBuf::from))?;
-    ["config.exe", "bosskey-config.exe"]
+    ["config.exe", "zonedeck-config.exe"]
         .into_iter()
         .map(|name| dir.join(name))
         .find(|p| p.exists())
@@ -909,7 +909,7 @@ fn find_config_exe() -> Option<PathBuf> {
 fn launch_settings(state: &mut AgentState, action: Option<&str>) {
     let Some(path) = find_config_exe() else {
         log_warn!(
-            "核心所在目录下找不到配置程序（config.exe / bosskey-config.exe），无法打开设置界面"
+            "核心所在目录下找不到配置程序（config.exe / zonedeck-config.exe），无法打开设置界面"
         );
         if let Some(tray) = &state.tray {
             tray.balloon(APP_NAME, i18n::t(Msg::ConfigExeMissing));
@@ -1136,7 +1136,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 fn create_agent_window() -> windows::core::Result<HWND> {
     unsafe {
         let hinstance = GetModuleHandleW(PCWSTR::null())?;
-        let class_name = w!("BossKeyAgentWindow");
+        let class_name = w!("ZoneDeckAgentWindow");
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: hinstance.into(),
@@ -1148,7 +1148,7 @@ fn create_agent_window() -> windows::core::Result<HWND> {
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             class_name,
-            w!("Boss Key"),
+            w!("ZoneDeck"),
             WS_OVERLAPPED,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -1194,10 +1194,26 @@ pub fn run(options: AgentOptions) {
     let config_missing = !options.config_path.exists();
     let mut config = load_config_logging_fallback(&options.config_path);
     i18n::set_from_pref(&config.setting.language);
+
+    // 品牌改名迁移：把旧名称的自启注册（或安装器留下的迁移标记）迁到新名称。
+    // 一次性事件用 warn 级别，默认输出等级下也能落盘。冒烟测试不碰系统级注册。
+    if options.auto_quit_ms.is_none() {
+        use crate::autostart::LegacyMigration;
+        match crate::autostart::migrate_legacy(config.setting.autostart_admin) {
+            LegacyMigration::NotNeeded => {}
+            LegacyMigration::Done => {
+                log_warn!("发现旧品牌（Boss Key）的自启注册，已迁移到新名称");
+            }
+            LegacyMigration::Failed(e) => {
+                log_warn!("旧品牌自启迁移失败，保留旧注册待下次启动重试: {e}");
+            }
+        }
+    }
+
     let open_settings = should_open_settings(
         config_missing,
         &config.app_version,
-        bosskey_common::APP_VERSION,
+        zonedeck_common::APP_VERSION,
     );
 
     // 冒烟测试不拉起配置程序。
@@ -1212,13 +1228,13 @@ pub fn run(options: AgentOptions) {
             };
             format!(
                 "更新后首次启动（{was} → {}），拉起配置程序",
-                bosskey_common::APP_VERSION
+                zonedeck_common::APP_VERSION
             )
         };
         logging::info(&reason);
         // 记录当前版本并落盘，避免下次启动重复弹出（首次启动时顺带创建配置文件）。
-        config.version = bosskey_common::APP_CONFIG_VERSION.to_string();
-        config.app_version = bosskey_common::APP_VERSION.to_string();
+        config.version = zonedeck_common::APP_CONFIG_VERSION.to_string();
+        config.app_version = zonedeck_common::APP_VERSION.to_string();
         if let Err(e) = config.save(&options.config_path) {
             log_warn!(
                 "写入程序版本到配置失败，下次启动会重复拉起配置程序: {} — {e}",
@@ -1234,7 +1250,7 @@ pub fn run(options: AgentOptions) {
             }
         } else {
             log_warn!(
-                "核心所在目录下找不到配置程序（config.exe / bosskey-config.exe），启动时无法拉起设置界面"
+                "核心所在目录下找不到配置程序（config.exe / zonedeck-config.exe），启动时无法拉起设置界面"
             );
         }
     }
@@ -1262,7 +1278,7 @@ pub fn run(options: AgentOptions) {
                 None,
             );
         }
-        let tray = TrayIcon::new(hwnd, WM_APP_TRAY, "Boss Key");
+        let tray = TrayIcon::new(hwnd, WM_APP_TRAY, "ZoneDeck");
         if !tray.is_visible() {
             // 首挂失败（任务栏尚未就绪）时定时重试兜底，TaskbarCreated 广播为主要恢复路径。
             unsafe {
@@ -1466,7 +1482,7 @@ mod tests {
             let hwnd = CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 w!("Static"),
-                w!("BossKeyHotkeyTestWindow"),
+                w!("ZoneDeckHotkeyTestWindow"),
                 WS_OVERLAPPED,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -1503,7 +1519,7 @@ mod tests {
 
     #[test]
     fn rule_label_names_the_process_and_never_the_window_title() {
-        let mut rule = bosskey_common::WindowRule::from_window(&bosskey_common::WindowInfo::new(
+        let mut rule = zonedeck_common::WindowRule::from_window(&zonedeck_common::WindowInfo::new(
             "与某人的聊天",
             10,
             "WeChat.exe",

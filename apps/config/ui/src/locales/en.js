@@ -191,7 +191,7 @@ export default {
     "When several states are active at once, they are shown in red > green > yellow > blue priority order",
   "notify.trayTooltip": "Show the tray icon tooltip",
   "notify.trayTooltipDesc":
-    "Show “Boss Key” when hovering over the tray icon; turn this off to show no text for extra discretion.",
+    "Show “ZoneDeck” when hovering over the tray icon; turn this off to show no text for extra discretion.",
 
   "options.generalCard": "General",
   "options.muteAfterHide": "Mute after hiding",
@@ -202,9 +202,9 @@ export default {
     "When the hotkey is pressed, also hide the foreground window in addition to the bound windows.",
   "options.clickToHide": "Toggle hiding by clicking the tray icon",
   "options.clickToHideDesc": "Left-click the tray icon to hide / show without pressing a hotkey.",
-  "options.hideIcon": "Also hide Boss Key's tray icon",
+  "options.hideIcon": "Also hide ZoneDeck's tray icon",
   "options.hideIconDesc":
-    "Hide Boss Key's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
+    "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
   "options.sendPause": "Send the pause key before hiding",
   "options.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
 
@@ -336,7 +336,7 @@ export default {
   "update.current": "Current {version}",
   "update.publishedAt": "· published {time}",
   "update.forcedNote":
-    "This is a required update; the old version is no longer supported. Download the new version, then restart Boss Key.",
+    "This is a required update; the old version is no longer supported. Download the new version, then restart ZoneDeck.",
   "update.quitApp": "Quit",
   "update.download": "Download",
   "update.noDownloadUrl": "This version has no download URL — please get it from the website",

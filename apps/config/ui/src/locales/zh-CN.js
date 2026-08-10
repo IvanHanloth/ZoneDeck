@@ -185,7 +185,7 @@ export default {
   "notify.statusMonitorPaused": "热键监控已暂停",
   "notify.trayPriorityNote": "多个状态同时满足时，按红 > 绿 > 黄 > 蓝的优先级显示",
   "notify.trayTooltip": "显示图标悬浮名称",
-  "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「Boss Key」；关闭后不显示任何文字，更隐蔽。",
+  "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「ZoneDeck」；关闭后不显示任何文字，更隐蔽。",
 
   "options.generalCard": "常规",
   "options.muteAfterHide": "隐藏窗口后静音",
@@ -194,9 +194,9 @@ export default {
   "options.hideCurrentDesc": "按下热键时，除已绑定窗口外，同时隐藏当前正在使用的前台窗口。",
   "options.clickToHide": "单击托盘图标切换隐藏",
   "options.clickToHideDesc": "左键单击托盘图标即可隐藏 / 显示，无需按热键。",
-  "options.hideIcon": "同时隐藏 Boss Key 托盘图标",
+  "options.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "options.hideIconDesc":
-    "隐藏窗口时连 Boss Key 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
+    "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
   "options.sendPause": "隐藏前发送暂停键",
   "options.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
 
@@ -322,7 +322,7 @@ export default {
   "update.preview": "预览版",
   "update.current": "当前 {version}",
   "update.publishedAt": "· 发布于 {time}",
-  "update.forcedNote": "这是一个强制更新，旧版本已停止服务。请下载新版本后重新启动 Boss Key。",
+  "update.forcedNote": "这是一个强制更新，旧版本已停止服务。请下载新版本后重新启动 ZoneDeck。",
   "update.quitApp": "退出程序",
   "update.download": "前往下载",
   "update.noDownloadUrl": "该版本没有提供下载地址，请前往项目主页获取",

@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
   - name: ❓提出问题
-    url: https://github.com/IvanHanloth/BossKey/discussions
+    url: https://github.com/IvanHanloth/Boss-Key/discussions
     about: 提问项目相关的其他问题
   - name: 📄官方文档
-    url: https://ivanhanloth.github.io/Boss-Key/
-    about: 在创建 Issue 之前，请仔细查阅 Bili23 Downloader 使用手册以确保正确使用。
+    url: https://boss-key.ivan-hanloth.cn/
+    about: 在创建 Issue 之前，请仔细查阅 ZoneDeck 使用手册以确保正确使用。

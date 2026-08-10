@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use bosskey_common::matching::{WindowResolution, match_process_rule, resolve_window_rule};
-use bosskey_common::{Config, NO_TITLE, Setting, WindowInfo, WindowRule};
 use serde::{Deserialize, Serialize};
+use zonedeck_common::matching::{WindowResolution, match_process_rule, resolve_window_rule};
+use zonedeck_common::{Config, NO_TITLE, Setting, WindowInfo, WindowRule};
 
 use crate::effects::Effects;
 use crate::platform::WindowManager;
@@ -600,7 +600,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::HashMap;
 
-    use bosskey_common::{ProcessRule, WindowRule};
+    use zonedeck_common::{ProcessRule, WindowRule};
 
     fn win(title: &str, hwnd: i64, process: &str, path: &str) -> WindowInfo {
         WindowInfo::new(title, hwnd, process, hwnd as u32, path)
@@ -800,20 +800,20 @@ mod tests {
         config.setting.freeze_after_hide = true;
         config.setting.mute_after_hide = true;
         config.process_rules = vec![ProcessRule::from_window(&win_pid(
-            "Boss Key 设置",
+            "ZoneDeck 设置",
             10,
-            "Boss Key.exe",
+            "ZoneDeck.exe",
             700,
-            "C:\\Boss Key.exe",
+            "C:\\ZoneDeck.exe",
         ))];
 
         let wm = MockWm::new(
             vec![win_pid(
-                "Boss Key 设置",
+                "ZoneDeck 设置",
                 10,
-                "Boss Key.exe",
+                "ZoneDeck.exe",
                 700,
-                "C:\\Boss Key.exe",
+                "C:\\ZoneDeck.exe",
             )],
             0,
         );
@@ -925,7 +925,7 @@ mod tests {
                 .iter()
                 .find(|w| w.hwnd == hwnd)
                 .map(|w| w.title.clone())
-                .unwrap_or_else(|| bosskey_common::NO_TITLE.to_string())
+                .unwrap_or_else(|| zonedeck_common::NO_TITLE.to_string())
         }
         fn process_start_time(&self, pid: u32) -> i64 {
             if pid == 0 {
@@ -1418,7 +1418,7 @@ mod tests {
             "标题未变不算更新"
         );
         assert!(
-            !controller.update_title(10, bosskey_common::NO_TITLE),
+            !controller.update_title(10, zonedeck_common::NO_TITLE),
             "NO_TITLE 不参与同步"
         );
         assert_eq!(controller.snapshot().hidden[0].title, "微信 - 新会话");

@@ -13,7 +13,7 @@ pub use ipc::{Command, Response};
 pub use matching::{WindowResolution, match_process_rule, regex_is_valid, resolve_window_rule};
 pub use model::{ProcessRule, WindowInfo, WindowRule};
 
-pub const APP_NAME: &str = "Boss Key";
+pub const APP_NAME: &str = "ZoneDeck";
 /// 配置 schema 版本：配置结构变动时才动，与程序版本无关。
 pub const APP_CONFIG_VERSION: &str = "v3.0.0.0";
 /// 程序版本（workspace 版本号，唯一真源是根 `Cargo.toml`）。

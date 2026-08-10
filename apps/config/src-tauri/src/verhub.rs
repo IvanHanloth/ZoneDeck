@@ -16,7 +16,7 @@ use verhub_sdk::models::{
 
 /// Verhub 基础路径。
 pub const BASE_URL: &str = "https://verhub.hanloth.cn/api/v1";
-pub const PROJECT_KEY: &str = "ivanhanloth-boss-key";
+pub const PROJECT_KEY: &str = "ivanhanloth-zonedeck";
 /// 客户端平台（本程序只发行 Windows 版）。
 pub const PLATFORM: Platform = Platform::Windows;
 
@@ -27,13 +27,13 @@ pub const LOG_EXCERPT_MAX: usize = LOG_CONTENT_MAX * 3 / 5;
 
 type Result<T> = verhub_sdk::Result<T>;
 
-/// 构造公开接口客户端；User-Agent 追加 `BossKey/{版本}` 以便服务端识别。
+/// 构造公开接口客户端；User-Agent 追加 `ZoneDeck/{版本}` 以便服务端识别。
 fn client() -> Result<VerhubClient> {
     VerhubClient::builder(BASE_URL)
         .project_key(PROJECT_KEY)
         .platform(PLATFORM)
         .timeout(TIMEOUT)
-        .app_identifier(concat!("BossKey/", env!("CARGO_PKG_VERSION")))
+        .app_identifier(concat!("ZoneDeck/", env!("CARGO_PKG_VERSION")))
         .build()
 }
 
@@ -389,14 +389,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("verhub_cache.json");
         let links = ProjectLinks {
-            name: Some("Boss Key".into()),
+            name: Some("ZoneDeck".into()),
             website_url: Some("https://example.com/".into()),
             fetched_at: 42,
             ..Default::default()
         };
         write_cache_file(&path, &links);
         let read = read_cache_file(&path).expect("缓存应可读回");
-        assert_eq!(read.name.as_deref(), Some("Boss Key"));
+        assert_eq!(read.name.as_deref(), Some("ZoneDeck"));
         assert_eq!(read.website_url.as_deref(), Some("https://example.com/"));
         assert_eq!(read.fetched_at, 42);
     }

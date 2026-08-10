@@ -1,4 +1,4 @@
-﻿# Boss Key 版本号工具
+﻿# ZoneDeck 版本号工具
 #
 # 版本号只写在 Cargo.toml 的 [workspace.package] version 一处，Cargo.lock 跟着它走。
 # 其余地方都取真实版本号，不再各存一份，从源头上没有「对不上」的可能：
@@ -6,8 +6,8 @@
 #   - 核心清单的 assemblyIdentity：crates/core/build.rs 按 CARGO_PKG_VERSION 填
 #   - 安装包的 MyAppVersion：scripts/package.ps1 从 Cargo.toml 读出后传入
 #   - 程序内与上报给 Verhub 的版本：env!("CARGO_PKG_VERSION")
-# 发版流程（.github/workflows/tag.yml）先 apply 写入并提交，
-# 构建流程（release.yml）再 check 校验，防止 tag 与代码里的版本号对不上。
+# 发版与构建同在 .github/workflows/release.yml：先 apply 写入并经 API 提交打 tag，
+# 检出 tag 后再 check 校验，防止 tag 与代码里的版本号对不上。
 #
 # 用法：
 #   powershell -File scripts/version.ps1 apply v3.0.1      # 写入 Cargo.toml 并同步 Cargo.lock

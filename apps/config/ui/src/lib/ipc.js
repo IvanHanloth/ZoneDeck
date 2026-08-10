@@ -145,7 +145,7 @@ function mockInvoke(cmd, args) {
       return null;
     case "app_info":
       return {
-        name: "Boss Key",
+        name: "ZoneDeck",
         version: "3.0.0",
         website: "https://github.com/IvanHanloth/Boss-Key",
         author: "Ivan Hanloth",
@@ -155,7 +155,7 @@ function mockInvoke(cmd, args) {
       };
     case "verhub_project_links":
       return {
-        name: "Boss Key",
+        name: "ZoneDeck",
         website_url: "https://boss-key.ivan-hanloth.cn/",
         repo_url: "https://github.com/IvanHanloth/Boss-Key",
         docs_url: "https://boss-key.ivan-hanloth.cn/guide/",
@@ -176,7 +176,7 @@ function mockInvoke(cmd, args) {
       return [
         {
           id: "mock-1",
-          title: "Boss Key 3.0 发布",
+          title: "ZoneDeck 3.0 发布",
           content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://boss-key.ivan-hanloth.cn/changelog/)。",
           is_pinned: true,
           is_hidden: false,

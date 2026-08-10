@@ -1,5 +1,5 @@
 [package]
-name = "bosskey-common"
+name = "zonedeck-common"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

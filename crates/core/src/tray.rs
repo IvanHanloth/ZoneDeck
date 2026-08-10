@@ -104,7 +104,7 @@ fn load_icon_from_file() -> Option<HICON> {
 
 pub struct TrayIcon {
     hwnd: HWND,
-    /// 业务层期望的可见性（如「同时隐藏 Boss Key 托盘图标」时为 false）。
+    /// 业务层期望的可见性（如「同时隐藏 ZoneDeck 托盘图标」时为 false）。
     desired: bool,
     /// 图标是否实际已挂到任务栏（NIM_ADD 成功）。
     visible: bool,

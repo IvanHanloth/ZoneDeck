@@ -2,10 +2,6 @@
 
 use std::time::{Duration, Instant};
 
-use bosskey_common::ipc::{Command, PipeClient, Response};
-use bosskey_core::agent::{self, AgentOptions};
-use bosskey_core::hide::Target;
-use bosskey_core::recovery::{self, Snapshot};
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -14,6 +10,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_QUIT, WS_OVERLAPPEDWINDOW,
 };
 use windows::core::w;
+use zonedeck_common::ipc::{Command, PipeClient, Response};
+use zonedeck_core::agent::{self, AgentOptions};
+use zonedeck_core::hide::Target;
+use zonedeck_core::recovery::{self, Snapshot};
 
 /// 在带消息循环的独立线程上创建一个“已被隐藏”的窗口。
 fn spawn_hidden_window() -> (i64, u32, std::thread::JoinHandle<()>) {
@@ -22,7 +22,7 @@ fn spawn_hidden_window() -> (i64, u32, std::thread::JoinHandle<()>) {
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("Static"),
-            w!("BossKeyRecoveryTestWindow"),
+            w!("ZoneDeckRecoveryTestWindow"),
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -61,7 +61,7 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
 
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
-    bosskey_common::Config::default()
+    zonedeck_common::Config::default()
         .save(&config_path)
         .unwrap();
 
@@ -80,7 +80,7 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
     )
     .unwrap();
 
-    let pipe = r"\\.\pipe\bosskey_test_agent_recovery";
+    let pipe = r"\\.\pipe\zonedeck_test_agent_recovery";
     let options = AgentOptions {
         pipe_name: pipe.to_string(),
         enable_tray: false,
@@ -125,7 +125,7 @@ fn agent_discards_snapshot_from_a_previous_boot() {
 
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
-    bosskey_common::Config::default()
+    zonedeck_common::Config::default()
         .save(&config_path)
         .unwrap();
 
@@ -141,7 +141,7 @@ fn agent_discards_snapshot_from_a_previous_boot() {
     };
     std::fs::write(&recovery_path, serde_json::to_string(&stale).unwrap()).unwrap();
 
-    let pipe = r"\\.\pipe\bosskey_test_agent_recovery_stale";
+    let pipe = r"\\.\pipe\zonedeck_test_agent_recovery_stale";
     let options = AgentOptions {
         pipe_name: pipe.to_string(),
         enable_tray: false,

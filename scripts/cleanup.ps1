@@ -1,8 +1,8 @@
-﻿# Boss Key 残留数据清理脚本
+﻿# ZoneDeck 残留数据清理脚本
 #
 # 便携版的设置、日志、恢复文件就放在程序文件夹里，删掉文件夹即可。但另有两样东西在
 # 用户目录下，删文件夹清不掉：配置界面的浏览器数据，以及程序文件夹不可写时改存到
-# %APPDATA%\BossKey 的那份设置。开机自启还会留下计划任务与注册表项。本脚本负责这些。
+# %APPDATA%\ZoneDeck 的那份设置。开机自启还会留下计划任务与注册表项。本脚本负责这些。
 #
 # 用法（在本文件所在目录打开 PowerShell）：
 #   powershell -ExecutionPolicy Bypass -File cleanup.ps1
@@ -22,12 +22,12 @@ else { 'en' }
 
 $catalog = @{
     'zh-CN' = @{
-        Title     = 'Boss Key 残留数据清理'
+        Title     = 'ZoneDeck 残留数据清理'
         Nothing   = '没有发现残留数据，无需清理。'
         Found     = '将删除以下内容：'
         Confirm   = '确认删除？输入 y 继续，其他任意键取消'
         Cancelled = '已取消，未做任何改动。'
-        Killing   = '正在结束仍在运行的 Boss Key 进程...'
+        Killing   = '正在结束仍在运行的 ZoneDeck 进程...'
         Removed   = '已删除：{0}'
         Failed    = '删除失败：{0}（{1}）'
         Done      = '清理完成。程序文件夹请自行删除。'
@@ -37,12 +37,12 @@ $catalog = @{
         RegRun    = '开机自启注册表项'
     }
     'zh-TW' = @{
-        Title     = 'Boss Key 殘留資料清理'
+        Title     = 'ZoneDeck 殘留資料清理'
         Nothing   = '沒有發現殘留資料，不需清理。'
         Found     = '將刪除以下內容：'
         Confirm   = '確認刪除？輸入 y 繼續，其他任意鍵取消'
         Cancelled = '已取消，未做任何變更。'
-        Killing   = '正在結束仍在執行的 Boss Key 處理程序...'
+        Killing   = '正在結束仍在執行的 ZoneDeck 處理程序...'
         Removed   = '已刪除：{0}'
         Failed    = '刪除失敗：{0}（{1}）'
         Done      = '清理完成。程式資料夾請自行刪除。'
@@ -52,12 +52,12 @@ $catalog = @{
         RegRun    = '開機自動啟動登錄項目'
     }
     'en'    = @{
-        Title     = 'Boss Key leftover data cleanup'
+        Title     = 'ZoneDeck leftover data cleanup'
         Nothing   = 'No leftover data found; nothing to clean up.'
         Found     = 'The following will be deleted:'
         Confirm   = 'Delete these? Type y to continue, anything else to cancel'
         Cancelled = 'Cancelled; nothing was changed.'
-        Killing   = 'Stopping running Boss Key processes...'
+        Killing   = 'Stopping running ZoneDeck processes...'
         Removed   = 'Deleted: {0}'
         Failed    = 'Could not delete {0} ({1})'
         Done      = 'Cleanup finished. Delete the program folder yourself.'
@@ -69,31 +69,45 @@ $catalog = @{
 }
 $t = $catalog[$lang]
 
-# 以下四项须与程序保持一致：
-#   用户数据目录    crates/common/src/paths.rs（USER_DIR_NAME）
+# 以下各项须与程序保持一致，带 Boss/bosskey 的为改名（Boss Key → ZoneDeck）前的旧名：
+#   用户数据目录    crates/common/src/paths.rs（USER_DIR_NAME / LEGACY_USER_DIR_NAME）
 #   浏览器数据目录  apps/config/src-tauri/tauri.conf.json（identifier）
-#   自启任务与注册表项  crates/core/src/autostart.rs（TASK_NAME / REG_VALUE_NAME）
-$dataDir = Join-Path $env:APPDATA 'BossKey'
-$webViewDir = Join-Path $env:LOCALAPPDATA 'cn.hanloth.bosskey.config'
-$taskName = 'BossKeyAutostart'
+#   自启任务与注册表项  crates/core/src/autostart.rs（TASK_NAME / REG_VALUE_NAME 及 LEGACY_*）
+$dataDirs = @('ZoneDeck', 'BossKey') | ForEach-Object { Join-Path $env:APPDATA $_ }
+$webViewDirs = @('cn.hanloth.zonedeck.config', 'cn.hanloth.bosskey.config') |
+    ForEach-Object { Join-Path $env:LOCALAPPDATA $_ }
+$taskNames = @('ZoneDeckAutostart', 'BossKeyAutostart')
 $runSubkey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-$runValueName = 'Boss Key Application'
+$runValueNames = @('ZoneDeck Application', 'Boss Key Application')
 
 $targets = @()
-if (Test-Path $dataDir) {
-    $targets += [pscustomobject]@{ Kind = 'Dir'; Label = $t.DataDir; Detail = $dataDir }
+foreach ($dataDir in $dataDirs) {
+    if (Test-Path $dataDir) {
+        $targets += [pscustomobject]@{ Kind = 'Dir'; Label = $t.DataDir; Detail = $dataDir }
+    }
 }
-if (Test-Path $webViewDir) {
-    $targets += [pscustomobject]@{ Kind = 'Dir'; Label = $t.WebView; Detail = $webViewDir }
+foreach ($webViewDir in $webViewDirs) {
+    if (Test-Path $webViewDir) {
+        $targets += [pscustomobject]@{ Kind = 'Dir'; Label = $t.WebView; Detail = $webViewDir }
+    }
 }
 # schtasks 找不到任务时返回非零码，用它判断存在性；输出丢弃，此处只关心结果。
-& schtasks.exe /Query /TN $taskName *> $null
-if ($LASTEXITCODE -eq 0) {
-    $targets += [pscustomobject]@{ Kind = 'Task'; Label = $t.Task; Detail = $taskName }
+foreach ($taskName in $taskNames) {
+    & schtasks.exe /Query /TN $taskName *> $null
+    if ($LASTEXITCODE -eq 0) {
+        $targets += [pscustomobject]@{ Kind = 'Task'; Label = $t.Task; Detail = $taskName }
+    }
 }
-$runEntry = Get-ItemProperty -Path $runSubkey -Name $runValueName -ErrorAction SilentlyContinue
-if ($runEntry) {
-    $targets += [pscustomobject]@{ Kind = 'Reg'; Label = $t.RegRun; Detail = "$runSubkey\$runValueName" }
+foreach ($runValueName in $runValueNames) {
+    $runEntry = Get-ItemProperty -Path $runSubkey -Name $runValueName -ErrorAction SilentlyContinue
+    if ($runEntry) {
+        $targets += [pscustomobject]@{ Kind = 'Reg'; Label = $t.RegRun; Detail = "$runSubkey\$runValueName"; Name = $runValueName }
+    }
+}
+# 安装器写的自启迁移标记键（ZoneDeck.iss / autostart.rs 的 MIGRATION_MARKER_*）
+$markerKey = 'HKCU:\Software\ZoneDeck'
+if (Test-Path $markerKey) {
+    $targets += [pscustomobject]@{ Kind = 'RegKey'; Label = $t.RegRun; Detail = $markerKey }
 }
 
 Write-Host $t.Title -ForegroundColor Cyan
@@ -120,7 +134,7 @@ if (-not $Force) {
 # 核心是常驻进程，不结束它的话数据目录里的日志正被占用，删不干净；
 # 它还会在退出前回写配置，把刚删掉的目录重新建出来。
 Write-Host $t.Killing
-foreach ($name in @('Boss Key', 'config')) {
+foreach ($name in @('ZoneDeck', 'Boss Key', 'config')) {
     Get-Process -Name $name -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
@@ -132,7 +146,8 @@ foreach ($target in $targets) {
                 & schtasks.exe /Delete /F /TN $target.Detail *> $null
                 if ($LASTEXITCODE -ne 0) { throw "schtasks exit $LASTEXITCODE" }
             }
-            'Reg' { Remove-ItemProperty -Path $runSubkey -Name $runValueName -Force -ErrorAction Stop }
+            'Reg' { Remove-ItemProperty -Path $runSubkey -Name $target.Name -Force -ErrorAction Stop }
+            'RegKey' { Remove-Item -Path $target.Detail -Recurse -Force -ErrorAction Stop }
         }
         Write-Host ($t.Removed -f $target.Detail) -ForegroundColor Green
     }

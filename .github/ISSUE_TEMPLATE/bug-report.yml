@@ -28,7 +28,7 @@ body:
   - type: input
     attributes:
       label: 使用版本
-      description: 请提供您当前使用的 Boss Key 版本号。
+      description: 请提供您当前使用的 ZoneDeck 版本号。
       placeholder: 如：v2.0.3
     validations:
       required: true

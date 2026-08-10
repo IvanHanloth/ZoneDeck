@@ -6,7 +6,6 @@
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI32, AtomicIsize, AtomicU32, AtomicU64, Ordering::Relaxed};
 
-use bosskey_common::{MouseButton as MouseButtonCfg, Setting};
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::SystemInformation::GetTickCount64;
@@ -16,6 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_MBUTTONDOWN, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_XBUTTONDOWN,
 };
 use windows::core::PCWSTR;
+use zonedeck_common::{MouseButton as MouseButtonCfg, Setting};
 
 use crate::hotkey::parse_modifiers;
 use crate::util::pressed_modifiers;

@@ -1,6 +1,5 @@
 use std::ffi::c_void;
 
-use bosskey_common::{NO_TITLE, WindowInfo};
 use windows::Win32::Foundation::{CloseHandle, FILETIME, HWND, LPARAM};
 use windows::Win32::System::Threading::{
     GetProcessTimes, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
@@ -12,6 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     SW_HIDE, SW_SHOW, ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 use windows::core::{BOOL, PWSTR};
+use zonedeck_common::{NO_TITLE, WindowInfo};
 
 use super::WindowManager;
 
@@ -241,7 +241,7 @@ mod tests {
             let hwnd = CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 w!("Static"),
-                w!("BossKeyTestWindow"),
+                w!("ZoneDeckTestWindow"),
                 WS_OVERLAPPEDWINDOW,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,
@@ -298,7 +298,7 @@ mod tests {
             let hwnd = CreateWindowExW(
                 WINDOW_EX_STYLE(0),
                 w!("Static"),
-                w!("BossKeyIdentityTestWindow"),
+                w!("ZoneDeckIdentityTestWindow"),
                 WS_OVERLAPPEDWINDOW,
                 CW_USEDEFAULT,
                 CW_USEDEFAULT,

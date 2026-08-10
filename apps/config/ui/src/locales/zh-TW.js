@@ -184,7 +184,7 @@ export default {
   "notify.statusMonitorPaused": "快速鍵監控已暫停",
   "notify.trayPriorityNote": "多個狀態同時滿足時，依紅 > 綠 > 黃 > 藍的優先順序顯示",
   "notify.trayTooltip": "顯示圖示懸浮名稱",
-  "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「Boss Key」；關閉後不顯示任何文字，更為隱密。",
+  "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「ZoneDeck」；關閉後不顯示任何文字，更為隱密。",
 
   "options.generalCard": "一般",
   "options.muteAfterHide": "隱藏視窗後靜音",
@@ -193,9 +193,9 @@ export default {
   "options.hideCurrentDesc": "按下快速鍵時，除已綁定的視窗外，同時隱藏目前正在使用的前景視窗。",
   "options.clickToHide": "按一下通知區域圖示切換隱藏",
   "options.clickToHideDesc": "以左鍵按一下通知區域圖示即可隱藏／顯示，不需按快速鍵。",
-  "options.hideIcon": "一併隱藏 Boss Key 通知區域圖示",
+  "options.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
   "options.hideIconDesc":
-    "隱藏視窗時連 Boss Key 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
+    "隱藏視窗時連 ZoneDeck 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
   "options.sendPause": "隱藏前傳送暫停鍵",
   "options.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
 
@@ -323,7 +323,7 @@ export default {
   "update.preview": "預覽版",
   "update.current": "目前 {version}",
   "update.publishedAt": "· 發布於 {time}",
-  "update.forcedNote": "這是強制更新，舊版本已停止服務。請下載新版本後重新啟動 Boss Key。",
+  "update.forcedNote": "這是強制更新，舊版本已停止服務。請下載新版本後重新啟動 ZoneDeck。",
   "update.quitApp": "結束程式",
   "update.download": "前往下載",
   "update.noDownloadUrl": "該版本沒有提供下載網址，請前往專案首頁取得",

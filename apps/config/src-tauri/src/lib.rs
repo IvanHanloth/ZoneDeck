@@ -1,34 +1,34 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use bosskey_common::Config;
-use bosskey_common::ipc::{Command, PipeClient, Response};
-use bosskey_common::model::WindowInfo;
-use bosskey_core::i18n::{self, Msg};
+use zonedeck_common::Config;
+use zonedeck_common::ipc::{Command, PipeClient, Response};
+use zonedeck_common::model::WindowInfo;
+use zonedeck_core::i18n::{self, Msg};
 use serde::Serialize;
 use tauri::{Emitter, Manager};
 
 mod verhub;
 
-const CORE_EXE: &str = "Boss Key.exe";
+const CORE_EXE: &str = "ZoneDeck.exe";
 
 /// 程序自身所在目录：只用来找同目录下的可执行文件（核心、pssuspend）。
-/// 数据文件一律走 [`bosskey_common::paths`]——安装版存到用户目录，便携版才在这里。
+/// 数据文件一律走 [`zonedeck_common::paths`]——安装版存到用户目录，便携版才在这里。
 fn exe_dir() -> PathBuf {
-    bosskey_common::paths::exe_dir()
+    zonedeck_common::paths::exe_dir()
 }
 
 /// 数据目录（配置、日志、恢复文件、缓存）；与核心得出的结果一致。
 fn data_dir() -> PathBuf {
-    bosskey_common::paths::data_dir()
+    zonedeck_common::paths::data_dir()
 }
 
 fn config_path() -> PathBuf {
-    bosskey_common::paths::config_path()
+    zonedeck_common::paths::config_path()
 }
 
 fn log_dir() -> PathBuf {
-    data_dir().join(bosskey_core::logging::LOG_DIR_NAME)
+    data_dir().join(zonedeck_core::logging::LOG_DIR_NAME)
 }
 
 /// 定位同目录下的核心程序，不存在时报错。
@@ -122,8 +122,8 @@ async fn save_config(config: serde_json::Value) -> Result<(), String> {
 #[tauri::command]
 async fn list_windows() -> Vec<WindowInfo> {
     blocking(|| {
-        use bosskey_core::platform::WindowManager;
-        bosskey_core::platform::manager().enumerate()
+        use zonedeck_core::platform::WindowManager;
+        zonedeck_core::platform::manager().enumerate()
     })
     .await
 }
@@ -138,7 +138,7 @@ async fn window_icons(paths: Vec<String>) -> std::collections::HashMap<String, S
             if path.is_empty() || icons.contains_key(&path) {
                 continue;
             }
-            if let Some(uri) = bosskey_core::icon::icon_data_uri(&path) {
+            if let Some(uri) = zonedeck_core::icon::icon_data_uri(&path) {
                 icons.insert(path, uri);
             }
         }
@@ -171,8 +171,8 @@ async fn show_windows(hwnds: Vec<i64>) {
         }) {
             return;
         }
-        use bosskey_core::platform::WindowManager;
-        let mgr = bosskey_core::platform::manager();
+        use zonedeck_core::platform::WindowManager;
+        let mgr = zonedeck_core::platform::manager();
         for h in hwnds {
             mgr.show(h);
         }
@@ -190,8 +190,8 @@ async fn hide_windows(hwnds: Vec<i64>) {
         }) {
             return;
         }
-        use bosskey_core::platform::WindowManager;
-        let mgr = bosskey_core::platform::manager();
+        use zonedeck_core::platform::WindowManager;
+        let mgr = zonedeck_core::platform::manager();
         for h in hwnds {
             mgr.hide(h);
         }
@@ -221,11 +221,11 @@ async fn run_freeze(
     suspend: bool,
 ) -> Result<(), String> {
     blocking(move || {
-        use bosskey_core::freeze;
+        use zonedeck_core::freeze;
         let dir = exe_dir();
         let use_enhanced = enhanced && freeze::pssuspend_available(&dir);
         let targets = if whole_tree {
-            bosskey_core::hide::expand_descendants(&pids, &freeze::process_tree())
+            zonedeck_core::hide::expand_descendants(&pids, &freeze::process_tree())
         } else {
             pids
         };
@@ -287,9 +287,9 @@ struct AutostartStatus {
 #[tauri::command]
 async fn autostart_status() -> AutostartStatus {
     blocking(|| {
-        use bosskey_core::autostart::Method;
+        use zonedeck_core::autostart::Method;
         // 用核心 exe 路径查询，与核心写入的自启项一致。
-        let status = bosskey_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE)).status();
+        let status = zonedeck_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE)).status();
         let method = match status {
             Some(Method::TaskScheduler) => Some("task"),
             Some(Method::Registry) => Some("registry"),
@@ -354,7 +354,7 @@ async fn start_core(elevated: bool) -> Result<bool, String> {
     let exe = core_exe_path()?;
     blocking(move || {
         if elevated {
-            Ok(bosskey_core::elevation::relaunch_as_admin(&exe, ""))
+            Ok(zonedeck_core::elevation::relaunch_as_admin(&exe, ""))
         } else {
             spawn_core_detached(&exe, None).map(|_| true)
         }
@@ -370,7 +370,7 @@ async fn restart_core(elevated: bool) -> Result<bool, String> {
         let _ = notify_core(&Command::Quit);
         std::thread::sleep(Duration::from_millis(400));
         if elevated {
-            Ok(bosskey_core::elevation::relaunch_as_admin(&exe, "elevated"))
+            Ok(zonedeck_core::elevation::relaunch_as_admin(&exe, "elevated"))
         } else {
             spawn_core_detached(&exe, Some("elevated")).map(|_| true)
         }
@@ -406,7 +406,7 @@ async fn set_hotkeys_enabled(enabled: bool) -> Result<bool, String> {
 /// 增强冻结是否可用：需要 exe 同目录存在 pssuspend64.exe。
 #[tauri::command]
 async fn pssuspend_available() -> bool {
-    blocking(|| bosskey_core::freeze::pssuspend_available(&exe_dir())).await
+    blocking(|| zonedeck_core::freeze::pssuspend_available(&exe_dir())).await
 }
 
 /// 启动参数里请求的动作（如 `restore`/`about`），只在启动时读一次。
@@ -414,7 +414,7 @@ async fn pssuspend_available() -> bool {
 fn startup_action() -> Option<String> {
     std::env::args()
         .skip(1)
-        .find(|a| a == bosskey_common::ARG_RESTORE || a == bosskey_common::ARG_ABOUT)
+        .find(|a| a == zonedeck_common::ARG_RESTORE || a == zonedeck_common::ARG_ABOUT)
 }
 
 /// 打开日志目录（`<数据目录>/logs`）；目录不存在时先创建，再用资源管理器打开。
@@ -423,7 +423,7 @@ async fn open_log_dir() -> Result<(), String> {
     blocking(|| {
         let dir = log_dir();
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        bosskey_core::shell::open(&dir.to_string_lossy())
+        zonedeck_core::shell::open(&dir.to_string_lossy())
     })
     .await
 }
@@ -431,8 +431,8 @@ async fn open_log_dir() -> Result<(), String> {
 /// 数据目录及其由来。界面据 `kind` 判断是否要提示便携版写不进程序目录。
 #[tauri::command]
 fn data_location() -> DataLocation {
-    use bosskey_common::paths::DataDirKind;
-    let located = bosskey_common::paths::locate();
+    use zonedeck_common::paths::DataDirKind;
+    let located = zonedeck_common::paths::locate();
     DataLocation {
         dir: located.dir.display().to_string(),
         program_dir: located.program_dir.display().to_string(),
@@ -447,7 +447,7 @@ fn data_location() -> DataLocation {
 #[tauri::command]
 fn app_info() -> AppInfo {
     AppInfo {
-        name: bosskey_common::APP_NAME,
+        name: zonedeck_common::APP_NAME,
         // 程序版本（非配置 schema 版本 APP_CONFIG_VERSION）。
         version: env!("CARGO_PKG_VERSION"),
         website: "https://github.com/IvanHanloth/Boss-Key",
@@ -464,7 +464,7 @@ async fn open_external(url: String) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("mailto:") {
         return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
-    blocking(move || bosskey_core::shell::open(&url)).await
+    blocking(move || zonedeck_core::shell::open(&url)).await
 }
 
 /// 项目公开链接（主页 / 仓库 / 文档等）。带缓存（内存 + 数据目录下的磁盘文件，
@@ -542,7 +542,7 @@ async fn verhub_upload_log(content: String) -> Result<(), String> {
 /// 核心最近一次运行的日志：从该次运行的 `[START]` 起至今，压到上报预算以内。
 #[tauri::command]
 async fn current_session_log() -> String {
-    blocking(move || bosskey_core::logging::latest_session(&log_dir(), verhub::LOG_EXCERPT_MAX))
+    blocking(move || zonedeck_core::logging::latest_session(&log_dir(), verhub::LOG_EXCERPT_MAX))
         .await
 }
 
@@ -573,10 +573,10 @@ pub fn run() {
                 let _ = window.show();
                 let _ = window.set_focus();
             }
-            if argv.iter().any(|a| a == bosskey_common::ARG_RESTORE) {
+            if argv.iter().any(|a| a == zonedeck_common::ARG_RESTORE) {
                 let _ = app.emit("open-restore", ());
             }
-            if argv.iter().any(|a| a == bosskey_common::ARG_ABOUT) {
+            if argv.iter().any(|a| a == zonedeck_common::ARG_ABOUT) {
                 let _ = app.emit("open-about", ());
             }
         }))
@@ -624,5 +624,5 @@ pub fn run() {
             Ok(())
         })
         .run(tauri::generate_context!())
-        .expect("运行 Boss Key 配置程序时出错");
+        .expect("运行 ZoneDeck 配置程序时出错");
 }

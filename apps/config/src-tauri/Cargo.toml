@@ -1,5 +1,5 @@
 [package]
-name = "bosskey-config"
+name = "zonedeck-config"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [lib]
-name = "bosskey_config_lib"
+name = "zonedeck_config_lib"
 crate-type = ["lib"]
 
 [build-dependencies]
@@ -17,8 +17,8 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-bosskey-common = { path = "../../../crates/common" }
-bosskey-core = { path = "../../../crates/core" }
+zonedeck-common = { path = "../../../crates/common" }
+zonedeck-core = { path = "../../../crates/core" }
 tauri-plugin-single-instance = "2.4.2"
 verhub-sdk = { workspace = true }
 
