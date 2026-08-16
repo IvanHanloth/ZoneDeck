@@ -4,11 +4,11 @@ title: 快速上手
 
 # 快速上手
 
-本章介紹 Boss Key 的基本操作：如何開啟設定、如何透過通知區域選單控制程式，以及預設快速鍵。
+本章介紹 ZoneDeck 的基本操作：如何開啟設定、如何透過通知區域選單控制程式，以及預設快速鍵。
 
 ## 首次啟動
 
-安裝或更新後**首次開啟** Boss Key 時，程式會自動開啟**設定介面**，方便您立即進行快速鍵修改、視窗／程序綁定等設定。
+安裝或更新後**首次開啟** ZoneDeck 時，程式會自動開啟**設定介面**，方便您立即進行快速鍵修改、視窗／程序綁定等設定。
 
 ## 設定介面
 
@@ -38,10 +38,10 @@ title: 快速上手
 
 <StatusBar variant="offline" />
 
-- <Play class="lucide-inline" style="color:#2f9e63" /> **啟動核心**：以一般使用者身分啟動核心。
+- <Play class="lucide-inline" style="color:#0e7490" /> **啟動核心**：以一般使用者身分啟動核心。
 - <Shield class="lucide-inline" style="color:#3b82f6" /> **以系統管理員啟動**：以系統管理員身分啟動核心（增強凍結等功能需要）。
 
-**② 核心已執行** —— 核心正在執行，狀態文字與標示為綠色：
+**② 核心已執行** —— 核心正在執行，狀態文字與標示為青色：
 
 <StatusBar variant="user" />
 
@@ -51,8 +51,8 @@ title: 快速上手
 
 ::: tip 如何區分執行身分
 
-- <span class="status-dot" style="color:#2f9e63"></span> **圓點標示**：核心正在以一般使用者身分執行。
-- <Shield class="lucide-inline" style="color:#2f9e63" /> **盾牌標示**：核心正在以系統管理員身分執行。
+- <span class="status-dot" style="color:#0e7490"></span> **圓點標示**：核心正在以一般使用者身分執行。
+- <Shield class="lucide-inline" style="color:#0e7490" /> **盾牌標示**：核心正在以系統管理員身分執行。
 :::
 
 
@@ -60,14 +60,14 @@ title: 快速上手
 
 - <ScrollText class="lucide-inline" /> **開啟記錄檔資料夾**：開啟執行記錄所在的 `logs` 資料夾，便於排查問題。
 - <span style="opacity:.7">◐</span> **切換佈景主題**：在**跟隨系統 → 淺色 → 深色**之間循環切換介面佈景主題。
-- <span class="status-dot" style="color:#2f9e63"></span> **快速鍵狀態**：顯示核心目前是否在監聽快速鍵與滑鼠。<span class="status-dot" style="color:#2f9e63"></span> **快速鍵生效** 表示正常監聽；進入「快速鍵與滑鼠」設定頁錄製時會暫時顯示為 <span class="status-dot" style="color:#e5484d"></span> **快速鍵暫停**，避免誤觸發。
-- <Check class="lucide-inline" style="color:#2f9e63" /> **儲存狀態**：顯示 **已儲存**／**儲存中…**，設定變更會自動儲存，不需手動儲存。
+- <span class="status-dot" style="color:#0e7490"></span> **快速鍵狀態**：顯示核心目前是否在監聽快速鍵與滑鼠。<span class="status-dot" style="color:#0e7490"></span> **快速鍵生效** 表示正常監聽；進入「快速鍵與滑鼠」設定頁錄製時會暫時顯示為 <span class="status-dot" style="color:#e5484d"></span> **快速鍵暫停**，避免誤觸發。
+- <Check class="lucide-inline" style="color:#0e7490" /> **儲存狀態**：顯示 **已儲存**／**儲存中…**，設定變更會自動儲存，不需手動儲存。
 
 ## 通知區域選單
 
 日常使用時，可以透過**以滑鼠右鍵按一下通知區域圖示**開啟選單。通知區域選單提供以下常用功能：
 
-![Boss Key 核心通知區域選單](/static/screenshot-5.png)
+![ZoneDeck 核心通知區域選單](/static/screenshot-5.png)
 
 - **設定**：開啟設定介面。
 - **隱藏視窗／顯示視窗**：快速隱藏或顯示已綁定的視窗。
@@ -82,12 +82,12 @@ title: 快速上手
 
 ## 預設快速鍵
 
-Boss Key 預置了兩個鍵盤快速鍵，均可在 [快速鍵與滑鼠手勢](/zh-tw/guide/hotkeys) 中自訂：
+ZoneDeck 預置了兩個鍵盤快速鍵，均可在 [快速鍵與滑鼠手勢](/zh-tw/guide/hotkeys) 中自訂：
 
 | 功能 | 預設快速鍵 | 說明 |
 | --- | --- | --- |
 | **隱藏／顯示視窗** | `Ctrl + Q` | 按一次隱藏已綁定視窗，再按一次復原 |
-| **關閉核心** | `Win + Esc` | 立即結束 Boss Key 核心程序 |
+| **關閉核心** | `Win + Esc` | 立即結束 ZoneDeck 核心程序 |
 
 此外，全新安裝預設還開啟了**滑鼠中鍵按一下隱藏**，您可以在設定中調整或關閉。
 

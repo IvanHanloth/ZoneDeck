@@ -4,10 +4,10 @@ title: 開發文件導覽
 
 # 開發文件
 
-歡迎參與 Boss Key 的開發！本部分文件面向**開發者與貢獻者**，介紹如何在本機執行專案程式碼、參與貢獻的要求、專案管理策略，以及系統架構。
+歡迎參與 ZoneDeck 的開發！本部分文件面向**開發者與貢獻者**，介紹如何在本機執行專案程式碼、參與貢獻的要求、專案管理策略，以及系統架構。
 
 ::: tip
-如果您只是想使用 Boss Key，請閱讀 [使用說明](/zh-tw/guide/)。
+如果您只是想使用 ZoneDeck，請閱讀 [使用說明](/zh-tw/guide/)。
 :::
 
 ## 技術堆疊概覽
@@ -45,4 +45,4 @@ v3 重寫的核心目標：
 
 ## 儲存庫位址
 
-<https://github.com/IvanHanloth/Boss-Key>
+<https://github.com/IvanHanloth/ZoneDeck>

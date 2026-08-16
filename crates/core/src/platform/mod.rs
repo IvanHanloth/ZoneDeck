@@ -1,6 +1,6 @@
 pub mod win32;
 
-use bosskey_common::WindowInfo;
+use zonedeck_common::WindowInfo;
 
 pub trait WindowManager {
     fn enumerate(&self) -> Vec<WindowInfo>;

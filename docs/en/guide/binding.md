@@ -4,18 +4,18 @@ title: Binding windows & processes
 
 # Binding windows & processes
 
-"Binding" determines **which windows are hidden** when you press the hotkey. By binding several targets you can hide everything that needs hiding in one go.
+"Binding" determines **which windows are hidden** when you press the hotkey. By binding several targets you can hide every private window in one go, leaving nothing behind when you switch context.
 
 Open the settings window and switch to the **Windows** tab. It has two columns:
 
 - **Left (Open windows)**: the windows currently present on the system.
 - **Right (Bound rules)**: the hiding rules you have added, split into "Hidden windows" and "Hidden processes".
 
-![Boss Key window binding page](/static/screenshot-1.png)
+![ZoneDeck window binding page](/static/screenshot-1.png)
 
 ## Hidden windows vs. hidden processes
 
-Boss Key offers two levels of granularity:
+ZoneDeck offers two levels of granularity:
 
 | Type | Granularity | Description |
 | --- | --- | --- |
@@ -51,7 +51,7 @@ Find the rule you no longer need in the right-hand list and click its **remove**
 
 ## Advanced: regular-expression matching
 
-Besides exact targeting, Boss Key can match window titles and process paths in bulk with **regular expressions** — useful when a title changes over time, or when you want to match a whole class of programs.
+Besides exact targeting, ZoneDeck can match window titles and process paths in bulk with **regular expressions** — useful when a title changes over time, or when you want to match a whole class of programs.
 
 Click the **Regex** button above the hidden-windows / hidden-processes list to create a regex rule, seeded from the current selection so it is easy to adapt.
 

@@ -7,10 +7,46 @@
   import MousePicker from "./MousePicker.svelte";
   import SettingRow from "./SettingRow.svelte";
   import Toggle from "./Toggle.svelte";
+  import IconRepeat from "~icons/lucide/repeat";
+  import IconEyeOff from "~icons/lucide/eye-off";
+  import IconEye from "~icons/lucide/eye";
+  import IconAppWindow from "~icons/lucide/app-window";
+  import IconPower from "~icons/lucide/power";
+  import IconUndo from "~icons/lucide/undo-2";
+  import IconTimer from "~icons/lucide/timer";
+  import IconZap from "~icons/lucide/zap";
+  import IconCornerUpLeft from "~icons/lucide/corner-up-left";
+  import IconHourglass from "~icons/lucide/hourglass";
+  import IconClock from "~icons/lucide/clock";
   import { MAX_MULTI_CLICK_MS, MIN_MULTI_CLICK_MS } from "../lib/pointer.js";
+  import {
+    clampInt,
+    DEFAULT_AUTO_HIDE_TIME,
+    DEFAULT_MULTI_CLICK_MS,
+    MAX_AUTO_HIDE_TIME,
+    MIN_AUTO_HIDE_TIME,
+  } from "../lib/sanitize.js";
   import { app, resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
 
   const s = $derived(app.config.setting);
+
+  // 数字输入框清空或越界时失焦归位，避免 null 留在配置里。
+  function fixMultiClickMs() {
+    s.mouse.multi_click_ms = clampInt(
+      s.mouse.multi_click_ms,
+      MIN_MULTI_CLICK_MS,
+      MAX_MULTI_CLICK_MS,
+      DEFAULT_MULTI_CLICK_MS,
+    );
+  }
+  function fixAutoHideTime() {
+    s.auto_hide_time = clampInt(
+      s.auto_hide_time,
+      MIN_AUTO_HIDE_TIME,
+      MAX_AUTO_HIDE_TIME,
+      DEFAULT_AUTO_HIDE_TIME,
+    );
+  }
 
   // 鼠标进入本页设置区时暂停核心监控，离开时恢复。
   const REASON = { area: "hotkeys-panel" };
@@ -32,6 +68,7 @@
 >
   <Card title={t("hotkeys.keyboardCard")}>
     <HotkeyRecorder
+      icon={IconRepeat}
       label={t("hotkeys.hideShow")}
       bind:value={app.config.hotkey.hide_hotkey}
       bind:intercept={app.config.hotkey.hide_intercept}
@@ -39,6 +76,7 @@
       interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
+      icon={IconEyeOff}
       label={t("hotkeys.hideOnly")}
       bind:value={app.config.hotkey.hide_only_hotkey}
       bind:intercept={app.config.hotkey.hide_only_intercept}
@@ -46,6 +84,7 @@
       interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
+      icon={IconEye}
       label={t("hotkeys.showOnly")}
       bind:value={app.config.hotkey.show_only_hotkey}
       bind:intercept={app.config.hotkey.show_only_intercept}
@@ -53,6 +92,7 @@
       interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
+      icon={IconAppWindow}
       label={t("hotkeys.hideForeground")}
       bind:value={app.config.hotkey.hide_foreground_hotkey}
       bind:intercept={app.config.hotkey.hide_foreground_intercept}
@@ -60,6 +100,7 @@
       interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
+      icon={IconPower}
       label={t("hotkeys.closeApp")}
       bind:value={app.config.hotkey.close_hotkey}
       bind:intercept={app.config.hotkey.close_intercept}
@@ -71,10 +112,11 @@
 
   <Card title={t("hotkeys.mouseCard")}>
     <MousePicker mouse={s.mouse} />
-    <SettingRow label={t("hotkeys.clickRestore")} description={t("hotkeys.clickRestoreDesc")}>
+    <SettingRow icon={IconUndo} label={t("hotkeys.clickRestore")} description={t("hotkeys.clickRestoreDesc")}>
       {#snippet control()}<Toggle bind:checked={s.mouse.allow_click_restore} />{/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconTimer}
       label={t("hotkeys.multiClickWindow")}
       description={t("hotkeys.multiClickWindowDesc")}
     >
@@ -87,6 +129,7 @@
             step="50"
             aria-label={t("hotkeys.multiClickWindowAria")}
             bind:value={s.mouse.multi_click_ms}
+            onblur={fixMultiClickMs}
           />
           <span>{t("hotkeys.milliseconds")}</span>
         </div>
@@ -97,22 +140,24 @@
   <Card title={t("hotkeys.cornerCard")}>
     <CornerPicker setting={s} />
     <SettingRow
+      icon={IconZap}
       label={t("hotkeys.fastOnly")}
       description={t("hotkeys.fastOnlyDesc")}
     >
       {#snippet control()}<Toggle bind:checked={s.corner_fast_only} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("hotkeys.cornerRestore")} description={t("hotkeys.cornerRestoreDesc")}>
+    <SettingRow icon={IconCornerUpLeft} label={t("hotkeys.cornerRestore")} description={t("hotkeys.cornerRestoreDesc")}>
       {#snippet control()}<Toggle bind:checked={s.allow_move_restore} />{/snippet}
     </SettingRow>
   </Card>
 
   <section class="fcard">
     <h3>{t("hotkeys.idleCard")}</h3>
-    <SettingRow label={t("hotkeys.autoHide")} description={t("hotkeys.autoHideDesc")}>
+    <SettingRow icon={IconHourglass} label={t("hotkeys.autoHide")} description={t("hotkeys.autoHideDesc")}>
       {#snippet control()}<Toggle bind:checked={s.auto_hide_enabled} />{/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconClock}
       label={t("hotkeys.idleTime")}
       description={t("hotkeys.idleTimeDesc")}
       disabled={!s.auto_hide_enabled}
@@ -121,9 +166,10 @@
         <div class="num-ctl">
           <input
             type="number"
-            min="1"
-            max="120"
+            min={MIN_AUTO_HIDE_TIME}
+            max={MAX_AUTO_HIDE_TIME}
             bind:value={s.auto_hide_time}
+            onblur={fixAutoHideTime}
             disabled={!s.auto_hide_enabled}
           />
           <span>{t("hotkeys.minutes")}</span>

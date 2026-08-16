@@ -28,15 +28,15 @@ Preview releases may contain features that are not fully tested and are less sta
 
 ## Announcements
 
-Boss Key can display **announcements** from the server (important update notices, known issues, and so on). New announcements pop up automatically; ones you have already read are not shown again.
+ZoneDeck can display **announcements** from the server (important update notices, known issues, and so on). New announcements pop up automatically; ones you have already read are not shown again.
 
 ## Feedback and reporting
 
-You can send **feedback or a problem report** directly from the "About & Feedback" tab, or open an [issue](https://github.com/IvanHanloth/Boss-Key/issues) on the **GitHub repository**.
+You can send **feedback or a problem report** directly from the "About & Feedback" tab, or open an [issue](https://github.com/IvanHanloth/ZoneDeck/issues) on the **GitHub repository**.
 
 ::: tip Include details in your report
 To help diagnose the problem, please include:
-- The Boss Key version;
+- The ZoneDeck version;
 - Your operating system version;
 - Steps to reproduce;
 - The relevant [log file](/en/guide/options).
@@ -54,4 +54,4 @@ Below the feedback box there is an **Also convert into a GitHub issue** option (
 - The contact is **required, and should be your GitHub account** (in the form `@IvanHanloth`) — it is how the issue gets followed up with you;
 - If the issue cannot be created, the feedback is not recorded at all; file it manually in that case.
 
-You can also open an [issue](https://github.com/IvanHanloth/Boss-Key/issues) on GitHub directly. The repository provides **bug report** and **feature request** templates; filling one in helps maintainers understand your problem faster.
+You can also open an [issue](https://github.com/IvanHanloth/ZoneDeck/issues) on GitHub directly. The repository provides **bug report** and **feature request** templates; filling one in helps maintainers understand your problem faster.

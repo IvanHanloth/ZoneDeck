@@ -4,7 +4,7 @@ title: 系統架構
 
 # 系統架構
 
-Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透過**具名管道**通訊。本章介紹整體設計與工程結構。
+ZoneDeck v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透過**具名管道**通訊。本章介紹整體設計與工程結構。
 
 ## 雙程序總覽
 
@@ -13,7 +13,7 @@ Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 │ 使用者互動工作階段（Session 1+）                                 │
 │                                                                  │
 │  ┌──────────────────────────┐        ┌────────────────────────┐ │
-│  │ Boss Key.exe（常駐）      │        │ config.exe             │ │
+│  │ ZoneDeck.exe（常駐）      │        │ config.exe             │ │
 │  │ 純 Rust 原生，~350KB      │◀─IPC──▶│ Tauri（Rust + WebView）│ │
 │  │ 隱藏的訊息視窗 + wndproc  │ 具名   │ 依需求開啟，關閉即結束 │ │
 │  │                          │ 管道   │                        │ │
@@ -39,7 +39,7 @@ Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 
 ### 程序間通訊（IPC）
 
-- 使用具名管道 `\\.\pipe\bosskey`，**一行一條 JSON**（`Command`／`Response`）。
+- 使用具名管道 `\\.\pipe\zonedeck`，**一行一條 JSON**（`Command`／`Response`）。
 - 設定儲存後，設定介面傳送 `reload_config`，核心**熱重新載入**並重新註冊快速鍵／掛鉤／計時器，**不需重新啟動核心**。
 - 協定細節見 [IPC 協定](/zh-tw/dev/ipc-protocol)。
 
@@ -64,7 +64,7 @@ Boss Key v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 ## 工程結構（Cargo workspace）
 
 ```
-Boss-Key/
+ZoneDeck/
 ├── Cargo.toml                      workspace（含 release profile 調校）
 ├── crates/
 │   ├── common/                     共用程式庫（無平台相依，可跨平台編譯）
@@ -121,9 +121,9 @@ Boss-Key/
 
 | 情形 | 資料目錄 | `DataDirKind` |
 | --- | --- | --- |
-| 安裝版 | `%APPDATA%\BossKey` | `Installed` |
+| 安裝版 | `%APPDATA%\ZoneDeck` | `Installed` |
 | 可攜版，程式資料夾可寫入 | 程式資料夾 | `Portable` |
-| 可攜版，程式資料夾寫不進去 | `%APPDATA%\BossKey` | `PortableFallback` |
+| 可攜版，程式資料夾寫不進去 | `%APPDATA%\ZoneDeck` | `PortableFallback` |
 
 可攜版把資料留在程式資料夾，複製走整個資料夾就帶走了全部設定；安裝版則不能這麼做——安裝程式可以裝進 `Program Files`，那裡一般權限程序不可寫入，設定程式每次儲存都會得到 `os error 5`。
 
@@ -144,8 +144,10 @@ Boss-Key/
 
 用到使用者資料夾時，程式資料夾裡的 `config.json` 會搬過來：先複製，再盡力刪掉原檔案。目標已有設定就不動它——那是目前在用的一份，舊檔案不得覆蓋，也不去刪。刪不掉（沒有寫入權限、檔案被占用）就留在原處，反正不會再被讀到。
 
+品牌改名（Boss Key → ZoneDeck）留下的舊資料同樣自動遷移：每次定位資料目錄時，`%APPDATA%\BossKey` 若還在而 `%APPDATA%\ZoneDeck` 尚不存在，就整體重新命名過去；舊資料夾被占用、重新命名失敗時退回只複製 `config.json` 與 `recovery.json`，殘餘交給解除安裝程式或 `cleanup.ps1`。舊記錄檔前綴 `BossKey-` 仍被保留天數清理與工作階段回溯識別（同日期時新前綴排前）。舊名稱註冊的開機自啟（`BossKeyAutostart` 排程工作、`Boss Key Application` 登錄值）由核心啟動時遷移：先按原權限偏好在新名稱下註冊成功，再清理舊殘留；安裝版升級時安裝程式須先刪掉舊看門狗工作才能替換檔案，刪除前會寫一個遷移標記（`HKCU\Software\ZoneDeck\MigrateAutostart`）供核心首啟接力。核心啟動前還會探測舊互斥體 `BossKey_SingleInstance_Mutex`：舊版核心仍在執行時彈窗提示並結束，避免雙實例以及從執行中的舊核心腳下搬走資料目錄。
+
 ::: tip 設定介面的瀏覽器資料另有一處
-Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，不在資料目錄裡，也不由 `paths.rs` 管。安裝程式的解除安裝程式與可攜版隨附的 `scripts/cleanup.ps1` 都會清理它。
+Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`，不在資料目錄裡，也不由 `paths.rs` 管。安裝程式的解除安裝程式與可攜版隨附的 `scripts/cleanup.ps1` 都會清理它。
 :::
 
 每次啟動的實際資料目錄與判定結果會寫進記錄檔的 `[START]` 標記，排查讀寫失敗先看它（路徑中的使用者目錄已去識別化為 `%USERPROFILE%`）。
@@ -185,7 +187,7 @@ agent 執行緒本身**不**提優先權：它做的是列舉／凍結／寫入�
 
 ## 穩定性設計（當機自癒三層防線）
 
-1. **當機記錄**：關鍵事件與 panic 寫入[資料目錄](#資料目錄)下的 `logs/BossKey-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；依 `log_level` 過濾，預設只記 WARN 及以上，詳見[記錄分級與去識別化](#記錄分級與去識別化)）。
+1. **當機記錄**：關鍵事件與 panic 寫入[資料目錄](#資料目錄)下的 `logs/ZoneDeck-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；依 `log_level` 過濾，預設只記 WARN 及以上，詳見[記錄分級與去識別化](#記錄分級與去識別化)）。
 2. **當機復原**：隱藏動作執行前先把「將要隱藏／凍結／靜音什麼」寫入 `recovery.json`（tmp + rename 原子替換），異常結束後重新啟動自動找回；快照帶開機時刻與處理程序建立時刻，跨重新開機的過期快照直接丟棄，不會對無關視窗／處理程序做復原動作。
 3. **監控程式**：排程工作 `RestartOnFailure`（當機後 1 分鐘內重新啟動，最多 3 次）。release 建置 `panic = "abort"`，panic 掛鉤寫完記錄後以非零碼結束，正好觸發排程工作重新啟動。
 

@@ -58,7 +58,9 @@ Tauri 配置 `decorations: false`，标题栏由前端自绘：
 
 ## 配置自动保存
 
-`App.svelte` 中用 `$effect` 深度追踪配置对象（含 `window_rules` / `process_rules`）的任何变化，停顿后经 `scheduleSave`（内部 debounce）自动写盘。加载阶段不触发保存，`loadAll` 完成后才"武装"自动保存。
+`App.svelte` 中用 `$effect` 深度追踪配置对象（含 `window_rules` / `process_rules`）的任何变化，停顿后经 `scheduleSave`（内部 debounce）自动写盘。加载阶段不触发保存，`loadAll` 完成后才"武装"自动保存。调度逻辑在 `lib/autosave.js`：连续改动合并为一次写盘，写盘互不并发，写盘途中的新改动在上一笔完成后补写。
+
+关窗请求（标题栏按钮、Alt+F4）会先把未落盘的改动写完再关闭；写盘失败时窗口保持打开并弹出错误框，再次关闭不再阻拦。
 
 保存后前端通过 IPC 通知核心 `reload_config`，核心热重载配置。
 
@@ -80,7 +82,7 @@ t("restore.frozen", { n: 3 });        // → 已冻结 3 个进程
 - `lib/` 里的纯逻辑模块（`pointer.js`、`grouping.js`、`theme.js`）也经由 `t()` 取文案；因默认语言为简体中文，它们的既有单测无需改动。
 
 ::: warning NO_TITLE 不是文案
-`grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）与核心 `bosskey_common::NO_TITLE` 一致，是写进 `config.json` 的跨进程哨兵值，**不可翻译**；仅在展示时用 `t("common.noTitleWindow")` 换成当前语言。
+`grouping.js` 的 `NO_TITLE`（`"无标题窗口"`）与核心 `zonedeck_common::NO_TITLE` 一致，是写进 `config.json` 的跨进程哨兵值，**不可翻译**；仅在展示时用 `t("common.noTitleWindow")` 换成当前语言。
 :::
 
 ## 公告与更新日志的 Markdown 渲染
@@ -106,10 +108,10 @@ Verhub 返回的内容不可信。`renderMarkdown()` 先整体转义 `& < > "` �
 
 ## 前端不依赖 dev server
 
-最终产物中，前端在**编译期被内嵌**进 `bosskey-config.exe`，静态运行，**不需要任何本地服务器**。
+最终产物中，前端在**编译期被内嵌**进 `zonedeck-config.exe`，静态运行，**不需要任何本地服务器**。
 
 - 开发前端 UI：`npm run dev` 在浏览器里预览（mock 数据、热重载）。
-- 验证 Tauri 集成：`npm run build` 后 `cargo run -p bosskey-config`。
+- 验证 Tauri 集成：`npm run build` 后 `cargo run -p zonedeck-config`。
 
 ## 与核心的联动示例
 

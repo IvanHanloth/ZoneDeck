@@ -46,7 +46,7 @@ export function splitByVisibility(windows) {
 }
 
 /**
- * 与核心 `bosskey_common::NO_TITLE` 一致的占位标题。
+ * 与核心 `zonedeck_common::NO_TITLE` 一致的占位标题。
  *
  * 它是跨进程、写进配置文件的哨兵值，不随界面语言变化；展示时用
  * `t("common.noTitleWindow")` 翻译。

@@ -32,13 +32,13 @@ fn main() {
     let mut res = tauri_winres::WindowsResource::new();
     res.set_icon("icon.ico");
     res.set_manifest(&manifest);
-    res.set("ProductName", "Boss Key");
-    res.set("FileDescription", "Boss Key 核心服务");
+    res.set("ProductName", "ZoneDeck");
+    res.set("FileDescription", "ZoneDeck 核心服务");
     res.set("CompanyName", "Ivan Hanloth");
     res.set(
         "LegalCopyright",
         "Copyright © 2022-2026 Ivan Hanloth All Rights Reserved.",
     );
-    res.set("OriginalFilename", "Boss Key.exe");
+    res.set("OriginalFilename", "ZoneDeck.exe");
     res.compile().expect("嵌入 Windows 资源失败");
 }

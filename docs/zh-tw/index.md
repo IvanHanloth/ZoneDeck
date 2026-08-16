@@ -3,19 +3,19 @@
 layout: home
 
 hero:
-  name: "Boss Key"
-  text: "快速隱藏，只需一鍵"
-  tagline: 老闆來了？快用 Boss Key 老闆鍵一鍵隱藏、靜音、凍結視窗，摸魚必備神器
+  name: "ZoneDeck"
+  text: "生活工作，無縫切換"
+  tagline: 專業的桌面工作區管理助手
   image:
-    src: /static/icon.png
-    alt: Boss Key
+    src: /static/logo.svg
+    alt: ZoneDeck
   actions:
     - theme: brand
       text: 快速上手
       link: /zh-tw/guide/getting-started
     - theme: alt
       text: 前往下載
-      link: https://github.com/IvanHanloth/Boss-Key/releases
+      link: https://github.com/IvanHanloth/ZoneDeck/releases
 
 features:
   - title: 極速隱藏
@@ -26,7 +26,7 @@ features:
     details: v3 以 Rust 重寫，核心常駐背景的記憶體佔用僅約 1 MB，原生實作不易被防毒軟體誤判。
   - title: 超多姿勢
     icon: 💅
-    details: 隱藏後靜音、傳送暫停鍵、凍結程序、隱藏自身通知區域圖示、正規表示式比對視窗／程序……高度可自訂，滿足不同摸魚需求。
+    details: 隱藏後靜音、傳送暫停鍵、凍結程序、隱藏自身通知區域圖示、正規表示式比對視窗／程序……高度可自訂，適配不同的專注情境與隱私需求。
   - title: 穩如磐石
     icon: 🛡️
     details: 當機記錄、當機復原、排程工作三層防線，常駐背景穩定執行。

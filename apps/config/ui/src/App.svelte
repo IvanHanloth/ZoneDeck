@@ -18,6 +18,8 @@
   import {
     app,
     checkForUpdate,
+    flushSave,
+    hasUnsavedChanges,
     loadAll,
     loadAnnouncements,
     openAboutTab,
@@ -89,17 +91,27 @@
     });
 
     // 跟踪最大化状态（控制圆角 / 缩放热区 / 还原按钮图标）。
-    let unlisten = () => {};
     win.isMaximized().then((m) => (app.maximized = m));
-    win.onResized(async () => {
+    const resizedReg = win.onResized(async () => {
       app.maximized = await win.isMaximized();
-    }).then((fn) => (unlisten = fn));
+    });
+
+    // 关窗前把未落盘的改动写完，debounce 中的最后一次改动不得静默丢失。
+    // 写盘失败时留在窗口（错误框已弹出）；此时已无待存改动，再次关闭不再阻拦。
+    const closeReg = win.onCloseRequested(async (e) => {
+      if (!hasUnsavedChanges()) return;
+      e.preventDefault();
+      if (await flushSave()) win.close();
+    });
 
     return () => {
       stopPolling();
       stopRestoreEvent();
       stopAboutEvent();
-      unlisten();
+      // 注册是异步完成的：清理挂在注册的 promise 上，卸载先于注册完成时
+      // 监听器也能解除，不会残留旧监听器绕过关窗拦截。
+      resizedReg.then((fn) => fn());
+      closeReg.then((fn) => fn());
       media.removeEventListener("change", onSystemTheme);
     };
   });

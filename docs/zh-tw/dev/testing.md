@@ -4,7 +4,7 @@ title: 測試策略
 
 # 測試策略
 
-Boss Key 涵蓋了從純邏輯單元測試到系統層級整合測試的多層測試。CI 會在每次 PR／推送時執行全部測試。
+ZoneDeck 涵蓋了從純邏輯單元測試到系統層級整合測試的多層測試。CI 會在每次 PR／推送時執行全部測試。
 
 ## 執行測試
 
@@ -17,16 +17,16 @@ npm --prefix apps/config/ui test
 ```
 
 ::: warning 核心並行測試可能因 COM 當機
-`bosskey-core` 的部分測試涉及 COM（如靜音鏈路）初始化，多執行緒並行執行可能當機。遇到此類問題時改用單執行緒：
+`zonedeck-core` 的部分測試涉及 COM（如靜音鏈路）初始化，多執行緒並行執行可能當機。遇到此類問題時改用單執行緒：
 
 ```bash
-cargo test -p bosskey-core -- --test-threads=1
+cargo test -p zonedeck-core -- --test-threads=1
 ```
 :::
 
 ## Rust 測試涵蓋範圍
 
-### `bosskey-common`
+### `zonedeck-common`
 
 模型／設定／比對／協定的**純邏輯單元測試**，以及設定檔讀寫的整合測試。例如：
 
@@ -38,7 +38,7 @@ cargo test -p bosskey-core -- --test-threads=1
 - 資料目錄定位與移轉（可攜版就地／安裝版走使用者資料夾／不可寫入時回退並報明原因／標記檔案與解除安裝程式的辨識／舊設定搬過去、原檔案刪不掉、目標已有設定不覆蓋）；
 - 設定寫入的原子性（寫入失敗不截斷原檔案、不留臨時檔案，錯誤訊息帶路徑）。
 
-### `bosskey-core`
+### `zonedeck-core`
 
 系統行為的整合測試（多為建立真實資源來回驗證）：
 

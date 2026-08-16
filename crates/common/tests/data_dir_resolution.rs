@@ -1,8 +1,8 @@
-//! 数据目录定位：安装版用 `%APPDATA%\BossKey`，便携版用程序目录，写不进去才回退。
+//! 数据目录定位：安装版用 `%APPDATA%\ZoneDeck`，便携版用程序目录，写不进去才回退。
 
 use std::path::Path;
 
-use bosskey_common::paths::{self, CONFIG_FILE_NAME, DataDirKind, INSTALLED_MARKER};
+use zonedeck_common::paths::{self, CONFIG_FILE_NAME, DataDirKind, INSTALLED_MARKER};
 
 fn write(path: &Path, content: &str) {
     if let Some(parent) = path.parent() {
@@ -15,7 +15,7 @@ fn write(path: &Path, content: &str) {
 fn a_portable_copy_keeps_its_data_next_to_the_exe() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
 
     let located = paths::resolve_data_dir(program.path(), &user_dir, false, true);
 
@@ -28,7 +28,7 @@ fn a_portable_copy_keeps_its_data_next_to_the_exe() {
 fn an_installed_copy_uses_the_user_dir() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
 
     // 装在 Program Files 下的核心提权后写得进程序目录，但仍须用用户目录：
     // 普通权限的配置程序写不进去，两边不能各读一份。
@@ -43,7 +43,7 @@ fn an_installed_copy_uses_the_user_dir() {
 fn an_unwritable_portable_copy_falls_back_and_says_so() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
 
     let located = paths::resolve_data_dir(program.path(), &user_dir, false, false);
 
@@ -100,7 +100,7 @@ fn a_lookalike_file_is_not_mistaken_for_an_uninstaller() {
 fn an_installed_copy_takes_over_a_config_left_in_the_program_dir() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
     let old = program.path().join(CONFIG_FILE_NAME);
     write(&old, r#"{"hotkey": {"hide_hotkey": "Ctrl+Shift+B"}}"#);
 
@@ -118,7 +118,7 @@ fn an_installed_copy_takes_over_a_config_left_in_the_program_dir() {
 fn an_undeletable_original_is_left_where_it_is() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
     let old = program.path().join(CONFIG_FILE_NAME);
     write(&old, r#"{"version": "old"}"#);
     // 打开着的文件在 Windows 上删不掉，等价于 Program Files 下没有写权限的情形。
@@ -136,7 +136,7 @@ fn an_undeletable_original_is_left_where_it_is() {
 fn a_config_already_in_the_user_dir_is_not_overwritten() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
     write(&user_dir.join(CONFIG_FILE_NAME), r#"{"version": "user"}"#);
     let old = program.path().join(CONFIG_FILE_NAME);
     write(&old, r#"{"version": "program"}"#);
@@ -155,7 +155,7 @@ fn a_config_already_in_the_user_dir_is_not_overwritten() {
 fn migration_is_idempotent() {
     let program = tempfile::tempdir().unwrap();
     let user = tempfile::tempdir().unwrap();
-    let user_dir = user.path().join("BossKey");
+    let user_dir = user.path().join("ZoneDeck");
     write(
         &program.path().join(CONFIG_FILE_NAME),
         r#"{"version": "old"}"#,

@@ -1,4 +1,4 @@
-use bosskey_common::{Config, ProcessRule, WindowInfo, WindowRule};
+use zonedeck_common::{Config, ProcessRule, WindowInfo, WindowRule};
 
 #[test]
 fn save_then_load_round_trips_through_a_real_file() {
@@ -42,6 +42,13 @@ fn loading_a_corrupt_file_falls_back_to_defaults() {
     std::fs::write(&path, "{ not valid json at all ").unwrap();
     let loaded = Config::load(&path).unwrap();
     assert_eq!(loaded, Config::default());
+    // load 无副作用：启动早期读日志参数等场景不得破坏现场，
+    // 隔离备份只由 load_reporting 执行。
+    assert!(path.exists(), "load 不得移走原文件");
+    assert!(
+        !dir.path().join("corrupt.json.bad").exists(),
+        "load 不得产生备份"
+    );
 }
 
 #[test]
@@ -59,6 +66,108 @@ fn load_reporting_surfaces_the_parse_error_behind_a_corrupt_fallback() {
 }
 
 #[test]
+fn a_corrupt_file_is_backed_up_before_falling_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(&path, "{ not valid json at all ").unwrap();
+
+    let (loaded, parse_error) = Config::load_reporting(&path).unwrap();
+    assert_eq!(loaded, Config::default());
+
+    let backup = dir.path().join("config.json.bad");
+    assert!(
+        backup.exists(),
+        "解析失败的原文件必须先备份，否则随后写入的默认配置会把用户规则永久覆写"
+    );
+    assert_eq!(
+        std::fs::read_to_string(&backup).unwrap(),
+        "{ not valid json at all ",
+        "备份须保留原文件的完整内容"
+    );
+    assert!(!path.exists(), "备份即改名，原路径让位给随后写入的默认配置");
+
+    let msg = parse_error.unwrap();
+    assert!(
+        msg.contains("config.json.bad"),
+        "备份去向必须出现在报告里，日志才能指引用户找回: {msg}"
+    );
+}
+
+#[test]
+fn a_bad_numeric_field_keeps_user_rules_recoverable_from_backup() {
+    // 单个数值字段类型不符（如浮点写进整数字段）会让整份配置解析失败并回退
+    // 默认值；用户规则必须能从备份找回。
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+
+    let mut cfg = Config::default();
+    cfg.window_rules
+        .push(WindowRule::from_window(&WindowInfo::new(
+            "微信",
+            555,
+            "WeChat.exe",
+            2020,
+            "C:\\WeChat.exe",
+        )));
+    cfg.save(&path).unwrap();
+
+    let mut v: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    v["setting"]["auto_hide_time"] = serde_json::json!(5.5);
+    std::fs::write(&path, serde_json::to_string(&v).unwrap()).unwrap();
+
+    let (loaded, parse_error) = Config::load_reporting(&path).unwrap();
+    assert_eq!(loaded, Config::default(), "整份解析失败时回退默认值");
+    assert!(parse_error.is_some());
+
+    let backup = std::fs::read_to_string(dir.path().join("config.json.bad")).unwrap();
+    assert!(
+        backup.contains("微信"),
+        "用户规则必须留在备份里可供找回: {backup}"
+    );
+}
+
+#[test]
+fn a_new_corruption_replaces_the_stale_backup() {
+    // 旧备份对应的配置早已被默认值取代，新损坏文件里才是最新的用户数据，
+    // rename 直接顶替旧备份。
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(dir.path().join("config.json.bad"), "stale backup").unwrap();
+    std::fs::write(&path, "{ fresh corruption ").unwrap();
+
+    Config::load_reporting(&path).unwrap();
+
+    assert_eq!(
+        std::fs::read_to_string(dir.path().join("config.json.bad")).unwrap(),
+        "{ fresh corruption ",
+        "新损坏文件必须顶替旧备份"
+    );
+}
+
+#[test]
+fn a_failed_backup_still_falls_back_and_reports() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(&path, "{ not valid json at all ").unwrap();
+    // 用同名目录占住备份位置：rename 到已存在目录必然失败，稳定触发备份失败分支。
+    std::fs::create_dir(dir.path().join("config.json.bad")).unwrap();
+
+    let (loaded, parse_error) = Config::load_reporting(&path).unwrap();
+    assert_eq!(
+        loaded,
+        Config::default(),
+        "备份失败不得阻断回退，核心必须能启动"
+    );
+    assert!(path.exists(), "备份失败时原文件留在原地");
+    let msg = parse_error.unwrap();
+    assert!(
+        msg.contains("备份原文件失败"),
+        "报告须注明备份未成功、数据仍有被覆盖的风险: {msg}"
+    );
+}
+
+#[test]
 fn load_reporting_is_quiet_for_healthy_and_missing_files() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.json");
@@ -69,6 +178,12 @@ fn load_reporting_is_quiet_for_healthy_and_missing_files() {
     Config::default().save(&path).unwrap();
     let (_, parse_error) = Config::load_reporting(&path).unwrap();
     assert_eq!(parse_error, None, "正常文件不应报告解析失败");
+
+    assert!(
+        !dir.path().join("config.json.bad").exists(),
+        "健康文件不得产生备份"
+    );
+    assert!(path.exists(), "健康文件不得被移走");
 }
 
 #[test]

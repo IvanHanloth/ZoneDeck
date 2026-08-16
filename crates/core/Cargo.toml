@@ -1,5 +1,5 @@
 [package]
-name = "bosskey-core"
+name = "zonedeck-core"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -11,7 +11,7 @@ name = "core"
 path = "src/main.rs"
 
 [dependencies]
-bosskey-common = { path = "../common" }
+zonedeck-common = { path = "../common" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

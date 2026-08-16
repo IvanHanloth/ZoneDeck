@@ -1,5 +1,5 @@
-﻿# Boss Key 一键生产打包脚本
-# 流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace → 组装便携文件夹 dist\Boss-Key
+﻿# ZoneDeck 一键生产打包脚本
+# 流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace → 组装便携文件夹 dist\ZoneDeck
 #      → 可选生成 InnoSetup 安装包 dist\installer（-Installer）
 #
 # 用法：
@@ -44,19 +44,19 @@ if (-not (Test-Path (Join-Path $root "apps\config\dist\index.html"))) {
     throw "缺少前端产物 apps/config/dist（可去掉 -SkipFrontend 重新构建）"
 }
 
-# 2. Rust 生产编译（bosskey-config 的 tauri 构建脚本会内嵌 dist）
+# 2. Rust 生产编译（zonedeck-config 的 tauri 构建脚本会内嵌 dist）
 Write-Host "==> 生产编译（cargo build --release）..." -ForegroundColor Cyan
 cargo build --release
 if ($LASTEXITCODE -ne 0) { throw "cargo 编译失败" }
 
-# 3. 组装便携文件夹（dist\Boss-Key）
-# 发布时整个文件夹直接压成 zip，所以解压后就是一个 Boss-Key 目录，不会散落到当前目录。
-$portableDir = Join-Path $root "dist\Boss-Key"
+# 3. 组装便携文件夹（dist\ZoneDeck）
+# 发布时整个文件夹直接压成 zip，所以解压后就是一个 ZoneDeck 目录，不会散落到当前目录。
+$portableDir = Join-Path $root "dist\ZoneDeck"
 if (Test-Path $portableDir) { Remove-Item $portableDir -Recurse -Force }
 New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
 
-Copy-Item "target\release\core.exe" (Join-Path $portableDir "Boss Key.exe")
-Copy-Item "target\release\bosskey-config.exe" (Join-Path $portableDir "config.exe")
+Copy-Item "target\release\core.exe" (Join-Path $portableDir "ZoneDeck.exe")
+Copy-Item "target\release\zonedeck-config.exe" (Join-Path $portableDir "config.exe")
 # LICENSE 带上 .txt 后缀：Windows 上双击才有默认打开方式；安装包的许可协议页也复用这份
 Copy-Item "LICENSE" (Join-Path $portableDir "LICENSE.txt")
 # 三语 README 全带上：便携版没有安装向导，README 是唯一的随包说明，
@@ -80,7 +80,7 @@ if ($Installer) {
     $installerDir = Join-Path $root "dist\installer"
     if (Test-Path $installerDir) { Remove-Item $installerDir -Recurse -Force }
 
-    & $iscc "/DMyAppVersion=$Version" "/DMyAppVersion4=$Version4" ".github\inno-script\Boss-Key.iss"
+    & $iscc "/DMyAppVersion=$Version" "/DMyAppVersion4=$Version4" ".github\inno-script\ZoneDeck.iss"
     if ($LASTEXITCODE -ne 0) { throw "InnoSetup 编译失败" }
     Write-Host "==> 安装包输出：$installerDir" -ForegroundColor Green
     Get-ChildItem $installerDir

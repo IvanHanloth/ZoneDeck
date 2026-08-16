@@ -4,7 +4,7 @@ title: 安裝與版本選擇
 
 # 安裝與版本選擇
 
-Boss Key 的所有版本均可從 GitHub [Release 頁面](https://github.com/IvanHanloth/Boss-Key/releases) 下載。
+ZoneDeck 的所有版本均可從 GitHub [Release 頁面](https://github.com/IvanHanloth/ZoneDeck/releases) 下載。
 
 ## 選擇合適的軟體包
 
@@ -12,7 +12,7 @@ Boss Key 的所有版本均可從 GitHub [Release 頁面](https://github.com/Iva
 
 | 類型 | 說明 | 適用情境 |
 | --- | --- | --- |
-| **installer（安裝版）** | 完整封裝的安裝程式，提供一鍵安裝、更新、解除安裝 | **建議**。更有效率、安全地管理 Boss Key |
+| **installer（安裝版）** | 完整封裝的安裝程式，提供一鍵安裝、更新、解除安裝 | **建議**。更有效率、安全地管理 ZoneDeck |
 | **portable（可攜版）** | 包含核心程式與設定程式的壓縮檔，解壓縮即可使用 | 可攜、免安裝、放入隨身碟隨身攜帶 |
 
 ::: tip Windows 7 使用者
@@ -23,28 +23,28 @@ Windows 7 系統及部分精簡版系統可能預設不含 WebView2，導致設�
 
 ## 使用安裝版
 
-1. 下載 `Boss-Key-<版本>-Setup.exe`。
+1. 下載 `ZoneDeck-<版本>-Setup.exe`。
 2. 按兩下執行，依照精靈完成安裝。安裝程式在安裝前會**自動結束正在執行的核心程序**，避免檔案被佔用。
 3. 安裝完成後會自動啟動，並開啟設定介面。
 
 安裝程式會先問您裝給誰：
 
-- **僅為我安裝**（預設，不需系統管理員權限）：裝到 `%LocalAppData%\Programs\Boss Key`。
-- **為所有使用者安裝**（需要系統管理員權限）：裝到 `C:\Program Files\Boss Key`。
+- **僅為我安裝**（預設，不需系統管理員權限）：裝到 `%LocalAppData%\Programs\ZoneDeck`。
+- **為所有使用者安裝**（需要系統管理員權限）：裝到 `C:\Program Files\ZoneDeck`。
 
-兩種模式下設定都存在 `%APPDATA%\BossKey`，不在安裝資料夾裡，見下方[資料存放位置](#資料存放位置)。安裝程式會在安裝資料夾裡放一個 `installed.marker` 檔案，程式據它認出自己是安裝版，請勿刪除。
+兩種模式下設定都存在 `%APPDATA%\ZoneDeck`，不在安裝資料夾裡，見下方[資料存放位置](#資料存放位置)。安裝程式會在安裝資料夾裡放一個 `installed.marker` 檔案，程式據它認出自己是安裝版，請勿刪除。
 
 ## 使用可攜版
 
-1. 下載 `Boss-Key-<版本>-portable.zip`。
-2. 解壓縮到任意位置。壓縮檔內已包含一層 `Boss-Key` 資料夾，解壓縮後把它整個搬到您想放的位置即可。
-3. 執行該資料夾中的 **`Boss Key.exe`**。首次執行會自動開啟設定介面。
+1. 下載 `ZoneDeck-<版本>-portable.zip`。
+2. 解壓縮到任意位置。壓縮檔內已包含一層 `ZoneDeck` 資料夾，解壓縮後把它整個搬到您想放的位置即可。
+3. 執行該資料夾中的 **`ZoneDeck.exe`**。首次執行會自動開啟設定介面。
 
 解壓縮後資料夾結構如下：
 
 ```
-Boss-Key/
-├── Boss Key.exe      常駐核心（背景執行，負責隱藏視窗／快速鍵監聽）
+ZoneDeck/
+├── ZoneDeck.exe      常駐核心（背景執行，負責隱藏視窗／快速鍵監聽）
 ├── config.exe        設定介面（依需求開啟，關閉即結束）
 ├── cleanup.ps1       殘留資料清理指令碼（見下方「解除安裝」）
 ├── LICENSE.txt       授權檔案
@@ -54,7 +54,7 @@ Boss-Key/
 ```
 
 ::: warning 兩個程式需放在同一資料夾
-`Boss Key.exe` 與 `config.exe` 透過共用的 `config.json` 與具名管道協作，請勿將它們分開放置。
+`ZoneDeck.exe` 與 `config.exe` 透過共用的 `config.json` 與具名管道協作，請勿將它們分開放置。
 :::
 
 ## 資料存放位置
@@ -62,23 +62,23 @@ Boss-Key/
 設定、記錄檔、復原檔與快取放在同一個資料夾裡，位置取決於您用的是哪個版本：
 
 - **可攜版**：就在**程式資料夾**裡。複製走整個資料夾就帶走了全部設定，這正是可攜版該有的樣子。
-- **安裝版**：在 **`%APPDATA%\BossKey`**。安裝資料夾可能是 `C:\Program Files`，一般權限寫不進去，設定存在那裡每次儲存都會失敗。
+- **安裝版**：在 **`%APPDATA%\ZoneDeck`**。安裝資料夾可能是 `C:\Program Files`，一般權限寫不進去，設定存在那裡每次儲存都會失敗。
 
 程式憑安裝程式放在程式資料夾裡的 `installed.marker` 分辨自己是哪一種，請勿刪除該檔案。
 
 ::: warning 可攜版放在了不可寫入的位置
-若可攜版所在資料夾寫不進去（放在了 `C:\Program Files` 之類的地方，或唯讀媒體上），程式會改用 `%APPDATA%\BossKey` 並在設定介面彈出提示，說明是權限問題以及怎麼處理。功能不受影響，只是設定不再跟著程式資料夾走。
+若可攜版所在資料夾寫不進去（放在了 `C:\Program Files` 之類的地方，或唯讀媒體上），程式會改用 `%APPDATA%\ZoneDeck` 並在設定介面彈出提示，說明是權限問題以及怎麼處理。功能不受影響，只是設定不再跟著程式資料夾走。
 :::
 
-設定介面用到的瀏覽器元件另有一份資料在 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`，兩個版本都一樣。
+設定介面用到的瀏覽器元件另有一份資料在 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`，兩個版本都一樣。
 
 位置發生變化時（例如把可攜版裝成了安裝版），原先的 `config.json` 會在首次啟動時自動搬過去，您的綁定與快速鍵都會保留。設定介面狀態列的**開啟記錄檔資料夾**按鈕總是開啟目前實際使用的那個資料夾。
 
 ## 關於兩個執行檔
 
-Boss Key 採用 **核心＋設定分離** 的雙程序設計：
+ZoneDeck 採用 **核心＋設定分離** 的雙程序設計：
 
-- **`Boss Key.exe`（核心）**：背景常駐，負責監聽快速鍵、隱藏／顯示視窗。
+- **`ZoneDeck.exe`（核心）**：背景常駐，負責監聽快速鍵、隱藏／顯示視窗。
 - **`config.exe`（設定介面）**：僅在您需要修改設定時才開啟，改完關閉即結束，不常駐記憶體。
 
 日常使用中，您通常只會與通知區域圖示和設定介面打交道。核心會在背景默默執行。
@@ -94,7 +94,7 @@ Boss Key 採用 **核心＋設定分離** 的雙程序設計：
 
 ## 解除安裝
 
-- **安裝版**：透過系統「應用程式與功能」或安裝資料夾中的解除安裝程式移除。解除安裝時會一併刪除記錄檔、快取、設定介面的瀏覽器資料等執行階段產生的檔案，並**詢問是否保留設定檔**：選擇保留則留下 `config.json`（重新安裝後可繼續使用），選擇不保留則連同 `%APPDATA%\BossKey` 一起刪除。無訊息解除安裝不會顯示提示，預設保留設定。
+- **安裝版**：透過系統「應用程式與功能」或安裝資料夾中的解除安裝程式移除。解除安裝時會一併刪除記錄檔、快取、設定介面的瀏覽器資料等執行階段產生的檔案，並**詢問是否保留設定檔**：選擇保留則留下 `config.json`（重新安裝後可繼續使用），選擇不保留則連同 `%APPDATA%\ZoneDeck` 一起刪除。無訊息解除安裝不會顯示提示，預設保留設定。
 - **可攜版**：先結束核心程式，再執行資料夾中的 `cleanup.ps1` 清理使用者資料夾下的殘留，最後刪除整個程式資料夾（設定就在裡面，隨資料夾一起刪掉）。
 
 可攜版的清理指令（在程式資料夾中開啟 PowerShell 執行）：
@@ -103,4 +103,4 @@ Boss Key 採用 **核心＋設定分離** 的雙程序設計：
 powershell -ExecutionPolicy Bypass -File cleanup.ps1
 ```
 
-指令碼會先列出將要刪除的內容並等您確認，隨後清理 `%LOCALAPPDATA%\cn.hanloth.bosskey.config`、可能存在的 `%APPDATA%\BossKey`（程式資料夾不可寫入時才有），以及開機自動啟動留下的排程工作 `BossKeyAutostart` 與登錄項目 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\Boss Key Application`。程式資料夾本身不會被刪，跑完後自行刪除即可。
+指令碼會先列出將要刪除的內容並等您確認，隨後清理 `%LOCALAPPDATA%\cn.hanloth.zonedeck.config`、可能存在的 `%APPDATA%\ZoneDeck`（程式資料夾不可寫入時才有），以及開機自動啟動留下的排程工作 `ZoneDeckAutostart` 與登錄項目 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\ZoneDeck Application`。程式資料夾本身不會被刪，跑完後自行刪除即可。

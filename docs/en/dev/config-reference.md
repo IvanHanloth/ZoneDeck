@@ -4,7 +4,7 @@ title: Configuration fields
 
 # Configuration field reference
 
-Boss Key stores its configuration in `config.json` — in the program folder for a portable copy, in `%APPDATA%\BossKey` for an installed one; see [Data folder](/en/dev/architecture#data-folder). When the location changes, the old configuration is migrated across automatically. The structure is **fully compatible with older versions**, so existing configurations carry over. If the file is missing on first run, defaults are used. The field definitions live in `crates/common/src/config.rs`.
+ZoneDeck stores its configuration in `config.json` — in the program folder for a portable copy, in `%APPDATA%\ZoneDeck` for an installed one; see [Data folder](/en/dev/architecture#data-folder). When the location changes, the old configuration is migrated across automatically. The structure is **fully compatible with older versions**, so existing configurations carry over. If the file is missing on first run, defaults are used. The field definitions live in `crates/common/src/config.rs`.
 
 ::: tip You normally do not edit this by hand
 The settings window reads and writes the configuration automatically. This page is for developers who need to understand the fields.
@@ -49,7 +49,7 @@ The settings window reads and writes the configuration automatically. This page 
 | `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/options) |
 | `hide_current` | bool | `true` | [Also hide the active window](/en/guide/options) |
 | `click_to_hide` | bool | `true` | [Toggle hiding by clicking the tray icon](/en/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [Also hide Boss Key's tray icon](/en/guide/options) |
+| `hide_icon_after_hide` | bool | `false` | [Also hide ZoneDeck's tray icon](/en/guide/options) |
 | `tray_badges` | object | See below | [Tray icon status](/en/guide/notifications#tray-icon-status) |
 | `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |
@@ -147,5 +147,6 @@ Coarse-grained rules that hide every window of a program, matched by executable.
 
 - **Unknown fields are ignored**: fields added later do not break parsing in an older core.
 - **Missing fields use defaults**: any missing field falls back to its default.
+- **Corrupt files are backed up first**: if the whole file fails to parse, it is renamed to `config.json.bad` in the same directory before defaults take over, so rules can be recovered manually; the backup location is recorded in the log.
 - **Old bindings migrate automatically**: `hide_binding` → `window_rules`; the old mouse switches → `mouse` click triggers. Migration is **idempotent**.
 - **Uppercase `PID`**: serialisation emits an uppercase `PID`, compatible with the old Python versions.

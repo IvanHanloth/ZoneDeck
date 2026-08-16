@@ -107,7 +107,7 @@ let mockAutostart = false;
 function mockInvoke(cmd, args) {
   switch (cmd) {
     case "load_config":
-      return structuredClone(mockConfig);
+      return { config: structuredClone(mockConfig), fallback: null };
     case "list_windows":
       return structuredClone(mockWindows);
     case "window_icons":
@@ -145,9 +145,9 @@ function mockInvoke(cmd, args) {
       return null;
     case "app_info":
       return {
-        name: "Boss Key",
+        name: "ZoneDeck",
         version: "3.0.0",
-        website: "https://github.com/IvanHanloth/Boss-Key",
+        website: "https://github.com/IvanHanloth/ZoneDeck",
         author: "Ivan Hanloth",
         email: "ivan@hanloth.com",
         blog: "https://blog.ivan-hanloth.cn/",
@@ -155,10 +155,10 @@ function mockInvoke(cmd, args) {
       };
     case "verhub_project_links":
       return {
-        name: "Boss Key",
-        website_url: "https://boss-key.ivan-hanloth.cn/",
-        repo_url: "https://github.com/IvanHanloth/Boss-Key",
-        docs_url: "https://boss-key.ivan-hanloth.cn/guide/",
+        name: "ZoneDeck",
+        website_url: "https://zonedeck.ivan-hanloth.cn/",
+        repo_url: "https://github.com/IvanHanloth/ZoneDeck",
+        docs_url: "https://zonedeck.ivan-hanloth.cn/guide/",
         author: "Ivan Hanloth",
         author_homepage_url: "https://www.ivan-hanloth.cn/",
         fetched_at: Math.floor(Date.now() / 1000),
@@ -176,8 +176,8 @@ function mockInvoke(cmd, args) {
       return [
         {
           id: "mock-1",
-          title: "Boss Key 3.0 发布",
-          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://boss-key.ivan-hanloth.cn/changelog/)。",
+          title: "ZoneDeck 3.0 发布",
+          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://zonedeck.ivan-hanloth.cn/changelog/)。",
           is_pinned: true,
           is_hidden: false,
           author: "Ivan Hanloth",
@@ -226,6 +226,9 @@ export const win = {
   minimize: () => IN_TAURI && getCurrentWindow().minimize(),
   toggleMaximize: () => IN_TAURI && getCurrentWindow().toggleMaximize(),
   close: () => IN_TAURI && getCurrentWindow().close(),
+  /** 拦截关窗请求（含标题栏按钮与 Alt+F4）；浏览器预览时不拦截。 */
+  onCloseRequested: (handler) =>
+    IN_TAURI ? getCurrentWindow().onCloseRequested(handler) : Promise.resolve(() => {}),
   isMaximized: async () => (IN_TAURI ? getCurrentWindow().isMaximized() : false),
   startResize: (direction) =>
     IN_TAURI && getCurrentWindow().startResizeDragging(direction),

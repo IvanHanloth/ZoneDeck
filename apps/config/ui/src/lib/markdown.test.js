@@ -81,8 +81,8 @@ describe("renderMarkdown 行内", () => {
   });
 
   it("链接与裸链接", () => {
-    expect(renderMarkdown("[官网](https://boss-key.ivan-hanloth.cn/)")).toBe(
-      '<p><a href="https://boss-key.ivan-hanloth.cn/">官网</a></p>',
+    expect(renderMarkdown("[官网](https://zonedeck.ivan-hanloth.cn/)")).toBe(
+      '<p><a href="https://zonedeck.ivan-hanloth.cn/">官网</a></p>',
     );
     expect(renderMarkdown("见 https://example.com 。")).toBe(
       '<p>见 <a href="https://example.com">https://example.com</a> 。</p>',

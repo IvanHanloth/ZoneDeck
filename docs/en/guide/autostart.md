@@ -4,7 +4,7 @@ title: Start with Windows
 
 # Start with Windows
 
-With startup enabled, the Boss Key core **starts in the background automatically when you sign in**, so you do not have to run it manually.
+With startup enabled, the ZoneDeck core **starts in the background automatically when you sign in**, so you do not have to run it manually.
 
 ## Turning it on / off
 
@@ -17,7 +17,7 @@ After toggling (unless you disabled the matching notification), a notification r
 
 ## How startup works
 
-Boss Key uses a **two-tier** approach that balances privileges and reliability:
+ZoneDeck uses a **two-tier** approach that balances privileges and reliability:
 
 | Mechanism | Description |
 | --- | --- |

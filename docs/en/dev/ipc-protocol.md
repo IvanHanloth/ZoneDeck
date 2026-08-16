@@ -4,11 +4,11 @@ title: IPC protocol
 
 # IPC protocol
 
-The settings window (`config.exe`) and the resident core (`Boss Key.exe`) communicate over a **named pipe**. The protocol is defined in `crates/common/src/ipc.rs`.
+The settings window (`config.exe`) and the resident core (`ZoneDeck.exe`) communicate over a **named pipe**. The protocol is defined in `crates/common/src/ipc.rs`.
 
 ## Transport
 
-- Pipe name: `\\.\pipe\bosskey`.
+- Pipe name: `\\.\pipe\zonedeck`.
 - Encoding: **one JSON object per line**, separated by `\n`. The client sends one `Command`; the server replies with one `Response`.
 - The client is wrapped as `PipeClient`: it retries by default (25 attempts, 40 ms apart). `.fast()` selects **fail-fast** mode (a single attempt), for cases such as status polling where blocking is undesirable.
 

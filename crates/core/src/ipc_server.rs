@@ -2,7 +2,6 @@ use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::os::windows::io::FromRawHandle;
 
-use bosskey_common::ipc::{Command, Response};
 use windows::Win32::Foundation::{ERROR_PIPE_CONNECTED, HLOCAL, INVALID_HANDLE_VALUE, LocalFree};
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -13,6 +12,7 @@ use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_BYTE, PIPE_TYPE_BYTE, PIPE_WAIT,
 };
 use windows::core::{HRESULT, PCWSTR};
+use zonedeck_common::ipc::{Command, Response};
 
 use crate::log_error;
 use crate::util::to_wide_null;
@@ -91,7 +91,7 @@ where
     F: Fn(Command) -> Response + Send + 'static,
 {
     std::thread::Builder::new()
-        .name("bosskey-ipc".to_string())
+        .name("zonedeck-ipc".to_string())
         .spawn(move || serve_loop(&pipe_name, executor))
         .expect("无法启动 IPC 线程");
 }
@@ -268,7 +268,7 @@ mod tests {
 
     #[test]
     fn back_to_back_reconnects_all_get_served() {
-        let pipe = r"\\.\pipe\bosskey_test_reconnect_race";
+        let pipe = r"\\.\pipe\zonedeck_test_reconnect_race";
         spawn(pipe.to_string(), |_| Response::Ok);
 
         let mut client = connect_with_retry(pipe);
@@ -282,7 +282,7 @@ mod tests {
 
     #[test]
     fn get_state_round_trips_over_a_real_pipe() {
-        let pipe = r"\\.\pipe\bosskey_test_get_state";
+        let pipe = r"\\.\pipe\zonedeck_test_get_state";
         spawn(pipe.to_string(), |cmd| match cmd {
             Command::GetState => Response::State { hidden: true },
             _ => Response::Ok,
@@ -295,7 +295,7 @@ mod tests {
 
     #[test]
     fn invalid_json_gets_error_response_and_connection_survives() {
-        let pipe = r"\\.\pipe\bosskey_test_bad_json";
+        let pipe = r"\\.\pipe\zonedeck_test_bad_json";
         spawn(pipe.to_string(), |_| Response::Ok);
 
         let mut client = connect_with_retry(pipe);
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn sequential_clients_are_served() {
-        let pipe = r"\\.\pipe\bosskey_test_sequential";
+        let pipe = r"\\.\pipe\zonedeck_test_sequential";
         spawn(pipe.to_string(), |_| Response::Ok);
 
         for _ in 0..3 {
@@ -322,7 +322,7 @@ mod tests {
 
     #[test]
     fn multiple_commands_on_one_connection() {
-        let pipe = r"\\.\pipe\bosskey_test_multi_cmd";
+        let pipe = r"\\.\pipe\zonedeck_test_multi_cmd";
         spawn(pipe.to_string(), |cmd| match cmd {
             Command::Hide => Response::Ok,
             Command::GetState => Response::State { hidden: false },

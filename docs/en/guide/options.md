@@ -6,7 +6,7 @@ title: Other options
 
 The **Options** tab of the settings window gathers the enhancement switches for hiding, startup privileges, logs and tools. This page covers the general options, privileges and logs. For process freezing see [Process freezing](/en/guide/freeze); for the window recovery tool see [Window recovery & crash self-healing](/en/guide/recovery).
 
-![Boss Key options page](/static/screenshot-4.png)
+![ZoneDeck options page](/static/screenshot-4.png)
 
 ## General
 
@@ -30,12 +30,12 @@ When on, a **left click on the tray icon** hides / shows the windows.
 
 - **On** by default.
 
-### Also hide Boss Key's tray icon
+### Also hide ZoneDeck's tray icon
 
-When on, hiding the windows **hides Boss Key's own tray icon as well** for extra discretion; triggering restore brings back both the windows and the icon.
+When on, hiding the windows **hides ZoneDeck's own tray icon as well** for extra discretion; triggering restore brings back both the windows and the icon.
 
 - **Off** by default.
-- This option only affects Boss Key's own tray icon — it **does not hide other programs' tray icons** (including the icons of the programs whose windows are hidden).
+- This option only affects ZoneDeck's own tray icon — it **does not hide other programs' tray icons** (including the icons of the programs whose windows are hidden).
 
 ::: warning
 Once the tray icon is hidden you cannot click it to restore or open the settings. Be sure to remember your **hide / show hotkey** or mouse gesture, and use that to restore.
@@ -47,11 +47,11 @@ Windows itself controls which tray icons are visible: you can choose which icons
 
 ### Send the pause key before hiding
 
-When on, Boss Key sends the **media pause key** to the window **before** hiding it, to try to pause any video or music playing inside.
+When on, ZoneDeck sends the **media pause key** to the window **before** hiding it, to try to pause any video or music playing inside.
 
 - **Off** by default.
 - It differs from "mute after hiding": muting only silences the audio, whereas the pause key actually stops playback.
-- Boss Key's **process freezing** has the same pausing effect while also cutting resource usage — see [Process freezing](/en/guide/freeze).
+- ZoneDeck's **process freezing** has the same pausing effect while also cutting resource usage — see [Process freezing](/en/guide/freeze).
 
 ## Startup & permissions
 

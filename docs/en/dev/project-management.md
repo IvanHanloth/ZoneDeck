@@ -4,7 +4,7 @@ title: Project management
 
 # Project management
 
-To move development forward efficiently and safely, Boss Key follows a set of conventions for branching, merging and planning.
+To move development forward efficiently and safely, ZoneDeck follows a set of conventions for branching, merging and planning.
 
 ## Branch model
 

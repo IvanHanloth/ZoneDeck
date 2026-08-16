@@ -4,6 +4,13 @@
   import Toggle from "./Toggle.svelte";
   import IconBell from "~icons/lucide/bell";
   import IconCircleDot from "~icons/lucide/circle-dot";
+  import IconPlay from "~icons/lucide/play";
+  import IconCircleStop from "~icons/lucide/circle-stop";
+  import IconPower from "~icons/lucide/power";
+  import IconEyeOff from "~icons/lucide/eye-off";
+  import IconEye from "~icons/lucide/eye";
+  import IconCircle from "~icons/lucide/circle";
+  import IconTag from "~icons/lucide/tag";
   import { app } from "../lib/state.svelte.js";
 
   const n = $derived(app.config.notifications);
@@ -27,24 +34,31 @@
     { value: "elevated", labelKey: "notify.statusElevated" },
     { value: "monitor_paused", labelKey: "notify.statusMonitorPaused" },
   ];
+
+  // 行首的圆环就是色板：未绑定状态时淡化，一眼看出这一档没启用。
+  function badgeColor(color) {
+    return s.tray_badges[color.key]
+      ? color.css
+      : `color-mix(in srgb, ${color.css} 30%, var(--surface))`;
+  }
 </script>
 
 <div class="panel-stack">
   <section class="fcard">
     <h3><IconBell width="16" height="16" /> {t("notify.card")}</h3>
-    <SettingRow label={t("notify.onStart")} description={t("notify.onStartDesc")}>
+    <SettingRow icon={IconPlay} label={t("notify.onStart")} description={t("notify.onStartDesc")}>
       {#snippet control()}<Toggle bind:checked={n.on_start} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("notify.onQuit")} description={t("notify.onQuitDesc")}>
+    <SettingRow icon={IconCircleStop} label={t("notify.onQuit")} description={t("notify.onQuitDesc")}>
       {#snippet control()}<Toggle bind:checked={n.on_quit} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("notify.onAutostart")} description={t("notify.onAutostartDesc")}>
+    <SettingRow icon={IconPower} label={t("notify.onAutostart")} description={t("notify.onAutostartDesc")}>
       {#snippet control()}<Toggle bind:checked={n.on_autostart} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("notify.onHide")} description={t("notify.onHideDesc")}>
+    <SettingRow icon={IconEyeOff} label={t("notify.onHide")} description={t("notify.onHideDesc")}>
       {#snippet control()}<Toggle bind:checked={n.on_hide} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("notify.onShow")} description={t("notify.onShowDesc")}>
+    <SettingRow icon={IconEye} label={t("notify.onShow")} description={t("notify.onShowDesc")}>
       {#snippet control()}<Toggle bind:checked={n.on_show} />{/snippet}
     </SettingRow>
   </section>
@@ -52,21 +66,18 @@
   <section class="fcard">
     <h3><IconCircleDot width="16" height="16" /> {t("notify.trayCard")}</h3>
     {#each BADGE_COLORS as color (color.key)}
-      <SettingRow label={t(color.labelKey)}>
+      <SettingRow icon={IconCircle} iconColor={badgeColor(color)} label={t(color.labelKey)}>
         {#snippet control()}
-          <div class="badge-ctl">
-            <span class="dot" style:background={color.css} class:off={!s.tray_badges[color.key]}></span>
-            <select class="sel" bind:value={s.tray_badges[color.key]}>
-              {#each BADGE_STATUSES as st (st.value)}
-                <option value={st.value}>{t(st.labelKey)}</option>
-              {/each}
-            </select>
-          </div>
+          <select class="sel" bind:value={s.tray_badges[color.key]}>
+            {#each BADGE_STATUSES as st (st.value)}
+              <option value={st.value}>{t(st.labelKey)}</option>
+            {/each}
+          </select>
         {/snippet}
       </SettingRow>
     {/each}
     <div class="note">{t("notify.trayPriorityNote")}</div>
-    <SettingRow label={t("notify.trayTooltip")} description={t("notify.trayTooltipDesc")}>
+    <SettingRow icon={IconTag} label={t("notify.trayTooltip")} description={t("notify.trayTooltipDesc")}>
       {#snippet control()}<Toggle bind:checked={s.tray_show_tooltip} />{/snippet}
     </SettingRow>
   </section>
@@ -77,22 +88,6 @@
     display: flex;
     align-items: center;
     gap: 6px;
-  }
-  .badge-ctl {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    border: 2px solid var(--surface-2);
-    box-shadow: 0 0 0 1px var(--border);
-    flex-shrink: 0;
-  }
-  .dot.off {
-    opacity: 0.25;
   }
   .sel {
     padding: 5px 10px;

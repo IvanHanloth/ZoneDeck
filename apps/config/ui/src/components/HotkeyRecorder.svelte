@@ -7,6 +7,7 @@
   import Toggle from "./Toggle.svelte";
 
   let {
+    icon: Icon = null,
     label,
     value = $bindable(""),
     intercept = $bindable(false),
@@ -54,7 +55,12 @@
 </script>
 
 <div class="row">
-  <span class="label">{label}</span>
+  <span class="head">
+    {#if Icon}
+      <span class="icon" aria-hidden="true"><Icon width="17" height="17" /></span>
+    {/if}
+    <span class="label">{label}</span>
+  </span>
   <kbd class="combo" class:recording class:off={!recording && !value}>
     {recording ? t("recorder.pressCombo") : value || t("recorder.disabled")}
   </kbd>
@@ -75,9 +81,21 @@
     align-items: center;
     gap: 10px;
   }
-  .label {
-    width: 8.5em;
+  /* 图标 + 名称是固定宽的一列，右边的录制框才好对齐。 */
+  .head {
+    width: 10.5em;
     flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .icon {
+    flex: none;
+    display: inline-flex;
+    color: var(--muted);
+  }
+  .label {
+    min-width: 0;
   }
   .combo {
     flex: 1;
@@ -118,7 +136,7 @@
     .row {
       flex-wrap: wrap;
     }
-    .label {
+    .head {
       width: 100%;
     }
   }

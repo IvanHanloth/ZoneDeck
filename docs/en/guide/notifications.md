@@ -4,7 +4,7 @@ title: Alerts
 
 # Alerts
 
-Boss Key reflects the core's state through two kinds of hints: **tray notifications** and **tray icon badges**. The **Alerts** tab of the settings window lets you control which notifications appear and which states the icon badge shows, so you stay informed without being interrupted.
+ZoneDeck reflects the core's state through two kinds of hints: **tray notifications** and **tray icon badges**. The **Alerts** tab of the settings window lets you control which notifications appear and which states the icon badge shows, so you stay informed without being interrupted.
 
 ## Controllable events
 
@@ -36,15 +36,15 @@ Badges — especially "Windows are hidden" — also reveal the core's state to o
 
 ## Tray icon tooltip
 
-Hovering over the tray icon shows "Boss Key" by default. Turn this option off to show no text at all for extra discretion.
+Hovering over the tray icon shows "ZoneDeck" by default. Turn this option off to show no text at all for extra discretion.
 
 - **On** by default.
 
 ## Recommendations
 
-- **Hide / show notifications are off by default**: a notification on every hide would rather defeat the purpose, so they are not shown. Turn them on if you want explicit feedback.
+- **Hide / show notifications are off by default**: hiding is there to protect your privacy, and a notification on every hide would only draw attention, so they are not shown. Turn them on if you want explicit feedback.
 - **Start / exit / startup notifications are on by default**: these are infrequent events, and keeping them helps you confirm the core's state.
 
-::: info Not the same as "Also hide Boss Key's tray icon"
-[Also hide Boss Key's tray icon](/en/guide/options) controls whether **the icon itself is visible**; this page controls **notifications and icon badges**. They are independent.
+::: info Not the same as "Also hide ZoneDeck's tray icon"
+[Also hide ZoneDeck's tray icon](/en/guide/options) controls whether **the icon itself is visible**; this page controls **notifications and icon badges**. They are independent.
 :::

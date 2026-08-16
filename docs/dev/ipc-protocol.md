@@ -4,11 +4,11 @@ title: IPC 协议
 
 # IPC 协议
 
-配置界面（`config.exe`）与常驻核心（`Boss Key.exe`）通过**命名管道**通信。协议定义在 `crates/common/src/ipc.rs`。
+配置界面（`config.exe`）与常驻核心（`ZoneDeck.exe`）通过**命名管道**通信。协议定义在 `crates/common/src/ipc.rs`。
 
 ## 传输
 
-- 管道名：`\\.\pipe\bosskey`。
+- 管道名：`\\.\pipe\zonedeck`。
 - 编码：**一行一条 JSON**，以 `\n` 分隔。客户端发送一条 `Command`，服务端回一条 `Response`。
 - 客户端封装为 `PipeClient`：默认带重试（25 次、40ms 间隔）；`.fast()` 为**快速失败**模式（只尝试一次），用于状态轮询等不希望阻塞的场景。
 
