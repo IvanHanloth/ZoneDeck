@@ -1,12 +1,12 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use serde::Serialize;
+use tauri::{Emitter, Manager};
 use zonedeck_common::Config;
 use zonedeck_common::ipc::{Command, PipeClient, Response};
 use zonedeck_common::model::WindowInfo;
 use zonedeck_core::i18n::{self, Msg};
-use serde::Serialize;
-use tauri::{Emitter, Manager};
 
 mod verhub;
 
@@ -98,8 +98,7 @@ struct LoadedConfig {
 
 #[tauri::command]
 fn load_config() -> Result<LoadedConfig, String> {
-    let (config, fallback) =
-        Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
+    let (config, fallback) = Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
     i18n::set_from_pref(&config.setting.language);
     Ok(LoadedConfig { config, fallback })
 }
@@ -289,7 +288,8 @@ async fn autostart_status() -> AutostartStatus {
     blocking(|| {
         use zonedeck_core::autostart::Method;
         // 用核心 exe 路径查询，与核心写入的自启项一致。
-        let status = zonedeck_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE)).status();
+        let status =
+            zonedeck_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE)).status();
         let method = match status {
             Some(Method::TaskScheduler) => Some("task"),
             Some(Method::Registry) => Some("registry"),
@@ -370,7 +370,9 @@ async fn restart_core(elevated: bool) -> Result<bool, String> {
         let _ = notify_core(&Command::Quit);
         std::thread::sleep(Duration::from_millis(400));
         if elevated {
-            Ok(zonedeck_core::elevation::relaunch_as_admin(&exe, "elevated"))
+            Ok(zonedeck_core::elevation::relaunch_as_admin(
+                &exe, "elevated",
+            ))
         } else {
             spawn_core_detached(&exe, Some("elevated")).map(|_| true)
         }
