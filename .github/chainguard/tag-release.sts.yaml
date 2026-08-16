@@ -1,8 +1,12 @@
 # octo-sts 信任策略：release.yml 以 OIDC 身份向 https://octo-sts.dev 换取
 # 本仓库 contents:write 的短期 token（见 release.yml 的 Federate token 步骤）。
 # 只放行 main / dev 分支上的工作流运行。
+#
+# subject 中的 @81500828 / @869857916 是 owner ID 与 repo ID。仓库由 Boss-Key 改名为
+# ZoneDeck 后，GitHub 将其切到 immutable subject claims，sub 形如
+# repo:OWNER@OWNER-ID/REPO@REPO-ID:ref:...。ID 不随改名变化，不要退回纯名字写法。
 issuer: https://token.actions.githubusercontent.com
-subject_pattern: repo:IvanHanloth/ZoneDeck:ref:refs/heads/(main|dev)
+subject_pattern: repo:IvanHanloth@81500828/ZoneDeck@869857916:ref:refs/heads/(main|dev)
 
 permissions:
   contents: write
