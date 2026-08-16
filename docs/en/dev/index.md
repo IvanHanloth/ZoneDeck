@@ -4,10 +4,10 @@ title: Development docs
 
 # Development
 
-Welcome to Boss Key development. This section is for **developers and contributors**: how to run the project locally, what is expected of contributions, how the project is managed, and how the system is designed.
+Welcome to ZoneDeck development. This section is for **developers and contributors**: how to run the project locally, what is expected of contributions, how the project is managed, and how the system is designed.
 
 ::: tip
-If you only want to use Boss Key, read the [user guide](/en/guide/) instead.
+If you only want to use ZoneDeck, read the [user guide](/en/guide/) instead.
 :::
 
 ## Technology overview
@@ -45,4 +45,4 @@ Reference material: [Configuration fields](/en/dev/config-reference), [IPC proto
 
 ## Repository
 
-<https://github.com/IvanHanloth/Boss-Key>
+<https://github.com/IvanHanloth/ZoneDeck>

@@ -287,45 +287,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bosskey-common"
-version = "3.1.0-rc.2"
-dependencies = [
- "regex",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "bosskey-config"
-version = "3.1.0-rc.2"
-dependencies = [
- "bosskey-common",
- "bosskey-core",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-single-instance",
- "tempfile",
- "verhub-sdk",
-]
-
-[[package]]
-name = "bosskey-core"
-version = "3.1.0-rc.2"
-dependencies = [
- "bosskey-common",
- "serde",
- "serde_json",
- "tauri-winres",
- "tempfile",
- "thiserror 2.0.18",
- "windows 0.62.2",
-]
-
-[[package]]
 name = "brotli"
 version = "8.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5205,6 +5166,45 @@ name = "zmij"
 version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
+
+[[package]]
+name = "zonedeck-common"
+version = "3.1.0-rc.2"
+dependencies = [
+ "regex",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+]
+
+[[package]]
+name = "zonedeck-config"
+version = "3.1.0-rc.2"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-single-instance",
+ "tempfile",
+ "verhub-sdk",
+ "zonedeck-common",
+ "zonedeck-core",
+]
+
+[[package]]
+name = "zonedeck-core"
+version = "3.1.0-rc.2"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri-winres",
+ "tempfile",
+ "thiserror 2.0.18",
+ "windows 0.62.2",
+ "zonedeck-common",
+]
 
 [[package]]
 name = "zvariant"

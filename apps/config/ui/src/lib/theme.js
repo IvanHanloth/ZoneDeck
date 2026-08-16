@@ -3,7 +3,7 @@
 import { t } from "./i18n.svelte.js";
 
 export const THEMES = ["auto", "light", "dark"];
-const STORAGE_KEY = "bosskey-theme";
+const STORAGE_KEY = "zonedeck-theme";
 
 /** 循环切换主题偏好。未知值回到 auto。 */
 export function nextTheme(current) {

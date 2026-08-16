@@ -76,7 +76,7 @@ pnpm docs:preview
 ## 图片与截图
 
 - 将图片放入 `docs/public/`，在 Markdown 中以**根路径**引用，例如 `![说明](/screenshot-1.png)`。
-- 站点部署在自定义域名下，`base` 为 `/`。若改为 GitHub Pages 项目站点（`/Boss-Key/`），VitePress 会自动为 `public` 资源补上前缀，Markdown 里始终无需手写 `base`。
+- 站点部署在自定义域名下，`base` 为 `/`。若改为 GitHub Pages 项目站点（`/ZoneDeck/`），VitePress 会自动为 `public` 资源补上前缀，Markdown 里始终无需手写 `base`。
 
 ## VitePress 特性
 
@@ -116,6 +116,6 @@ pnpm docs:preview
 ## 写作约定
 
 - 使用**专业、客观**的描述。
-- 面向用户处统一称 **Boss Key**（不使用小写 `bosskey`）。
+- 面向用户处统一称 **ZoneDeck**（不使用小写 `zonedeck`）。
 - 每新增一个功能，请同时在 [使用文档](/guide/) 补充对应说明，并在需要时更新 [配置文件字段](/dev/config-reference)。
 - 改动文档时**三种语言一并更新**；繁体中文使用台湾用语（如「视窗」「程式」「档案」「滑鼠」「快速键」），不要只做简繁字形转换。

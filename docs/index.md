@@ -3,19 +3,19 @@
 layout: home
 
 hero:
-  name: "Boss Key"
-  text: "快速隐藏，只需一键"
-  tagline: 老板来了？快用 Boss Key 老板键一键隐藏、静音、冻结窗口，摸鱼必备神器
+  name: "ZoneDeck"
+  text: "生活工作，无缝切换"
+  tagline: 专业的桌面工作区管理助手
   image:
-    src: /static/icon.png
-    alt: Boss Key
+    src: /static/logo.svg
+    alt: ZoneDeck
   actions:
     - theme: brand
       text: 快速上手
       link: /guide/getting-started
     - theme: alt
       text: 前往下载
-      link: https://github.com/IvanHanloth/Boss-Key/releases
+      link: https://github.com/IvanHanloth/ZoneDeck/releases
 
 features:
   - title: 极速隐藏
@@ -26,7 +26,7 @@ features:
     details: v3 使用 Rust 重写，核心常驻后台内存占用仅约 1 MB，原生实现不易被杀软误报。
   - title: 超多姿势
     icon: 💅
-    details: 隐藏后静音、发送暂停键、冻结进程、隐藏自身托盘图标、正则匹配窗口/进程……高度可定制，满足不同摸鱼需求。
+    details: 隐藏后静音、发送暂停键、冻结进程、隐藏自身托盘图标、正则匹配窗口/进程……高度可定制，适配不同的专注场景与隐私需求。
   - title: 稳如磐石
     icon: 🛡️
     details: 崩溃日志、崩溃恢复、计划任务三层防线，常驻后台稳定运行。

@@ -9,8 +9,11 @@ use windows::core::PCWSTR;
 use crate::util::to_wide_null;
 
 const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
-pub const REG_VALUE_NAME: &str = "Boss Key Application";
-pub const TASK_NAME: &str = "BossKeyAutostart";
+pub const REG_VALUE_NAME: &str = "ZoneDeck Application";
+pub const TASK_NAME: &str = "ZoneDeckAutostart";
+/// 改名（Boss Key → ZoneDeck）前注册的自启名称，仅用于清理旧残留。
+pub const LEGACY_REG_VALUE_NAME: &str = "Boss Key Application";
+pub const LEGACY_TASK_NAME: &str = "BossKeyAutostart";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Method {
@@ -97,6 +100,77 @@ impl Autostart {
             task_delete(&self.task_name);
         }
         registry_delete(&self.run_subkey, &self.reg_value_name);
+    }
+}
+
+/// 安装器在清理旧自启前写下的迁移标记（见 ZoneDeck.iss）：安装器必须先删掉旧
+/// 看门狗任务才能安全替换文件，核心首启时旧残留已不在，只能凭此标记得知用户
+/// 此前开着自启。
+pub const MIGRATION_MARKER_SUBKEY: &str = r"Software\ZoneDeck";
+pub const MIGRATION_MARKER_VALUE: &str = "MigrateAutostart";
+
+/// [`migrate_legacy`] 的结果。
+pub enum LegacyMigration {
+    /// 未发现旧残留或迁移标记。
+    NotNeeded,
+    /// 新名称已注册（本次注册或此前已注册），旧残留与标记已清理。
+    Done,
+    /// 新名称注册失败；保留旧残留与标记，下次启动重试。
+    Failed(AutostartError),
+}
+
+/// 自启的品牌迁移：发现旧名称残留（[`LEGACY_TASK_NAME`]、[`LEGACY_REG_VALUE_NAME`]）
+/// 或安装器迁移标记时，先确保自启已在新名称下注册，成功后再清理旧残留与标记。
+/// 注册失败时保留信号下次启动重试——"先删后建"会在注册失败时把用户的自启弄丢。
+pub fn migrate_legacy(admin: bool) -> LegacyMigration {
+    let legacy = LegacySignals {
+        run_subkey: RUN_SUBKEY,
+        run_value_name: LEGACY_REG_VALUE_NAME,
+        task_name: LEGACY_TASK_NAME,
+        marker_subkey: MIGRATION_MARKER_SUBKEY,
+    };
+    if !legacy.present() {
+        return LegacyMigration::NotNeeded;
+    }
+    let auto = match Autostart::standard() {
+        Ok(auto) => auto,
+        Err(e) => return LegacyMigration::Failed(e),
+    };
+    if auto.status().is_none()
+        && let Err(e) = auto.enable(admin)
+    {
+        return LegacyMigration::Failed(e);
+    }
+    legacy.clear();
+    LegacyMigration::Done
+}
+
+/// 旧名称自启残留与安装器标记的位置，供测试注入。
+struct LegacySignals {
+    run_subkey: &'static str,
+    run_value_name: &'static str,
+    task_name: &'static str,
+    marker_subkey: &'static str,
+}
+
+impl LegacySignals {
+    fn present(&self) -> bool {
+        registry_read(self.run_subkey, self.run_value_name).is_some()
+            || registry_read(self.marker_subkey, MIGRATION_MARKER_VALUE).is_some()
+            || task_exists(self.task_name)
+    }
+
+    /// 清除残留与标记。旧任务可能是管理员级而当前进程无权删除：记 warn 保留，
+    /// 待下次以管理员身份运行时再清；期间新名称已注册，不会重复注册。
+    fn clear(&self) {
+        registry_delete(self.run_subkey, self.run_value_name);
+        registry_delete(self.marker_subkey, MIGRATION_MARKER_VALUE);
+        if task_exists(self.task_name) && !task_delete(self.task_name) {
+            crate::log_warn!(
+                "旧计划任务 {} 删除失败（可能需要管理员权限），暂予保留",
+                self.task_name
+            );
+        }
     }
 }
 
@@ -207,7 +281,7 @@ fn task_xml(exe: &str, user_id: &str, run_level: RunLevel) -> String {
         r#"<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
-    <Description>Boss Key 开机自启（崩溃后自动重启）</Description>
+    <Description>ZoneDeck 开机自启（崩溃后自动重启）</Description>
   </RegistrationInfo>
   <Triggers>
     <LogonTrigger>
@@ -306,7 +380,37 @@ fn task_delete(task_name: &str) -> bool {
 mod tests {
     use super::*;
 
-    const TEST_SUBKEY: &str = r"Software\BossKeyTest\Autostart";
+    const TEST_SUBKEY: &str = r"Software\ZoneDeckTest\Autostart";
+
+    #[test]
+    fn legacy_signals_detect_and_clear_registry_and_marker() {
+        let signals = LegacySignals {
+            run_subkey: TEST_SUBKEY,
+            run_value_name: "ZoneDeckTest_LegacyRunValue",
+            task_name: "ZoneDeckTest_NoSuchLegacyTask_77",
+            marker_subkey: r"Software\ZoneDeckTest\Marker",
+        };
+        assert!(!signals.present(), "初始不应报告残留");
+
+        registry_write(
+            TEST_SUBKEY,
+            signals.run_value_name,
+            "\"C:\\test\\legacy.exe\"",
+        );
+        assert!(signals.present(), "存在旧 Run 值即视为有残留");
+        signals.clear();
+        assert!(!signals.present(), "清理后不再报告残留");
+        assert_eq!(registry_read(TEST_SUBKEY, signals.run_value_name), None);
+
+        registry_write(signals.marker_subkey, MIGRATION_MARKER_VALUE, "1");
+        assert!(signals.present(), "安装器迁移标记同样视为有残留");
+        signals.clear();
+        assert_eq!(
+            registry_read(signals.marker_subkey, MIGRATION_MARKER_VALUE),
+            None,
+            "标记应被清除"
+        );
+    }
 
     struct RegCleanup(&'static str);
     impl Drop for RegCleanup {
@@ -329,12 +433,12 @@ mod tests {
 
         assert!(registry_read(TEST_SUBKEY, name).is_none());
         assert!(
-            registry_write(TEST_SUBKEY, name, "\"C:\\test\\bosskey.exe\""),
+            registry_write(TEST_SUBKEY, name, "\"C:\\test\\zonedeck.exe\""),
             "写普通键应成功（不受启动项防护影响）"
         );
         assert_eq!(
             registry_read(TEST_SUBKEY, name).as_deref(),
-            Some("\"C:\\test\\bosskey.exe\"")
+            Some("\"C:\\test\\zonedeck.exe\"")
         );
         assert!(registry_delete(TEST_SUBKEY, name));
         assert!(registry_read(TEST_SUBKEY, name).is_none());
@@ -346,18 +450,18 @@ mod tests {
         let _guard = RegCleanup(name);
 
         let auto = Autostart {
-            task_name: "BossKeyTest_NoSuchTask".to_string(),
+            task_name: "ZoneDeckTest_NoSuchTask".to_string(),
             run_subkey: TEST_SUBKEY.to_string(),
             reg_value_name: name.to_string(),
-            exe_path: PathBuf::from("C:\\test\\bosskey.exe"),
+            exe_path: PathBuf::from("C:\\test\\zonedeck.exe"),
         };
 
         assert_eq!(auto.status(), None);
 
-        registry_write(TEST_SUBKEY, name, "\"C:\\test\\bosskey.exe\"");
+        registry_write(TEST_SUBKEY, name, "\"C:\\test\\zonedeck.exe\"");
         assert_eq!(auto.status(), Some(Method::Registry), "带引号路径应识别");
 
-        registry_write(TEST_SUBKEY, name, "C:\\test\\bosskey.exe");
+        registry_write(TEST_SUBKEY, name, "C:\\test\\zonedeck.exe");
         assert_eq!(
             auto.status(),
             Some(Method::Registry),
@@ -368,7 +472,7 @@ mod tests {
     #[test]
     fn enable_then_disable_round_trip() {
         let reg_name = "EnableDisable";
-        let task_name = "BossKeyTest_EnableDisableTask";
+        let task_name = "ZoneDeckTest_EnableDisableTask";
         let _guard1 = RegCleanup(reg_name);
         let _guard2 = TaskCleanup(task_name);
 
@@ -394,7 +498,7 @@ mod tests {
 
     #[test]
     fn nonexistent_task_is_not_reported() {
-        assert!(!task_exists("BossKeyTest_DefinitelyNotExists_42"));
+        assert!(!task_exists("ZoneDeckTest_DefinitelyNotExists_42"));
     }
 
     #[test]
@@ -409,7 +513,7 @@ mod tests {
     #[test]
     fn task_xml_contains_watchdog_and_run_level_settings() {
         let xml = task_xml(
-            "C:\\Tools & Games\\bosskey-core.exe",
+            "C:\\Tools & Games\\zonedeck-core.exe",
             "DESKTOP\\ivan",
             RunLevel::Highest,
         );
@@ -422,7 +526,7 @@ mod tests {
         );
         assert!(xml.contains("<RunLevel>HighestAvailable</RunLevel>"));
         assert!(
-            xml.contains("<Command>C:\\Tools &amp; Games\\bosskey-core.exe</Command>"),
+            xml.contains("<Command>C:\\Tools &amp; Games\\zonedeck-core.exe</Command>"),
             "路径中的特殊字符应被转义"
         );
         assert!(xml.contains("<UserId>DESKTOP\\ivan</UserId>"));
@@ -468,7 +572,7 @@ mod tests {
     fn xml_task_registers_and_deletes_via_schtasks() {
         // 用 LeastPrivilege 验证 XML 能被 schtasks 接受（HighestAvailable 需要管理员，
         // 在非提权测试环境会失败，那是权限问题而非 XML 问题）。
-        let task_name = "BossKeyTest_XmlRegistration";
+        let task_name = "ZoneDeckTest_XmlRegistration";
         let _guard = TaskCleanup(task_name);
 
         let exe = std::env::current_exe().unwrap();

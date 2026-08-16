@@ -2,9 +2,6 @@
 
 use std::time::{Duration, Instant};
 
-use bosskey_common::ipc::{Command, PipeClient, Response};
-use bosskey_core::agent::{self, AgentOptions};
-use bosskey_core::recovery;
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -13,6 +10,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WS_OVERLAPPEDWINDOW,
 };
 use windows::core::w;
+use zonedeck_common::ipc::{Command, PipeClient, Response};
+use zonedeck_core::agent::{self, AgentOptions};
+use zonedeck_core::recovery;
 
 /// 在带消息循环的独立线程上创建一个可见窗口。
 fn spawn_visible_window() -> (i64, u32, std::thread::JoinHandle<()>) {
@@ -21,7 +21,7 @@ fn spawn_visible_window() -> (i64, u32, std::thread::JoinHandle<()>) {
         let hwnd = CreateWindowExW(
             WINDOW_EX_STYLE(0),
             w!("Static"),
-            w!("BossKeyToolAlignmentTestWindow"),
+            w!("ZoneDeckToolAlignmentTestWindow"),
             WS_OVERLAPPEDWINDOW,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -59,12 +59,12 @@ fn adopt_and_release_keep_core_records_and_recovery_file_in_sync() {
 
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
-    bosskey_common::Config::default()
+    zonedeck_common::Config::default()
         .save(&config_path)
         .unwrap();
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
 
-    let pipe = r"\\.\pipe\bosskey_test_tool_alignment";
+    let pipe = r"\\.\pipe\zonedeck_test_tool_alignment";
     let options = AgentOptions {
         pipe_name: pipe.to_string(),
         enable_tray: false,

@@ -89,7 +89,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
 fn create_hook_window() -> windows::core::Result<HWND> {
     unsafe {
         let hinstance = GetModuleHandleW(PCWSTR::null())?;
-        let class_name = w!("BossKeyInputHookWindow");
+        let class_name = w!("ZoneDeckInputHookWindow");
         let wc = WNDCLASSW {
             lpfnWndProc: Some(wndproc),
             hInstance: hinstance.into(),
@@ -101,7 +101,7 @@ fn create_hook_window() -> windows::core::Result<HWND> {
         CreateWindowExW(
             WINDOW_EX_STYLE(0),
             class_name,
-            w!("Boss Key Input Hooks"),
+            w!("ZoneDeck Input Hooks"),
             WS_OVERLAPPED,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -127,7 +127,7 @@ impl InputHooks {
         AGENT_HWND.store(agent_hwnd.0 as isize, Relaxed);
         let (tx, rx) = channel::<isize>();
         let thread = std::thread::Builder::new()
-            .name("bosskey-input-hooks".into())
+            .name("zonedeck-input-hooks".into())
             .spawn(move || {
                 unsafe {
                     // 不上 TIME_CRITICAL，避免把调度权从前台程序手里整体抢走。

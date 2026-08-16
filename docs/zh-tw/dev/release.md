@@ -19,7 +19,7 @@ powershell -File scripts/package.ps1 -Installer
 powershell -File scripts/package.ps1 -SkipFrontend
 ```
 
-`package.ps1` 的流程：編譯前端（Vite + Svelte）→ 生產編譯 Rust workspace（Tauri 建置指令碼會把前端 `dist` 內嵌進 `bosskey-config.exe`）→ 組裝可攜資料夾 → 選擇性產生安裝包。
+`package.ps1` 的流程：編譯前端（Vite + Svelte）→ 生產編譯 Rust workspace（Tauri 建置指令碼會把前端 `dist` 內嵌進 `zonedeck-config.exe`）→ 組裝可攜資料夾 → 選擇性產生安裝包。
 
 ### 產物結構
 
@@ -27,8 +27,8 @@ powershell -File scripts/package.ps1 -SkipFrontend
 
 ```
 dist/
-├── Boss-Key/                    可攜版（複製走即可用，發布時整個資料夾壓成 zip）
-│   ├── Boss Key.exe               常駐核心（內嵌 DPI／長路徑 manifest + 版本資訊 + 圖示）
+├── ZoneDeck/                    可攜版（複製走即可用，發布時整個資料夾壓成 zip）
+│   ├── ZoneDeck.exe               常駐核心（內嵌 DPI／長路徑 manifest + 版本資訊 + 圖示）
 │   ├── config.exe                 設定介面（前端已內嵌，自包含）
 │   ├── cleanup.ps1                殘留資料清理指令碼（可攜版沒有解除安裝程式）
 │   ├── LICENSE.txt
@@ -36,7 +36,7 @@ dist/
 │   ├── README.en.md               English
 │   └── README.zh-TW.md            繁體中文
 └── installer/                   安裝包（-Installer 時產生）
-    └── Boss-Key-<版本>-Setup.exe  InnoSetup（安裝前自動結束執行中的核心）
+    └── ZoneDeck-<版本>-Setup.exe  InnoSetup（安裝前自動結束執行中的核心）
 ```
 
 可攜版**不需安裝、無外部相依**（除系統內建的 WebView2）。兩個程式透過[資料目錄](/zh-tw/dev/architecture#資料目錄)下的 `config.json` 與具名管道協作。
@@ -44,10 +44,10 @@ dist/
 三語 README 都要帶上：可攜版沒有安裝精靈，README 是唯一的隨附說明，其中「資料存放位置與清理」一節交代了程式在使用者資料夾下留了什麼、怎麼用 `cleanup.ps1` 清掉。
 
 ::: danger 可攜資料夾裡不能出現 installed.marker
-程式憑它認出自己是安裝版並改用 `%APPDATA%\BossKey`（見[資料目錄](/zh-tw/dev/architecture#資料目錄)）。該檔案由 `.iss` 從指令碼資料夾直取，不經過 `dist\Boss-Key`——若混進可攜包，可攜版就不可攜了。
+程式憑它認出自己是安裝版並改用 `%APPDATA%\ZoneDeck`（見[資料目錄](/zh-tw/dev/architecture#資料目錄)）。該檔案由 `.iss` 從指令碼資料夾直取，不經過 `dist\ZoneDeck`——若混進可攜包，可攜版就不可攜了。
 :::
 
-安裝包預設走**一般權限**安裝（`%LocalAppData%\Programs\Boss Key`），使用者可在精靈首頁改選「為所有使用者安裝」裝進 `Program Files`。兩種模式下資料都在 `%APPDATA%\BossKey`，不在安裝資料夾裡。
+安裝包預設走**一般權限**安裝（`%LocalAppData%\Programs\ZoneDeck`），使用者可在精靈首頁改選「為所有使用者安裝」裝進 `Program Files`。兩種模式下資料都在 `%APPDATA%\ZoneDeck`，不在安裝資料夾裡。
 
 ## 版本號管理
 
@@ -60,7 +60,7 @@ dist/
 | 核心資訊清單的 `assemblyIdentity` | `crates/core/build.rs` 按 `CARGO_PKG_VERSION` 填入（換算成純數字四段號） |
 | 安裝包的 `MyAppVersion` | `scripts/package.ps1` 從 `Cargo.toml` 讀出後傳給 Inno；未傳則編譯報錯，不留過期的預設值 |
 | 程式內與回報給 Verhub 的版本 | `env!("CARGO_PKG_VERSION")` |
-| 設定檔的 `app_version` | 核心啟動時寫入 `bosskey_common::APP_VERSION` |
+| 設定檔的 `app_version` | 核心啟動時寫入 `zonedeck_common::APP_VERSION` |
 :::
 
 `scripts/version.ps1` 負責寫入與驗證：
@@ -102,7 +102,7 @@ powershell -File scripts/version.ps1 show
 2. 以 OIDC 身分向 [octo-sts](https://octo-sts.dev) 換取本儲存庫 `contents:write` 的短期 token；
 3. 經 GraphQL `createCommitOnBranch` 把版本號變更提交到觸發分支，並打上 `v<版本>` 附註 tag——API 建立的提交由 GitHub 伺服器端簽章，帶 **Verified** 徽章；
 4. 檢出該 tag → 驗證 tag 與程式碼版本一致 → 前端／Rust 測試；
-5. `package.ps1 -Installer` 組裝 `dist/Boss-Key` 與 `dist/installer` → 把 `dist/Boss-Key` 壓成可攜 zip；
+5. `package.ps1 -Installer` 組裝 `dist/ZoneDeck` 與 `dist/installer` → 把 `dist/ZoneDeck` 壓成可攜 zip；
 6. 產生**建置來源證明**（Sigstore attestation）→ 產生發布說明（自動產生的更新日誌，結尾附安全提示）→ 建立**草稿** Release 並上傳 zip 與安裝包。
 
 tag 已存在時跳過第 2、3 步，直接檢出該 tag 重新建置——重跑／補發就是再次執行並填入同一版本號。

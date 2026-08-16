@@ -17,28 +17,28 @@ This chapter covers setting up a development environment, running the core and t
 | **pssuspend64.exe** | *Optional*, needed to test enhanced freezing | [Microsoft PSTools](https://download.sysinternals.com/files/PSTools.zip) |
 
 ::: tip The settings window does not need a dev server
-The frontend is **embedded** into `bosskey-config.exe` at build time, so the final artefact runs statically. While working on the frontend, preview it in a browser with `npm run dev` (mock data, hot reload); after `npm run build`, verify the Tauri integration with `cargo run -p bosskey-config`.
+The frontend is **embedded** into `zonedeck-config.exe` at build time, so the final artefact runs statically. While working on the frontend, preview it in a browser with `npm run dev` (mock data, hot reload); after `npm run build`, verify the Tauri integration with `cargo run -p zonedeck-config`.
 :::
 
 ## Cloning the project
 
 ```bash
-git clone https://github.com/IvanHanloth/Boss-Key.git
-cd Boss-Key
+git clone https://github.com/IvanHanloth/ZoneDeck.git
+cd ZoneDeck
 ```
 
 ## Common commands
 
 Run these from the **repository root**:
 
-### Core (bosskey-core)
+### Core (zonedeck-core)
 
 ```bash
 # Run the core (development)
-cargo run -p bosskey-core
+cargo run -p zonedeck-core
 
 # Core smoke test: exits automatically after N milliseconds
-cargo run -p bosskey-core -- smoke 3000
+cargo run -p zonedeck-core -- smoke 3000
 ```
 
 ### Frontend (apps/config/ui)
@@ -57,11 +57,11 @@ npm --prefix apps/config/ui test
 npm --prefix apps/config/ui run dev
 ```
 
-### Settings window (bosskey-config, Tauri)
+### Settings window (zonedeck-config, Tauri)
 
 ```bash
 # Run the settings window (build the frontend first)
-npm --prefix apps/config/ui run build && cargo run -p bosskey-config
+npm --prefix apps/config/ui run build && cargo run -p zonedeck-config
 ```
 
 ### Checks and tests
@@ -84,7 +84,7 @@ cargo fmt --all -- --check
 # Release build (minimised size)
 cargo build --release
 
-# One-shot packaging (frontend + Rust + the portable folder dist/Boss-Key)
+# One-shot packaging (frontend + Rust + the portable folder dist/ZoneDeck)
 powershell -File scripts/package.ps1
 
 # Packaging plus installer (dist/installer; installs Inno Setup automatically on first run)
@@ -97,13 +97,13 @@ For packaging details see [Packaging & releasing](/en/dev/release).
 
 | Purpose | Command |
 | --- | --- |
-| Run the core | `cargo run -p bosskey-core` |
-| Core smoke test | `cargo run -p bosskey-core -- smoke 3000` |
+| Run the core | `cargo run -p zonedeck-core` |
+| Core smoke test | `cargo run -p zonedeck-core -- smoke 3000` |
 | Install frontend deps | `npm --prefix apps/config/ui install` |
 | Build the frontend | `npm --prefix apps/config/ui run build` |
 | Frontend tests | `npm --prefix apps/config/ui test` |
 | Frontend browser preview | `npm --prefix apps/config/ui run dev` |
-| Run the settings window | `npm --prefix apps/config/ui run build && cargo run -p bosskey-config` |
+| Run the settings window | `npm --prefix apps/config/ui run build && cargo run -p zonedeck-config` |
 | Release build | `cargo build --release` |
 | All Rust tests | `cargo test --workspace` |
 | Clippy | `cargo clippy --workspace --all-targets -- -D warnings` |
@@ -118,5 +118,5 @@ If you see `os error 5 access denied`, antivirus software has usually locked the
 :::
 
 ::: tip Core tests must run single-threaded
-Some core tests initialise COM, and running them in parallel can crash. If you hit this, run them single-threaded with `cargo test -p bosskey-core -- --test-threads=1`. See [Testing strategy](/en/dev/testing).
+Some core tests initialise COM, and running them in parallel can crash. If you hit this, run them single-threaded with `cargo test -p zonedeck-core -- --test-threads=1`. See [Testing strategy](/en/dev/testing).
 :::

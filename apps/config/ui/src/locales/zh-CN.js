@@ -185,7 +185,7 @@ export default {
   "notify.statusMonitorPaused": "热键监控已暂停",
   "notify.trayPriorityNote": "多个状态同时满足时，按红 > 绿 > 黄 > 蓝的优先级显示",
   "notify.trayTooltip": "显示图标悬浮名称",
-  "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「Boss Key」；关闭后不显示任何文字，更隐蔽。",
+  "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「ZoneDeck」；关闭后不显示任何文字，更隐蔽。",
 
   "options.generalCard": "常规",
   "options.muteAfterHide": "隐藏窗口后静音",
@@ -194,9 +194,9 @@ export default {
   "options.hideCurrentDesc": "按下热键时，除已绑定窗口外，同时隐藏当前正在使用的前台窗口。",
   "options.clickToHide": "单击托盘图标切换隐藏",
   "options.clickToHideDesc": "左键单击托盘图标即可隐藏 / 显示，无需按热键。",
-  "options.hideIcon": "同时隐藏 Boss Key 托盘图标",
+  "options.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "options.hideIconDesc":
-    "隐藏窗口时连 Boss Key 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
+    "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
   "options.sendPause": "隐藏前发送暂停键",
   "options.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
 
@@ -244,11 +244,11 @@ export default {
   "options.logDays": "{n} 天",
   "options.logLevel": "日志输出等级",
   "options.logLevelDesc":
-    "只记录所选等级及以上的日志。默认「警告」，即仅记录警告与错误；日常隐藏、恢复等流水不写入。反馈问题前可临时调低以取得更详细的记录。",
-  "options.logLevel.debug": "调试（最详细）",
+    "只记录所选等级及以上的日志。默认「警告」，即仅记录警告与错误。反馈问题前可临时调低以取得更详细的记录。",
+  "options.logLevel.debug": "调试",
   "options.logLevel.info": "信息",
-  "options.logLevel.warn": "警告（默认）",
-  "options.logLevel.error": "错误（最精简）",
+  "options.logLevel.warn": "警告",
+  "options.logLevel.error": "错误",
 
   "options.languageCard": "语言",
   "options.language": "界面语言",
@@ -261,7 +261,7 @@ export default {
   "options.openLinkFailed": "打开链接失败：{err}",
 
   "about.version": "版本 {version}",
-  "about.tagline": "老板来了？一键隐藏窗口，上班摸鱼必备神器。",
+  "about.tagline": "专业的桌面工作区管理助手",
   "about.homepage": "项目主页",
   "about.repository": "仓库地址",
   "about.docs": "使用文档",
@@ -322,7 +322,7 @@ export default {
   "update.preview": "预览版",
   "update.current": "当前 {version}",
   "update.publishedAt": "· 发布于 {time}",
-  "update.forcedNote": "这是一个强制更新，旧版本已停止服务。请下载新版本后重新启动 Boss Key。",
+  "update.forcedNote": "这是一个强制更新，旧版本已停止服务。请下载新版本后重新启动 ZoneDeck。",
   "update.quitApp": "退出程序",
   "update.download": "前往下载",
   "update.noDownloadUrl": "该版本没有提供下载地址，请前往项目主页获取",
@@ -361,6 +361,7 @@ export default {
   "state.detectFailed": "检测失败：{err}",
   "state.partialLoadFailed": "部分数据加载失败：{reason}",
   "state.saveFailed": "保存配置失败，你的改动可能没有写入磁盘。",
+  "state.configFallback": "配置文件解析失败，已恢复默认配置；原文件的备份情况见详细信息。",
   "state.elevationCancelled": "已取消提权",
   "state.coreStartingAdmin": "核心正在以管理员身份启动…",
   "state.coreStarting": "核心正在启动…",

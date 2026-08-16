@@ -4,8 +4,8 @@
 
 use std::sync::RwLock;
 
-use bosskey_common::i18n::{Lang, resolve};
 use windows::Win32::Globalization::GetUserDefaultLocaleName;
+use zonedeck_common::i18n::{Lang, resolve};
 
 /// 用户可见文案的键。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,9 +18,16 @@ pub enum Msg {
     MenuAutostart,
     MenuAbout,
     MenuQuit,
+    // 托盘气泡文案一律成对：`*Title` 是状态短语，`*Body` 是补充详情。正文不重复
+    // 应用名（Windows 通知自带 ZoneDeck 归属行），且不得为空——`szInfo` 为空时
+    // Shell_NotifyIcon 根本不弹气泡。
+    HiddenTitle,
     HiddenBody,
+    ShownTitle,
     ShownBody,
-    ConfigExeMissing,
+    ConfigExeMissingTitle,
+    ConfigExeMissingBody,
+    RecoveryPersistFailedTitle,
     RecoveryPersistFailedBody,
     AutostartOffTitle,
     AutostartOffBody,
@@ -34,6 +41,8 @@ pub enum Msg {
     StartBody,
     QuitTitle,
     QuitBody,
+    LegacyCoreRunningTitle,
+    LegacyCoreRunningBody,
     ErrReloadConfig,
     ErrCoreExited,
     ErrNotifyCore,
@@ -66,28 +75,36 @@ impl Msg {
             Msg::MenuAutostart => "开机自启",
             Msg::MenuAbout => "关于",
             Msg::MenuQuit => "退出",
-            Msg::HiddenBody => "已隐藏窗口",
-            Msg::ShownBody => "已恢复显示窗口",
-            Msg::ConfigExeMissing => "未找到配置程序",
-            Msg::RecoveryPersistFailedBody => "无法写入崩溃恢复文件，异常退出后将无法自动找回窗口",
+            Msg::HiddenTitle => "已隐藏窗口",
+            Msg::HiddenBody => "可通过热键或托盘菜单「显示窗口」恢复",
+            Msg::ShownTitle => "已恢复显示窗口",
+            Msg::ShownBody => "隐藏的窗口已重新出现在桌面上",
+            Msg::ConfigExeMissingTitle => "未找到配置程序",
+            Msg::ConfigExeMissingBody => "请确认配置程序与核心位于同一目录，或重新安装",
+            Msg::RecoveryPersistFailedTitle => "无法写入崩溃恢复文件",
+            Msg::RecoveryPersistFailedBody => "核心若异常退出，隐藏的窗口将无法自动找回",
             Msg::AutostartOffTitle => "开机自启已关闭",
-            Msg::AutostartOffBody => "Boss Key 将不再随系统启动",
+            Msg::AutostartOffBody => "核心将不再随系统启动",
             Msg::AutostartOnTitle => "开机自启已开启",
             Msg::AutostartOnTaskAdmin => "已注册计划任务（管理员权限）",
             Msg::AutostartOnTaskUser => "已注册计划任务（普通权限）",
             Msg::AutostartOnRegistry => "已写入注册表启动项",
             Msg::AutostartFailTitle => "开机自启设置失败",
             Msg::AutostartFailBody => "计划任务与注册表方式均失败",
-            Msg::StartTitle => "Boss Key 正在运行！",
-            Msg::StartBody => "Boss Key 正在为您服务，您可通过托盘图标看到我",
-            Msg::QuitTitle => "Boss Key 已停止服务",
-            Msg::QuitBody => "Boss Key 已成功退出",
+            Msg::StartTitle => "核心已启动",
+            Msg::StartBody => "可在通知区域找到托盘图标",
+            Msg::QuitTitle => "核心已退出",
+            Msg::QuitBody => "热键监控已停止，隐藏的窗口已恢复显示",
+            Msg::LegacyCoreRunningTitle => "检测到旧版本正在运行",
+            Msg::LegacyCoreRunningBody => {
+                "旧版本核心（Boss Key）仍在运行。请先退出旧版本（托盘图标，或任务管理器中的 Boss Key.exe），再启动 ZoneDeck。"
+            }
             Msg::ErrReloadConfig => "重载配置失败：{err}",
             Msg::ErrCoreExited => "核心已退出",
             Msg::ErrNotifyCore => "无法通知核心",
             Msg::ErrCoreTimeout => "核心响应超时",
             Msg::ErrCoreExeMissing => {
-                "未找到核心程序 {exe}。它很可能被杀毒软件拦截或隔离了：请尝试将 Boss Key 的程序目录加入杀毒软件的白名单 / 信任区，再从隔离区恢复该文件；若无法恢复，请重新下载完整程序包。"
+                "未找到核心程序 {exe}。它很可能被杀毒软件拦截或隔离了：请尝试将 ZoneDeck 的程序目录加入杀毒软件的白名单 / 信任区，再从隔离区恢复该文件；若无法恢复，请重新下载完整程序包。"
             }
             Msg::ErrFreezePartial => "{failed}/{total} 个进程冻结失败",
             Msg::ErrResumePartial => "{failed}/{total} 个进程解冻失败",
@@ -107,30 +124,40 @@ impl Msg {
             Msg::MenuAutostart => "Start with Windows",
             Msg::MenuAbout => "About",
             Msg::MenuQuit => "Exit",
-            Msg::HiddenBody => "Windows hidden",
-            Msg::ShownBody => "Windows restored",
-            Msg::ConfigExeMissing => "Settings app not found",
+            Msg::HiddenTitle => "Windows hidden",
+            Msg::HiddenBody => "Restore them with the hotkey or “Show Windows” in the tray menu",
+            Msg::ShownTitle => "Windows restored",
+            Msg::ShownBody => "The hidden windows are back on your desktop",
+            Msg::ConfigExeMissingTitle => "Settings app not found",
+            Msg::ConfigExeMissingBody => {
+                "Make sure the settings app sits next to the core, or reinstall"
+            }
+            Msg::RecoveryPersistFailedTitle => "Cannot write the crash-recovery file",
             Msg::RecoveryPersistFailedBody => {
-                "Cannot write the crash-recovery file; windows cannot be restored automatically after an abnormal exit"
+                "If the core exits abnormally, hidden windows cannot be restored automatically"
             }
             Msg::AutostartOffTitle => "Startup disabled",
-            Msg::AutostartOffBody => "Boss Key will no longer start with Windows",
+            Msg::AutostartOffBody => "The core will no longer start with Windows",
             Msg::AutostartOnTitle => "Startup enabled",
             Msg::AutostartOnTaskAdmin => "Scheduled task registered (administrator)",
             Msg::AutostartOnTaskUser => "Scheduled task registered (standard user)",
             Msg::AutostartOnRegistry => "Registry startup entry written",
             Msg::AutostartFailTitle => "Could not configure startup",
             Msg::AutostartFailBody => "Both the scheduled task and the registry method failed",
-            Msg::StartTitle => "Boss Key is running",
-            Msg::StartBody => "Boss Key is active — find it in the notification area",
-            Msg::QuitTitle => "Boss Key has stopped",
-            Msg::QuitBody => "Boss Key exited successfully",
+            Msg::StartTitle => "The core is running",
+            Msg::StartBody => "Find the tray icon in the notification area",
+            Msg::QuitTitle => "The core has exited",
+            Msg::QuitBody => "Hotkey monitoring stopped; hidden windows have been restored",
+            Msg::LegacyCoreRunningTitle => "An old version is still running",
+            Msg::LegacyCoreRunningBody => {
+                "The previous Boss Key core is still running. Quit it first (via its tray icon, or Boss Key.exe in Task Manager), then start ZoneDeck."
+            }
             Msg::ErrReloadConfig => "Failed to reload configuration: {err}",
             Msg::ErrCoreExited => "The core has exited",
             Msg::ErrNotifyCore => "Cannot reach the core",
             Msg::ErrCoreTimeout => "The core did not respond in time",
             Msg::ErrCoreExeMissing => {
-                "Core program {exe} not found. It was most likely blocked or quarantined by antivirus software: add the Boss Key program folder to your antivirus allowlist, then restore the file from quarantine; if that is not possible, download the full package again."
+                "Core program {exe} not found. It was most likely blocked or quarantined by antivirus software: add the ZoneDeck program folder to your antivirus allowlist, then restore the file from quarantine; if that is not possible, download the full package again."
             }
             Msg::ErrFreezePartial => "Failed to freeze {failed} of {total} processes",
             Msg::ErrResumePartial => "Failed to resume {failed} of {total} processes",
@@ -152,28 +179,36 @@ impl Msg {
             Msg::MenuAutostart => "開機自動啟動",
             Msg::MenuAbout => "關於",
             Msg::MenuQuit => "結束",
-            Msg::HiddenBody => "已隱藏視窗",
-            Msg::ShownBody => "已復原顯示視窗",
-            Msg::ConfigExeMissing => "找不到設定程式",
-            Msg::RecoveryPersistFailedBody => "無法寫入當機復原檔案，異常結束後將無法自動找回視窗",
+            Msg::HiddenTitle => "已隱藏視窗",
+            Msg::HiddenBody => "可透過熱鍵或通知區域選單「顯示視窗」復原",
+            Msg::ShownTitle => "已復原顯示視窗",
+            Msg::ShownBody => "隱藏的視窗已重新出現在桌面上",
+            Msg::ConfigExeMissingTitle => "找不到設定程式",
+            Msg::ConfigExeMissingBody => "請確認設定程式與核心位於同一資料夾，或重新安裝",
+            Msg::RecoveryPersistFailedTitle => "無法寫入當機復原檔案",
+            Msg::RecoveryPersistFailedBody => "核心若異常結束，隱藏的視窗將無法自動找回",
             Msg::AutostartOffTitle => "已關閉開機自動啟動",
-            Msg::AutostartOffBody => "Boss Key 將不再隨系統啟動",
+            Msg::AutostartOffBody => "核心將不再隨系統啟動",
             Msg::AutostartOnTitle => "已開啟開機自動啟動",
             Msg::AutostartOnTaskAdmin => "已註冊排程工作（系統管理員權限）",
             Msg::AutostartOnTaskUser => "已註冊排程工作（一般權限）",
             Msg::AutostartOnRegistry => "已寫入登錄檔啟動項目",
             Msg::AutostartFailTitle => "開機自動啟動設定失敗",
             Msg::AutostartFailBody => "排程工作與登錄檔方式均失敗",
-            Msg::StartTitle => "Boss Key 正在執行！",
-            Msg::StartBody => "Boss Key 正在為您服務，您可透過通知區域圖示找到我",
-            Msg::QuitTitle => "Boss Key 已停止服務",
-            Msg::QuitBody => "Boss Key 已成功結束",
+            Msg::StartTitle => "核心已啟動",
+            Msg::StartBody => "可在通知區域找到圖示",
+            Msg::QuitTitle => "核心已結束",
+            Msg::QuitBody => "熱鍵監控已停止，隱藏的視窗已復原顯示",
+            Msg::LegacyCoreRunningTitle => "偵測到舊版本正在執行",
+            Msg::LegacyCoreRunningBody => {
+                "舊版本核心（Boss Key）仍在執行。請先結束舊版本（通知區域圖示，或工作管理員中的 Boss Key.exe），再啟動 ZoneDeck。"
+            }
             Msg::ErrReloadConfig => "重新載入設定失敗：{err}",
             Msg::ErrCoreExited => "核心已結束",
             Msg::ErrNotifyCore => "無法通知核心",
             Msg::ErrCoreTimeout => "核心回應逾時",
             Msg::ErrCoreExeMissing => {
-                "找不到核心程式 {exe}。它很可能被防毒軟體攔截或隔離了：請將 Boss Key 的程式資料夾加入防毒軟體的信任區／白名單，再從隔離區還原該檔案；若無法還原，請重新下載完整程式包。"
+                "找不到核心程式 {exe}。它很可能被防毒軟體攔截或隔離了：請將 ZoneDeck 的程式資料夾加入防毒軟體的信任區／白名單，再從隔離區還原該檔案；若無法還原，請重新下載完整程式包。"
             }
             Msg::ErrFreezePartial => "{failed}/{total} 個程序凍結失敗",
             Msg::ErrResumePartial => "{failed}/{total} 個程序解除凍結失敗",
@@ -231,7 +266,7 @@ mod tests {
     use super::*;
 
     /// 全部文案键；新增 Msg 变体后必须同步登记，否则跨语言校验会漏掉它。
-    const ALL_MSGS: [Msg; 34] = [
+    const ALL_MSGS: [Msg; 40] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -240,9 +275,13 @@ mod tests {
         Msg::MenuAutostart,
         Msg::MenuAbout,
         Msg::MenuQuit,
+        Msg::HiddenTitle,
         Msg::HiddenBody,
+        Msg::ShownTitle,
         Msg::ShownBody,
-        Msg::ConfigExeMissing,
+        Msg::ConfigExeMissingTitle,
+        Msg::ConfigExeMissingBody,
+        Msg::RecoveryPersistFailedTitle,
         Msg::RecoveryPersistFailedBody,
         Msg::AutostartOffTitle,
         Msg::AutostartOffBody,
@@ -256,6 +295,8 @@ mod tests {
         Msg::StartBody,
         Msg::QuitTitle,
         Msg::QuitBody,
+        Msg::LegacyCoreRunningTitle,
+        Msg::LegacyCoreRunningBody,
         Msg::ErrReloadConfig,
         Msg::ErrCoreExited,
         Msg::ErrNotifyCore,

@@ -1,5 +1,5 @@
 <script>
-  // 鼠标按键选择器；图形几何取自根目录 mouse_icon.svg。
+  // 鼠标按键选择器；图形是下方内联的 SVG，各按键区域为独立可点击的 path。
   import ModifierRecorder from "./ModifierRecorder.svelte";
   import { MOUSE_PARTS, describeTrigger } from "../lib/pointer.js";
   import { t } from "../lib/i18n.svelte.js";
@@ -139,10 +139,14 @@
     align-items: flex-start;
     gap: 18px;
 
-    --line: color-mix(in srgb, var(--text) 58%, var(--surface-2));
+    /* 示意图走「浅色线稿」：轮廓是淡灰线，选中态是主色淡染 + 主色描边，
+       避免整块深绿压在面板上。状态在右侧列表里还有圆点与文字重复表达。 */
+    --line: color-mix(in srgb, var(--text) 34%, var(--surface-2));
     --face: var(--surface);
-    --face-hover: color-mix(in srgb, var(--text) 9%, var(--surface));
-    --face-on-line: color-mix(in srgb, var(--accent) 50%, var(--text));
+    --face-hover: color-mix(in srgb, var(--text) 7%, var(--surface));
+    --face-on: color-mix(in srgb, var(--accent) 22%, var(--surface));
+    --face-on-hover: color-mix(in srgb, var(--accent) 34%, var(--surface));
+    --line-on: color-mix(in srgb, var(--accent) 60%, var(--surface));
   }
 
   .mouse {
@@ -180,11 +184,11 @@
     fill: var(--face-hover);
   }
   .part.on :is(rect, path):not(.hit) {
-    fill: var(--accent);
-    stroke: var(--face-on-line);
+    fill: var(--face-on);
+    stroke: var(--line-on);
   }
   .part.on:hover :is(rect, path):not(.hit) {
-    fill: var(--accent-strong);
+    fill: var(--face-on-hover);
   }
   .part:focus-visible :is(rect, path):not(.hit) {
     stroke: var(--accent);

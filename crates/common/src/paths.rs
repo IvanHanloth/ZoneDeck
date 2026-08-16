@@ -2,9 +2,9 @@
 //!
 //! 安装版与便携版分开对待：
 //!
-//! - **安装版**用 `%APPDATA%\BossKey`。安装包可以装进 `Program Files`，那里普通权限
+//! - **安装版**用 `%APPDATA%\ZoneDeck`。安装包可以装进 `Program Files`，那里普通权限
 //!   进程不可写，配置程序每次保存都会得到 `os error 5`。
-//! - **便携版**用 exe 同目录；写不进去时退回 `%APPDATA%\BossKey`，界面据此提示权限问题。
+//! - **便携版**用 exe 同目录；写不进去时退回 `%APPDATA%\ZoneDeck`，界面据此提示权限问题。
 //!
 //! 靠程序目录里有没有安装痕迹来分辨：安装包会放一份 [`INSTALLED_MARKER`]，
 //! 卸载程序 `unins*.exe` 也在同一目录，便携版压缩包里两者都没有。
@@ -15,7 +15,9 @@
 use std::path::{Path, PathBuf};
 
 pub const CONFIG_FILE_NAME: &str = "config.json";
-pub const USER_DIR_NAME: &str = "BossKey";
+pub const USER_DIR_NAME: &str = "ZoneDeck";
+/// 改名（Boss Key → ZoneDeck）前的用户目录名，仅用于迁移旧数据。
+pub const LEGACY_USER_DIR_NAME: &str = "BossKey";
 /// 安装版标记文件，由安装包放进程序目录，卸载时随之移除。
 pub const INSTALLED_MARKER: &str = "installed.marker";
 
@@ -48,7 +50,7 @@ pub fn exe_dir() -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("."))
 }
 
-/// 用户目录 `%APPDATA%\BossKey`；取不到 `%APPDATA%` 时退回 exe 同目录。
+/// 用户目录 `%APPDATA%\ZoneDeck`；取不到 `%APPDATA%` 时退回 exe 同目录。
 pub fn user_data_dir() -> PathBuf {
     match std::env::var_os("APPDATA") {
         Some(appdata) if !appdata.is_empty() => PathBuf::from(appdata).join(USER_DIR_NAME),
@@ -73,7 +75,7 @@ pub fn is_installed(program_dir: &Path) -> bool {
 
 /// 当前进程能否在 `dir` 下建文件。探针文件用后即删。
 pub fn dir_writable(dir: &Path) -> bool {
-    let probe = dir.join(format!(".BossKey-write-probe-{}", std::process::id()));
+    let probe = dir.join(format!(".ZoneDeck-write-probe-{}", std::process::id()));
     match std::fs::File::create(&probe) {
         Ok(file) => {
             drop(file);
@@ -130,13 +132,46 @@ pub fn resolve_data_dir(
     located(user_dir.to_path_buf(), kind)
 }
 
+/// 把改名前的用户目录 `%APPDATA%\BossKey` 迁到 `%APPDATA%\ZoneDeck`。
+///
+/// 新目录已存在则不动，那是当前在用的一份；旧目录不存在则无事可做。
+/// 整体重命名失败（旧版进程尚未退出、目录被占用等）时退回复制配置与恢复文件；
+/// 此后新目录已存在，不会再重试整体迁移，旧目录连同日志留在原处——安装版由
+/// 卸载程序清理，便携版留给 `scripts/cleanup.ps1`，用户不跑就一直留着（已知取舍）。
+pub fn migrate_legacy_user_dir(new_dir: &Path) {
+    let Some(appdata) = new_dir.parent() else {
+        return;
+    };
+    let legacy_dir = appdata.join(LEGACY_USER_DIR_NAME);
+    if new_dir.exists() || !legacy_dir.exists() {
+        return;
+    }
+    if std::fs::rename(&legacy_dir, new_dir).is_ok() {
+        return;
+    }
+    if std::fs::create_dir_all(new_dir).is_err() {
+        return;
+    }
+    for name in [CONFIG_FILE_NAME, "recovery.json"] {
+        let old = legacy_dir.join(name);
+        let new = new_dir.join(name);
+        if old.exists() && !new.exists() {
+            let _ = std::fs::copy(&old, &new);
+        }
+    }
+}
+
 /// 本次运行使用的数据目录。核心与配置程序共用，两边必须得出同一结果。
 pub fn locate() -> DataDir {
     let program_dir = exe_dir();
     let installed = is_installed(&program_dir);
+    let user_dir = user_data_dir();
+    // 用户目录本次不一定被选中（便携版），但旧数据只要还在就顺手迁走，
+    // 便携版此前退回过用户目录的场景同样受益。
+    migrate_legacy_user_dir(&user_dir);
     // 安装版结果一样是用户目录，没必要再往程序目录里试写一次。
     let portable_writable = !installed && dir_writable(&program_dir);
-    resolve_data_dir(&program_dir, &user_data_dir(), installed, portable_writable)
+    resolve_data_dir(&program_dir, &user_dir, installed, portable_writable)
 }
 
 pub fn data_dir() -> PathBuf {

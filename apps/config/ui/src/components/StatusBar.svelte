@@ -224,32 +224,29 @@
     border-color: currentColor;
   }
 
+  /* hover 底色一律由 currentColor 派生：各 .act 变体的 color 已经是权威来源，
+     再手写一份 rgba 只会在换主题时脱钩（暗主题的 --warn / --danger 与亮主题不同值）。 */
   .act.ok {
     color: var(--ok);
-  }
-  .act.ok:hover {
-    background: rgba(47, 158, 99, 0.1);
   }
 
   .act.blue {
     color: #3b82f6;
   }
-  .act.blue:hover {
-    background: rgba(59, 130, 246, 0.1);
-  }
 
   .act.warn {
     color: var(--warn);
-  }
-  .act.warn:hover {
-    background: rgba(217, 119, 6, 0.1);
   }
 
   .act.danger {
     color: var(--danger);
   }
+
+  .act.ok:hover,
+  .act.blue:hover,
+  .act.warn:hover,
   .act.danger:hover {
-    background: rgba(229, 72, 77, 0.1);
+    background: color-mix(in srgb, currentColor 10%, transparent);
   }
 
   .monitor {

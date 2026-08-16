@@ -1,18 +1,18 @@
 use std::time::{Duration, Instant};
 
-use bosskey_common::ipc::{Command, PipeClient, Response};
-use bosskey_core::agent::{self, AgentOptions};
+use zonedeck_common::ipc::{Command, PipeClient, Response};
+use zonedeck_core::agent::{self, AgentOptions};
 
 #[test]
 fn agent_answers_ipc_and_quits_cleanly() {
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
-    let mut config = bosskey_common::Config::default();
+    let mut config = zonedeck_common::Config::default();
     // 开启自动隐藏，验证 GetStatus 会如实回传该开关（供设置界面与托盘对齐）。
     config.setting.auto_hide_enabled = true;
     config.save(&config_path).unwrap();
 
-    let pipe = r"\\.\pipe\bosskey_test_agent_e2e";
+    let pipe = r"\\.\pipe\zonedeck_test_agent_e2e";
     let options = AgentOptions {
         pipe_name: pipe.to_string(),
         enable_tray: false,

@@ -76,7 +76,7 @@ pnpm docs:preview
 ## 圖片與螢幕擷取畫面
 
 - 將圖片放入 `docs/public/`，在 Markdown 中以**根路徑**引用，例如 `![說明](/screenshot-1.png)`。
-- 站台部署在自訂網域下，`base` 為 `/`。若改為 GitHub Pages 專案站台（`/Boss-Key/`），VitePress 會自動為 `public` 資源補上前綴，Markdown 裡始終不需手寫 `base`。
+- 站台部署在自訂網域下，`base` 為 `/`。若改為 GitHub Pages 專案站台（`/ZoneDeck/`），VitePress 會自動為 `public` 資源補上前綴，Markdown 裡始終不需手寫 `base`。
 
 ## VitePress 特性
 
@@ -116,6 +116,6 @@ pnpm docs:preview
 ## 撰寫約定
 
 - 使用**專業、客觀**的描述。
-- 面向使用者處統一稱 **Boss Key**（不使用小寫 `bosskey`）。
+- 面向使用者處統一稱 **ZoneDeck**（不使用小寫 `zonedeck`）。
 - 每新增一個功能，請同時在 [使用說明](/zh-tw/guide/) 補充對應說明，並在需要時更新 [設定檔欄位](/zh-tw/dev/config-reference)。
 - 改動文件時**三種語言一併更新**；繁體中文使用台灣用語（如「視窗」「程式」「檔案」「滑鼠」「快速鍵」），不要只做簡繁字形轉換。

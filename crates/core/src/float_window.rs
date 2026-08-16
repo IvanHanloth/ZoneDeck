@@ -76,7 +76,7 @@ impl FloatWindow {
     pub(crate) fn create(agent_hwnd: HWND) -> Option<FloatWindow> {
         unsafe {
             let hinstance = GetModuleHandleW(PCWSTR::null()).ok()?;
-            let class_name = w!("BossKeyFloatWindow");
+            let class_name = w!("ZoneDeckFloatWindow");
             let wc = WNDCLASSW {
                 style: CS_DBLCLKS,
                 lpfnWndProc: Some(float_wndproc),
@@ -91,7 +91,7 @@ impl FloatWindow {
             let hwnd = CreateWindowExW(
                 WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                 class_name,
-                w!("Boss Key"),
+                w!("ZoneDeck"),
                 WS_POPUP,
                 x,
                 y,

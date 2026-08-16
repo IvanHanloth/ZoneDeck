@@ -104,7 +104,7 @@ fn load_icon_from_file() -> Option<HICON> {
 
 pub struct TrayIcon {
     hwnd: HWND,
-    /// 业务层期望的可见性（如「同时隐藏 Boss Key 托盘图标」时为 false）。
+    /// 业务层期望的可见性（如「同时隐藏 ZoneDeck 托盘图标」时为 false）。
     desired: bool,
     /// 图标是否实际已挂到任务栏（NIM_ADD 成功）。
     visible: bool,
@@ -236,6 +236,8 @@ impl TrayIcon {
         }
     }
 
+    /// 弹出气泡通知。样式统一：`title` 为状态短语，`message` 为补充详情。
+    /// `message` 不可为空——`szInfo` 为空时 Shell_NotifyIcon 不弹任何气泡。
     pub fn balloon(&self, title: &str, message: &str) {
         if !self.visible {
             return;

@@ -1,7 +1,7 @@
 # 确保本机/CI 具备编译安装包所需的 Inno Setup 环境。
 #
 # 为什么需要这个脚本：
-#   Boss-Key.iss 声明了简繁中文，而这两个语言包从 Inno Setup 7.0 起才随官方安装包分发
+#   ZoneDeck.iss 声明了简繁中文，而这两个语言包从 Inno Setup 7.0 起才随官方安装包分发
 #   （7.0 更新日志：“Added official Lithuanian, Simplified Chinese and Traditional
 #   Chinese translations.”）。GitHub runner 预装的却是 Inno Setup 6.x，编译会因缺少 .isl
 #   失败，所以这里统一装 7.x，顺带保证本地和 CI 用的是同一套环境，不随 runner 镜像漂移。
@@ -32,7 +32,7 @@ $wingetId = "JRSoftware.InnoSetup.7"
 $innoUrl = "https://github.com/jrsoftware/issrc/releases/download/is-7_0_2/innosetup-$innoVersion-x64.exe"
 $minVersion = [version]"7.0"
 
-# 与 Boss-Key.iss 的 [Languages] 保持一致
+# 与 ZoneDeck.iss 的 [Languages] 保持一致
 $requiredLanguages = @("ChineseSimplified.isl", "ChineseTraditional.isl")
 
 function Write-Info([string]$Message) {

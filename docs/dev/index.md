@@ -4,10 +4,10 @@ title: 开发文档导览
 
 # 开发文档
 
-欢迎参与 Boss Key 的开发！本部分文档面向**开发者与贡献者**，介绍如何在本地运行项目代码、参与贡献的要求、项目管理策略，以及系统架构。
+欢迎参与 ZoneDeck 的开发！本部分文档面向**开发者与贡献者**，介绍如何在本地运行项目代码、参与贡献的要求、项目管理策略，以及系统架构。
 
 ::: tip 
-如果你只是想使用 Boss Key，请阅读 [使用文档](/guide/)。
+如果你只是想使用 ZoneDeck，请阅读 [使用文档](/guide/)。
 :::
 
 ## 技术栈概览
@@ -45,4 +45,4 @@ v3 重写的核心目标：
 
 ## 仓库地址
 
-<https://github.com/IvanHanloth/Boss-Key>
+<https://github.com/IvanHanloth/ZoneDeck>

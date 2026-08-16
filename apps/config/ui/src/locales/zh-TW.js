@@ -184,7 +184,7 @@ export default {
   "notify.statusMonitorPaused": "快速鍵監控已暫停",
   "notify.trayPriorityNote": "多個狀態同時滿足時，依紅 > 綠 > 黃 > 藍的優先順序顯示",
   "notify.trayTooltip": "顯示圖示懸浮名稱",
-  "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「Boss Key」；關閉後不顯示任何文字，更為隱密。",
+  "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「ZoneDeck」；關閉後不顯示任何文字，更為隱密。",
 
   "options.generalCard": "一般",
   "options.muteAfterHide": "隱藏視窗後靜音",
@@ -193,9 +193,9 @@ export default {
   "options.hideCurrentDesc": "按下快速鍵時，除已綁定的視窗外，同時隱藏目前正在使用的前景視窗。",
   "options.clickToHide": "按一下通知區域圖示切換隱藏",
   "options.clickToHideDesc": "以左鍵按一下通知區域圖示即可隱藏／顯示，不需按快速鍵。",
-  "options.hideIcon": "一併隱藏 Boss Key 通知區域圖示",
+  "options.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
   "options.hideIconDesc":
-    "隱藏視窗時連 Boss Key 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
+    "隱藏視窗時連 ZoneDeck 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
   "options.sendPause": "隱藏前傳送暫停鍵",
   "options.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
 
@@ -243,11 +243,11 @@ export default {
   "options.logDays": "{n} 天",
   "options.logLevel": "記錄輸出等級",
   "options.logLevelDesc":
-    "只記錄所選等級及以上的內容。預設「警告」，即僅記錄警告與錯誤；日常隱藏、還原等流水不寫入。回報問題前可暫時調低以取得更詳細的記錄。",
-  "options.logLevel.debug": "偵錯（最詳細）",
+    "只記錄所選等級及以上的內容。預設「警告」，即僅記錄警告與錯誤；回報問題前可暫時調低以取得更詳細的記錄。",
+  "options.logLevel.debug": "偵錯",
   "options.logLevel.info": "資訊",
-  "options.logLevel.warn": "警告（預設）",
-  "options.logLevel.error": "錯誤（最精簡）",
+  "options.logLevel.warn": "警告",
+  "options.logLevel.error": "錯誤",
 
   "options.languageCard": "語言",
   "options.language": "介面語言",
@@ -262,7 +262,7 @@ export default {
   "options.openLinkFailed": "開啟連結失敗：{err}",
 
   "about.version": "版本 {version}",
-  "about.tagline": "老闆來了？一鍵隱藏視窗，上班摸魚必備神器。",
+  "about.tagline": "專業的桌面工作區管理助手",
   "about.homepage": "專案首頁",
   "about.repository": "程式碼儲存庫",
   "about.docs": "使用說明文件",
@@ -323,7 +323,7 @@ export default {
   "update.preview": "預覽版",
   "update.current": "目前 {version}",
   "update.publishedAt": "· 發布於 {time}",
-  "update.forcedNote": "這是強制更新，舊版本已停止服務。請下載新版本後重新啟動 Boss Key。",
+  "update.forcedNote": "這是強制更新，舊版本已停止服務。請下載新版本後重新啟動 ZoneDeck。",
   "update.quitApp": "結束程式",
   "update.download": "前往下載",
   "update.noDownloadUrl": "該版本沒有提供下載網址，請前往專案首頁取得",
@@ -362,6 +362,7 @@ export default {
   "state.detectFailed": "偵測失敗：{err}",
   "state.partialLoadFailed": "部分資料載入失敗：{reason}",
   "state.saveFailed": "儲存設定失敗，您的變更可能沒有寫入磁碟。",
+  "state.configFallback": "設定檔解析失敗，已恢復預設設定；原檔案的備份情況見詳細資訊。",
   "state.elevationCancelled": "已取消提升權限",
   "state.coreStartingAdmin": "核心正在以系統管理員身分啟動…",
   "state.coreStarting": "核心正在啟動…",

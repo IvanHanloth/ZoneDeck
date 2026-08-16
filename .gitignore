@@ -7,7 +7,6 @@ user.ini
 out/
 test.py
 pssuspend64.exe
-.bosskey_state
 .idea
 node_modules/
 
@@ -26,9 +25,11 @@ apps/config/dist/
 apps/config/src-tauri/gen/
 
 # 运行时产物
-bosskey.log
-bosskey.log.old
+ZoneDeck-*.log
 recovery.json
 
 docs/.vitepress/dist
 docs/.vitepress/cache
+
+__pycache__/
+/design/

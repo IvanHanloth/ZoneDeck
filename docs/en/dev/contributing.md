@@ -4,7 +4,7 @@ title: Contribution guide
 
 # Contribution guide
 
-Thank you for contributing to Boss Key. To keep collaboration efficient and safe, please read this page before submitting.
+Thank you for contributing to ZoneDeck. To keep collaboration efficient and safe, please read this page before submitting.
 
 ## Contribution workflow
 

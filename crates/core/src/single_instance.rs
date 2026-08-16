@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn second_acquire_detects_running_instance() {
-        let name = "BossKey_UnitTest_SingleInstance_9f3a";
+        let name = "ZoneDeck_UnitTest_SingleInstance_9f3a";
         let first = SingleInstance::acquire(name);
         assert!(!first.already_running(), "首个实例不应报告已在运行");
 

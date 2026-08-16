@@ -345,7 +345,7 @@ pub struct Setting {
     /// 托盘图标状态角标的颜色绑定，见 [`TrayBadges`]。
     #[serde(default)]
     pub tray_badges: TrayBadges,
-    /// 是否显示托盘图标的悬浮名称（Boss Key）；关闭后悬停不显示任何文字。
+    /// 是否显示托盘图标的悬浮名称（ZoneDeck）；关闭后悬停不显示任何文字。
     #[serde(default = "default_true")]
     pub tray_show_tooltip: bool,
     #[serde(default)]
@@ -548,7 +548,15 @@ impl Default for Config {
 
 impl Config {
     pub fn from_json(s: &str) -> Result<Self, ConfigError> {
-        let mut config: Config = serde_json::from_str(s)?;
+        Self::from_value(serde_json::from_str(s)?)
+    }
+
+    /// 同 [`Config::from_json`]，入参为已解析的 JSON 值（配置程序 `save_config`
+    /// 收到的前端数据走此入口）。反序列化前先剥离 `null`：配置界面的输入框被
+    /// 清空时会提交 `null`，应按「字段缺失」回落默认值，而不是整份配置失败。
+    pub fn from_value(mut value: serde_json::Value) -> Result<Self, ConfigError> {
+        strip_nulls(&mut value);
+        let mut config: Config = serde_json::from_value(value)?;
         config.normalize();
         Ok(config)
     }
@@ -557,23 +565,28 @@ impl Config {
         Ok(serde_json::to_string_pretty(self)?)
     }
 
+    /// 无副作用的加载：解析失败回退默认值，原文件保持原样，回退原因被丢弃。
+    /// 适合顺带读取配置的场景（如启动早期读日志参数）；把结果作为本次生效
+    /// 配置时应使用 [`Config::load_reporting`]，以便隔离损坏文件并记录原因。
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
-        Self::load_reporting(path).map(|(config, _)| config)
+        match std::fs::read_to_string(path) {
+            Ok(s) => Ok(Self::from_json(&s).unwrap_or_default()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+            Err(e) => Err(ConfigError::io(path, e)),
+        }
     }
 
     /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
-    /// 回退保证核心总能启动，代价是用户的规则会凭空消失，故须由调用方记进日志。
-    /// 返回 `(配置, 解析错误)`；解析成功或文件不存在时第二项为 `None`。
+    /// 回退保证核心总能启动；解析失败的原文件先改名为同目录 `*.bad` 备份，
+    /// 随后写入的默认配置才不会把用户数据永久覆写。备份去向包含在报告里，
+    /// 须由调用方记进日志。
+    /// 返回 `(配置, 回退原因)`；解析成功或文件不存在时第二项为 `None`。
     pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
         match std::fs::read_to_string(path) {
-            Ok(s) => {
-                let (mut config, parse_error) = match serde_json::from_str::<Config>(&s) {
-                    Ok(config) => (config, None),
-                    Err(e) => (Config::default(), Some(e.to_string())),
-                };
-                config.normalize();
-                Ok((config, parse_error))
-            }
+            Ok(s) => match Self::from_json(&s) {
+                Ok(config) => Ok((config, None)),
+                Err(e) => Ok((Config::default(), Some(quarantine_corrupt(path, &e)))),
+            },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Config::default(), None)),
             Err(e) => Err(ConfigError::io(path, e)),
         }
@@ -611,10 +624,51 @@ impl Config {
     }
 }
 
+/// 递归剥离 JSON 中的 `null`：对象里值为 `null` 的键按「字段缺失」处理
+/// （反序列化时走 serde 默认值），数组里的 `null` 元素直接丢弃。
+fn strip_nulls(value: &mut serde_json::Value) {
+    match value {
+        serde_json::Value::Object(map) => {
+            map.retain(|_, v| !v.is_null());
+            for v in map.values_mut() {
+                strip_nulls(v);
+            }
+        }
+        serde_json::Value::Array(items) => {
+            items.retain(|v| !v.is_null());
+            for v in items.iter_mut() {
+                strip_nulls(v);
+            }
+        }
+        _ => {}
+    }
+}
+
 /// 原子写入用的临时文件路径（与目标同目录，rename 才是原子的）。
 fn tmp_path(path: &Path) -> std::path::PathBuf {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".tmp");
+    path.with_file_name(name)
+}
+
+/// 把解析失败的配置文件改名为同目录 `*.bad` 备份，返回供调用方记日志的完整
+/// 回退原因。备份失败不阻断回退（核心必须能启动），但原因里须注明数据仍会
+/// 被随后的保存覆写。
+fn quarantine_corrupt(path: &Path, parse_error: &ConfigError) -> String {
+    let backup = bad_path(path);
+    // Windows 下 rename 覆盖已存在的目标文件（与 save() 的原子替换同一前提），
+    // 旧备份直接被顶替；多个进程同时加载同一份损坏文件时，后完成改名的一方
+    // 以 NotFound 失败，不会动先到者刚建立的备份。
+    match std::fs::rename(path, &backup) {
+        Ok(()) => format!("{parse_error}（原文件已备份为 {}）", backup.display()),
+        Err(e) => format!("{parse_error}（备份原文件失败，随后的保存会将其覆盖: {e}）"),
+    }
+}
+
+/// 损坏配置的备份路径（与原文件同目录，文件名追加 `.bad`）。
+fn bad_path(path: &Path) -> std::path::PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".bad");
     path.with_file_name(name)
 }
 
@@ -823,6 +877,129 @@ mod tests {
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
         assert_eq!(c.setting.log_level, "warn", "日志等级默认只记警告及以上");
         assert!(!c.setting.autostart_admin, "自启默认普通权限");
+    }
+
+    /// 配置界面的数字输入框被清空时会提交 `null`；不应导致整份配置保存失败。
+    #[test]
+    fn null_numeric_fields_fall_back_to_defaults() {
+        let c = Config::from_json(
+            r#"{"setting": {
+                "auto_hide_time": null,
+                "log_retention_days": null,
+                "mouse": {
+                    "multi_click_ms": null,
+                    "left": {"enabled": true, "clicks": null}
+                }
+            }}"#,
+        )
+        .unwrap();
+        assert_eq!(c.setting.auto_hide_time, DEFAULT_AUTO_HIDE_TIME);
+        assert_eq!(c.setting.log_retention_days, DEFAULT_LOG_RETENTION_DAYS);
+        assert_eq!(c.setting.mouse.multi_click_ms, DEFAULT_MULTI_CLICK_MS);
+        assert_eq!(c.setting.mouse.left.clicks, 1);
+        assert!(c.setting.mouse.left.enabled, "同级字段不受影响");
+    }
+
+    /// 覆盖全部会写入文件的字段（含规则数组元素）的完整样例。
+    fn full_sample_config() -> Config {
+        let w = WindowInfo::new("窗口", 42, "app.exe", 100, "D:\\app.exe");
+        Config {
+            history: vec![111],
+            frozen_pids: vec![222],
+            window_rules: vec![WindowRule::from_window(&w), WindowRule::from_regex("^a.*")],
+            process_rules: vec![
+                ProcessRule::from_window(&w),
+                ProcessRule::from_regex(".*\\.exe$"),
+            ],
+            ..Config::default()
+        }
+    }
+
+    /// 收集 JSON 中的全部路径（对象键与数组下标，含中间节点）。
+    fn collect_paths(value: &serde_json::Value, prefix: &str, out: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (k, v) in map {
+                    let path = format!("{prefix}/{k}");
+                    out.push(path.clone());
+                    collect_paths(v, &path, out);
+                }
+            }
+            serde_json::Value::Array(items) => {
+                for (i, v) in items.iter().enumerate() {
+                    let path = format!("{prefix}/{i}");
+                    out.push(path.clone());
+                    collect_paths(v, &path, out);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn set_null(value: &mut serde_json::Value, path: &str) {
+        let mut cur = value;
+        let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+        for (i, part) in parts.iter().enumerate() {
+            let last = i == parts.len() - 1;
+            match cur {
+                serde_json::Value::Object(map) => {
+                    let v = map.get_mut(*part).unwrap();
+                    if last {
+                        *v = serde_json::Value::Null;
+                        return;
+                    }
+                    cur = v;
+                }
+                serde_json::Value::Array(items) => {
+                    let v = &mut items[part.parse::<usize>().unwrap()];
+                    if last {
+                        *v = serde_json::Value::Null;
+                        return;
+                    }
+                    cur = v;
+                }
+                _ => unreachable!("路径中间节点必须是对象或数组: {path}"),
+            }
+        }
+    }
+
+    /// 穷举防护：配置里的**任意**字段（含整节对象、数组元素）为 `null` 时，
+    /// 读取与保存都不得失败。新增字段若缺 `#[serde(default)]` 会使本测试失败。
+    #[test]
+    fn any_field_set_to_null_still_parses() {
+        let base: serde_json::Value =
+            serde_json::from_str(&full_sample_config().to_json().unwrap()).unwrap();
+        let mut paths = Vec::new();
+        collect_paths(&base, "", &mut paths);
+        assert!(paths.len() > 60, "样例应覆盖全部字段，当前 {}", paths.len());
+        for path in paths {
+            let mut v = base.clone();
+            set_null(&mut v, &path);
+            let r = Config::from_json(&v.to_string());
+            assert!(r.is_ok(), "字段 {path} 为 null 时解析失败: {r:?}");
+        }
+    }
+
+    /// 整份配置为 `null` 或非对象时按损坏处理（仍是错误），不在容错范围内。
+    #[test]
+    fn top_level_null_is_still_an_error() {
+        assert!(Config::from_json("null").is_err());
+    }
+
+    /// [`Config::from_value`] 与 [`Config::from_json`] 行为一致（save_config 走该入口）。
+    #[test]
+    fn from_value_strips_nulls_like_from_json() {
+        let v = serde_json::json!({"setting": {"auto_hide_time": null}});
+        let c = Config::from_value(v).unwrap();
+        assert_eq!(c.setting.auto_hide_time, DEFAULT_AUTO_HIDE_TIME);
+    }
+
+    /// 数组里的 `null` 元素直接丢弃，其余元素保留。
+    #[test]
+    fn null_array_elements_are_dropped() {
+        let c = Config::from_json(r#"{"history": [1, null, 2], "frozen_pids": [null]}"#).unwrap();
+        assert_eq!(c.history, vec![1, 2]);
+        assert!(c.frozen_pids.is_empty());
     }
 
     #[test]

@@ -28,15 +28,15 @@ title: 检查更新与反馈
 
 ## 公告
 
-Boss Key 支持展示来自服务端的**公告**（如重要更新提示、已知问题说明等）。有新公告时会自动弹出；已读过的公告不会重复打扰。
+ZoneDeck 支持展示来自服务端的**公告**（如重要更新提示、已知问题说明等）。有新公告时会自动弹出；已读过的公告不会重复打扰。
 
 ## 问题反馈与上报
 
-在"关于与反馈"页可以直接发起**反馈 / 问题上报**，也可以通过 **GitHub 仓库** 提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)
+在"关于与反馈"页可以直接发起**反馈 / 问题上报**，也可以通过 **GitHub 仓库** 提交 [Issue](https://github.com/IvanHanloth/ZoneDeck/issues)
 
 ::: tip 反馈时请附上信息
 为便于定位问题，反馈时建议附上：
-- Boss Key 版本号；
+- ZoneDeck 版本号；
 - 操作系统版本；
 - 复现步骤；
 - 相关的 [日志文件](/guide/options#日志保留天数)。
@@ -54,4 +54,4 @@ Boss Key 支持展示来自服务端的**公告**（如重要更新提示、已�
 - 选择转换时联系方式**必填，且应填 GitHub 账号**（形如 `@IvanHanloth`）——机器人建好 Issue 后，后续跟进要靠它找到你；
 - Issue 创建失败时整条反馈不会被记录，此时请改用下面的手动方式。
 
-你也可以直接前往 GitHub 仓库提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。仓库提供了 **Bug 报告** 与 **功能建议** 两种 Issue 模板，按模板填写能让维护者更快理解你的问题。
+你也可以直接前往 GitHub 仓库提交 [Issue](https://github.com/IvanHanloth/ZoneDeck/issues)。仓库提供了 **Bug 报告** 与 **功能建议** 两种 Issue 模板，按模板填写能让维护者更快理解你的问题。

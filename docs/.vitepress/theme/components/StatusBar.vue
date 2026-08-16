@@ -97,7 +97,7 @@ const statusClass = computed(() => (running.value ? 'online' : 'offline'))
 <style scoped>
 /* 强调色取自应用状态栏（与主题无关，保持一致）；面板底色随文档主题走。 */
 .sb-statusbar {
-  --sb-ok: #2f9e63;
+  --sb-ok: #0e7490;
   --sb-warn: #d97706;
   --sb-danger: #e5484d;
   --sb-blue: #3b82f6;

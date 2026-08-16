@@ -5,15 +5,15 @@
 
 use std::collections::HashMap;
 
-use bosskey_common::config::{
-    TRAY_STATUS_AUTO_HIDE, TRAY_STATUS_ELEVATED, TRAY_STATUS_FREEZE, TRAY_STATUS_HIDDEN,
-    TRAY_STATUS_HIDE_CURRENT, TRAY_STATUS_MONITOR_PAUSED, TrayBadges,
-};
 use windows::Win32::Graphics::Gdi::{
     BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateBitmap, CreateDIBSection, DIB_RGB_COLORS,
     DeleteObject, GetDC, ReleaseDC,
 };
 use windows::Win32::UI::WindowsAndMessaging::{CreateIconIndirect, HICON, ICONINFO};
+use zonedeck_common::config::{
+    TRAY_STATUS_AUTO_HIDE, TRAY_STATUS_ELEVATED, TRAY_STATUS_FREEZE, TRAY_STATUS_HIDDEN,
+    TRAY_STATUS_HIDE_CURRENT, TRAY_STATUS_MONITOR_PAUSED, TrayBadges,
+};
 
 use crate::icon::IconRgba;
 
@@ -368,7 +368,7 @@ mod tests {
         // 绿色改绑「存在隐藏窗口」：隐藏时显示绿点（红色已置空）。
         let b = TrayBadges {
             red: String::new(),
-            green: bosskey_common::config::TRAY_STATUS_HIDDEN.to_string(),
+            green: zonedeck_common::config::TRAY_STATUS_HIDDEN.to_string(),
             ..TrayBadges::default()
         };
         let st = TrayStatus {

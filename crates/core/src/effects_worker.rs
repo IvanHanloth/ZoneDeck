@@ -43,7 +43,7 @@ impl EffectsWorker {
     pub fn spawn<E: Effects + Send + 'static>(inner: E) -> Self {
         let (tx, rx) = channel::<Task>();
         let handle = std::thread::Builder::new()
-            .name("bosskey-effects".into())
+            .name("zonedeck-effects".into())
             .spawn(move || {
                 while let Ok(task) = rx.recv() {
                     match task {

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub const PIPE_NAME: &str = r"\\.\pipe\bosskey";
+pub const PIPE_NAME: &str = r"\\.\pipe\zonedeck";
 
 /// 监控停用的看门狗时长：超过这么久没收到心跳，核心自动恢复监控。
 pub const SUSPEND_TIMEOUT_MS: u32 = 15_000;

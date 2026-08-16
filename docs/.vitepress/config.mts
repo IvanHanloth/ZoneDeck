@@ -1,7 +1,7 @@
 import { defineConfig, type DefaultTheme } from 'vitepress'
 import { getReleases } from './utils/releases'
 
-const REPO = 'https://github.com/IvanHanloth/Boss-Key'
+const REPO = 'https://github.com/IvanHanloth/ZoneDeck'
 
 // 更新日志侧边栏在构建时从 GitHub Releases 动态生成，见 changelog/[version].paths.ts。
 // 三种语言共用同一份 Release 列表，仅前缀与「更早版本」一项的文案不同。
@@ -31,7 +31,7 @@ export default defineConfig(async () => {
         pageData.title = String(pageData.params.title)
       }
     },
-    title: 'Boss Key',
+    title: 'ZoneDeck',
 
     base: '/',
     lastUpdated: true,
@@ -39,11 +39,12 @@ export default defineConfig(async () => {
     ignoreDeadLinks: true,
 
     head: [
-      ['link', { rel: 'icon', href: '/static/icon.png' }],
+      ['link', { rel: 'icon', href: '/static/logo.svg', type: 'image/svg+xml' }],
+      ['link', { rel: 'icon', href: '/static/icon.png', sizes: 'any' }],
     ],
 
     themeConfig: {
-      logo: '/static/icon.png',
+      logo: '/static/logo.svg',
       socialLinks: [{ icon: 'github', link: REPO }],
       search: { provider: 'local' },
     },
@@ -52,7 +53,7 @@ export default defineConfig(async () => {
       root: {
         label: '简体中文',
         lang: 'zh-CN',
-        description: '老板来了？快用 Boss Key 老板键一键隐藏静音当前窗口！上班摸鱼必备神器',
+        description: 'ZoneDeck — 生活工作无缝切换，专业的桌面工作区管理助手',
         themeConfig: {
           nav: [
             { text: '首页', link: '/' },
@@ -159,8 +160,7 @@ export default defineConfig(async () => {
         label: 'English',
         lang: 'en',
         link: '/en/',
-        description:
-          'Boss coming? Hide, mute and freeze the current window with a single key — Boss Key.',
+        description: 'ZoneDeck — Switch between work and life, seamlessly. The Ultimate Workspace Manager.',
         themeConfig: {
           nav: [
             { text: 'Home', link: '/en/' },
@@ -258,7 +258,7 @@ export default defineConfig(async () => {
         label: '繁體中文',
         lang: 'zh-TW',
         link: '/zh-tw/',
-        description: '老闆來了？快用 Boss Key 老闆鍵一鍵隱藏靜音目前視窗！上班摸魚必備神器',
+        description: 'ZoneDeck — 生活工作無縫切換，專業的桌面工作區管理助手',
         themeConfig: {
           nav: [
             { text: '首頁', link: '/zh-tw/' },

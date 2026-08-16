@@ -4,11 +4,11 @@ title: 快速上手
 
 # 快速上手
 
-本章介绍 Boss Key 的基本操作：如何打开设置、如何通过托盘菜单控制程序，以及默认热键。
+本章介绍 ZoneDeck 的基本操作：如何打开设置、如何通过托盘菜单控制程序，以及默认热键。
 
 ## 首次启动
 
-安装或更新后**首次打开** Boss Key 时，程序会自动弹出**配置界面**，方便你立即进行热键修改、窗口 / 进程绑定等设置。
+安装或更新后**首次打开** ZoneDeck 时，程序会自动弹出**配置界面**，方便你立即进行热键修改、窗口 / 进程绑定等设置。
 
 ## 配置界面
 
@@ -38,10 +38,10 @@ title: 快速上手
 
 <StatusBar variant="offline" />
 
-- <Play class="lucide-inline" style="color:#2f9e63" /> **启动核心**：以普通用户身份启动核心。
+- <Play class="lucide-inline" style="color:#0e7490" /> **启动核心**：以普通用户身份启动核心。
 - <Shield class="lucide-inline" style="color:#3b82f6" /> **管理员启动**：以管理员身份启动核心（增强冻结等功能需要）。
 
-**② 核心已运行** —— 核心正在运行，状态文字与标识为绿色：
+**② 核心已运行** —— 核心正在运行，状态文字与标识为青色：
 
 <StatusBar variant="user" />
 
@@ -51,8 +51,8 @@ title: 快速上手
 
 ::: tip 如何区分运行身份
 
-- <span class="status-dot" style="color:#2f9e63"></span> **圆点标识**：核心正在以普通用户身份运行。
-- <Shield class="lucide-inline" style="color:#2f9e63" /> **盾牌标识**：核心正在以管理员身份运行。
+- <span class="status-dot" style="color:#0e7490"></span> **圆点标识**：核心正在以普通用户身份运行。
+- <Shield class="lucide-inline" style="color:#0e7490" /> **盾牌标识**：核心正在以管理员身份运行。
 :::
 
 
@@ -60,14 +60,14 @@ title: 快速上手
 
 - <ScrollText class="lucide-inline" /> **打开日志目录**：打开运行日志所在的 `logs` 目录，便于排查问题。
 - <span style="opacity:.7">◐</span> **切换主题** ：在**跟随系统 → 浅色 → 深色**之间循环切换界面主题。
-- <span class="status-dot" style="color:#2f9e63"></span> **热键状态**：显示核心当前是否在监听热键与鼠标。<span class="status-dot" style="color:#2f9e63"></span> **热键生效** 表示正常监听；进入"热键与鼠标"设置页录制时会临时显示为 <span class="status-dot" style="color:#e5484d"></span> **热键暂停**，避免误触发。
-- <Check class="lucide-inline" style="color:#2f9e63" /> **保存状态**：显示 **已保存** / **保存中…**，配置改动会自动保存，无需手动保存。
+- <span class="status-dot" style="color:#0e7490"></span> **热键状态**：显示核心当前是否在监听热键与鼠标。<span class="status-dot" style="color:#0e7490"></span> **热键生效** 表示正常监听；进入"热键与鼠标"设置页录制时会临时显示为 <span class="status-dot" style="color:#e5484d"></span> **热键暂停**，避免误触发。
+- <Check class="lucide-inline" style="color:#0e7490" /> **保存状态**：显示 **已保存** / **保存中…**，配置改动会自动保存，无需手动保存。
 
 ## 托盘菜单
 
 日常使用时，可以通过**右键点击托盘图标**打开菜单。托盘菜单提供以下常用功能：
 
-![Boss Key 核心托盘菜单](/static/screenshot-5.png)
+![ZoneDeck 核心托盘菜单](/static/screenshot-5.png)
 
 - **设置**：打开配置界面。
 - **隐藏窗口 / 显示窗口**：快速隐藏或显示已绑定的窗口。
@@ -82,12 +82,12 @@ title: 快速上手
 
 ## 默认热键
 
-Boss Key 预置了两个键盘热键，均可在 [热键与鼠标手势](/guide/hotkeys) 中自定义：
+ZoneDeck 预置了两个键盘热键，均可在 [热键与鼠标手势](/guide/hotkeys) 中自定义：
 
 | 功能 | 默认热键 | 说明 |
 | --- | --- | --- |
 | **隐藏 / 显示窗口** | `Ctrl + Q` | 按一次隐藏已绑定窗口，再按一次恢复 |
-| **关闭核心** | `Win + Esc` | 立即结束 Boss Key 核心进程 |
+| **关闭核心** | `Win + Esc` | 立即结束 ZoneDeck 核心进程 |
 
 此外，全新安装默认还开启了**鼠标中键单击隐藏**，你可以在设置中调整或关闭。
 
