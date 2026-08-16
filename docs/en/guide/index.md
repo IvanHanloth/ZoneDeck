@@ -4,7 +4,9 @@ title: Introduction
 
 # ZoneDeck documentation
 
-**ZoneDeck** is a "look busy" utility for Windows: when you need to hide the window you are using, press a hotkey, click a mouse button, or flick the pointer into a screen corner, and the selected windows are hidden and muted at once. Trigger it again to bring them back.
+**ZoneDeck** is a desktop workspace manager for Windows: when you need to switch between work and life, press a hotkey, click a mouse button, or flick the pointer into a screen corner, and the selected windows are hidden and muted at once. Trigger it again to bring them back.
+
+(formerly the Boss-Key open-source project)
 
 ![ZoneDeck settings window – window binding page](/static/screenshot-1.png)
 

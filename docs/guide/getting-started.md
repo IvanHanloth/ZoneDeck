@@ -38,10 +38,10 @@ title: 快速上手
 
 <StatusBar variant="offline" />
 
-- <Play class="lucide-inline" style="color:#2f9e63" /> **启动核心**：以普通用户身份启动核心。
+- <Play class="lucide-inline" style="color:#0e7490" /> **启动核心**：以普通用户身份启动核心。
 - <Shield class="lucide-inline" style="color:#3b82f6" /> **管理员启动**：以管理员身份启动核心（增强冻结等功能需要）。
 
-**② 核心已运行** —— 核心正在运行，状态文字与标识为绿色：
+**② 核心已运行** —— 核心正在运行，状态文字与标识为青色：
 
 <StatusBar variant="user" />
 
@@ -51,8 +51,8 @@ title: 快速上手
 
 ::: tip 如何区分运行身份
 
-- <span class="status-dot" style="color:#2f9e63"></span> **圆点标识**：核心正在以普通用户身份运行。
-- <Shield class="lucide-inline" style="color:#2f9e63" /> **盾牌标识**：核心正在以管理员身份运行。
+- <span class="status-dot" style="color:#0e7490"></span> **圆点标识**：核心正在以普通用户身份运行。
+- <Shield class="lucide-inline" style="color:#0e7490" /> **盾牌标识**：核心正在以管理员身份运行。
 :::
 
 
@@ -60,8 +60,8 @@ title: 快速上手
 
 - <ScrollText class="lucide-inline" /> **打开日志目录**：打开运行日志所在的 `logs` 目录，便于排查问题。
 - <span style="opacity:.7">◐</span> **切换主题** ：在**跟随系统 → 浅色 → 深色**之间循环切换界面主题。
-- <span class="status-dot" style="color:#2f9e63"></span> **热键状态**：显示核心当前是否在监听热键与鼠标。<span class="status-dot" style="color:#2f9e63"></span> **热键生效** 表示正常监听；进入"热键与鼠标"设置页录制时会临时显示为 <span class="status-dot" style="color:#e5484d"></span> **热键暂停**，避免误触发。
-- <Check class="lucide-inline" style="color:#2f9e63" /> **保存状态**：显示 **已保存** / **保存中…**，配置改动会自动保存，无需手动保存。
+- <span class="status-dot" style="color:#0e7490"></span> **热键状态**：显示核心当前是否在监听热键与鼠标。<span class="status-dot" style="color:#0e7490"></span> **热键生效** 表示正常监听；进入"热键与鼠标"设置页录制时会临时显示为 <span class="status-dot" style="color:#e5484d"></span> **热键暂停**，避免误触发。
+- <Check class="lucide-inline" style="color:#0e7490" /> **保存状态**：显示 **已保存** / **保存中…**，配置改动会自动保存，无需手动保存。
 
 ## 托盘菜单
 

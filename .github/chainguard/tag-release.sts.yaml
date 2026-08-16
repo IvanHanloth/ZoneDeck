@@ -2,7 +2,7 @@
 # 本仓库 contents:write 的短期 token（见 release.yml 的 Federate token 步骤）。
 # 只放行 main / dev 分支上的工作流运行。
 issuer: https://token.actions.githubusercontent.com
-subject_pattern: repo:IvanHanloth/Boss-Key:ref:refs/heads/(main|dev)
+subject_pattern: repo:IvanHanloth/ZoneDeck:ref:refs/heads/(main|dev)
 
 permissions:
   contents: write

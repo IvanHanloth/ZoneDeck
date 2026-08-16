@@ -32,7 +32,7 @@ ZoneDeck 支援顯示來自伺服器的**公告**（如重要更新提示、已�
 
 ## 問題回報
 
-在「關於與意見回饋」頁可以直接提出**意見回饋／問題回報**，也可以透過 **GitHub 儲存庫** 提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。
+在「關於與意見回饋」頁可以直接提出**意見回饋／問題回報**，也可以透過 **GitHub 儲存庫** 提交 [Issue](https://github.com/IvanHanloth/ZoneDeck/issues)。
 
 ::: tip 回報時請附上資訊
 為便於定位問題，回報時建議附上：
@@ -54,4 +54,4 @@ ZoneDeck 支援顯示來自伺服器的**公告**（如重要更新提示、已�
 - 選擇轉換時聯絡方式**為必填，且應填 GitHub 帳號**（形如 `@IvanHanloth`）——機器人建立 Issue 後，後續追蹤要靠它找到您；
 - Issue 建立失敗時整則意見回饋不會被記錄，此時請改用下方的手動方式。
 
-您也可以直接前往 GitHub 儲存庫提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。儲存庫提供了 **Bug 回報** 與 **功能建議** 兩種 Issue 範本，按範本填寫能讓維護者更快理解您的問題。
+您也可以直接前往 GitHub 儲存庫提交 [Issue](https://github.com/IvanHanloth/ZoneDeck/issues)。儲存庫提供了 **Bug 回報** 與 **功能建議** 兩種 Issue 範本，按範本填寫能讓維護者更快理解您的問題。

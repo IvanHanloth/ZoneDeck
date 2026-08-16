@@ -152,12 +152,12 @@
     border-color: var(--accent);
   }
   .mini.primary {
-    color: #fff;
+    color: var(--on-accent);
     background: var(--accent);
     border-color: var(--accent);
   }
   .mini.primary:hover:not(:disabled) {
-    color: #fff;
+    color: var(--on-accent);
     background: var(--accent-strong);
     border-color: var(--accent-strong);
   }

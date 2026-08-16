@@ -8,9 +8,9 @@
 
 <p align="center">
 
-<img src="https://img.shields.io/github/v/release/IvanHanloth/Boss-Key?style=flat-square" alt="Github Release Version">
-<img src="https://img.shields.io/github/license/IvanHanloth/Boss-Key?style=flat-square" alt="Github Repo License">
-<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
+<img src="https://img.shields.io/github/v/release/IvanHanloth/ZoneDeck?style=flat-square" alt="Github Release Version">
+<img src="https://img.shields.io/github/license/IvanHanloth/ZoneDeck?style=flat-square" alt="Github Repo License">
+<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/ZoneDeck/release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
 <img src="https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue?style=flat-square" alt="Supported Platform">
 
 </p>
@@ -23,7 +23,7 @@
         <span> • </span>
         <a href="https://zonedeck.ivan-hanloth.cn/zh-tw/dev/">開發文件</a>
         <span> • </span>
-        <a href="https://github.com/IvanHanloth/Boss-Key/releases">下載位址</a>
+        <a href="https://github.com/IvanHanloth/ZoneDeck/releases">下載位址</a>
     </h3>
 </div>
 
@@ -36,7 +36,7 @@
 </p>
 
 <div align="center">
-    <strong>老闆來了？快用 ZoneDeck 老闆鍵一鍵隱藏視窗！上班摸魚必備神器。</strong><br>
+    <strong>生活工作無縫切換，專業的桌面工作區管理助手</strong><br>
 
 支援多視窗隱藏、多程序隱藏、自訂快速鍵、隱藏使用中視窗、靜音視窗、暫停影片播放、程序凍結等超多功能。
 
@@ -56,7 +56,7 @@
 
 ## 使用說明
 
-從 v3.0.0 版本開始，每個版本都會提供兩種類型的程式，可以從 [Release 頁面](https://github.com/IvanHanloth/Boss-Key/releases) 下載：
+從 v3.0.0 版本開始，每個版本都會提供兩種類型的程式，可以從 [Release 頁面](https://github.com/IvanHanloth/ZoneDeck/releases) 下載：
 
 - installer - 安裝程式（建議），完整封裝的 ZoneDeck 程式安裝程式，提供一鍵安裝、更新、解除安裝，可以更有效率且安全地管理 ZoneDeck 程式
 - portable - 可攜版，包含 ZoneDeck 的核心程式和設定程式的壓縮檔，解壓縮後可以執行
@@ -77,7 +77,7 @@
 
 ### 綁定視窗
 
-透過綁定視窗，可以同時隱藏多個視窗，摸魚更安全～
+透過綁定視窗，可以同時隱藏多個視窗，切換情境時不留遺漏。
 
 設定視窗中上方部分，左邊清單是目前存在的視窗，右邊清單是已經綁定的視窗。
 
@@ -130,3 +130,7 @@ powershell -ExecutionPolicy Bypass -File cleanup.ps1
 ## 更新日誌
 
 完整的更新日誌請參閱 ZoneDeck [更新日誌](https://zonedeck.ivan-hanloth.cn/zh-tw/changelog/)。
+
+<p align="center">
+<img src="/docs/public/static/logo.svg" width="50px" alt="ZoneDeck logo">
+</p>

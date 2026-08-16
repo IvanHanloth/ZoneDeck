@@ -236,6 +236,8 @@ impl TrayIcon {
         }
     }
 
+    /// 弹出气泡通知。样式统一：`title` 为状态短语，`message` 为补充详情。
+    /// `message` 不可为空——`szInfo` 为空时 Shell_NotifyIcon 不弹任何气泡。
     pub fn balloon(&self, title: &str, message: &str) {
         if !self.visible {
             return;

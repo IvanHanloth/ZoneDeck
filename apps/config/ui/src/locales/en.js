@@ -254,11 +254,11 @@ export default {
   "options.logDays": "{n} days",
   "options.logLevel": "Log level",
   "options.logLevelDesc":
-    "Only records entries at the selected level or above. The default is “Warning”, which keeps warnings and errors while leaving out routine hide/restore activity. Lower it temporarily to collect more detail before reporting an issue.",
-  "options.logLevel.debug": "Debug (most detailed)",
+    "Only records entries at the selected level or above. The default is “Warning”. Lower it temporarily to collect more detail before reporting an issue.",
+  "options.logLevel.debug": "Debug",
   "options.logLevel.info": "Info",
-  "options.logLevel.warn": "Warning (default)",
-  "options.logLevel.error": "Error (least detailed)",
+  "options.logLevel.warn": "Warning",
+  "options.logLevel.error": "Error",
 
   "options.languageCard": "Language",
   "options.language": "Display language",
@@ -273,7 +273,7 @@ export default {
   "options.openLinkFailed": "Could not open the link: {err}",
 
   "about.version": "Version {version}",
-  "about.tagline": "Boss walking by? Hide your windows with one key.",
+  "about.tagline": "The Ultimate Workspace Manager",
   "about.homepage": "Website",
   "about.repository": "Repository",
   "about.docs": "Documentation",

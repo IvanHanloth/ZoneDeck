@@ -7,7 +7,7 @@ version = "3.1.0-rc.1"
 edition = "2024"
 authors = ["IvanHanloth"]
 license = "MIT"
-repository = "https://github.com/IvanHanloth/Boss-Key"
+repository = "https://github.com/IvanHanloth/ZoneDeck"
 
 [workspace.dependencies]
 serde = { version = "1.0.228", features = ["derive"] }

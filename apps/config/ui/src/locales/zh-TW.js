@@ -243,11 +243,11 @@ export default {
   "options.logDays": "{n} 天",
   "options.logLevel": "記錄輸出等級",
   "options.logLevelDesc":
-    "只記錄所選等級及以上的內容。預設「警告」，即僅記錄警告與錯誤；日常隱藏、還原等流水不寫入。回報問題前可暫時調低以取得更詳細的記錄。",
-  "options.logLevel.debug": "偵錯（最詳細）",
+    "只記錄所選等級及以上的內容。預設「警告」，即僅記錄警告與錯誤；回報問題前可暫時調低以取得更詳細的記錄。",
+  "options.logLevel.debug": "偵錯",
   "options.logLevel.info": "資訊",
-  "options.logLevel.warn": "警告（預設）",
-  "options.logLevel.error": "錯誤（最精簡）",
+  "options.logLevel.warn": "警告",
+  "options.logLevel.error": "錯誤",
 
   "options.languageCard": "語言",
   "options.language": "介面語言",
@@ -262,7 +262,7 @@ export default {
   "options.openLinkFailed": "開啟連結失敗：{err}",
 
   "about.version": "版本 {version}",
-  "about.tagline": "老闆來了？一鍵隱藏視窗，上班摸魚必備神器。",
+  "about.tagline": "專業的桌面工作區管理助手",
   "about.homepage": "專案首頁",
   "about.repository": "程式碼儲存庫",
   "about.docs": "使用說明文件",

@@ -4,8 +4,8 @@ layout: home
 
 hero:
   name: "ZoneDeck"
-  text: "生活工作，無縫切換"
-  tagline: 專業的桌面工作區管理助手
+  text: "快速隱藏，只需一鍵"
+  tagline: 老闆來了？快用 ZoneDeck 老闆鍵一鍵隱藏、靜音、凍結視窗，摸魚必備神器（原Boss-Key開源專案）
   image:
     src: /static/logo.svg
     alt: ZoneDeck
@@ -26,7 +26,7 @@ features:
     details: v3 以 Rust 重寫，核心常駐背景的記憶體佔用僅約 1 MB，原生實作不易被防毒軟體誤判。
   - title: 超多姿勢
     icon: 💅
-    details: 隱藏後靜音、傳送暫停鍵、凍結程序、隱藏自身通知區域圖示、正規表示式比對視窗／程序……高度可自訂，適配不同的專注情境與隱私需求。
+    details: 隱藏後靜音、傳送暫停鍵、凍結程序、隱藏自身通知區域圖示、正規表示式比對視窗／程序……高度可自訂，滿足不同摸魚需求。
   - title: 穩如磐石
     icon: 🛡️
     details: 當機記錄、當機復原、排程工作三層防線，常駐背景穩定執行。
@@ -37,3 +37,4 @@ features:
     icon: 🧩
     details: 基於 MIT 授權條款開放原始碼，歡迎貢獻程式碼、回報問題。Windows 10 以上開箱即用。
 ---
+

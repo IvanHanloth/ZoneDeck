@@ -23,8 +23,8 @@ title: 本地运行
 ## 克隆项目
 
 ```bash
-git clone https://github.com/IvanHanloth/Boss-Key.git
-cd Boss-Key
+git clone https://github.com/IvanHanloth/ZoneDeck.git
+cd ZoneDeck
 ```
 
 ## 常用命令

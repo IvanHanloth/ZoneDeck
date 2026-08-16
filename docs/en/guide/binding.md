@@ -4,7 +4,7 @@ title: Binding windows & processes
 
 # Binding windows & processes
 
-"Binding" determines **which windows are hidden** when you press the hotkey. By binding several targets you can hide everything that needs hiding in one go.
+"Binding" determines **which windows are hidden** when you press the hotkey. By binding several targets you can hide every private window in one go, leaving nothing behind when you switch context.
 
 Open the settings window and switch to the **Windows** tab. It has two columns:
 

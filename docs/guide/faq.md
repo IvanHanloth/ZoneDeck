@@ -26,10 +26,10 @@ v3 的配置程序（`config.exe`）使用 Tauri 编写，其运行依赖系统�
 ZoneDeck 会监听全局热键、隐藏窗口，这类行为有时会被杀软误判。v3 已改用 Rust 原生单文件实现，显著降低了误报概率。若仍被拦截：
 
 - 将 ZoneDeck 的**程序目录**加入杀软信任区 / 白名单；
-- 从 [官方 Release 页面](https://github.com/IvanHanloth/Boss-Key/releases) 下载，避免第三方来源。
+- 从 [官方 Release 页面](https://github.com/IvanHanloth/ZoneDeck/releases) 下载，避免第三方来源。
 
 ::: tip 校验产物来源
-官方发布的产物带有构建来源证明（Sigstore attestation）。进阶用户可用 `gh attestation verify <文件> -R IvanHanloth/Boss-Key` 核验产物确实由官方仓库构建。
+官方发布的产物带有构建来源证明（Sigstore attestation）。进阶用户可用 `gh attestation verify <文件> -R IvanHanloth/ZoneDeck` 核验产物确实由官方仓库构建。
 :::
 
 ## 按了隐藏热键没反应？
@@ -81,5 +81,5 @@ Windows 10 及以上开箱即用；Windows 7 需自行确保 WebView2 可用才�
 ## 还有其他问题？
 
 - 查阅本使用文档的对应章节；
-- 前往 GitHub 提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)。
+- 前往 GitHub 提交 [Issue](https://github.com/IvanHanloth/ZoneDeck/issues)。
 - 在配置界面的 [关于与反馈](/guide/update#问题反馈与上报) 页提交反馈；

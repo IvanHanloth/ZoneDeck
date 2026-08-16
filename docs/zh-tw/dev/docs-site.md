@@ -76,7 +76,7 @@ pnpm docs:preview
 ## 圖片與螢幕擷取畫面
 
 - 將圖片放入 `docs/public/`，在 Markdown 中以**根路徑**引用，例如 `![說明](/screenshot-1.png)`。
-- 站台部署在自訂網域下，`base` 為 `/`。若改為 GitHub Pages 專案站台（`/Boss-Key/`），VitePress 會自動為 `public` 資源補上前綴，Markdown 裡始終不需手寫 `base`。
+- 站台部署在自訂網域下，`base` 為 `/`。若改為 GitHub Pages 專案站台（`/ZoneDeck/`），VitePress 會自動為 `public` 資源補上前綴，Markdown 裡始終不需手寫 `base`。
 
 ## VitePress 特性
 

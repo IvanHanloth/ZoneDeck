@@ -8,9 +8,9 @@
 
 <p align="center">
 
-<img src="https://img.shields.io/github/v/release/IvanHanloth/Boss-Key?style=flat-square" alt="Github Release Version">
-<img src="https://img.shields.io/github/license/IvanHanloth/Boss-Key?style=flat-square" alt="Github Repo License">
-<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/Boss-Key/release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
+<img src="https://img.shields.io/github/v/release/IvanHanloth/ZoneDeck?style=flat-square" alt="Github Release Version">
+<img src="https://img.shields.io/github/license/IvanHanloth/ZoneDeck?style=flat-square" alt="Github Repo License">
+<img src="https://img.shields.io/github/actions/workflow/status/IvanHanloth/ZoneDeck/release.yml?style=flat-square" alt="GitHub Actions Workflow Status">
 <img src="https://img.shields.io/badge/Platform-Windows_10\+-cornflowerblue?style=flat-square" alt="Supported Platform">
 
 </p>
@@ -23,7 +23,7 @@
         <span> • </span>
         <a href="https://zonedeck.ivan-hanloth.cn/en/dev/">Development</a>
         <span> • </span>
-        <a href="https://github.com/IvanHanloth/Boss-Key/releases">Download</a>
+        <a href="https://github.com/IvanHanloth/ZoneDeck/releases">Download</a>
     </h3>
 </div>
 
@@ -36,7 +36,7 @@
 </p>
 
 <div align="center">
-    <strong>Boss coming? Hide your windows with a single key.</strong><br>
+    <strong>Switch between work and life, seamlessly — The Ultimate Workspace Manager</strong><br>
 
 Hide multiple windows and processes, customise hotkeys, hide the active window, mute windows, pause video playback, freeze processes, and more.
 
@@ -56,7 +56,7 @@ Highly configurable to fit how you work, and very light: about 1 MB of memory wh
 
 ## Getting started
 
-Since v3.0.0 every release ships two kinds of package, both available from the [Releases page](https://github.com/IvanHanloth/Boss-Key/releases):
+Since v3.0.0 every release ships two kinds of package, both available from the [Releases page](https://github.com/IvanHanloth/ZoneDeck/releases):
 
 - **installer** (recommended) — a fully packaged installer providing one-click install, update and uninstall, for managing ZoneDeck more efficiently and safely.
 - **portable** — an archive containing the ZoneDeck core and settings programs; extract it and run.
@@ -77,7 +77,7 @@ Press the hide / show hotkey to hide the bound windows at once. Press the close 
 
 ### Binding windows
 
-Binding several windows lets you hide them all at once.
+Binding several windows lets you hide them all at once, leaving nothing behind when you switch context.
 
 In the upper part of the settings window, the left list holds the windows currently open and the right list holds the ones already bound.
 
@@ -130,3 +130,7 @@ Thanks to HsFreezer for the approach to process freezing.
 ## Changelog
 
 For the full changelog, see the ZoneDeck [changelog](https://zonedeck.ivan-hanloth.cn/en/changelog/).
+
+<p align="center">
+<img src="/docs/public/static/logo.svg" width="50px" alt="ZoneDeck logo">
+</p>

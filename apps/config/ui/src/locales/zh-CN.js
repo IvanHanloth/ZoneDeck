@@ -244,11 +244,11 @@ export default {
   "options.logDays": "{n} 天",
   "options.logLevel": "日志输出等级",
   "options.logLevelDesc":
-    "只记录所选等级及以上的日志。默认「警告」，即仅记录警告与错误；日常隐藏、恢复等流水不写入。反馈问题前可临时调低以取得更详细的记录。",
-  "options.logLevel.debug": "调试（最详细）",
+    "只记录所选等级及以上的日志。默认「警告」，即仅记录警告与错误。反馈问题前可临时调低以取得更详细的记录。",
+  "options.logLevel.debug": "调试",
   "options.logLevel.info": "信息",
-  "options.logLevel.warn": "警告（默认）",
-  "options.logLevel.error": "错误（最精简）",
+  "options.logLevel.warn": "警告",
+  "options.logLevel.error": "错误",
 
   "options.languageCard": "语言",
   "options.language": "界面语言",
@@ -261,7 +261,7 @@ export default {
   "options.openLinkFailed": "打开链接失败：{err}",
 
   "about.version": "版本 {version}",
-  "about.tagline": "老板来了？一键隐藏窗口，上班摸鱼必备神器。",
+  "about.tagline": "专业的桌面工作区管理助手",
   "about.homepage": "项目主页",
   "about.repository": "仓库地址",
   "about.docs": "使用文档",

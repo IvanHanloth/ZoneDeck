@@ -42,7 +42,7 @@ Hovering over the tray icon shows "ZoneDeck" by default. Turn this option off to
 
 ## Recommendations
 
-- **Hide / show notifications are off by default**: a notification on every hide would rather defeat the purpose, so they are not shown. Turn them on if you want explicit feedback.
+- **Hide / show notifications are off by default**: hiding is there to protect your privacy, and a notification on every hide would only draw attention, so they are not shown. Turn them on if you want explicit feedback.
 - **Start / exit / startup notifications are on by default**: these are infrequent events, and keeping them helps you confirm the core's state.
 
 ::: info Not the same as "Also hide ZoneDeck's tray icon"

@@ -1,6 +1,21 @@
 <script>
   import SettingRow from "./SettingRow.svelte";
   import Toggle from "./Toggle.svelte";
+  import IconVolumeOff from "~icons/lucide/volume-off";
+  import IconAppWindow from "~icons/lucide/app-window";
+  import IconMousePointerClick from "~icons/lucide/mouse-pointer-click";
+  import IconEyeOff from "~icons/lucide/eye-off";
+  import IconPause from "~icons/lucide/pause";
+  import IconSnowflake from "~icons/lucide/snowflake";
+  import IconZap from "~icons/lucide/zap";
+  import IconGitFork from "~icons/lucide/git-fork";
+  import IconPower from "~icons/lucide/power";
+  import IconShield from "~icons/lucide/shield";
+  import IconKeyRound from "~icons/lucide/key-round";
+  import IconLanguages from "~icons/lucide/languages";
+  import IconCalendarClock from "~icons/lucide/calendar-clock";
+  import IconGauge from "~icons/lucide/gauge";
+  import IconLifeBuoy from "~icons/lucide/life-buoy";
   import { app, openRestoreTool, restartCore, startCore, setAutostart, refreshPssuspend, toast } from "../lib/state.svelte.js";
   import { openExternal } from "../lib/verhub.js";
   import { LANGS, LANG_AUTO, LANG_NAMES, t } from "../lib/i18n.svelte.js";
@@ -73,19 +88,19 @@
 <div class="panel-stack">
   <section class="fcard">
     <h3>{t("options.generalCard")}</h3>
-    <SettingRow label={t("options.muteAfterHide")} description={t("options.muteAfterHideDesc")}>
+    <SettingRow icon={IconVolumeOff} label={t("options.muteAfterHide")} description={t("options.muteAfterHideDesc")}>
       {#snippet control()}<Toggle bind:checked={s.mute_after_hide} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("options.hideCurrent")} description={t("options.hideCurrentDesc")}>
+    <SettingRow icon={IconAppWindow} label={t("options.hideCurrent")} description={t("options.hideCurrentDesc")}>
       {#snippet control()}<Toggle bind:checked={s.hide_current} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("options.clickToHide")} description={t("options.clickToHideDesc")}>
+    <SettingRow icon={IconMousePointerClick} label={t("options.clickToHide")} description={t("options.clickToHideDesc")}>
       {#snippet control()}<Toggle bind:checked={s.click_to_hide} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("options.hideIcon")} description={t("options.hideIconDesc")}>
+    <SettingRow icon={IconEyeOff} label={t("options.hideIcon")} description={t("options.hideIconDesc")}>
       {#snippet control()}<Toggle bind:checked={s.hide_icon_after_hide} />{/snippet}
     </SettingRow>
-    <SettingRow label={t("options.sendPause")} description={t("options.sendPauseDesc")}>
+    <SettingRow icon={IconPause} label={t("options.sendPause")} description={t("options.sendPauseDesc")}>
       {#snippet control()}<Toggle bind:checked={s.send_before_hide} />{/snippet}
     </SettingRow>
     <!-- <SettingRow label="显示悬浮窗" description="在桌面显示一个可拖动的悬浮小窗，双击可快速切换隐藏（核心侧功能开发中）。">
@@ -95,10 +110,11 @@
 
   <section class="fcard">
     <h3>{t("options.freezeCard")}</h3>
-    <SettingRow label={t("options.freezeAfterHide")} description={t("options.freezeAfterHideDesc")}>
+    <SettingRow icon={IconSnowflake} label={t("options.freezeAfterHide")} description={t("options.freezeAfterHideDesc")}>
       {#snippet control()}<Toggle bind:checked={s.freeze_after_hide} />{/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconZap}
       label={t("options.enhancedFreeze")}
       disabled={freezeOff || enhancedDisabled}
       description={!freezeOff && enhancedDisabled
@@ -118,6 +134,7 @@
       {/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconGitFork}
       label={t("options.freezeWholeTree")}
       disabled={freezeOff}
       description={t("options.freezeWholeTreeDesc")}
@@ -134,7 +151,7 @@
 
   <section class="fcard">
     <h3>{t("options.startupCard")}</h3>
-    <SettingRow label={t("options.autostart")} description={t("options.autostartDesc")}>
+    <SettingRow icon={IconPower} label={t("options.autostart")} description={t("options.autostartDesc")}>
       {#snippet control()}
         <div class="autostart-ctl">
           {#if autostartMethodText}
@@ -145,6 +162,7 @@
       {/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconShield}
       label={t("options.autostartAdmin")}
       disabled={autostartOff}
       description={t("options.autostartAdminDesc")}
@@ -159,6 +177,7 @@
       {/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconKeyRound}
       label={t("options.corePrivilege")}
       description={t("options.corePrivilegeDesc")}
     >
@@ -185,7 +204,7 @@
 
   <section class="fcard">
     <h3>{t("options.languageCard")}</h3>
-    <SettingRow label={t("options.language")} description={t("options.languageDesc")}>
+    <SettingRow icon={IconLanguages} label={t("options.language")} description={t("options.languageDesc")}>
       {#snippet control()}
         <select class="sel" bind:value={s.language}>
           <option value={LANG_AUTO}>{t("options.languageAuto")}</option>
@@ -200,6 +219,7 @@
   <section class="fcard">
     <h3>{t("options.logCard")}</h3>
     <SettingRow
+      icon={IconCalendarClock}
       label={t("options.logRetention")}
       description={t("options.logRetentionDesc")}
     >
@@ -213,6 +233,7 @@
       {/snippet}
     </SettingRow>
     <SettingRow
+      icon={IconGauge}
       label={t("options.logLevel")}
       description={t("options.logLevelDesc")}
       disabled={logDisabled}
@@ -230,6 +251,7 @@
   <section class="fcard">
     <h3>{t("options.toolsCard")}</h3>
     <SettingRow
+      icon={IconLifeBuoy}
       label={t("options.restoreTool")}
       description={t("options.restoreToolDesc")}
     >

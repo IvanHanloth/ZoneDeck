@@ -4,7 +4,7 @@ title: Installation & editions
 
 # Installation & editions
 
-Every release of ZoneDeck can be downloaded from the GitHub [Releases page](https://github.com/IvanHanloth/Boss-Key/releases).
+Every release of ZoneDeck can be downloaded from the GitHub [Releases page](https://github.com/IvanHanloth/ZoneDeck/releases).
 
 ## Choosing a package
 

@@ -147,7 +147,7 @@ function mockInvoke(cmd, args) {
       return {
         name: "ZoneDeck",
         version: "3.0.0",
-        website: "https://github.com/IvanHanloth/Boss-Key",
+        website: "https://github.com/IvanHanloth/ZoneDeck",
         author: "Ivan Hanloth",
         email: "ivan@hanloth.com",
         blog: "https://blog.ivan-hanloth.cn/",
@@ -157,7 +157,7 @@ function mockInvoke(cmd, args) {
       return {
         name: "ZoneDeck",
         website_url: "https://zonedeck.ivan-hanloth.cn/",
-        repo_url: "https://github.com/IvanHanloth/Boss-Key",
+        repo_url: "https://github.com/IvanHanloth/ZoneDeck",
         docs_url: "https://zonedeck.ivan-hanloth.cn/guide/",
         author: "Ivan Hanloth",
         author_homepage_url: "https://www.ivan-hanloth.cn/",

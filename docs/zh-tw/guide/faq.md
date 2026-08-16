@@ -26,10 +26,10 @@ v3 的設定程式（`config.exe`）使用 Tauri 撰寫，其執行相依於系�
 ZoneDeck 會監聽全域快速鍵、隱藏視窗，這類行為有時會被防毒軟體誤判。v3 已改用 Rust 原生單一檔案實作，顯著降低了誤判機率。若仍被攔截：
 
 - 將 ZoneDeck 的**程式資料夾**加入防毒軟體信任區／白名單；
-- 從 [官方 Release 頁面](https://github.com/IvanHanloth/Boss-Key/releases) 下載，避免第三方來源。
+- 從 [官方 Release 頁面](https://github.com/IvanHanloth/ZoneDeck/releases) 下載，避免第三方來源。
 
 ::: tip 驗證產物來源
-官方發布的產物帶有建置來源證明（Sigstore attestation）。進階使用者可用 `gh attestation verify <檔案> -R IvanHanloth/Boss-Key` 驗證產物確實由官方儲存庫建置。
+官方發布的產物帶有建置來源證明（Sigstore attestation）。進階使用者可用 `gh attestation verify <檔案> -R IvanHanloth/ZoneDeck` 驗證產物確實由官方儲存庫建置。
 :::
 
 ## 按了隱藏快速鍵沒反應？
@@ -81,5 +81,5 @@ Windows 10 以上開箱即用；Windows 7 需自行確保 WebView2 可用才能�
 ## 還有其他問題？
 
 - 查閱本使用說明的對應章節；
-- 前往 GitHub 提交 [Issue](https://github.com/IvanHanloth/Boss-Key/issues)；
+- 前往 GitHub 提交 [Issue](https://github.com/IvanHanloth/ZoneDeck/issues)；
 - 在設定介面的 [關於與意見回饋](/zh-tw/guide/update) 頁提出意見回饋。

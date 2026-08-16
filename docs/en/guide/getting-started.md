@@ -38,10 +38,10 @@ The left side shows whether the core is running and offers matching shortcuts.
 
 <StatusBar variant="offline" />
 
-- <Play class="lucide-inline" style="color:#2f9e63" /> **Start core**: start the core as a standard user.
+- <Play class="lucide-inline" style="color:#0e7490" /> **Start core**: start the core as a standard user.
 - <Shield class="lucide-inline" style="color:#3b82f6" /> **Start as administrator**: start the core with administrator rights (required by features such as enhanced freezing).
 
-**② Core running** — the core is running; the status text and indicator are green:
+**② Core running** — the core is running; the status text and indicator are cyan:
 
 <StatusBar variant="user" />
 
@@ -51,8 +51,8 @@ The left side shows whether the core is running and offers matching shortcuts.
 
 ::: tip Telling the privilege level apart
 
-- <span class="status-dot" style="color:#2f9e63"></span> **Dot indicator**: the core is running as a standard user.
-- <Shield class="lucide-inline" style="color:#2f9e63" /> **Shield indicator**: the core is running as administrator.
+- <span class="status-dot" style="color:#0e7490"></span> **Dot indicator**: the core is running as a standard user.
+- <Shield class="lucide-inline" style="color:#0e7490" /> **Shield indicator**: the core is running as administrator.
 :::
 
 
@@ -60,8 +60,8 @@ The left side shows whether the core is running and offers matching shortcuts.
 
 - <ScrollText class="lucide-inline" /> **Open log folder**: open the `logs` folder containing the runtime logs, for troubleshooting.
 - <span style="opacity:.7">◐</span> **Switch theme**: cycle the interface theme between **follow system → light → dark**.
-- <span class="status-dot" style="color:#2f9e63"></span> **Hotkey status**: shows whether the core is currently listening for hotkeys and mouse input. <span class="status-dot" style="color:#2f9e63"></span> **Hotkeys active** means normal listening; while recording on the "Hotkeys & Mouse" page it temporarily shows <span class="status-dot" style="color:#e5484d"></span> **Hotkeys paused** to avoid accidental triggers.
-- <Check class="lucide-inline" style="color:#2f9e63" /> **Save status**: shows **Saved** / **Saving…**. Changes save automatically; there is no save button.
+- <span class="status-dot" style="color:#0e7490"></span> **Hotkey status**: shows whether the core is currently listening for hotkeys and mouse input. <span class="status-dot" style="color:#0e7490"></span> **Hotkeys active** means normal listening; while recording on the "Hotkeys & Mouse" page it temporarily shows <span class="status-dot" style="color:#e5484d"></span> **Hotkeys paused** to avoid accidental triggers.
+- <Check class="lucide-inline" style="color:#0e7490" /> **Save status**: shows **Saved** / **Saving…**. Changes save automatically; there is no save button.
 
 ## The tray menu
 

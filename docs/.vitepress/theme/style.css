@@ -49,10 +49,12 @@
   --vp-c-default-3: var(--vp-c-gray-3);
   --vp-c-default-soft: var(--vp-c-gray-soft);
 
-  --vp-c-brand-1: var(--vp-c-green-1);
-  --vp-c-brand-2: var(--vp-c-green-2);
-  --vp-c-brand-3: var(--vp-c-green-3);
-  --vp-c-brand-soft: var(--vp-c-green-soft);
+  /* ZoneDeck 品牌绿（emerald）。不 alias VitePress 内置 green —— 那是森林绿，
+     与 logo 渐变不同源。括号内为该色作文字压在所处背景上的对比度。 */
+  --vp-c-brand-1: #047857; /* 链接文字，白底 5.48 ✓ AA */
+  --vp-c-brand-2: #059669; /* 按钮底 + 白字 3.77（VitePress 默认仅 3.16） */
+  --vp-c-brand-3: #10b981; /* 装饰填充，白底仅 2.54，不可作文字色 */
+  --vp-c-brand-soft: rgba(16, 185, 129, 0.14);
 
   --vp-c-tip-1: var(--vp-c-brand-1);
   --vp-c-tip-2: var(--vp-c-brand-2);
@@ -68,22 +70,45 @@
   --vp-c-danger-2: var(--vp-c-red-2);
   --vp-c-danger-3: var(--vp-c-red-3);
   --vp-c-danger-soft: var(--vp-c-red-soft);
+
+  /* 按钮按下态需要比 brand-1 再深一档，VitePress 没有对应变量，自建一个 */
+  --zd-c-brand-deep: #065f46;
+}
+
+.dark {
+  /* 暗色下阶梯整体上移：链接改用最亮档，压在深底上才够读 */
+  --vp-c-brand-1: #6ee7b7; /* 链接文字，暗底 11.26 */
+  --vp-c-brand-2: #34d399; /* 按钮底，配深墨文字 7.88 */
+  --vp-c-brand-3: #10b981;
+  --vp-c-brand-soft: rgba(16, 185, 129, 0.16);
+
+  --zd-c-brand-deep: #a7f3d0;
 }
 
 /**
  * Component: Button
+ *
+ * 底色取 brand-2 而非 brand-3：brand-3（#10b981）压白字只有 2.54，
+ * 作按钮底不够读。三态由浅到深 brand-2 -> brand-1 -> brand-deep。
  * -------------------------------------------------------------------------- */
 
 :root {
   --vp-button-brand-border: transparent;
   --vp-button-brand-text: var(--vp-c-white);
-  --vp-button-brand-bg: var(--vp-c-brand-3);
+  --vp-button-brand-bg: var(--vp-c-brand-2);
   --vp-button-brand-hover-border: transparent;
   --vp-button-brand-hover-text: var(--vp-c-white);
-  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-hover-bg: var(--vp-c-brand-1);
   --vp-button-brand-active-border: transparent;
   --vp-button-brand-active-text: var(--vp-c-white);
-  --vp-button-brand-active-bg: var(--vp-c-brand-1);
+  --vp-button-brand-active-bg: var(--zd-c-brand-deep);
+}
+
+.dark {
+  /* 暗色阶梯是亮色，白字压上去只有 1.92，故文字换深墨 */
+  --vp-button-brand-text: #022c22;
+  --vp-button-brand-hover-text: #022c22;
+  --vp-button-brand-active-text: #022c22;
 }
 
 /**
@@ -92,18 +117,14 @@
 
 :root {
   --vp-home-hero-name-color: transparent;
-  /* ZoneDeck 品牌绿，与 logo 渐变（#34D399 → #059669）同源 */
+  /* ZoneDeck 品牌绿，与 logo 渐变（#6EE7B7 → #10B981）同源 */
   --vp-home-hero-name-background: -webkit-linear-gradient(
     120deg,
-    #059669 30%,
-    #34d399
+    #10b981 30%,
+    #6ee7b7
   );
 
-  --vp-home-hero-image-background-image: linear-gradient(
-    -45deg,
-    #10b981 50%,
-    #a7f3d0 50%
-  );
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, #10b98145 50%, #6ee7b785 50%);
   --vp-home-hero-image-filter: blur(44px);
 }
 

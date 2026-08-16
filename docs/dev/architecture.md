@@ -64,7 +64,7 @@ ZoneDeck v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通�
 ## 工程结构（Cargo workspace）
 
 ```
-Boss-Key/
+ZoneDeck/
 ├── Cargo.toml                      workspace（含 release profile 调优）
 ├── crates/
 │   ├── common/                     共享库（无平台依赖，可跨平台编译）

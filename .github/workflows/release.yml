@@ -178,7 +178,7 @@ jobs:
         run: Compress-Archive -Path "dist/ZoneDeck" -DestinationPath "ZoneDeck-$env:TAG-portable.zip"
 
       # 构建来源证明（Sigstore）：证明产物由本仓库的本 workflow 从该 commit 构建。
-      # 用户可用 gh attestation verify <文件> -R IvanHanloth/Boss-Key 核验。
+      # 用户可用 gh attestation verify <文件> -R IvanHanloth/ZoneDeck 核验。
       - name: Generate artifact attestation
         uses: actions/attest-build-provenance@v2
         with:

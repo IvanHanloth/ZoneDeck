@@ -23,8 +23,8 @@ The frontend is **embedded** into `zonedeck-config.exe` at build time, so the fi
 ## Cloning the project
 
 ```bash
-git clone https://github.com/IvanHanloth/Boss-Key.git
-cd Boss-Key
+git clone https://github.com/IvanHanloth/ZoneDeck.git
+cd ZoneDeck
 ```
 
 ## Common commands

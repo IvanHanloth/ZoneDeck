@@ -45,4 +45,4 @@ Reference material: [Configuration fields](/en/dev/config-reference), [IPC proto
 
 ## Repository
 
-<https://github.com/IvanHanloth/Boss-Key>
+<https://github.com/IvanHanloth/ZoneDeck>

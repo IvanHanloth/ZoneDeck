@@ -4,7 +4,7 @@ title: 安装与版本选择
 
 # 安装与版本选择
 
-ZoneDeck 的所有版本均可从 GitHub [Release 页面](https://github.com/IvanHanloth/Boss-Key/releases) 下载。
+ZoneDeck 的所有版本均可从 GitHub [Release 页面](https://github.com/IvanHanloth/ZoneDeck/releases) 下载。
 
 ## 选择合适的软件包
 

@@ -450,7 +450,7 @@ fn app_info() -> AppInfo {
         name: zonedeck_common::APP_NAME,
         // 程序版本（非配置 schema 版本 APP_CONFIG_VERSION）。
         version: env!("CARGO_PKG_VERSION"),
-        website: "https://github.com/IvanHanloth/Boss-Key",
+        website: "https://github.com/IvanHanloth/ZoneDeck",
         author: "Ivan Hanloth",
         email: "ivan@hanloth.com",
         blog: "https://blog.ivan-hanloth.cn/",

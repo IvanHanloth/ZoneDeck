@@ -26,10 +26,10 @@ No. Hiding only records windows that were **visible at the time**, and restoring
 ZoneDeck listens for global hotkeys and hides windows, behaviour that antivirus software sometimes misreads. v3 uses a native single-file Rust implementation, which considerably reduces false positives. If it is still blocked:
 
 - Add ZoneDeck's **program folder** to your antivirus allowlist;
-- Download from the [official Releases page](https://github.com/IvanHanloth/Boss-Key/releases) rather than third-party sources.
+- Download from the [official Releases page](https://github.com/IvanHanloth/ZoneDeck/releases) rather than third-party sources.
 
 ::: tip Verifying build provenance
-Official artefacts carry build provenance (a Sigstore attestation). Advanced users can run `gh attestation verify <file> -R IvanHanloth/Boss-Key` to confirm an artefact really was built by the official repository.
+Official artefacts carry build provenance (a Sigstore attestation). Advanced users can run `gh attestation verify <file> -R IvanHanloth/ZoneDeck` to confirm an artefact really was built by the official repository.
 :::
 
 ## I pressed the hide hotkey and nothing happened
@@ -81,5 +81,5 @@ Windows 10 and later work out of the box. On Windows 7 you must ensure WebView2 
 ## Still stuck?
 
 - Check the relevant chapter of this documentation;
-- Open an [issue](https://github.com/IvanHanloth/Boss-Key/issues) on GitHub;
+- Open an [issue](https://github.com/IvanHanloth/ZoneDeck/issues) on GitHub;
 - Send feedback from the [About & Feedback](/en/guide/update) page in the settings window.

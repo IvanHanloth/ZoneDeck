@@ -76,7 +76,7 @@ pnpm docs:preview
 ## Images and screenshots
 
 - Put images in `docs/public/` and reference them from the **root path** in Markdown, for example `![caption](/screenshot-1.png)`.
-- The site is deployed on a custom domain, so `base` is `/`. If it moved to a GitHub Pages project site (`/Boss-Key/`), VitePress would prefix `public` assets automatically — Markdown never needs to write `base` by hand.
+- The site is deployed on a custom domain, so `base` is `/`. If it moved to a GitHub Pages project site (`/ZoneDeck/`), VitePress would prefix `public` assets automatically — Markdown never needs to write `base` by hand.
 
 ## VitePress features
 

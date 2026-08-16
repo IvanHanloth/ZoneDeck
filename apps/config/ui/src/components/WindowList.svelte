@@ -206,7 +206,7 @@
     border-color: var(--accent);
   }
   .mini.active {
-    color: #fff;
+    color: var(--on-accent);
     background: var(--accent);
     border-color: var(--accent);
   }

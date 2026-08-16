@@ -64,7 +64,7 @@ ZoneDeck v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 ## 工程結構（Cargo workspace）
 
 ```
-Boss-Key/
+ZoneDeck/
 ├── Cargo.toml                      workspace（含 release profile 調校）
 ├── crates/
 │   ├── common/                     共用程式庫（無平台相依，可跨平台編譯）

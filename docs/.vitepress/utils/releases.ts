@@ -17,7 +17,7 @@ export interface Release {
   assets: ReleaseAsset[]
 }
 
-const REPO = process.env.GITHUB_REPOSITORY ?? 'IvanHanloth/Boss-Key'
+const REPO = process.env.GITHUB_REPOSITORY ?? 'IvanHanloth/ZoneDeck'
 // 网络不可用（例如本地无 token 触发限流）时，退回仓库里已提交的快照，保证构建不失败。
 const FALLBACK_PATH = fileURLToPath(new URL('../../public/releases.json', import.meta.url))
 

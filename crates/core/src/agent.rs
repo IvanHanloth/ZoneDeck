@@ -348,7 +348,10 @@ impl AgentState {
             );
             if !self.persist_warned {
                 self.persist_warned = true;
-                self.balloon(APP_NAME, i18n::t(Msg::RecoveryPersistFailedBody));
+                self.balloon(
+                    Msg::RecoveryPersistFailedTitle,
+                    Msg::RecoveryPersistFailedBody,
+                );
             }
         }
     }
@@ -364,7 +367,7 @@ impl AgentState {
         let setting = self.config.setting.clone();
         let plan = self.hide_with_plan_using(&setting, targets, freeze_set);
         if self.config.notifications.on_hide && !plan.fresh.is_empty() {
-            self.balloon(APP_NAME, i18n::t(Msg::HiddenBody));
+            self.balloon(Msg::HiddenTitle, Msg::HiddenBody);
         }
         plan
     }
@@ -453,14 +456,15 @@ impl AgentState {
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_show {
-            self.balloon(APP_NAME, i18n::t(Msg::ShownBody));
+            self.balloon(Msg::ShownTitle, Msg::ShownBody);
         }
     }
 
     /// 发送托盘气泡（托盘不存在或已隐藏时静默忽略）。
-    fn balloon(&self, title: &str, message: &str) {
+    /// 标题与正文必须成对传入，保证各处气泡样式一致，详见 [`Msg`] 上的说明。
+    fn balloon(&self, title: Msg, body: Msg) {
         if let Some(tray) = &self.tray {
-            tray.balloon(title, message);
+            tray.balloon(i18n::t(title), i18n::t(body));
         }
     }
 
@@ -912,7 +916,10 @@ fn launch_settings(state: &mut AgentState, action: Option<&str>) {
             "核心所在目录下找不到配置程序（config.exe / zonedeck-config.exe），无法打开设置界面"
         );
         if let Some(tray) = &state.tray {
-            tray.balloon(APP_NAME, i18n::t(Msg::ConfigExeMissing));
+            tray.balloon(
+                i18n::t(Msg::ConfigExeMissingTitle),
+                i18n::t(Msg::ConfigExeMissingBody),
+            );
         }
         return;
     };

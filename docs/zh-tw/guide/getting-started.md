@@ -38,10 +38,10 @@ title: 快速上手
 
 <StatusBar variant="offline" />
 
-- <Play class="lucide-inline" style="color:#2f9e63" /> **啟動核心**：以一般使用者身分啟動核心。
+- <Play class="lucide-inline" style="color:#0e7490" /> **啟動核心**：以一般使用者身分啟動核心。
 - <Shield class="lucide-inline" style="color:#3b82f6" /> **以系統管理員啟動**：以系統管理員身分啟動核心（增強凍結等功能需要）。
 
-**② 核心已執行** —— 核心正在執行，狀態文字與標示為綠色：
+**② 核心已執行** —— 核心正在執行，狀態文字與標示為青色：
 
 <StatusBar variant="user" />
 
@@ -51,8 +51,8 @@ title: 快速上手
 
 ::: tip 如何區分執行身分
 
-- <span class="status-dot" style="color:#2f9e63"></span> **圓點標示**：核心正在以一般使用者身分執行。
-- <Shield class="lucide-inline" style="color:#2f9e63" /> **盾牌標示**：核心正在以系統管理員身分執行。
+- <span class="status-dot" style="color:#0e7490"></span> **圓點標示**：核心正在以一般使用者身分執行。
+- <Shield class="lucide-inline" style="color:#0e7490" /> **盾牌標示**：核心正在以系統管理員身分執行。
 :::
 
 
@@ -60,8 +60,8 @@ title: 快速上手
 
 - <ScrollText class="lucide-inline" /> **開啟記錄檔資料夾**：開啟執行記錄所在的 `logs` 資料夾，便於排查問題。
 - <span style="opacity:.7">◐</span> **切換佈景主題**：在**跟隨系統 → 淺色 → 深色**之間循環切換介面佈景主題。
-- <span class="status-dot" style="color:#2f9e63"></span> **快速鍵狀態**：顯示核心目前是否在監聽快速鍵與滑鼠。<span class="status-dot" style="color:#2f9e63"></span> **快速鍵生效** 表示正常監聽；進入「快速鍵與滑鼠」設定頁錄製時會暫時顯示為 <span class="status-dot" style="color:#e5484d"></span> **快速鍵暫停**，避免誤觸發。
-- <Check class="lucide-inline" style="color:#2f9e63" /> **儲存狀態**：顯示 **已儲存**／**儲存中…**，設定變更會自動儲存，不需手動儲存。
+- <span class="status-dot" style="color:#0e7490"></span> **快速鍵狀態**：顯示核心目前是否在監聽快速鍵與滑鼠。<span class="status-dot" style="color:#0e7490"></span> **快速鍵生效** 表示正常監聽；進入「快速鍵與滑鼠」設定頁錄製時會暫時顯示為 <span class="status-dot" style="color:#e5484d"></span> **快速鍵暫停**，避免誤觸發。
+- <Check class="lucide-inline" style="color:#0e7490" /> **儲存狀態**：顯示 **已儲存**／**儲存中…**，設定變更會自動儲存，不需手動儲存。
 
 ## 通知區域選單
 

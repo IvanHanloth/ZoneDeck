@@ -64,7 +64,7 @@ The core defaults to `asInvoker` and **does not force UAC**. Only these two need
 ## Project layout (Cargo workspace)
 
 ```
-Boss-Key/
+ZoneDeck/
 ├── Cargo.toml                      workspace (including release profile tuning)
 ├── crates/
 │   ├── common/                     Shared library (no platform dependency; builds cross-platform)

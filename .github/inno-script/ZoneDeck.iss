@@ -16,7 +16,7 @@
 
 #define MyAppName "ZoneDeck"
 #define MyAppPublisher "Ivan Hanloth"
-#define MyAppURL "https://github.com/IvanHanloth/Boss-Key"
+#define MyAppURL "https://github.com/IvanHanloth/ZoneDeck"
 #define CoreExe "ZoneDeck.exe"
 ; 改名（Boss Key → ZoneDeck）前的核心映像名，升级时用于结束旧进程并删除旧文件
 #define LegacyCoreExe "Boss Key.exe"
