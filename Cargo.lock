@@ -5169,7 +5169,7 @@ checksum = "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa"
 
 [[package]]
 name = "zonedeck-common"
-version = "3.1.0-rc.1"
+version = "3.1.0-rc.2"
 dependencies = [
  "regex",
  "serde",
@@ -5180,7 +5180,7 @@ dependencies = [
 
 [[package]]
 name = "zonedeck-config"
-version = "3.1.0-rc.1"
+version = "3.1.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -5195,7 +5195,7 @@ dependencies = [
 
 [[package]]
 name = "zonedeck-core"
-version = "3.1.0-rc.1"
+version = "3.1.0-rc.2"
 dependencies = [
  "serde",
  "serde_json",
