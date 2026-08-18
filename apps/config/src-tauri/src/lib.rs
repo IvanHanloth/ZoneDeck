@@ -228,6 +228,16 @@ async fn run_freeze(
         } else {
             pids
         };
+        let names = freeze::process_names();
+        let targets: Vec<u32> = targets
+            .into_iter()
+            .filter(|pid| {
+                !suspend
+                    || !zonedeck_common::is_builtin_freeze_guarded(
+                        names.get(pid).map(String::as_str).unwrap_or_default(),
+                    )
+            })
+            .collect();
         let mut failed = 0usize;
         for pid in &targets {
             if *pid == 0 {
@@ -409,6 +419,41 @@ async fn set_hotkeys_enabled(enabled: bool) -> Result<bool, String> {
 #[tauri::command]
 async fn pssuspend_available() -> bool {
     blocking(|| zonedeck_core::freeze::pssuspend_available(&exe_dir())).await
+}
+
+/// 一批正则各自命中随机样本的条数；`None` 表示该条正则编译失败。
+/// 界面据此提示「可能过宽」。判定跑在这里而不是前端：与核心同一个 `regex` 引擎，
+/// `(?i)` 这类内联标志 JS 的 RegExp 根本编译不了，放前端必然误判。
+#[tauri::command]
+async fn regex_breadth(patterns: Vec<String>) -> Vec<Option<usize>> {
+    blocking(move || {
+        patterns
+            .iter()
+            .map(|p| zonedeck_common::regex_breadth(p))
+            .collect()
+    })
+    .await
+}
+
+/// 白名单里不可删除的内置项（永不冻结的自有进程），供界面渲染锁定行。
+/// 由后端吐出而非前端另抄一份常量，避免两边漂移。
+#[derive(Serialize)]
+struct BuiltinWhitelistEntry {
+    /// 稳定标识，界面据此查本地化的角色名。
+    key: &'static str,
+    /// 该角色覆盖的全部映像名。
+    names: &'static [&'static str],
+}
+
+#[tauri::command]
+fn whitelist_builtins() -> Vec<BuiltinWhitelistEntry> {
+    zonedeck_common::BUILTIN_FREEZE_GUARDS
+        .iter()
+        .map(|g| BuiltinWhitelistEntry {
+            key: g.key,
+            names: g.names,
+        })
+        .collect()
 }
 
 /// 启动参数里请求的动作（如 `restore`/`about`），只在启动时读一次。
@@ -601,6 +646,8 @@ pub fn run() {
             open_log_dir,
             set_hotkeys_enabled,
             pssuspend_available,
+            regex_breadth,
+            whitelist_builtins,
             startup_action,
             app_info,
             data_location,

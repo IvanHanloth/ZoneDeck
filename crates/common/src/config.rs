@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::APP_CONFIG_VERSION;
 use crate::i18n::LANG_AUTO;
-use crate::model::{ProcessRule, WindowInfo, WindowRule};
+use crate::model::{ProcessRule, WhitelistRule, WindowInfo, WindowRule};
 
 pub const DEFAULT_HIDE_HOTKEY: &str = "Ctrl+Q";
 pub const DEFAULT_CLOSE_HOTKEY: &str = "Win+Esc";
@@ -523,6 +523,13 @@ pub struct Config {
     /// 「进程」规则（粗粒度）。
     #[serde(default)]
     pub process_rules: Vec<ProcessRule>,
+    /// 白名单：逐进程声明忽略隐藏 / 冻结 / 静音，见 [`Config::whitelist`]。
+    ///
+    /// 用 `Option` 只为分辨「文件里没有这个键」与「用户清空了列表」：前者
+    /// （老配置 / 全新配置）由 [`Config::normalize`] 播种默认项，后者保持为空。
+    /// 归一后恒为 `Some`，写出的永远是数组。
+    #[serde(default)]
+    pub whitelist: Option<Vec<WhitelistRule>>,
     /// 旧版扁平绑定，仅用于反序列化迁移；迁移后清空、不再序列化。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hide_binding: Vec<WindowInfo>,
@@ -541,9 +548,27 @@ impl Default for Config {
             verhub: Verhub::default(),
             window_rules: Vec::new(),
             process_rules: Vec::new(),
+            whitelist: Some(default_whitelist()),
             hide_binding: Vec::new(),
         }
     }
+}
+
+/// 全新配置预置的白名单。
+///
+/// 文件资源管理器是桌面与任务栏本身：隐藏它会让桌面图标一并消失，冻结它会让整个
+/// 外壳卡住，两者都不是用户想要的。用户可以删掉这条。
+/// ZoneDeck 自身的强制保护不在这里，见 [`crate::matching::BUILTIN_FREEZE_GUARDS`]。
+fn default_whitelist() -> Vec<WhitelistRule> {
+    vec![WhitelistRule {
+        process: "explorer.exe".to_string(),
+        path: String::new(),
+        regex: None,
+        by_name: true,
+        ignore_hide: true,
+        ignore_freeze: true,
+        ignore_mute: false,
+    }]
 }
 
 impl Config {
@@ -602,7 +627,18 @@ impl Config {
                 .collect();
         }
         self.hide_binding.clear();
+        // 缺这一节的配置（老配置与全新配置）播种默认白名单；`[]` 是用户清空的结果，
+        // 不再播种，否则删掉的条目每次启动都会长回来。
+        if self.whitelist.is_none() {
+            self.whitelist = Some(default_whitelist());
+        }
         self.setting.normalize();
+    }
+
+    /// 当前生效的白名单。[`Config::normalize`] 之后恒非空 `Option`，此处对未归一的
+    /// 配置回落空表。
+    pub fn whitelist(&self) -> &[WhitelistRule] {
+        self.whitelist.as_deref().unwrap_or_default()
     }
 
     /// 写入配置。先写同目录下的临时文件再原子替换，写到一半失败也不会
@@ -911,6 +947,10 @@ mod tests {
                 ProcessRule::from_window(&w),
                 ProcessRule::from_regex(".*\\.exe$"),
             ],
+            whitelist: Some(vec![
+                WhitelistRule::from_window(&w),
+                WhitelistRule::from_regex("^b.*"),
+            ]),
             ..Config::default()
         }
     }
@@ -1153,6 +1193,58 @@ mod tests {
         assert_eq!(c.process_rules.len(), 2);
         assert!(!c.process_rules[0].is_regex());
         assert!(c.process_rules[1].is_regex());
+    }
+
+    /// 老配置没有 `whitelist` 键：播种默认项，老用户升级后同样受保护。
+    #[test]
+    fn missing_whitelist_is_seeded_with_explorer() {
+        let c = Config::from_json(r#"{"setting": {}}"#).unwrap();
+        assert_eq!(c.whitelist().len(), 1);
+        let rule = &c.whitelist()[0];
+        assert_eq!(rule.process, "explorer.exe");
+        assert!(rule.by_name, "按文件名匹配，不锁死安装目录");
+        assert!(rule.ignore_hide, "隐藏它会连桌面图标一起没掉");
+        assert!(rule.ignore_freeze, "冻结它会让整个外壳卡住");
+        assert!(!rule.ignore_mute);
+        assert_eq!(Config::default().whitelist(), c.whitelist(), "全新配置一致");
+    }
+
+    /// 用户清空白名单后必须保持为空，否则删掉的条目每次启动都会长回来。
+    #[test]
+    fn emptied_whitelist_is_not_reseeded() {
+        let c = Config::from_json(r#"{"whitelist": []}"#).unwrap();
+        assert!(c.whitelist().is_empty());
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert!(back.whitelist().is_empty(), "写回再读仍应为空");
+    }
+
+    #[test]
+    fn whitelist_round_trips_all_three_modes() {
+        let c = Config::from_json(
+            r#"{"whitelist": [
+                {"process": "a.exe", "ignore_hide": true, "ignore_mute": true},
+                {"regex": "(?i)^b", "by_name": false, "ignore_freeze": true}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(c.whitelist().len(), 2);
+        assert!(c.whitelist()[0].ignore_hide && c.whitelist()[0].ignore_mute);
+        assert!(!c.whitelist()[0].ignore_freeze, "三个开关相互独立");
+        assert!(c.whitelist()[1].is_regex() && !c.whitelist()[1].by_name);
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.whitelist, c.whitelist, "写回后应保留");
+    }
+
+    /// 归一后 `whitelist` 恒为 `Some`：前端与配置文件永远看到数组，不会是 null。
+    #[test]
+    fn whitelist_is_always_written_as_an_array() {
+        let json = Config::from_json(r#"{"whitelist": []}"#)
+            .unwrap()
+            .to_json()
+            .unwrap();
+        assert!(json.contains("\"whitelist\": []"), "应写出空数组: {json}");
+        assert!(!json.contains("\"whitelist\": null"));
     }
 
     #[test]

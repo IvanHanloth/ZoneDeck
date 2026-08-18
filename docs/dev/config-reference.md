@@ -24,6 +24,7 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `verhub` | object | 更新 / 公告相关，见下 |
 | `window_rules` | object[] | 窗口规则（细粒度） |
 | `process_rules` | object[] | 进程规则（粗粒度） |
+| `whitelist` | object[] | 白名单：逐进程声明忽略隐藏 / 冻结 / 静音 |
 | `hide_binding` | object[] | *V2版*扁平绑定，仅用于迁移，迁移后清空、不再写回 |
 
 ## `hotkey`
@@ -144,6 +145,26 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `by_name` | `false` | 只按文件名匹配，忽略路径 |
 | `include_untitled` | `true` | 是否纳入无标题窗口（进程规则默认纳入） |
 | `include_background` | `false` | 是否纳入后台窗口 |
+
+## `whitelist`（白名单）
+
+按进程声明在哪些模式下跳过，见[白名单](/guide/whitelist)。匹配方式与 `process_rules` 同构，但**默认按文件名**匹配；文件名与路径的比较不区分大小写。
+
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `process` | | 进程名 |
+| `path` | | 可执行文件路径 |
+| `regex` | | 正则（作用于路径或文件名） |
+| `by_name` | `true` | 只按文件名匹配，忽略路径 |
+| `ignore_hide` | `false` | 隐藏时跳过该程序的窗口 |
+| `ignore_freeze` | `false` | 隐藏后不冻结该程序的进程 |
+| `ignore_mute` | `false` | 隐藏后不静音该程序的进程 |
+
+::: tip 键缺失 vs 空数组
+`whitelist` **键不存在**（老配置 / 全新配置）时会播种一条默认的 `explorer.exe`；写成 `[]` 表示用户清空了列表，不会再被播种。归一后该字段恒为数组，不会是 `null`。
+:::
+
+ZoneDeck 自身的核心与配置程序（`ZoneDeck.exe` / `core.exe` / `config.exe` / `zonedeck-config.exe`）**恒被排除在冻结之外**。该保护写死在 `crates/common/src/matching.rs` 的 `BUILTIN_FREEZE_GUARDS` 里，不出现在配置文件中，手改配置也绕不过去。
 
 ## 兼容与迁移
 

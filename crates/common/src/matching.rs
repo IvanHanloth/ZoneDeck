@@ -1,12 +1,13 @@
 //! 窗口 / 进程规则匹配引擎。
 //!
 //! 窗口规则（细）按句柄 + 标题锁定单个窗口，句柄失效时按「标题 + 进程路径」追溯；
-//! 进程规则（粗）按可执行文件路径隐藏该程序的所有窗口。均为纯函数。
+//! 进程规则（粗）按可执行文件路径隐藏该程序的所有窗口；白名单（[`is_ignored`]）
+//! 反向声明某个程序在哪些模式下应被跳过。均为纯函数。
 
 use regex::Regex;
 
 use crate::NO_TITLE;
-use crate::model::{ProcessRule, WindowInfo, WindowRule};
+use crate::model::{ProcessRule, WhitelistRule, WindowInfo, WindowRule};
 
 /// 一条窗口规则针对当前存活窗口的解析结果。
 #[derive(Debug, PartialEq, Eq)]
@@ -123,6 +124,194 @@ pub fn match_process_rule<'a>(
             candidates.filter(|w| &subject(w) == want).collect()
         }
     }
+}
+
+/// 白名单声明的忽略模式，与配置界面「白名单」页的三个开关一一对应。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IgnoreMode {
+    /// 隐藏时跳过该程序的窗口。
+    Hide,
+    /// 隐藏后不冻结该程序的进程。
+    Freeze,
+    /// 隐藏后不静音该程序的进程。
+    Mute,
+}
+
+/// 一条内置的强制忽略冻结项：ZoneDeck 自身的一个角色，及其全部映像名。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuiltinGuard {
+    /// 稳定标识，供界面查对应的本地化角色名；不随品牌 / 文件名变化。
+    pub key: &'static str,
+    /// 该角色可能的映像名。生产名与开发构建名各列一条，同
+    /// `zonedeck_core` 定位配置程序时的先例。
+    pub names: &'static [&'static str],
+}
+
+/// 永不冻结的自有进程。
+///
+/// 核心通常是 explorer.exe 的子进程（快捷方式 / 自启拉起），配置程序又是核心的子
+/// 进程；开启「冻结完整进程」后冻结 explorer.exe 会把两者一并挂起，届时热键失效、
+/// 恢复工具打不开、已隐藏的窗口再也回不来。这条保护不可由用户关闭，故写死在此，
+/// 并由 [`is_ignored`] 内部兜底，调用方无从绕过。
+pub const BUILTIN_FREEZE_GUARDS: [BuiltinGuard; 2] = [
+    BuiltinGuard {
+        key: "core",
+        names: &["ZoneDeck.exe", "core.exe"],
+    },
+    BuiltinGuard {
+        key: "config",
+        names: &["config.exe", "zonedeck-config.exe"],
+    },
+];
+
+/// 映像名是否属于内置强制忽略冻结项。Windows 文件名大小写不敏感，故忽略大小写。
+pub fn is_builtin_freeze_guarded(process: &str) -> bool {
+    BUILTIN_FREEZE_GUARDS
+        .iter()
+        .flat_map(|g| g.names)
+        .any(|n| n.eq_ignore_ascii_case(process))
+}
+
+/// 一条白名单条目是否命中该进程。`path` 为空（如枚举不到路径的目标）时按路径匹配
+/// 的条目一律不命中。
+fn whitelist_rule_matches(rule: &WhitelistRule, path: &str, process: &str) -> bool {
+    let subject = if rule.by_name { process } else { path };
+    if subject.is_empty() {
+        return false;
+    }
+    match &rule.regex {
+        Some(pattern) => Regex::new(pattern).is_ok_and(|re| re.is_match(subject)),
+        None => {
+            let want = if rule.by_name {
+                &rule.process
+            } else {
+                &rule.path
+            };
+            // Windows 上文件名与路径都大小写不敏感：Explorer.EXE 必须与 explorer.exe 同命中。
+            !want.is_empty() && want.eq_ignore_ascii_case(subject)
+        }
+    }
+}
+
+/// 进程（由完整路径 + 映像名标识）是否被声明忽略该模式。
+///
+/// [`IgnoreMode::Freeze`] 先过 [`BUILTIN_FREEZE_GUARDS`]：内置保护写在这里而非各调
+/// 用方，核心侧不可能漏掉。
+pub fn is_ignored(rules: &[WhitelistRule], path: &str, process: &str, mode: IgnoreMode) -> bool {
+    if mode == IgnoreMode::Freeze && is_builtin_freeze_guarded(process) {
+        return true;
+    }
+    rules
+        .iter()
+        .filter(|r| match mode {
+            IgnoreMode::Hide => r.ignore_hide,
+            IgnoreMode::Freeze => r.ignore_freeze,
+            IgnoreMode::Mute => r.ignore_mute,
+        })
+        .any(|r| whitelist_rule_matches(r, path, process))
+}
+
+/// 白名单里是否存在**按路径**（含路径正则）声明忽略冻结的条目。
+///
+/// 冻结集只拿得到 PID，映像名可由一次进程快照批量得出，完整路径却要逐 PID
+/// `OpenProcess`。调用方据此决定要不要付这笔开销。
+pub fn whitelist_needs_paths(rules: &[WhitelistRule], mode: IgnoreMode) -> bool {
+    rules.iter().any(|r| {
+        !r.by_name
+            && match mode {
+                IgnoreMode::Hide => r.ignore_hide,
+                IgnoreMode::Freeze => r.ignore_freeze,
+                IgnoreMode::Mute => r.ignore_mute,
+            }
+    })
+}
+
+/// 过宽判定用的样本条数。
+pub const BREADTH_SAMPLES: usize = 200;
+/// 命中数超过它即判定「可能过宽」。
+pub const BREADTH_LIMIT: usize = BREADTH_SAMPLES / 2;
+
+/// [`breadth_samples`] 的随机种子。**定种是刻意的**：同一条正则每次都得到同一结论，
+/// 判定可写进单测，界面上也不会时红时不红。
+const BREADTH_SEED: u64 = 0x5A17_C0DE_1234_9E77;
+
+/// 样本用字符集。窗口标题正则与进程路径正则都要能被拉开，故 ASCII 字母数字、
+/// 空格、常见标点与中日文字符混排。
+const SAMPLE_ALPHABET: &[char] = &[
+    'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
+    't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
+    'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4',
+    '5', '6', '7', '8', '9', ' ', '-', '_', '.', ',', '(', ')', '[', ']', '—', '·', '文', '档',
+    '窗', '口', '设', '置', '浏', '览', '器', '音', '乐', '视', '频', '聊', '天',
+];
+
+/// 路径形样本的目录段，凑出 `C:\Program Files\…\xxx.exe` 的形状。
+const SAMPLE_DIRS: &[&str] = &[
+    "C:\\Program Files",
+    "C:\\Program Files (x86)",
+    "C:\\Windows\\System32",
+    "D:\\Games",
+    "E:\\我的程序",
+    "C:\\Users\\Public\\AppData\\Local",
+];
+
+/// xorshift64*：足够均匀、十行写完，不必为生成样本引入 rand 依赖。
+struct Rng(u64);
+
+impl Rng {
+    fn next(&mut self) -> u64 {
+        self.0 ^= self.0 >> 12;
+        self.0 ^= self.0 << 25;
+        self.0 ^= self.0 >> 27;
+        self.0.wrapping_mul(0x2545_F491_4F6C_DD1D)
+    }
+
+    /// `[0, n)` 内的伪随机数；`n` 为 0 时返回 0。
+    fn below(&mut self, n: usize) -> usize {
+        if n == 0 {
+            0
+        } else {
+            (self.next() % n as u64) as usize
+        }
+    }
+
+    /// 由 [`SAMPLE_ALPHABET`] 拼出的 `len` 字符随机串。
+    fn word(&mut self, len: usize) -> String {
+        (0..len)
+            .map(|_| SAMPLE_ALPHABET[self.below(SAMPLE_ALPHABET.len())])
+            .collect()
+    }
+}
+
+/// [`BREADTH_SAMPLES`] 条伪随机样本串：约三成塑造成 Windows 路径形状（进程规则的
+/// 正则作用于路径），其余是长度 1–40 的自由文本（窗口标题形状）。
+pub fn breadth_samples() -> Vec<String> {
+    let mut rng = Rng(BREADTH_SEED);
+    (0..BREADTH_SAMPLES)
+        .map(|i| {
+            if i % 10 < 3 {
+                let dir = SAMPLE_DIRS[rng.below(SAMPLE_DIRS.len())];
+                let len = 3 + rng.below(9);
+                format!("{dir}\\{}.exe", rng.word(len))
+            } else {
+                let len = 1 + rng.below(40);
+                rng.word(len)
+            }
+        })
+        .collect()
+}
+
+/// 一条正则命中 [`breadth_samples`] 的条数；正则编译失败时返回 `None`
+/// （不判过宽——匹配不了任何东西是另一回事，核心侧已有 WARN）。
+pub fn regex_breadth(pattern: &str) -> Option<usize> {
+    let re = Regex::new(pattern).ok()?;
+    Some(breadth_samples().iter().filter(|s| re.is_match(s)).count())
+}
+
+/// 正则是否「可能过宽」：命中随机样本超过 [`BREADTH_LIMIT`] 条。
+/// 过宽的规则会连带命中大量无关窗口 / 进程，通常是写错了。
+pub fn regex_is_broad(pattern: &str) -> bool {
+    regex_breadth(pattern).is_some_and(|n| n > BREADTH_LIMIT)
 }
 
 #[cfg(test)]
@@ -344,5 +533,219 @@ mod tests {
     fn regex_validity_helper() {
         assert!(regex_is_valid("^foo.*$"));
         assert!(!regex_is_valid("("));
+    }
+
+    /// 便捷构造：一条按文件名匹配、只开指定模式的白名单条目。
+    fn allow(process: &str, mode: IgnoreMode) -> WhitelistRule {
+        let w = win("", 0, process, 0, &format!("C:\\{process}"));
+        let mut r = WhitelistRule::from_window(&w);
+        match mode {
+            IgnoreMode::Hide => r.ignore_hide = true,
+            IgnoreMode::Freeze => r.ignore_freeze = true,
+            IgnoreMode::Mute => r.ignore_mute = true,
+        }
+        r
+    }
+
+    #[test]
+    fn ignore_modes_are_independent() {
+        let rules = [allow("explorer.exe", IgnoreMode::Hide)];
+        let (path, name) = ("C:\\Windows\\explorer.exe", "explorer.exe");
+        assert!(is_ignored(&rules, path, name, IgnoreMode::Hide));
+        assert!(
+            !is_ignored(&rules, path, name, IgnoreMode::Mute),
+            "只勾了忽略隐藏，不应连带忽略静音"
+        );
+        assert!(
+            !is_ignored(&rules, path, name, IgnoreMode::Freeze),
+            "只勾了忽略隐藏，不应连带忽略冻结"
+        );
+    }
+
+    #[test]
+    fn ignore_by_name_is_case_insensitive_and_path_agnostic() {
+        let rules = [allow("Explorer.EXE", IgnoreMode::Hide)];
+        assert!(
+            is_ignored(
+                &rules,
+                "D:\\另一个位置\\explorer.exe",
+                "explorer.exe",
+                IgnoreMode::Hide
+            ),
+            "Windows 文件名大小写不敏感，且按文件名匹配应忽略安装目录"
+        );
+    }
+
+    #[test]
+    fn ignore_by_path_needs_the_exact_location() {
+        let mut rule = allow("explorer.exe", IgnoreMode::Hide);
+        rule.by_name = false;
+        rule.path = "C:\\Windows\\explorer.exe".to_string();
+        let rules = [rule];
+        assert!(is_ignored(
+            &rules,
+            "c:\\windows\\explorer.exe",
+            "explorer.exe",
+            IgnoreMode::Hide
+        ));
+        assert!(
+            !is_ignored(
+                &rules,
+                "D:\\别处\\explorer.exe",
+                "explorer.exe",
+                IgnoreMode::Hide
+            ),
+            "按路径匹配不应命中别处的同名程序"
+        );
+        assert!(
+            !is_ignored(&rules, "", "explorer.exe", IgnoreMode::Hide),
+            "查不到路径时按路径匹配的条目不命中"
+        );
+    }
+
+    #[test]
+    fn ignore_regex_matches_chosen_subject() {
+        let mut by_name = WhitelistRule::from_regex("(?i)^wechat");
+        by_name.ignore_mute = true;
+        assert!(is_ignored(
+            &[by_name],
+            "D:\\Program Files\\WeChat.exe",
+            "WeChat.exe",
+            IgnoreMode::Mute
+        ));
+
+        let mut by_path = WhitelistRule::from_regex(r"(?i)^c:\\windows\\");
+        by_path.by_name = false;
+        by_path.ignore_hide = true;
+        let rules = [by_path];
+        assert!(is_ignored(
+            &rules,
+            "C:\\Windows\\explorer.exe",
+            "explorer.exe",
+            IgnoreMode::Hide
+        ));
+        assert!(!is_ignored(
+            &rules,
+            "D:\\Games\\a.exe",
+            "a.exe",
+            IgnoreMode::Hide
+        ));
+    }
+
+    #[test]
+    fn invalid_ignore_regex_matches_nothing() {
+        let mut rule = WhitelistRule::from_regex("(");
+        rule.ignore_hide = true;
+        assert!(
+            !is_ignored(&[rule], "C:\\a.exe", "a.exe", IgnoreMode::Hide),
+            "写坏的正则不应意外放行一切"
+        );
+    }
+
+    /// 冻结自身会让已隐藏的窗口再也无法恢复，这条保护不依赖任何用户配置。
+    #[test]
+    fn builtin_guards_block_freezing_ourselves_with_empty_whitelist() {
+        for name in [
+            "ZoneDeck.exe",
+            "config.exe",
+            "core.exe",
+            "zonedeck-config.exe",
+        ] {
+            assert!(
+                is_ignored(&[], "D:\\安装目录\\", name, IgnoreMode::Freeze),
+                "{name} 必须恒被排除在冻结之外"
+            );
+            assert!(is_builtin_freeze_guarded(&name.to_ascii_uppercase()));
+        }
+        assert!(!is_builtin_freeze_guarded("explorer.exe"));
+    }
+
+    /// 内置保护只挡冻结：隐藏 / 静音自己的窗口是正常操作。
+    #[test]
+    fn builtin_guards_do_not_leak_into_other_modes() {
+        assert!(!is_ignored(
+            &[],
+            "C:\\a\\ZoneDeck.exe",
+            "ZoneDeck.exe",
+            IgnoreMode::Hide
+        ));
+        assert!(!is_ignored(
+            &[],
+            "C:\\a\\ZoneDeck.exe",
+            "ZoneDeck.exe",
+            IgnoreMode::Mute
+        ));
+    }
+
+    #[test]
+    fn needs_paths_only_when_a_relevant_rule_matches_by_path() {
+        let by_name = [allow("a.exe", IgnoreMode::Freeze)];
+        assert!(!whitelist_needs_paths(&by_name, IgnoreMode::Freeze));
+
+        let mut by_path = allow("a.exe", IgnoreMode::Freeze);
+        by_path.by_name = false;
+        assert!(whitelist_needs_paths(
+            &[by_path.clone()],
+            IgnoreMode::Freeze
+        ));
+        assert!(
+            !whitelist_needs_paths(&[by_path], IgnoreMode::Hide),
+            "该条目没勾忽略隐藏，隐藏模式无需查路径"
+        );
+    }
+
+    #[test]
+    fn breadth_samples_are_deterministic_and_well_shaped() {
+        let a = breadth_samples();
+        assert_eq!(a.len(), BREADTH_SAMPLES);
+        assert_eq!(a, breadth_samples(), "定种：两次生成必须完全一致");
+        assert!(a.iter().all(|s| !s.is_empty()), "样本不得为空串");
+
+        let unique: std::collections::HashSet<&String> = a.iter().collect();
+        assert!(
+            unique.len() > BREADTH_SAMPLES * 9 / 10,
+            "样本应基本互不相同"
+        );
+        let paths = a.iter().filter(|s| s.contains('\\')).count();
+        assert!(
+            (40..=80).contains(&paths),
+            "约三成样本应为路径形状，实际 {paths}"
+        );
+    }
+
+    /// 判定的意义在于分开「命中一切」与「命中特定目标」两类正则。
+    #[test]
+    fn broad_patterns_are_flagged_and_specific_ones_are_not() {
+        for broad in [".*", "", "^", ".", "(?s).*", "[\\s\\S]*"] {
+            assert!(
+                regex_is_broad(broad),
+                "{broad:?} 能命中几乎一切，应判为过宽"
+            );
+        }
+        for narrow in [
+            ".*微信.*",
+            "(?i)^wechat",
+            r"(?i)\\chrome\.exe$",
+            "^项目.*",
+            r".*\.exe$",
+        ] {
+            assert!(
+                !regex_is_broad(narrow),
+                "{narrow:?} 只命中特定目标，不应判为过宽"
+            );
+        }
+    }
+
+    #[test]
+    fn breadth_reports_counts_and_rejects_invalid_patterns() {
+        assert_eq!(regex_breadth(".*"), Some(BREADTH_SAMPLES), "命中全部样本");
+        assert_eq!(regex_breadth("(").as_ref(), None, "写坏的正则无从判定");
+        assert!(!regex_is_broad("("), "无法编译时不判过宽");
+        assert_eq!(
+            regex_breadth("这段文字不可能出现在样本里"),
+            Some(0),
+            "命中不到任何样本"
+        );
+        assert_eq!(BREADTH_LIMIT, 100, "阈值为样本数的一半");
     }
 }

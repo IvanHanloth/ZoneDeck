@@ -88,6 +88,16 @@ const mockConfig = {
       include_background: false,
     },
   ],
+  whitelist: [
+    {
+      process: "explorer.exe",
+      path: "",
+      by_name: true,
+      ignore_hide: true,
+      ignore_freeze: true,
+      ignore_mute: false,
+    },
+  ],
 };
 
 const mockWindows = [
@@ -95,6 +105,7 @@ const mockWindows = [
   { title: "文件传输助手", hwnd: 102, process: "WeChat.exe", PID: 2001, path: "C:\\WeChat.exe" },
   { title: "王者荣耀", hwnd: 201, process: "TiMi.exe", PID: 3002, path: "D:\\Games\\TiMi.exe" },
   { title: "记事本", hwnd: 301, process: "notepad.exe", PID: 4003, path: "C:\\Windows\\notepad.exe" },
+  { title: "此电脑", hwnd: 401, process: "explorer.exe", PID: 5004, path: "C:\\Windows\\explorer.exe" },
 ];
 
 /** mock 下的核心监控状态。 */
@@ -133,6 +144,24 @@ function mockInvoke(cmd, args) {
       return true;
     case "pssuspend_available":
       return false;
+    case "whitelist_builtins":
+      return [
+        { key: "core", names: ["ZoneDeck.exe", "core.exe"] },
+        { key: "config", names: ["config.exe", "zonedeck-config.exe"] },
+      ];
+    // 预览环境没有 regex crate，用 JS 近似：只为把弹窗与标红演出来。
+    // 真实判定在后端（同核心一个引擎），见 crates/common/src/matching.rs。
+    case "regex_breadth":
+      return (args?.patterns ?? []).map((p) => {
+        try {
+          const re = new RegExp(p);
+          return ["", "文档 A", "C:\\Program Files\\a.exe", "窗口", "abc123"].filter((s) =>
+            re.test(s),
+          ).length * 40;
+        } catch {
+          return null;
+        }
+      });
     case "startup_action":
       return null;
     case "set_autostart":

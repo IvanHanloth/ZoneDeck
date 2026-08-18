@@ -10,8 +10,12 @@ pub use config::{
 };
 pub use i18n::{LANG_AUTO, Lang};
 pub use ipc::{Command, Response};
-pub use matching::{WindowResolution, match_process_rule, regex_is_valid, resolve_window_rule};
-pub use model::{ProcessRule, WindowInfo, WindowRule};
+pub use matching::{
+    BUILTIN_FREEZE_GUARDS, BuiltinGuard, IgnoreMode, WindowResolution, is_builtin_freeze_guarded,
+    is_ignored, match_process_rule, regex_breadth, regex_is_broad, regex_is_valid,
+    resolve_window_rule, whitelist_needs_paths,
+};
+pub use model::{ProcessRule, WhitelistRule, WindowInfo, WindowRule};
 
 pub const APP_NAME: &str = "ZoneDeck";
 /// 配置 schema 版本：配置结构变动时才动，与程序版本无关。

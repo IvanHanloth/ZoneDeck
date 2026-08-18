@@ -57,6 +57,8 @@
             <span class="regex-tag"><IconRegex width="12" height="12" /> {t("windowRules.titleRegexTag")}</span>
             <input
               class="regex-input"
+              class:broad={app.broadPatterns.has(rule.regex)}
+              title={app.broadPatterns.has(rule.regex) ? t("broadRegex.inputTitle") : ""}
               placeholder={t("windowRules.titleRegexPlaceholder")}
               bind:value={rule.regex}
               spellcheck="false"
@@ -231,6 +233,11 @@
   .regex-input:focus {
     outline: none;
     border-color: var(--accent);
+  }
+  /* 保存时判定为「可能过宽」，见 BroadRegexModal */
+  .regex-input.broad {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
   }
   .badge {
     flex: none;
