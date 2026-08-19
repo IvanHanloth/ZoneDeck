@@ -20,14 +20,14 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, w};
 use zonedeck_common::ipc::{Command, Response};
-use zonedeck_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, Setting};
+use zonedeck_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, IgnoreMode, Setting};
 
 use crate::effects::WinEffects;
 use crate::effects_worker::{AsyncEffects, EffectsWorker};
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
 use crate::hide::{
-    HideController, HidePlan, RuleOutcome, ShowOutcome, expand_descendants, foreground_target,
-    freezable_pids, resolve_targets,
+    HideController, HidePlan, RuleOutcome, ShowOutcome, expand_descendants,
+    filter_freeze_whitelist, foreground_target, freezable_pids, resolve_targets,
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
@@ -365,21 +365,26 @@ impl AgentState {
     /// 意图先行：先落盘计划后的快照，再隐藏窗口；副作用由专职线程异步执行。
     fn hide_with_plan(&mut self, targets: &[crate::hide::Target], freeze_set: &[u32]) -> HidePlan {
         let setting = self.config.setting.clone();
-        let plan = self.hide_with_plan_using(&setting, targets, freeze_set);
+        let whitelist = self.config.whitelist().to_vec();
+        let plan = self.hide_with_plan_using(&setting, targets, freeze_set, &whitelist);
         if self.config.notifications.on_hide && !plan.fresh.is_empty() {
             self.balloon(Msg::HiddenTitle, Msg::HiddenBody);
         }
         plan
     }
 
-    /// [`Self::hide_with_plan`] 的按指定设置版本（恢复工具的手动隐藏关闭副作用）。
+    /// [`Self::hide_with_plan`] 的按指定设置版本（恢复工具的手动隐藏关闭副作用，
+    /// 并传空白名单——手动勾选窗口是明确意图，用户的软偏好不该拦）。
     fn hide_with_plan_using(
         &mut self,
         setting: &Setting,
         targets: &[crate::hide::Target],
         freeze_set: &[u32],
+        whitelist: &[zonedeck_common::WhitelistRule],
     ) -> HidePlan {
-        let plan = self.controller.plan_hide(setting, targets, freeze_set);
+        let plan = self
+            .controller
+            .plan_hide(setting, targets, freeze_set, whitelist);
         let planned = self.controller.planned_snapshot(&plan);
         self.persist_snapshot(&planned);
         self.controller.commit_hide(plan.clone());
@@ -387,13 +392,34 @@ impl AgentState {
         plan
     }
 
-    /// 「冻结完整进程」开启时把可冻结集展开到整棵子进程树。
+    /// 算出本次真正要冻结的 PID 集合。
+    ///
+    /// 顺序不可颠倒：先按「冻结完整进程」展开子进程树，再过白名单。核心通常是
+    /// explorer.exe 的子进程、配置程序又是核心的子进程，被内置保护挡下的正是展开
+    /// 后才出现的这两个自己——展开前它们根本不在集合里。
     fn freeze_set(&self, freezable: Vec<u32>) -> Vec<u32> {
-        if self.config.setting.freeze_whole_tree {
+        let pids = if self.config.setting.freeze_whole_tree {
             expand_descendants(&freezable, &crate::freeze::process_tree())
         } else {
             freezable
-        }
+        };
+
+        let whitelist = self.config.whitelist();
+        let names = crate::freeze::process_names();
+        // 完整路径要逐 PID OpenProcess，白名单里没有按路径的忽略冻结项就不必付这笔开销。
+        let paths = if zonedeck_common::whitelist_needs_paths(whitelist, IgnoreMode::Freeze) {
+            pids.iter()
+                .map(|&pid| (pid, crate::platform::win32::process_path(pid)))
+                .collect()
+        } else {
+            std::collections::HashMap::new()
+        };
+
+        let mut pids = filter_freeze_whitelist(pids, &names, &paths, whitelist);
+        // 兜底：无论映像名叫什么，都不能把自己冻死。
+        let self_pid = std::process::id();
+        pids.retain(|pid| *pid != self_pid);
+        pids
     }
 
     fn apply_hide(&mut self, trigger: Trigger) {
@@ -590,7 +616,7 @@ impl AgentState {
                 setting.mute_after_hide = false;
                 setting.freeze_after_hide = false;
                 setting.send_before_hide = false;
-                let plan = self.hide_with_plan_using(&setting, &targets, &[]);
+                let plan = self.hide_with_plan_using(&setting, &targets, &[], &[]);
                 if !plan.fresh.is_empty() {
                     logging::debug(&format!("窗口恢复工具隐藏 {} 个窗口", plan.fresh.len()));
                 }

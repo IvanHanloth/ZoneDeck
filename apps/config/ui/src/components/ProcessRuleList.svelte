@@ -55,6 +55,8 @@
             </span>
             <input
               class="regex-input"
+              class:broad={app.broadPatterns.has(rule.regex)}
+              title={app.broadPatterns.has(rule.regex) ? t("broadRegex.inputTitle") : ""}
               placeholder={t(
                 rule.by_name
                   ? "processRules.nameRegexPlaceholder"
@@ -251,5 +253,10 @@
   .regex-input:focus {
     outline: none;
     border-color: var(--accent);
+  }
+  /* 保存时判定为「可能过宽」，见 BroadRegexModal */
+  .regex-input.broad {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
   }
 </style>

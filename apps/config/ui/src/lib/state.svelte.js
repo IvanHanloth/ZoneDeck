@@ -5,6 +5,7 @@ import { setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
 import { sanitizeConfig } from "./sanitize.js";
 import { createAutosave } from "./autosave.js";
+import { createBreadthGuard } from "./regexcheck.js";
 import * as verhub from "./verhub.js";
 
 export const app = $state({
@@ -53,6 +54,12 @@ export const app = $state({
   dataLocation: null,
   /** 便携版回退提示弹窗是否打开。 */
   dataNoticeOpen: false,
+  /** 白名单里不可删除的内置项 [{ key, names }]，由后端吐出。 */
+  whitelistBuiltins: [],
+  /** 待提示的过宽正则 [{ kind, pattern, hits }]；有值即弹窗。 */
+  broadRegex: null,
+  /** 判定为过宽且用户尚未确认的正则，界面据此标红。 */
+  broadPatterns: new Set(),
 });
 
 // 按「理由」计数暂停核心监控，最后一个理由撤销后才恢复。
@@ -149,6 +156,9 @@ export async function loadAll() {
       app.info = info;
     }),
     invoke("pssuspend_available").then((v) => (app.pssuspend = !!v)),
+    invoke("whitelist_builtins").then((v) => {
+      app.whitelistBuiltins = v ?? [];
+    }),
     invoke("data_location").then((loc) => {
       app.dataLocation = loc;
       // 回退即程序目录写不进去，须提示用户。
@@ -193,11 +203,57 @@ async function loadIcons(windows) {
 
 // 自动保存：改动即存，带 debounce；关窗前由 flushSave 兜底。
 
+/** 正则过宽检查器；判定在后端（与核心同一个 regex 引擎）。 */
+const breadthGuard = createBreadthGuard((patterns) =>
+  invoke("regex_breadth", { patterns }),
+);
+
+/** 弹窗关闭后要 resolve 的回调；同一时刻只会有一个弹窗。 */
+let broadRegexResolve = null;
+
+function closeBroadRegex() {
+  app.broadRegex = null;
+  broadRegexResolve?.();
+  broadRegexResolve = null;
+}
+
+/** 「仍然保存」：确认这批正则无误，此后不再提醒、不再标红。 */
+export function acknowledgeBroadRegex() {
+  const patterns = (app.broadRegex ?? []).map((i) => i.pattern);
+  breadthGuard.acknowledge(patterns);
+  app.broadPatterns = new Set([...app.broadPatterns].filter((p) => !patterns.includes(p)));
+  closeBroadRegex();
+}
+
+/** 「我知道了」：关掉弹窗且此后不再打断保存，但红框留着等用户回去改。 */
+export function dismissBroadRegex() {
+  breadthGuard.dismiss((app.broadRegex ?? []).map((i) => i.pattern));
+  closeBroadRegex();
+}
+
+/**
+ * 写盘前的过宽正则检查。**不拦保存**——无论用户点哪个按钮都会继续写盘，
+ * 差别只在此后还提不提醒、还标不标红。
+ */
+async function warnOnBroadRegex(config) {
+  const { broad, toWarn } = await breadthGuard.inspect(config);
+  const patterns = new Set(broad.map((i) => i.pattern));
+  // 用户改好、删掉或确认无误的正则，红框要跟着消失。
+  if (patterns.size > 0 || app.broadPatterns.size > 0) app.broadPatterns = patterns;
+  if (toWarn.length === 0) return;
+  app.broadRegex = toWarn;
+  await new Promise((resolve) => {
+    broadRegexResolve = resolve;
+  });
+}
+
 const autosave = createAutosave(async () => {
   if (!app.config) return true;
+  const config = sanitizeConfig($state.snapshot(app.config));
+  await warnOnBroadRegex(config);
   app.saving = true;
   try {
-    await invoke("save_config", { config: sanitizeConfig($state.snapshot(app.config)) });
+    await invoke("save_config", { config });
     return true;
   } catch (err) {
     reportError(t("state.saveFailed"), err);

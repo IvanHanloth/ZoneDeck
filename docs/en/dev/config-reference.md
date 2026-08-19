@@ -24,6 +24,7 @@ The settings window reads and writes the configuration automatically. This page 
 | `verhub` | object | Updates / announcements; see below |
 | `window_rules` | object[] | Window rules (fine-grained) |
 | `process_rules` | object[] | Process rules (coarse-grained) |
+| `whitelist` | object[] | Whitelist: per-process opt-out of hiding / freezing / muting |
 | `hide_binding` | object[] | *v2* flat bindings, used only for migration; cleared afterwards and never written back |
 
 ## `hotkey`
@@ -142,6 +143,26 @@ Coarse-grained rules that hide every window of a program, matched by executable.
 | `by_name` | `false` | Match on the file name only, ignoring the path |
 | `include_untitled` | `true` | Whether to include untitled windows (process rules include them by default) |
 | `include_background` | `false` | Whether to include background windows |
+
+## `whitelist`
+
+Declares, per process, which modes to skip; see [Whitelist](/en/guide/whitelist). Matching mirrors `process_rules`, except it defaults to **file-name** matching, and both file names and paths compare case-insensitively.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `process` | | Process name |
+| `path` | | Executable path |
+| `regex` | | Regex (applied to the path or the file name) |
+| `by_name` | `true` | Match on the file name only, ignoring the path |
+| `ignore_hide` | `false` | Never hide this program's windows |
+| `ignore_freeze` | `false` | Never freeze this program's processes after hiding |
+| `ignore_mute` | `false` | Never mute this program's processes after hiding |
+
+::: tip Missing key vs empty array
+When the `whitelist` **key is absent** (old or brand-new configs), a default `explorer.exe` entry is seeded. Writing `[]` means the user emptied the list and nothing is seeded again. After normalization the field is always an array, never `null`.
+:::
+
+ZoneDeck's own core and settings app (`ZoneDeck.exe` / `core.exe` / `config.exe` / `zonedeck-config.exe`) are **always excluded from freezing**. That guard lives in `BUILTIN_FREEZE_GUARDS` in `crates/common/src/matching.rs`, never appears in the config file, and cannot be bypassed by editing it.
 
 ## Compatibility and migration
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   addProcessRules,
+  addWhitelistRules,
   addWindowRules,
   applyListFilters,
   containsPattern,
@@ -10,10 +11,12 @@ import {
   iconPathsToFetch,
   NO_TITLE,
   newProcessRegexRule,
+  newWhitelistRegexRule,
   newWindowRegexRule,
   processRuleFromWindow,
   splitByVisibility,
   traceWindowRule,
+  whitelistRuleFromWindow,
   windowRuleFromWindow,
 } from "./grouping.js";
 
@@ -229,5 +232,44 @@ describe("iconPathsToFetch", () => {
     ];
     const cache = { "C:\\b.exe": "data:...", "C:\\d.exe": null };
     expect(iconPathsToFetch(windows, cache)).toEqual(["C:\\a.exe"]);
+  });
+});
+
+describe("白名单条目", () => {
+  it("默认按文件名匹配、三个开关全关", () => {
+    const r = whitelistRuleFromWindow(win("资源管理器", 1, "explorer.exe"));
+    expect(r.by_name).toBe(true);
+    expect(r.process).toBe("explorer.exe");
+    expect(r.ignore_hide).toBe(false);
+    expect(r.ignore_freeze).toBe(false);
+    expect(r.ignore_mute).toBe(false);
+  });
+
+  it("正则条目默认作用于文件名", () => {
+    const r = newWhitelistRegexRule("game.exe");
+    expect(r.regex).toBe(".*game\\.exe.*");
+    expect(r.by_name).toBe(true);
+  });
+
+  it("按文件名去重，忽略大小写与安装目录", () => {
+    const existing = [whitelistRuleFromWindow(win("一", 1, "Explorer.exe"))];
+    const result = addWhitelistRules(existing, [
+      win("二", 2, "explorer.exe", "D:\\别处\\explorer.exe"),
+      win("三", 3, "notepad.exe"),
+    ]);
+    expect(result.map((r) => r.process)).toEqual(["Explorer.exe", "notepad.exe"]);
+  });
+
+  it("跳过没有进程名的窗口，且不改动原数组", () => {
+    const existing = [];
+    const result = addWhitelistRules(existing, [win("孤儿", 1, "", "")]);
+    expect(result).toEqual([]);
+    expect(existing).toEqual([]);
+  });
+
+  it("正则条目不参与精确条目的去重", () => {
+    const existing = [newWhitelistRegexRule("a.exe")];
+    const result = addWhitelistRules(existing, [win("一", 1, "a.exe")]);
+    expect(result).toHaveLength(2);
   });
 });

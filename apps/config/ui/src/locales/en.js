@@ -5,6 +5,7 @@ export default {
   "app.loadingConfig": "Loading configuration…",
 
   "tab.binding": "Windows",
+  "tab.whitelist": "Whitelist",
   "tab.hotkeys": "Hotkeys & Mouse",
   "tab.notify": "Alerts",
   "tab.options": "Options",
@@ -96,12 +97,38 @@ export default {
   "processRules.pathRegexTag": "Path regex",
   "processRules.nameRegexPlaceholder": "File name regex, e.g. .*WeChat\\.exe",
   "processRules.pathRegexPlaceholder": "Path regex, e.g. .*WeChat.*",
-  "processRules.anyDirectory": "(same file name in any folder)",
+  "processRules.anyDirectory": "(any application with same file name)",
   "processRules.byTitle":
     "Match on: the full path, or the executable file name only (matching that name in any folder)",
   "processRules.byAria": "Match on",
   "processRules.byPath": "Path",
   "processRules.byName": "File name",
+
+  "whitelist.title": "Whitelist",
+  "whitelist.aria": "Whitelist entries",
+  "whitelist.intro":
+    "The whitelist controls which steps a program skips when hiding. Note that if a window is never hidden, freezing and muting never happen either.",
+  "whitelist.addTitle": "Add the processes owning the windows selected on the left",
+  "whitelist.add": "Add process",
+  "whitelist.addRegexTitle": "Add a whitelist regex entry",
+  "whitelist.pickFirst": "Select the processes to whitelist on the left first",
+  "whitelist.ignoreHide": "Skip hiding: leave this program's windows visible",
+  "whitelist.ignoreFreeze": "Skip freezing: never suspend this program's processes",
+  "whitelist.ignoreMute": "Skip muting: never mute this program's processes",
+  "whitelist.builtinCore": "ZoneDeck core",
+  "whitelist.builtinConfig": "ZoneDeck settings",
+  "whitelist.builtinLocked":
+    "Built-in protection: freezing ZoneDeck itself kills the hotkeys and leaves hidden windows unrecoverable, so this cannot be turned off or removed.",
+
+  "broadRegex.title": "This regex may be too broad",
+  "broadRegex.lead":
+    "These patterns matched more than half of {total} random samples, which usually means a mistake — they will also catch a lot of unrelated windows or processes.",
+  "broadRegex.hits": "matched {hits}/{total}",
+  "broadRegex.saved":
+    "Your changes are already saved. \"Save anyway\" confirms the pattern is intentional and stops the warning; \"Got it\" keeps the red marker so you can come back and fix it.",
+  "broadRegex.keep": "Save anyway",
+  "broadRegex.dismiss": "Got it",
+  "broadRegex.inputTitle": "This pattern matched more than half of the random samples and may be too broad",
 
   "hotkeys.keyboardCard": "Keyboard hotkeys",
   "hotkeys.hideShow": "Hide / show windows",

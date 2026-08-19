@@ -3,6 +3,7 @@
   import TitleBar from "./components/TitleBar.svelte";
   import ResizeHandles from "./components/ResizeHandles.svelte";
   import BindingPanel from "./components/BindingPanel.svelte";
+  import WhitelistPanel from "./components/WhitelistPanel.svelte";
   import HotkeysPanel from "./components/HotkeysPanel.svelte";
   import OptionsPanel from "./components/OptionsPanel.svelte";
   import NotificationsPanel from "./components/NotificationsPanel.svelte";
@@ -13,6 +14,7 @@
   import AnnouncementModal from "./components/AnnouncementModal.svelte";
   import ErrorReportModal from "./components/ErrorReportModal.svelte";
   import DataNoticeModal from "./components/DataNoticeModal.svelte";
+  import BroadRegexModal from "./components/BroadRegexModal.svelte";
   import Toast from "./components/Toast.svelte";
   import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
@@ -35,6 +37,7 @@
 
   const TABS = [
     { id: "binding", labelKey: "tab.binding" },
+    { id: "whitelist", labelKey: "tab.whitelist" },
     { id: "hotkeys", labelKey: "tab.hotkeys" },
     { id: "notify", labelKey: "tab.notify" },
     { id: "options", labelKey: "tab.options" },
@@ -139,6 +142,8 @@
       <p class="hint loading">{t("app.loadingConfig")}</p>
     {:else if app.tab === "binding"}
       <BindingPanel />
+    {:else if app.tab === "whitelist"}
+      <WhitelistPanel />
     {:else if app.tab === "hotkeys"}
       <HotkeysPanel />
     {:else if app.tab === "options"}
@@ -155,6 +160,7 @@
   <RestoreWindowsModal bind:open={app.restoreOpen} />
   <AnnouncementModal />
   <DataNoticeModal />
+  <BroadRegexModal />
   <ErrorReportModal />
   <!-- 放最后：强制更新的遮罩层级最高，压住其它一切弹窗 -->
   <UpdateModal />

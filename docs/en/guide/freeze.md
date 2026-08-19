@@ -45,6 +45,16 @@ By default freezing affects only the matched process itself. With **Freeze the w
 This option is still in testing, may cause problems with some programs, and adds more delay when hiding and restoring because the whole process tree has to be walked. Enable it only once you understand the impact.
 :::
 
+::: danger Do not freeze File Explorer
+`explorer.exe` *is* the desktop and the taskbar; freezing it locks up the entire Windows shell. Worse, ZoneDeck is usually launched by File Explorer and is therefore its child process — freezing File Explorer with "Freeze the whole process tree" on suspends ZoneDeck along with it.
+
+That is why ZoneDeck's core and settings app are **built into** the [whitelist](/en/guide/whitelist) as permanently non-freezable entries that cannot be turned off, and why `explorer.exe` ships as a removable whitelist entry.
+:::
+
+## Excluding specific programs
+
+To keep a program running while still hiding its windows, add it to the [whitelist](/en/guide/whitelist) and tick "Skip freezing" — no need to turn off the master switch.
+
 ## Prerequisites at a glance
 
 | Feature | Needs administrator | Needs pssuspend64.exe |

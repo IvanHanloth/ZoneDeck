@@ -24,6 +24,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `verhub` | object | 更新／公告相關，見下 |
 | `window_rules` | object[] | 視窗規則（細粒度） |
 | `process_rules` | object[] | 程序規則（粗粒度） |
+| `whitelist` | object[] | 白名單：逐程序宣告略過隱藏／凍結／靜音 |
 | `hide_binding` | object[] | *v2 版*扁平綁定，僅用於移轉，移轉後清空、不再寫回 |
 
 ## `hotkey`
@@ -142,6 +143,26 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `by_name` | `false` | 只按檔名比對，忽略路徑 |
 | `include_untitled` | `true` | 是否納入無標題視窗（程序規則預設納入） |
 | `include_background` | `false` | 是否納入背景視窗 |
+
+## `whitelist`（白名單）
+
+按程序宣告在哪些模式下略過，見[白名單](/zh-tw/guide/whitelist)。比對方式與 `process_rules` 同構，但**預設按檔名**比對；檔名與路徑的比較都不區分大小寫。
+
+| 欄位 | 預設 | 說明 |
+| --- | --- | --- |
+| `process` | | 程序名 |
+| `path` | | 執行檔路徑 |
+| `regex` | | 正規表示式（作用於路徑或檔名） |
+| `by_name` | `true` | 只按檔名比對，忽略路徑 |
+| `ignore_hide` | `false` | 隱藏時略過該程式的視窗 |
+| `ignore_freeze` | `false` | 隱藏後不凍結該程式的程序 |
+| `ignore_mute` | `false` | 隱藏後不靜音該程式的程序 |
+
+::: tip 鍵不存在 vs 空陣列
+`whitelist` **鍵不存在**（舊設定／全新設定）時會植入一條預設的 `explorer.exe`；寫成 `[]` 表示使用者清空了清單，不會再被植入。正規化後該欄位恆為陣列，不會是 `null`。
+:::
+
+ZoneDeck 自身的核心與設定程式（`ZoneDeck.exe` / `core.exe` / `config.exe` / `zonedeck-config.exe`）**恆被排除在凍結之外**。該保護寫死在 `crates/common/src/matching.rs` 的 `BUILTIN_FREEZE_GUARDS` 裡，不出現在設定檔中，手改設定也繞不過去。
 
 ## 相容與移轉
 

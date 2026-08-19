@@ -114,6 +114,56 @@ export function newProcessRegexRule(seedProcess) {
   };
 }
 
+/**
+ * 由现有窗口构造一条白名单条目。三个忽略开关一律置假，由用户逐项勾选；
+ * 默认按文件名匹配 —— 换个安装目录就失效的白名单形同虚设。
+ */
+export function whitelistRuleFromWindow(w) {
+  return {
+    process: w.process,
+    path: w.path,
+    by_name: true,
+    ignore_hide: false,
+    ignore_freeze: false,
+    ignore_mute: false,
+  };
+}
+
+/** 新的白名单正则条目（默认作用于文件名）。 */
+export function newWhitelistRegexRule(seedProcess) {
+  return {
+    process: "",
+    path: "",
+    regex: containsPattern(seedProcess || t("binding.regexSeedProcess")),
+    by_name: true,
+    ignore_hide: false,
+    ignore_freeze: false,
+    ignore_mute: false,
+  };
+}
+
+/** 白名单条目的去重键：按文件名匹配看进程名，否则看路径。 */
+function whitelistKey(rule) {
+  return (rule.by_name ? rule.process : rule.path)?.toLowerCase() || "";
+}
+
+/** 追加为白名单条目，跳过已有的同一目标，返回新数组。 */
+export function addWhitelistRules(existing, pickedWindows) {
+  const result = existing.slice();
+  const seen = new Set(
+    result.filter((r) => !isRegexRule(r)).map(whitelistKey).filter(Boolean),
+  );
+  for (const w of pickedWindows) {
+    if (!w.process) continue;
+    const rule = whitelistRuleFromWindow(w);
+    const key = whitelistKey(rule);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(rule);
+  }
+  return result;
+}
+
 export function isRegexRule(rule) {
   return rule && rule.regex != null;
 }

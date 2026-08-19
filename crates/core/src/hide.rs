@@ -1,8 +1,10 @@
 use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
-use zonedeck_common::matching::{WindowResolution, match_process_rule, resolve_window_rule};
-use zonedeck_common::{Config, NO_TITLE, Setting, WindowInfo, WindowRule};
+use zonedeck_common::matching::{
+    IgnoreMode, WindowResolution, is_ignored, match_process_rule, resolve_window_rule,
+};
+use zonedeck_common::{Config, NO_TITLE, Setting, WhitelistRule, WindowInfo, WindowRule};
 
 use crate::effects::Effects;
 use crate::platform::WindowManager;
@@ -39,13 +41,21 @@ impl Target {
         }
     }
 
+    /// 可执行文件名（如 `WeChat.exe`）；路径为空时返回空串。
+    pub fn process_name(&self) -> &str {
+        std::path::Path::new(&self.process_path)
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+    }
+
     /// 日志用的一行摘要：`进程名(hwnd=…, pid=…)`。
     /// 不含窗口标题——标题属隐私内容，不写入日志。
     pub fn describe(&self) -> String {
-        let process = std::path::Path::new(&self.process_path)
-            .file_name()
-            .and_then(|s| s.to_str())
-            .unwrap_or("未知进程");
+        let process = match self.process_name() {
+            "" => "未知进程",
+            name => name,
+        };
         format!("{process}(hwnd={}, pid={})", self.hwnd, self.pid)
     }
 }
@@ -110,6 +120,17 @@ pub fn resolve_targets(
 
     let mut seen = HashSet::new();
     result.retain(|t| seen.insert(t.hwnd));
+    // 白名单过滤放在最后：上面的循环持着 config.window_rules 的可变借用。
+    // 这里只拦得住枚举得到的窗口——只有句柄的目标（`Target::bare`）身份未知，
+    // 由 `HideController::plan_hide` 补查路径后再过一次白名单。
+    result.retain(|t| {
+        !is_ignored(
+            config.whitelist(),
+            &t.process_path,
+            t.process_name(),
+            IgnoreMode::Hide,
+        )
+    });
     (result, outcomes)
 }
 
@@ -179,6 +200,29 @@ pub fn expand_descendants(roots: &[u32], edges: &[(u32, u32)]) -> Vec<u32> {
     let mut out: Vec<u32> = visited.into_iter().collect();
     out.sort_unstable();
     out
+}
+
+/// 按白名单剔除不该冻结的 PID。
+///
+/// `names` 为 `pid → 映像名`（一次进程快照即可得），`paths` 为 `pid → 完整路径`
+/// （逐 PID 查开销大，调用方仅在白名单确有按路径的条目时才填）。查不到名字的 PID
+/// 一律**保留**：拿不到身份就无从判定，此处不擅自放行。
+///
+/// 必须在 [`expand_descendants`] **之后**调用：被挡下的往往正是 explorer 子树里的
+/// ZoneDeck 自己，展开前它根本不在集合里。
+pub fn filter_freeze_whitelist(
+    pids: Vec<u32>,
+    names: &std::collections::HashMap<u32, String>,
+    paths: &std::collections::HashMap<u32, String>,
+    whitelist: &[WhitelistRule],
+) -> Vec<u32> {
+    let mut pids = pids;
+    pids.retain(|pid| {
+        let name = names.get(pid).map(String::as_str).unwrap_or_default();
+        let path = paths.get(pid).map(String::as_str).unwrap_or_default();
+        !is_ignored(whitelist, path, name, IgnoreMode::Freeze)
+    });
+    pids
 }
 
 /// 一次隐藏的执行计划：由 [`HideController::plan_hide`] 算出、
@@ -296,7 +340,12 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
     /// 计算一次隐藏的执行计划，不做任何窗口 / 副作用动作；顺带完成隐藏集剪枝
     /// 与 PID 补查（仍查不到的目标剔除）。`freeze_pids` 仅在 `freeze_after_hide`
-    /// 开启时生效。
+    /// 开启时生效，且须由调用方预先过好白名单（见 [`filter_freeze_whitelist`]）；
+    /// 隐藏与静音的白名单过滤在此处完成。
+    ///
+    /// 隐藏在这里再过一次白名单（`resolve_targets` 已过过一次）是必要的：只带句柄的
+    /// 目标（`hide_current` 命中枚举不到的前台窗口）当时无从判定身份，须先补查路径。
+    /// 静音则是因为静音集由 `fresh` 现算，外部拦不住。
     ///
     /// 只有「由本程序从可见变为不可见」的窗口才进入隐藏集，恢复即逆转这次改变。
     /// 隐藏是累加的，`show` 时一并恢复。已在隐藏 / 静音 / 冻结集内的目标会被
@@ -306,6 +355,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         setting: &Setting,
         targets: &[Target],
         freeze_pids: &[u32],
+        whitelist: &[WhitelistRule],
     ) -> HidePlan {
         self.prune_stale();
         let known: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
@@ -326,6 +376,19 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                     continue;
                 }
             }
+            // 任务栏（Shell_TrayWnd）与桌面（Progman）带 WS_EX_TOOLWINDOW，不在枚举
+            // 结果里，走 hide_current 时只有句柄。白名单要认得出它们就得先补上路径。
+            if t.process_path.is_empty() && !whitelist.is_empty() {
+                t.process_path = self.wm.process_path(t.pid);
+            }
+            if is_ignored(
+                whitelist,
+                &t.process_path,
+                t.process_name(),
+                IgnoreMode::Hide,
+            ) {
+                continue;
+            }
             fresh.push(t);
         }
 
@@ -334,6 +397,12 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             for t in &fresh {
                 if !self.muted.iter().any(|r| r.pid == t.pid)
                     && !mute.iter().any(|r| r.pid == t.pid)
+                    && !is_ignored(
+                        whitelist,
+                        &t.process_path,
+                        t.process_name(),
+                        IgnoreMode::Mute,
+                    )
                 {
                     mute.push(self.proc_record(t.pid));
                 }
@@ -398,9 +467,10 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.hidden.extend(plan.fresh);
     }
 
-    /// plan + commit 的便捷封装。
+    /// plan + commit 的便捷封装，**不带白名单**；供测试与不需要白名单的调用方使用。
+    /// 生产路径走 [`Self::plan_hide`]，白名单由调用方传入。
     pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
-        let plan = self.plan_hide(setting, targets, freeze_pids);
+        let plan = self.plan_hide(setting, targets, freeze_pids, &[]);
         self.commit_hide(plan);
     }
 
@@ -634,7 +704,8 @@ mod tests {
         let foreground = controller.foreground();
         let (targets, _) = resolve_targets(config, &windows, foreground);
         let freezable = freezable_pids(&targets, &windows);
-        controller.apply_hide(&config.setting, &targets, &freezable);
+        let plan = controller.plan_hide(&config.setting, &targets, &freezable, config.whitelist());
+        controller.commit_hide(plan);
     }
 
     #[test]
@@ -854,6 +925,8 @@ mod tests {
         pid_overrides: RefCell<HashMap<i64, u32>>,
         /// 覆写某进程的创建时刻（模拟 PID 被回收复用；0 = 进程已退出）。
         start_overrides: RefCell<HashMap<u32, i64>>,
+        /// 枚举不到的进程的映像路径（如任务栏 / 桌面所属的 explorer.exe）。
+        paths: RefCell<HashMap<u32, String>>,
     }
 
     impl MockWm {
@@ -866,7 +939,16 @@ mod tests {
                 exists: RefCell::new(handles),
                 pid_overrides: RefCell::new(HashMap::new()),
                 start_overrides: RefCell::new(HashMap::new()),
+                paths: RefCell::new(HashMap::new()),
             }
+        }
+
+        /// 登记一个枚举不到、但按 PID 能查出身份的窗口（任务栏 / 桌面即属此类）。
+        fn add_unlisted(&self, hwnd: i64, pid: u32, path: &str) {
+            self.exists.borrow_mut().insert(hwnd);
+            self.visible.borrow_mut().insert(hwnd);
+            self.pid_overrides.borrow_mut().insert(hwnd, pid);
+            self.paths.borrow_mut().insert(pid, path.to_string());
         }
 
         fn destroy(&self, hwnd: i64) {
@@ -926,6 +1008,20 @@ mod tests {
                 .find(|w| w.hwnd == hwnd)
                 .map(|w| w.title.clone())
                 .unwrap_or_else(|| zonedeck_common::NO_TITLE.to_string())
+        }
+        // 真实实现按 PID 查映像路径，因此枚举不到的窗口也能补出身份。
+        fn process_path(&self, pid: u32) -> String {
+            self.paths
+                .borrow()
+                .get(&pid)
+                .cloned()
+                .or_else(|| {
+                    self.windows
+                        .iter()
+                        .find(|w| w.pid == pid)
+                        .map(|w| w.path.clone())
+                })
+                .unwrap_or_default()
         }
         fn process_start_time(&self, pid: u32) -> i64 {
             if pid == 0 {
@@ -1215,7 +1311,7 @@ mod tests {
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         let freezable = freezable_pids(&targets, &windows);
 
-        let plan = controller.plan_hide(&config.setting, &targets, &freezable);
+        let plan = controller.plan_hide(&config.setting, &targets, &freezable, &[]);
         let planned = controller.planned_snapshot(&plan);
         controller.commit_hide(plan);
         let actual = controller.snapshot();
@@ -1644,5 +1740,250 @@ mod tests {
         assert!(controller.effects.mutes.borrow().is_empty());
         assert!(controller.effects.suspends.borrow().is_empty());
         assert_eq!(*controller.effects.pauses.borrow(), 0);
+    }
+
+    // ---- 白名单 ------------------------------------------------------------
+
+    /// 一条按文件名匹配、只开指定模式的白名单条目。
+    fn allow(process: &str, mode: IgnoreMode) -> WhitelistRule {
+        let mut r = WhitelistRule::from_window(&win("", 0, process, &format!("C:\\{process}")));
+        match mode {
+            IgnoreMode::Hide => r.ignore_hide = true,
+            IgnoreMode::Freeze => r.ignore_freeze = true,
+            IgnoreMode::Mute => r.ignore_mute = true,
+        }
+        r
+    }
+
+    /// 忽略隐藏：命中的窗口连隐藏目标都进不去，规则照写也不生效。
+    #[test]
+    fn ignored_windows_never_become_hide_targets() {
+        let mut config = Config {
+            window_rules: vec![
+                wrule(
+                    "资源管理器",
+                    10,
+                    "explorer.exe",
+                    "C:\\Windows\\explorer.exe",
+                ),
+                wrule("微信", 20, "WeChat.exe", "C:\\WeChat.exe"),
+            ],
+            whitelist: Some(vec![allow("explorer.exe", IgnoreMode::Hide)]),
+            ..Default::default()
+        };
+        let windows = vec![
+            win(
+                "资源管理器",
+                10,
+                "explorer.exe",
+                "C:\\Windows\\explorer.exe",
+            ),
+            win("微信", 20, "WeChat.exe", "C:\\WeChat.exe"),
+        ];
+        let (targets, outcomes) = resolve_targets(&mut config, &windows, 0);
+        assert_eq!(ids(&targets), vec![(20, 20)], "白名单命中的窗口应被剔除");
+        assert_eq!(
+            outcomes,
+            vec![RuleOutcome::Live, RuleOutcome::Live],
+            "规则本身仍然解析成功，只是目标被白名单拦下"
+        );
+    }
+
+    /// 忽略隐藏也拦得住「同时隐藏当前活动窗口」。
+    #[test]
+    fn ignored_foreground_window_is_not_hidden() {
+        let mut config = Config {
+            whitelist: Some(vec![allow("explorer.exe", IgnoreMode::Hide)]),
+            ..Default::default()
+        };
+        config.setting.hide_current = true;
+        let windows = vec![win(
+            "资源管理器",
+            10,
+            "explorer.exe",
+            "C:\\Windows\\explorer.exe",
+        )];
+        let (targets, _) = resolve_targets(&mut config, &windows, 10);
+        assert!(targets.is_empty());
+    }
+
+    /// 回归：任务栏（`Shell_TrayWnd`）与桌面（`Progman`）带 `WS_EX_TOOLWINDOW`，
+    /// **不在枚举结果里**，走「同时隐藏当前活动窗口」时只有一个句柄。
+    /// `resolve_targets` 那时无从判定身份，必须由 `plan_hide` 补查路径后再过白名单，
+    /// 否则白名单了 explorer.exe 也照样把桌面和任务栏藏掉。
+    #[test]
+    fn whitelisted_taskbar_is_not_hidden_even_though_it_is_unlisted() {
+        const TASKBAR: i64 = 777;
+        const EXPLORER_PID: u32 = 15172;
+
+        let mut config = Config {
+            whitelist: Some(vec![allow("explorer.exe", IgnoreMode::Hide)]),
+            ..Default::default()
+        };
+        config.setting.hide_current = true;
+
+        let wm = MockWm::new(
+            vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")],
+            TASKBAR,
+        );
+        wm.add_unlisted(TASKBAR, EXPLORER_PID, "C:\\Windows\\explorer.exe");
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let windows = controller.enumerate();
+        assert!(
+            !windows.iter().any(|w| w.hwnd == TASKBAR),
+            "前提：任务栏不在枚举结果里"
+        );
+        let (targets, _) = resolve_targets(&mut config, &windows, TASKBAR);
+        assert_eq!(
+            targets.iter().map(|t| t.hwnd).collect::<Vec<_>>(),
+            vec![TASKBAR],
+            "此时只有句柄，resolve_targets 判不出它属于 explorer"
+        );
+
+        let plan = controller.plan_hide(&config.setting, &targets, &[], config.whitelist());
+        assert!(plan.fresh.is_empty(), "补查路径后应被白名单挡下");
+        controller.commit_hide(plan);
+        assert!(controller.wm.is_visible(TASKBAR), "任务栏必须还在");
+        assert!(!controller.is_hidden());
+    }
+
+    /// 上一条的对照：没被白名单的枚举外窗口仍然照常隐藏。
+    #[test]
+    fn unlisted_foreground_window_is_still_hidden_without_a_whitelist_entry() {
+        const TASKBAR: i64 = 777;
+
+        let mut config = Config {
+            whitelist: Some(vec![allow("别的.exe", IgnoreMode::Hide)]),
+            ..Default::default()
+        };
+        config.setting.hide_current = true;
+
+        let wm = MockWm::new(Vec::new(), TASKBAR);
+        wm.add_unlisted(TASKBAR, 15172, "C:\\Windows\\explorer.exe");
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let (targets, _) = resolve_targets(&mut config, &controller.enumerate(), TASKBAR);
+        let plan = controller.plan_hide(&config.setting, &targets, &[], config.whitelist());
+        assert_eq!(plan.fresh.len(), 1);
+        controller.commit_hide(plan);
+        assert!(!controller.wm.is_visible(TASKBAR));
+    }
+
+    /// 恢复工具的手动隐藏传空白名单：勾了哪个窗口就藏哪个，软偏好不该拦。
+    #[test]
+    fn manual_hide_bypasses_the_whitelist() {
+        const TASKBAR: i64 = 777;
+
+        let setting = Setting {
+            hide_current: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(Vec::new(), 0);
+        wm.add_unlisted(TASKBAR, 15172, "C:\\Windows\\explorer.exe");
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let plan = controller.plan_hide(&setting, &[Target::bare(TASKBAR, 0)], &[], &[]);
+        assert_eq!(plan.fresh.len(), 1, "空白名单不拦任何窗口");
+    }
+
+    /// 忽略静音：窗口照常隐藏，只是不静音。
+    #[test]
+    fn ignored_process_is_hidden_but_not_muted() {
+        let mut config = Config {
+            window_rules: vec![
+                wrule("音乐", 10, "music.exe", "C:\\music.exe"),
+                wrule("微信", 20, "WeChat.exe", "C:\\WeChat.exe"),
+            ],
+            whitelist: Some(vec![allow("music.exe", IgnoreMode::Mute)]),
+            ..Default::default()
+        };
+        config.setting.mute_after_hide = true;
+        config.setting.hide_current = false;
+
+        let wm = MockWm::new(
+            vec![
+                win("音乐", 10, "music.exe", "C:\\music.exe"),
+                win("微信", 20, "WeChat.exe", "C:\\WeChat.exe"),
+            ],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        assert!(
+            !controller.wm.is_visible(10) && !controller.wm.is_visible(20),
+            "忽略静音不影响隐藏本身"
+        );
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(20, true)],
+            "只有未被白名单命中的进程被静音"
+        );
+    }
+
+    /// 冻结白名单按映像名剔除；查不到名字的 PID 保留（拿不到身份不擅自放行）。
+    #[test]
+    fn freeze_whitelist_drops_matching_pids_by_image_name() {
+        let names = std::collections::HashMap::from([
+            (100, "explorer.exe".to_string()),
+            (200, "WeChat.exe".to_string()),
+        ]);
+        let got = filter_freeze_whitelist(
+            vec![100, 200, 300],
+            &names,
+            &std::collections::HashMap::new(),
+            &[allow("Explorer.EXE", IgnoreMode::Freeze)],
+        );
+        assert_eq!(got, vec![200, 300], "大小写不敏感；未知 PID 保留");
+    }
+
+    /// 展开子进程树后，explorer 树里的 ZoneDeck 自己必须被内置保护挡下 —— 冻住它
+    /// 就再也解不开了。白名单为空时同样生效。
+    #[test]
+    fn freeze_whitelist_protects_zonedeck_inside_an_expanded_tree() {
+        // explorer(100) → 核心(200) → 配置程序(300)，另有普通子进程 400。
+        let edges = [(200, 100), (300, 200), (400, 100)];
+        let expanded = expand_descendants(&[100], &edges);
+        assert_eq!(expanded, vec![100, 200, 300, 400], "先展开整棵树");
+
+        let names = std::collections::HashMap::from([
+            (100, "explorer.exe".to_string()),
+            (200, "ZoneDeck.exe".to_string()),
+            (300, "config.exe".to_string()),
+            (400, "helper.exe".to_string()),
+        ]);
+        let got = filter_freeze_whitelist(expanded, &names, &std::collections::HashMap::new(), &[]);
+        assert_eq!(got, vec![100, 400], "核心与配置程序必须留下");
+    }
+
+    #[test]
+    fn freeze_whitelist_can_match_by_full_path() {
+        let names = std::collections::HashMap::from([
+            (100, "a.exe".to_string()),
+            (200, "a.exe".to_string()),
+        ]);
+        let paths = std::collections::HashMap::from([
+            (100, "C:\\Games\\a.exe".to_string()),
+            (200, "D:\\别处\\a.exe".to_string()),
+        ]);
+        let mut rule = allow("a.exe", IgnoreMode::Freeze);
+        rule.by_name = false;
+        rule.path = "C:\\Games\\a.exe".to_string();
+
+        let got = filter_freeze_whitelist(vec![100, 200], &names, &paths, &[rule]);
+        assert_eq!(got, vec![200], "按路径匹配只放过指定位置的那一个");
+    }
+
+    #[test]
+    fn target_process_name_falls_back_to_empty() {
+        let t = Target::from_window(&win("微信", 10, "WeChat.exe", "C:\\a\\WeChat.exe"));
+        assert_eq!(t.process_name(), "WeChat.exe");
+        assert_eq!(Target::bare(1, 2).process_name(), "");
+        assert_eq!(
+            Target::bare(1, 2).describe(),
+            "未知进程(hwnd=1, pid=2)",
+            "无路径时日志摘要仍要可读"
+        );
     }
 }
