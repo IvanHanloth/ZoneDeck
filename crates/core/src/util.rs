@@ -4,9 +4,6 @@ pub fn to_wide_null(s: &str) -> Vec<u16> {
 
 /// 以当前语言的文案追加一个菜单项。
 ///
-/// 菜单文案在运行时才确定，无法用编译期的 `w!`；`AppendMenuW` 会复制字符串，
-/// 因此临时缓冲区只需活到调用结束。
-///
 /// # Safety
 /// `menu` 必须是有效的菜单句柄。
 pub unsafe fn append_menu_item(
@@ -27,7 +24,6 @@ pub unsafe fn append_menu_item(
 }
 
 /// 当前按下的修饰键位掩码（[`crate::hotkey::MOD_CONTROL`] 等的组合）。
-/// 键盘 / 鼠标底层钩子共用，用来判定触发条件里的修饰键是否吻合。
 pub fn pressed_modifiers() -> u32 {
     use crate::hotkey::{MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN};
     use windows::Win32::UI::Input::KeyboardAndMouse::{
@@ -52,7 +48,6 @@ pub fn pressed_modifiers() -> u32 {
 }
 
 /// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」。
-/// 只有消息文本时无法区分「拒绝访问」的来源，只有码值又难以判读，故两者都写出。
 pub fn win_err(e: &windows::core::Error) -> String {
     let message = e.message();
     let message = message.trim();
@@ -64,8 +59,7 @@ pub fn win_err(e: &windows::core::Error) -> String {
     }
 }
 
-/// 取字符串开头至多 `max` 个字符，其余以「…（共 N 字符）」代替。
-/// 按字符切，不会切碎多字节字符。
+/// 取字符串开头至多 `max` 个字符，其余以「…（共 N 字符）」代替，按字符切。
 pub fn head_chars(text: &str, max: usize) -> String {
     let total = text.chars().count();
     if total <= max {
@@ -75,9 +69,8 @@ pub fn head_chars(text: &str, max: usize) -> String {
     format!("{head}…（共 {total} 字符）")
 }
 
-/// 把系统 ANSI 代码页（CP_ACP，中文系统为 GBK/936）编码的字节解码成 `String`。
-/// 用于读取只输出本地代码页文本的旧式控制台程序（如 pssuspend），避免直接按
-/// UTF-8 解码得到乱码。空输入返回空串；解码失败退回 UTF-8 有损解码。
+/// 把系统 ANSI 代码页编码的字节解码成 `String`，用于读取只输出本地代码页文本的
+/// 旧式控制台程序。空输入返回空串；解码失败退回 UTF-8 有损解码。
 pub fn from_ansi(bytes: &[u8]) -> String {
     use windows::Win32::Globalization::{CP_ACP, MB_ERR_INVALID_CHARS, MultiByteToWideChar};
 
@@ -115,8 +108,7 @@ mod tests {
 
     #[test]
     fn win_err_keeps_both_message_and_code() {
-        // 0x80070005 = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED)。消息文本随系统语言变化，
-        // 故只断言码值与「消息非空」，不断言具体文案。
+        // 消息文本随系统语言变化，故只断言码值与「消息非空」。
         let e = windows::core::Error::from_hresult(windows::core::HRESULT(0x8007_0005u32 as i32));
         let text = win_err(&e);
         assert!(text.ends_with("(0x80070005)"), "应带十六进制错误码: {text}");
@@ -136,7 +128,7 @@ mod tests {
 
     #[test]
     fn win_err_without_message_still_reports_code() {
-        // 自定义 HRESULT 通常没有对应的系统消息文本，此时不应只剩空串。
+        // 自定义 HRESULT 通常没有对应的系统消息文本。
         let e = windows::core::Error::from_hresult(windows::core::HRESULT(0xDEAD_BEEFu32 as i32));
         assert!(win_err(&e).contains("0xDEADBEEF"));
     }

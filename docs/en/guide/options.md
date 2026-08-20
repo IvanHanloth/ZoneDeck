@@ -4,7 +4,7 @@ title: Other options
 
 # Other options
 
-The **Options** tab of the settings window gathers the enhancement switches for hiding, startup privileges, logs and tools. This page covers the general options, privileges and logs. For process freezing see [Process freezing](/en/guide/freeze); for the window recovery tool see [Window recovery & crash self-healing](/en/guide/recovery).
+The **Options** tab of the settings window gathers the enhancement switches for hiding, startup privileges, logs and tools. This page covers the general options, privileges and logs. For process freezing and memory trimming see [Process freezing](/en/guide/freeze) (the settings live in the **Power & Memory** tab); for the window recovery tool see [Window recovery & crash self-healing](/en/guide/recovery).
 
 ![ZoneDeck options page](/static/screenshot-4.png)
 
@@ -52,6 +52,19 @@ When on, ZoneDeck sends the **media pause key** to the window **before** hiding 
 - **Off** by default.
 - It differs from "mute after hiding": muting only silences the audio, whereas the pause key actually stops playback.
 - ZoneDeck's **process freezing** has the same pausing effect while also cutting resource usage — see [Process freezing](/en/guide/freeze).
+
+### Minimise windows before hiding
+
+When on, each window is **minimised** before it is hidden, and restored to the size it had beforehand when you bring it back.
+
+- **Off** by default.
+- A window that was **maximised** before hiding comes back maximised — it is not shrunk to a normal size.
+- A window that was **already minimised** stays minimised: ZoneDeck did not minimise it for you, so it does not restore it for you either.
+- Some programs release resources when they receive the minimise message (pausing rendering, collapsing to the tray). Pair this with [process freezing](/en/guide/freeze) for a more pronounced effect.
+
+::: tip Hiding and restoring are one paired switch
+ZoneDeck's "restore" only reverses the changes **it made itself**: a window it never minimised is not resized, and a window it never hid (one the program hid on its own) is not popped back up. Side effects such as muting and freezing are still applied and undone as usual.
+:::
 
 ## Startup & permissions
 

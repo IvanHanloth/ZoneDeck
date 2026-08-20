@@ -1,6 +1,4 @@
-//! 界面语言标识与解析。
-//!
-//! 核心与配置程序共用同一套语言标签，实际文案分别由各自的 catalog 提供。
+//! 界面语言标识与解析；核心与配置程序共用同一套语言标签。
 
 /// 配置中表示「跟随系统」的语言偏好值。
 pub const LANG_AUTO: &str = "auto";
@@ -31,9 +29,7 @@ impl Lang {
     pub const ALL: [Lang; 3] = [Lang::ZhCn, Lang::En, Lang::ZhTw];
 
     /// 按 BCP-47 标签解析语言，无法归类时返回 `None`。
-    ///
-    /// 中文按 script/region 子标签区分正体与简体：`Hant`/`TW`/`HK`/`MO` 归为繁体，
-    /// 其余中文变体归为简体。
+    /// 中文按 `Hant`/`TW`/`HK`/`MO` 归为繁体，其余变体归为简体。
     pub fn from_tag(tag: &str) -> Option<Lang> {
         let tag = tag.trim().replace('_', "-").to_ascii_lowercase();
         let mut parts = tag.split('-').filter(|p| !p.is_empty());
@@ -59,10 +55,8 @@ pub fn normalize_pref(pref: &str) -> String {
     }
 }
 
-/// 解析实际生效的语言。
-///
-/// `pref` 为具体语言时直接采用；为 [`LANG_AUTO`] 或非法值时依据 `system_tag` 推断，
-/// 系统语言缺失或无对应翻译时回落到简体中文。
+/// 解析实际生效的语言：`pref` 为具体语言时直接采用，否则依据 `system_tag` 推断，
+/// 无法推断时回落简体中文。
 pub fn resolve(pref: &str, system_tag: Option<&str>) -> Lang {
     if !pref.trim().eq_ignore_ascii_case(LANG_AUTO)
         && let Some(lang) = Lang::from_tag(pref)

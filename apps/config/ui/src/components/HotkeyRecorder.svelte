@@ -81,7 +81,7 @@
     align-items: center;
     gap: 10px;
   }
-  /* 图标 + 名称是固定宽的一列，右边的录制框才好对齐。 */
+  /* 图标 + 名称固定宽，右边的录制框才好对齐。 */
   .head {
     width: 10.5em;
     flex: none;

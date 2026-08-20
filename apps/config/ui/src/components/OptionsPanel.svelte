@@ -6,9 +6,7 @@
   import IconMousePointerClick from "~icons/lucide/mouse-pointer-click";
   import IconEyeOff from "~icons/lucide/eye-off";
   import IconPause from "~icons/lucide/pause";
-  import IconSnowflake from "~icons/lucide/snowflake";
-  import IconZap from "~icons/lucide/zap";
-  import IconGitFork from "~icons/lucide/git-fork";
+  import IconMinimize from "~icons/lucide/minimize-2";
   import IconPower from "~icons/lucide/power";
   import IconShield from "~icons/lucide/shield";
   import IconKeyRound from "~icons/lucide/key-round";
@@ -16,19 +14,10 @@
   import IconCalendarClock from "~icons/lucide/calendar-clock";
   import IconGauge from "~icons/lucide/gauge";
   import IconLifeBuoy from "~icons/lucide/life-buoy";
-  import { app, openRestoreTool, restartCore, startCore, setAutostart, refreshPssuspend, toast } from "../lib/state.svelte.js";
-  import { openExternal } from "../lib/verhub.js";
+  import { app, openRestoreTool, restartCore, startCore, setAutostart } from "../lib/state.svelte.js";
   import { LANGS, LANG_AUTO, LANG_NAMES, t } from "../lib/i18n.svelte.js";
 
   let elevating = $state(false);
-
-  async function openLink(url) {
-    try {
-      await openExternal(url);
-    } catch (err) {
-      toast(t("options.openLinkFailed", { err }), true);
-    }
-  }
 
   async function elevate() {
     elevating = true;
@@ -63,26 +52,13 @@
           : "",
   );
 
-  // 权限开关变更：绑定已更新 s.autostart_admin（自动保存）；若自启已开，按新权限重注册。
+  // 权限开关变更后，若自启已开则按新权限重注册。
   async function onAutostartAdminChange(admin) {
     if (app.autostart) await setAutostart(true, admin);
   }
 
-  // 「以管理员身份自启」的前置条件：必须先开启开机自启。
+  // 「以管理员身份自启」需先开启开机自启。
   const autostartOff = $derived(!app.autostart);
-
-  // 未开启「隐藏窗口时冻结进程」时，冻结区下方的子选项一律置灰禁用。
-  const freezeOff = $derived(!s.freeze_after_hide);
-
-  // 增强冻结的前置条件；任一不满足即置灰。
-  const enhancedBlocked = $derived.by(() => {
-    const reasons = [];
-    if (!app.status.running) reasons.push(t("options.blockedCoreStopped"));
-    else if (!app.status.elevated) reasons.push(t("options.blockedNeedAdmin"));
-    if (!app.pssuspend) reasons.push(t("options.blockedNoPssuspend"));
-    return reasons;
-  });
-  const enhancedDisabled = $derived(enhancedBlocked.length > 0);
 </script>
 
 <div class="panel-stack">
@@ -103,50 +79,16 @@
     <SettingRow icon={IconPause} label={t("options.sendPause")} description={t("options.sendPauseDesc")}>
       {#snippet control()}<Toggle bind:checked={s.send_before_hide} />{/snippet}
     </SettingRow>
+    <SettingRow
+      icon={IconMinimize}
+      label={t("options.minimizeBeforeHide")}
+      description={t("options.minimizeBeforeHideDesc")}
+    >
+      {#snippet control()}<Toggle bind:checked={s.minimize_before_hide} />{/snippet}
+    </SettingRow>
     <!-- <SettingRow label="显示悬浮窗" description="在桌面显示一个可拖动的悬浮小窗，双击可快速切换隐藏（核心侧功能开发中）。">
       {#snippet control()}<Toggle bind:checked={s.show_float_window} />{/snippet}
     </SettingRow> -->
-  </section>
-
-  <section class="fcard">
-    <h3>{t("options.freezeCard")}</h3>
-    <SettingRow icon={IconSnowflake} label={t("options.freezeAfterHide")} description={t("options.freezeAfterHideDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.freeze_after_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow
-      icon={IconZap}
-      label={t("options.enhancedFreeze")}
-      disabled={freezeOff || enhancedDisabled}
-      description={!freezeOff && enhancedDisabled
-        ? t("options.enhancedFreezeBlocked", { reasons: enhancedBlocked.join("；") })
-        : t("options.enhancedFreezeDesc")}
-    >
-      {#snippet control()}
-        <Toggle
-          bind:checked={s.enhanced_freeze}
-          disabled={freezeOff || enhancedDisabled}
-          title={freezeOff
-            ? t("options.needFreezeFirst")
-            : enhancedDisabled
-              ? enhancedBlocked.join("；")
-              : ""}
-        />
-      {/snippet}
-    </SettingRow>
-    <SettingRow
-      icon={IconGitFork}
-      label={t("options.freezeWholeTree")}
-      disabled={freezeOff}
-      description={t("options.freezeWholeTreeDesc")}
-    >
-      {#snippet control()}<Toggle bind:checked={s.freeze_whole_tree} disabled={freezeOff} />{/snippet}
-    </SettingRow>
-    <div class="note" class:disabled={freezeOff}>
-      {t("options.freezeNoteBefore")}
-      <button class="link" onclick={() => openLink("https://download.sysinternals.com/files/PSTools.zip")} disabled={freezeOff}>PSTools</button>
-      {t("options.freezeNoteAfter")}
-      <button class="link" onclick={refreshPssuspend} disabled={freezeOff}>{t("options.recheck")}</button>
-    </div>
   </section>
 
   <section class="fcard">
@@ -263,32 +205,6 @@
 </div>
 
 <style>
-  .note {
-    padding: 10px 14px;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.6;
-    border-top: 1px solid var(--border);
-  }
-  .note.disabled {
-    opacity: 0.45;
-  }
-  .note .link {
-    color: var(--accent);
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    cursor: pointer;
-  }
-  .note .link:hover {
-    text-decoration: underline;
-  }
-  .note .link:disabled {
-    color: var(--muted);
-    cursor: not-allowed;
-    text-decoration: none;
-  }
   .perm-ctl {
     display: flex;
     align-items: center;

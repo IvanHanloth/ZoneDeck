@@ -14,7 +14,7 @@ use zonedeck_common::ipc::{Command, PipeClient, Response};
 use zonedeck_core::agent::{self, AgentOptions};
 use zonedeck_core::recovery;
 
-/// 在带消息循环的独立线程上创建一个可见窗口；线程收到 WM_QUIT 后销毁窗口。
+/// 在带消息循环的独立线程上创建一个可见窗口，收到 WM_QUIT 后销毁。
 fn spawn_visible_window() -> (i64, u32, std::thread::JoinHandle<()>) {
     let (tx, rx) = std::sync::mpsc::channel::<(i64, u32)>();
     let handle = std::thread::spawn(move || unsafe {
@@ -79,7 +79,7 @@ fn destroying_a_hidden_window_clears_the_record_in_real_time() {
     );
     assert!(recovery_path.exists());
 
-    // 结束窗口线程 → 窗口销毁 → 事件钩子应让核心实时移除记录。
+    // 结束窗口线程后事件钩子应让核心实时移除记录。
     unsafe {
         let _ = PostThreadMessageW(window_tid, WM_QUIT, WPARAM(0), LPARAM(0));
     }

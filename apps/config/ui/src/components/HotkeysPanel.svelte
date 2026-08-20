@@ -30,7 +30,7 @@
 
   const s = $derived(app.config.setting);
 
-  // 数字输入框清空或越界时失焦归位，避免 null 留在配置里。
+  // 数字输入框清空或越界时失焦归位。
   function fixMultiClickMs() {
     s.mouse.multi_click_ms = clampInt(
       s.mouse.multi_click_ms,
@@ -51,7 +51,7 @@
   // 鼠标进入本页设置区时暂停核心监控，离开时恢复。
   const REASON = { area: "hotkeys-panel" };
 
-  // 窗口失焦时恢复监控（此时不会触发 pointerleave）。
+  // 窗口失焦时恢复监控，此时不会触发 pointerleave。
   onMount(() => {
     const onBlur = () => resumeMonitoring(REASON);
     window.addEventListener("blur", onBlur);

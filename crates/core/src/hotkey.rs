@@ -77,7 +77,7 @@ fn key_to_vk(token: &str) -> Option<u16> {
     Some(vk)
 }
 
-/// 热键是否置空。置空表示关闭该热键，而非配置错误。
+/// 热键是否置空；置空表示关闭该热键。
 pub fn is_disabled(s: &str) -> bool {
     s.trim().is_empty()
 }

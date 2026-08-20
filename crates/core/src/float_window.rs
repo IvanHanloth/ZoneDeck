@@ -1,5 +1,5 @@
 //! 桌面悬浮窗：无边框、置顶、不占任务栏的小窗口，显示程序图标。
-//! 左键拖动、双击触发老板键、右键弹菜单；背景经颜色键透明。
+//! 左键拖动、双击触发老板键、右键弹菜单。
 
 use core::ffi::c_void;
 
@@ -22,7 +22,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{PCWSTR, w};
 
-/// 悬浮窗把用户意图转发给代理窗口（复用其隐藏/菜单逻辑）。
+/// 悬浮窗把用户意图转发给代理窗口。
 pub(crate) const WM_APP_FLOAT: u32 = WM_APP + 4;
 /// 双击：切换隐藏/显示。
 pub(crate) const FLOAT_TOGGLE: usize = 0;
@@ -31,7 +31,7 @@ pub(crate) const FLOAT_MENU: usize = 1;
 
 const FLOAT_SIZE: i32 = 64;
 const FLOAT_MARGIN: i32 = 24;
-/// 透明色键（洋红，图标几乎不会用到），背景填充此色后即变透明。
+/// 透明色键；背景填充此色后即变透明。
 const COLOR_KEY: COLORREF = COLORREF(0x00FF_00FF);
 
 /// 工作区（去掉任务栏后的可用屏幕区域），像素坐标。
@@ -50,7 +50,7 @@ pub fn initial_position(work: WorkArea, size: i32, margin: i32) -> (i32, i32) {
     clamp_position((x, y), size, work)
 }
 
-/// 把窗口左上角夹在工作区内，保证整窗可见；工作区比窗口还小时对齐左上角。
+/// 把窗口左上角夹在工作区内；工作区比窗口还小时对齐左上角。
 pub fn clamp_position(pos: (i32, i32), size: i32, work: WorkArea) -> (i32, i32) {
     let (x, y) = pos;
     let max_x = (work.right - size).max(work.left);
@@ -121,7 +121,7 @@ impl FloatWindow {
 
 impl Drop for FloatWindow {
     fn drop(&mut self) {
-        // WM_NCDESTROY 会同步释放 FloatState，这里只销毁窗口。
+        // WM_NCDESTROY 会同步释放 FloatState，此处只销毁窗口。
         unsafe {
             let _ = DestroyWindow(self.hwnd);
         }
@@ -287,7 +287,7 @@ unsafe extern "system" fn float_wndproc(
     }
 }
 
-/// 悬浮窗右键菜单：设置 / 退出。以代理窗口为宿主，选择项经 `WM_COMMAND` 处理。
+/// 悬浮窗右键菜单：设置 / 退出；以代理窗口为宿主。
 pub(crate) fn show_float_menu(agent_hwnd: HWND, id_settings: usize, id_quit: usize) -> bool {
     unsafe {
         let Ok(menu) = CreatePopupMenu() else {

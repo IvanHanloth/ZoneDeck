@@ -26,6 +26,7 @@ const mockConfig = {
   setting: {
     mute_after_hide: true,
     send_before_hide: false,
+    minimize_before_hide: false,
     hide_current: true,
     click_to_hide: true,
     hide_icon_after_hide: false,
@@ -33,7 +34,8 @@ const mockConfig = {
     tray_show_tooltip: true,
     freeze_after_hide: false,
     enhanced_freeze: false,
-    freeze_whole_tree: false,
+    power_scope: "self",
+    trim_memory_after_freeze: false,
     show_float_window: false,
     mouse: {
       left: { enabled: false, clicks: 1, modifiers: "" },
@@ -149,8 +151,7 @@ function mockInvoke(cmd, args) {
         { key: "core", names: ["ZoneDeck.exe", "core.exe"] },
         { key: "config", names: ["config.exe", "zonedeck-config.exe"] },
       ];
-    // 预览环境没有 regex crate，用 JS 近似：只为把弹窗与标红演出来。
-    // 真实判定在后端（同核心一个引擎），见 crates/common/src/matching.rs。
+    // 预览环境没有 regex crate，用 JS 近似；真实判定在后端。
     case "regex_breadth":
       return (args?.patterns ?? []).map((p) => {
         try {
@@ -255,7 +256,7 @@ export const win = {
   minimize: () => IN_TAURI && getCurrentWindow().minimize(),
   toggleMaximize: () => IN_TAURI && getCurrentWindow().toggleMaximize(),
   close: () => IN_TAURI && getCurrentWindow().close(),
-  /** 拦截关窗请求（含标题栏按钮与 Alt+F4）；浏览器预览时不拦截。 */
+  /** 拦截关窗请求；浏览器预览时不拦截。 */
   onCloseRequested: (handler) =>
     IN_TAURI ? getCurrentWindow().onCloseRequested(handler) : Promise.resolve(() => {}),
   isMaximized: async () => (IN_TAURI ? getCurrentWindow().isMaximized() : false),

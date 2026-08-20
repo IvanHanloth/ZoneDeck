@@ -1,4 +1,4 @@
-// 启动屏（index.html 里内联的 #splash）的收尾逻辑。
+// 启动屏的收尾逻辑。
 
 /** 在首帧绘制之后执行回调。 */
 export function afterFirstPaint(fn) {

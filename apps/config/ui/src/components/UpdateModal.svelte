@@ -1,6 +1,5 @@
 <script>
-  // 更新提示。强制更新（required=true）时不可关闭：无关闭按钮，Esc 与点遮罩均无效。
-  // 故不复用总是可关闭的 Modal 组件。
+  // 更新提示；required=true 时不可关闭，故不复用总是可关闭的 Modal 组件。
   import IconDownload from "~icons/lucide/download";
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import IconX from "~icons/lucide/x";

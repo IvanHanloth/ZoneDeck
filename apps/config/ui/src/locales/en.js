@@ -8,6 +8,7 @@ export default {
   "tab.whitelist": "Whitelist",
   "tab.hotkeys": "Hotkeys & Mouse",
   "tab.notify": "Alerts",
+  "tab.power": "Power & Memory",
   "tab.options": "Options",
   "tab.about": "About & Feedback",
 
@@ -107,7 +108,7 @@ export default {
   "whitelist.title": "Whitelist",
   "whitelist.aria": "Whitelist entries",
   "whitelist.intro":
-    "The whitelist controls which steps a program skips when hiding. Note that if a window is never hidden, freezing and muting never happen either.",
+    "The whitelist controls which steps a program skips when hiding.",
   "whitelist.addTitle": "Add the processes owning the windows selected on the left",
   "whitelist.add": "Add process",
   "whitelist.addRegexTitle": "Add a whitelist regex entry",
@@ -234,26 +235,37 @@ export default {
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
   "options.sendPause": "Send the pause key before hiding",
   "options.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "options.minimizeBeforeHide": "Minimise windows before hiding",
+  "options.minimizeBeforeHideDesc":
+    "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
-  "options.freezeCard": "Process freezing",
-  "options.freezeAfterHide": "Freeze processes when hiding",
-  "options.freezeAfterHideDesc":
-    "Suspend the target process once hidden to lower its CPU and memory usage; it is resumed automatically when restored. May add some delay when hiding and restoring.",
-  "options.enhancedFreeze": "Use enhanced freezing",
-  "options.enhancedFreezeDesc":
+  "power.scopeCard": "Scope",
+  "power.scope": "Scope",
+  "power.scopeDesc":
+    "Decides which processes freezing and memory reduction reach. A wider scope is more thorough, and more likely to affect other background work.",
+  "power.scopeSelf": "Target process only",
+  "power.scopeTree": "Target process and all its children",
+  "power.scopeImage": "All instances of the same program",
+  "power.freezeCard": "Process freezing",
+  "power.freezeAfterHide": "Freeze processes when hiding",
+  "power.freezeAfterHideDesc":
+    "Suspend the target process once hidden so it stops using CPU; it is resumed automatically when restored. May add some delay when hiding and restoring.",
+  "power.enhancedFreeze": "Use enhanced freezing",
+  "power.enhancedFreezeDesc":
     "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator. May add some delay when hiding and restoring.",
-  "options.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
-  "options.needFreezeFirst": "Enable “Freeze processes when hiding” first",
-  "options.blockedCoreStopped": "the core is not running",
-  "options.blockedNeedAdmin": "the core must run as administrator",
-  "options.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
-  "options.freezeWholeTree": "Freeze the whole process tree (beta)",
-  "options.freezeWholeTreeDesc":
-    "Recursively freeze the entire child-process tree of the matched program for a more thorough freeze; applies to both normal and enhanced freezing. May affect background tasks of those child processes and adds more delay when hiding and restoring.",
-  "options.freezeNoteBefore": "Enhanced freezing requires downloading",
-  "options.freezeNoteAfter":
+  "power.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
+  "power.needFreezeFirst": "Enable “Freeze processes when hiding” first",
+  "power.blockedCoreStopped": "the core is not running",
+  "power.blockedNeedAdmin": "the core must run as administrator",
+  "power.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
+  "power.memoryCard": "Memory usage",
+  "power.trimMemory": "Reduce memory usage (beta)",
+  "power.trimMemoryDesc":
+    "Page out a program's memory after freezing it, lowering its memory usage. Requires the process to be frozen first. May add some delay when restoring.",
+  "power.freezeNoteBefore": "Enhanced freezing requires downloading",
+  "power.freezeNoteAfter":
     "and placing pssuspend64.exe in the program folder, with the core running as administrator.",
-  "options.recheck": "Check again",
+  "power.recheck": "Check again",
 
   "options.startupCard": "Startup & permissions",
   "options.autostart": "Start with Windows",

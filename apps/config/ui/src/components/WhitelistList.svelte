@@ -1,6 +1,5 @@
 <script>
-  // 「白名单」：按进程声明在哪些模式下跳过。结构与 ProcessRuleList 同构，
-  // 差别在行尾把「匹配范围」换成隐藏 / 冻结 / 静音三个开关。
+  // 「白名单」：按进程声明在哪些模式下跳过；行尾是隐藏 / 冻结 / 静音三个开关。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";
@@ -24,19 +23,9 @@
     { field: "ignore_mute", icon: IconVolumeOff, label: "whitelist.ignoreMute" },
   ];
 
-  /**
-   * 切换一个模式开关。
-   *
-   * 勾上「忽略隐藏」时连带点亮另外两项：窗口压根不隐藏，冻结与静音本就无从发生，
-   * 界面照实反映这一点。取消时**不**联动取消——用户多半是想让它重新参与隐藏，
-   * 但仍不冻结 / 不静音。
-   */
+  // 三个开关相互独立，互不联动。
   function setMode(rule, field, on) {
     rule[field] = on;
-    if (field === "ignore_hide" && on) {
-      rule.ignore_freeze = true;
-      rule.ignore_mute = true;
-    }
   }
 
   function remove() {
@@ -64,7 +53,7 @@
   </div>
 
   <div class="rule-list" role="listbox" aria-label={t("whitelist.aria")}>
-    <!-- 内置项排在最前：冻结自己会让已隐藏的窗口再也回不来，故不可编辑、不可删除。 -->
+    <!-- 内置项排在最前，不可编辑、不可删除。 -->
     {#each app.whitelistBuiltins as builtin (builtin.key)}
       <div class="rule-row builtin">
         <span class="lock" title={t("whitelist.builtinLocked")}>
@@ -265,7 +254,7 @@
     width: 13px;
     color: var(--muted);
   }
-  /* 与 .by 下拉同宽的占位，内置行的开关列才与普通行对齐 */
+  /* 与 .by 下拉同宽的占位，让内置行的开关列对齐 */
   .by-placeholder {
     flex: none;
     width: 56px;
@@ -309,7 +298,7 @@
     direction: rtl;
     text-align: left;
   }
-  /* 内置行的次文本是映像名列表而非路径，按正常方向排版 */
+  /* 内置行的次文本是映像名列表，按正常方向排版 */
   .rpath.ltr {
     direction: ltr;
   }
@@ -367,7 +356,7 @@
     border-color: var(--accent);
     color: var(--text);
   }
-  /* 勾选态由外层 label 的配色表达，原生方框只保留可聚焦性 */
+  /* 勾选态由外层 label 的配色表达 */
   .mode input[type="checkbox"] {
     position: absolute;
     width: 1px;
@@ -379,7 +368,7 @@
     outline: 2px solid var(--accent);
     outline-offset: 1px;
   }
-  /* 内置行的开关是只读展示，不接受交互 */
+  /* 内置行的开关是只读展示 */
   .rule-row.builtin .mode {
     cursor: not-allowed;
   }

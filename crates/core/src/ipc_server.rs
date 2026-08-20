@@ -19,7 +19,7 @@ use crate::util::to_wide_null;
 
 const PIPE_BUF_SIZE: u32 = 4096;
 
-/// 创建管道失败后的重试间隔：逐级退避，最后一档一直沿用，线程不退出。
+/// 创建管道失败后的重试间隔，逐级退避，最后一档一直沿用。
 const RETRY_DELAYS: [std::time::Duration; 3] = [
     std::time::Duration::from_secs(1),
     std::time::Duration::from_secs(5),
@@ -30,7 +30,7 @@ fn retry_delay(attempt: u32) -> std::time::Duration {
     RETRY_DELAYS[(attempt as usize).min(RETRY_DELAYS.len() - 1)]
 }
 
-/// 命名管道安全描述符（SDDL）：Everyone 可读写，完整性标签设为 Low，
+/// 命名管道安全描述符（SDDL）：Everyone 可读写，完整性标签 Low，
 /// 使普通配置程序能连上以管理员运行的核心。
 const PIPE_SDDL: &str = "D:(A;;GRGW;;;WD)S:(ML;;NW;;;LW)";
 
@@ -101,7 +101,6 @@ where
     F: Fn(Command) -> Response,
 {
     let wide_name = to_wide_null(pipe_name);
-    // 安全描述符构造一次，供所有管道实例复用。
     let security = PipeSecurity::new();
     if security.is_none() {
         crate::logging::warn("命名管道安全描述符构造失败，管理员核心下普通配置程序可能无法连接");

@@ -1,6 +1,4 @@
-//! 核心的用户可见文案（托盘菜单、气泡通知、IPC 错误信息）。
-//!
-//! 日志不走此模块，一律使用中文。
+//! 核心的用户可见文案（托盘菜单、气泡通知、IPC 错误信息）；日志不走此模块。
 
 use std::sync::RwLock;
 
@@ -18,9 +16,8 @@ pub enum Msg {
     MenuAutostart,
     MenuAbout,
     MenuQuit,
-    // 托盘气泡文案一律成对：`*Title` 是状态短语，`*Body` 是补充详情。正文不重复
-    // 应用名（Windows 通知自带 ZoneDeck 归属行），且不得为空——`szInfo` 为空时
-    // Shell_NotifyIcon 根本不弹气泡。
+    // 托盘气泡文案一律成对：`*Title` 是状态短语，`*Body` 是补充详情。
+    // 正文不得为空，`szInfo` 为空时 Shell_NotifyIcon 不弹气泡。
     HiddenTitle,
     HiddenBody,
     ShownTitle,
@@ -228,7 +225,7 @@ fn system_locale() -> Option<String> {
     if len <= 0 {
         return None;
     }
-    // 返回值含结尾的 NUL，截断后再转字符串。
+    // 返回值含结尾的 NUL。
     let tag = String::from_utf16_lossy(&buf[..(len as usize).saturating_sub(1)]);
     (!tag.is_empty()).then_some(tag)
 }
@@ -250,9 +247,8 @@ pub fn t(msg: Msg) -> &'static str {
     msg.text(lang())
 }
 
-/// 取当前语言下的文案，并把 `{名字}` 占位符替换为 `params` 中的同名值。
-///
-/// 与前端 `t(key, params)` 同构；未提供的占位符原样保留。
+/// 取当前语言下的文案，并把 `{名字}` 占位符替换为 `params` 中的同名值；
+/// 未提供的占位符原样保留。
 pub fn tf(msg: Msg, params: &[(&str, &str)]) -> String {
     let mut text = t(msg).to_string();
     for (name, value) in params {
@@ -265,7 +261,7 @@ pub fn tf(msg: Msg, params: &[(&str, &str)]) -> String {
 mod tests {
     use super::*;
 
-    /// 全部文案键；新增 Msg 变体后必须同步登记，否则跨语言校验会漏掉它。
+    /// 全部文案键；新增 Msg 变体后必须同步登记。
     const ALL_MSGS: [Msg; 40] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
@@ -309,7 +305,7 @@ mod tests {
         Msg::ErrFeedbackContactRequired,
     ];
 
-    /// 任一语言缺翻译都会退化成中英混排，故逐条校验三种语言均非空且互不相同。
+    /// 逐条校验三种语言均非空且互不相同。
     #[test]
     fn every_message_is_translated_in_all_languages() {
         for msg in ALL_MSGS {
@@ -320,7 +316,7 @@ mod tests {
         }
     }
 
-    /// 占位符跨语言必须一致，否则换语言后参数会静默丢失。
+    /// 占位符跨语言必须一致。
     #[test]
     fn placeholders_match_across_languages() {
         fn holders(text: &str) -> Vec<&str> {
@@ -349,7 +345,6 @@ mod tests {
             tf(Msg::ErrFreezePartial, &[("failed", "2"), ("total", "5")]),
             "2/5 个进程冻结失败"
         );
-        // 未提供的占位符原样保留，便于发现漏传参数。
         assert_eq!(
             tf(Msg::ErrFreezePartial, &[]),
             "{failed}/{total} 个进程冻结失败"

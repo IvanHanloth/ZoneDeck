@@ -1,8 +1,8 @@
 //! 窗口 / 进程规则匹配引擎。
 //!
 //! 窗口规则（细）按句柄 + 标题锁定单个窗口，句柄失效时按「标题 + 进程路径」追溯；
-//! 进程规则（粗）按可执行文件路径隐藏该程序的所有窗口；白名单（[`is_ignored`]）
-//! 反向声明某个程序在哪些模式下应被跳过。均为纯函数。
+//! 进程规则（粗）按可执行文件路径隐藏该程序的所有窗口；白名单反向声明某个程序在
+//! 哪些模式下应被跳过。均为纯函数。
 
 use regex::Regex;
 
@@ -22,7 +22,7 @@ pub enum WindowResolution<'a> {
     Regex(Vec<&'a WindowInfo>),
 }
 
-/// 校验正则是否可编译（供核心侧对非法正则记录 WARN，界面侧给出反馈）。
+/// 校验正则是否可编译。
 pub fn regex_is_valid(pattern: &str) -> bool {
     Regex::new(pattern).is_ok()
 }
@@ -137,22 +137,17 @@ pub enum IgnoreMode {
     Mute,
 }
 
-/// 一条内置的强制忽略冻结项：ZoneDeck 自身的一个角色，及其全部映像名。
+/// 一条内置的强制忽略冻结项：ZoneDeck 自身的一个角色及其全部映像名。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltinGuard {
-    /// 稳定标识，供界面查对应的本地化角色名；不随品牌 / 文件名变化。
+    /// 稳定标识，供界面查对应的本地化角色名。
     pub key: &'static str,
-    /// 该角色可能的映像名。生产名与开发构建名各列一条，同
-    /// `zonedeck_core` 定位配置程序时的先例。
+    /// 该角色可能的映像名：生产名与开发构建名各一条。
     pub names: &'static [&'static str],
 }
 
-/// 永不冻结的自有进程。
-///
-/// 核心通常是 explorer.exe 的子进程（快捷方式 / 自启拉起），配置程序又是核心的子
-/// 进程；开启「冻结完整进程」后冻结 explorer.exe 会把两者一并挂起，届时热键失效、
-/// 恢复工具打不开、已隐藏的窗口再也回不来。这条保护不可由用户关闭，故写死在此，
-/// 并由 [`is_ignored`] 内部兜底，调用方无从绕过。
+/// 永不冻结的自有进程：冻住自己会让热键失效、已隐藏的窗口再也回不来。
+/// 不可由用户关闭，由 [`is_ignored`] 内部兜底。
 pub const BUILTIN_FREEZE_GUARDS: [BuiltinGuard; 2] = [
     BuiltinGuard {
         key: "core",
@@ -172,8 +167,7 @@ pub fn is_builtin_freeze_guarded(process: &str) -> bool {
         .any(|n| n.eq_ignore_ascii_case(process))
 }
 
-/// 一条白名单条目是否命中该进程。`path` 为空（如枚举不到路径的目标）时按路径匹配
-/// 的条目一律不命中。
+/// 一条白名单条目是否命中该进程；`path` 为空时按路径匹配的条目一律不命中。
 fn whitelist_rule_matches(rule: &WhitelistRule, path: &str, process: &str) -> bool {
     let subject = if rule.by_name { process } else { path };
     if subject.is_empty() {
@@ -187,16 +181,14 @@ fn whitelist_rule_matches(rule: &WhitelistRule, path: &str, process: &str) -> bo
             } else {
                 &rule.path
             };
-            // Windows 上文件名与路径都大小写不敏感：Explorer.EXE 必须与 explorer.exe 同命中。
+            // Windows 上文件名与路径都大小写不敏感。
             !want.is_empty() && want.eq_ignore_ascii_case(subject)
         }
     }
 }
 
 /// 进程（由完整路径 + 映像名标识）是否被声明忽略该模式。
-///
-/// [`IgnoreMode::Freeze`] 先过 [`BUILTIN_FREEZE_GUARDS`]：内置保护写在这里而非各调
-/// 用方，核心侧不可能漏掉。
+/// [`IgnoreMode::Freeze`] 先过 [`BUILTIN_FREEZE_GUARDS`]。
 pub fn is_ignored(rules: &[WhitelistRule], path: &str, process: &str, mode: IgnoreMode) -> bool {
     if mode == IgnoreMode::Freeze && is_builtin_freeze_guarded(process) {
         return true;
@@ -211,10 +203,8 @@ pub fn is_ignored(rules: &[WhitelistRule], path: &str, process: &str, mode: Igno
         .any(|r| whitelist_rule_matches(r, path, process))
 }
 
-/// 白名单里是否存在**按路径**（含路径正则）声明忽略冻结的条目。
-///
-/// 冻结集只拿得到 PID，映像名可由一次进程快照批量得出，完整路径却要逐 PID
-/// `OpenProcess`。调用方据此决定要不要付这笔开销。
+/// 白名单里是否存在按路径（含路径正则）声明忽略该模式的条目。
+/// 调用方据此决定要不要逐 PID 查完整路径。
 pub fn whitelist_needs_paths(rules: &[WhitelistRule], mode: IgnoreMode) -> bool {
     rules.iter().any(|r| {
         !r.by_name
@@ -231,12 +221,10 @@ pub const BREADTH_SAMPLES: usize = 200;
 /// 命中数超过它即判定「可能过宽」。
 pub const BREADTH_LIMIT: usize = BREADTH_SAMPLES / 2;
 
-/// [`breadth_samples`] 的随机种子。**定种是刻意的**：同一条正则每次都得到同一结论，
-/// 判定可写进单测，界面上也不会时红时不红。
+/// [`breadth_samples`] 的随机种子；定种保证同一条正则每次都得到同一结论。
 const BREADTH_SEED: u64 = 0x5A17_C0DE_1234_9E77;
 
-/// 样本用字符集。窗口标题正则与进程路径正则都要能被拉开，故 ASCII 字母数字、
-/// 空格、常见标点与中日文字符混排。
+/// 样本用字符集：ASCII 字母数字、空格、常见标点与中日文字符混排。
 const SAMPLE_ALPHABET: &[char] = &[
     'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's',
     't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L',
@@ -255,7 +243,7 @@ const SAMPLE_DIRS: &[&str] = &[
     "C:\\Users\\Public\\AppData\\Local",
 ];
 
-/// xorshift64*：足够均匀、十行写完，不必为生成样本引入 rand 依赖。
+/// xorshift64*，避免为生成样本引入 rand 依赖。
 struct Rng(u64);
 
 impl Rng {
@@ -283,8 +271,8 @@ impl Rng {
     }
 }
 
-/// [`BREADTH_SAMPLES`] 条伪随机样本串：约三成塑造成 Windows 路径形状（进程规则的
-/// 正则作用于路径），其余是长度 1–40 的自由文本（窗口标题形状）。
+/// [`BREADTH_SAMPLES`] 条伪随机样本串：约三成为 Windows 路径形状，其余是
+/// 长度 1–40 的自由文本。
 pub fn breadth_samples() -> Vec<String> {
     let mut rng = Rng(BREADTH_SEED);
     (0..BREADTH_SAMPLES)
@@ -301,15 +289,13 @@ pub fn breadth_samples() -> Vec<String> {
         .collect()
 }
 
-/// 一条正则命中 [`breadth_samples`] 的条数；正则编译失败时返回 `None`
-/// （不判过宽——匹配不了任何东西是另一回事，核心侧已有 WARN）。
+/// 一条正则命中 [`breadth_samples`] 的条数；正则编译失败时返回 `None`。
 pub fn regex_breadth(pattern: &str) -> Option<usize> {
     let re = Regex::new(pattern).ok()?;
     Some(breadth_samples().iter().filter(|s| re.is_match(s)).count())
 }
 
 /// 正则是否「可能过宽」：命中随机样本超过 [`BREADTH_LIMIT`] 条。
-/// 过宽的规则会连带命中大量无关窗口 / 进程，通常是写错了。
 pub fn regex_is_broad(pattern: &str) -> bool {
     regex_breadth(pattern).is_some_and(|n| n > BREADTH_LIMIT)
 }
@@ -642,7 +628,7 @@ mod tests {
         );
     }
 
-    /// 冻结自身会让已隐藏的窗口再也无法恢复，这条保护不依赖任何用户配置。
+    /// 这条保护不依赖任何用户配置。
     #[test]
     fn builtin_guards_block_freezing_ourselves_with_empty_whitelist() {
         for name in [
@@ -660,7 +646,7 @@ mod tests {
         assert!(!is_builtin_freeze_guarded("explorer.exe"));
     }
 
-    /// 内置保护只挡冻结：隐藏 / 静音自己的窗口是正常操作。
+    /// 内置保护只挡冻结。
     #[test]
     fn builtin_guards_do_not_leak_into_other_modes() {
         assert!(!is_ignored(
@@ -713,7 +699,6 @@ mod tests {
         );
     }
 
-    /// 判定的意义在于分开「命中一切」与「命中特定目标」两类正则。
     #[test]
     fn broad_patterns_are_flagged_and_specific_ones_are_not() {
         for broad in [".*", "", "^", ".", "(?s).*", "[\\s\\S]*"] {

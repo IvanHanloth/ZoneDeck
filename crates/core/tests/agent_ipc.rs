@@ -8,7 +8,7 @@ fn agent_answers_ipc_and_quits_cleanly() {
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("config.json");
     let mut config = zonedeck_common::Config::default();
-    // 开启自动隐藏，验证 GetStatus 会如实回传该开关（供设置界面与托盘对齐）。
+    // 开启自动隐藏，验证 GetStatus 会如实回传该开关。
     config.setting.auto_hide_enabled = true;
     config.save(&config_path).unwrap();
 

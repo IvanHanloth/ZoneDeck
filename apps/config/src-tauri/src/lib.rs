@@ -13,12 +13,12 @@ mod verhub;
 const CORE_EXE: &str = "ZoneDeck.exe";
 
 /// 程序自身所在目录：只用来找同目录下的可执行文件（核心、pssuspend）。
-/// 数据文件一律走 [`zonedeck_common::paths`]——安装版存到用户目录，便携版才在这里。
+/// 数据文件一律走 [`zonedeck_common::paths`]。
 fn exe_dir() -> PathBuf {
     zonedeck_common::paths::exe_dir()
 }
 
-/// 数据目录（配置、日志、恢复文件、缓存）；与核心得出的结果一致。
+/// 数据目录（配置、日志、恢复文件、缓存）。
 fn data_dir() -> PathBuf {
     zonedeck_common::paths::data_dir()
 }
@@ -62,7 +62,7 @@ fn notify_core(command: &Command) -> Result<Response, String> {
         .map_err(|e| e.to_string())
 }
 
-/// 把阻塞工作丢到专用线程，避免阻塞 Tauri 异步运行时与 WebView 渲染。
+/// 把阻塞工作丢到专用线程，避免阻塞 Tauri 异步运行时。
 async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
     tauri::async_runtime::spawn_blocking(f)
         .await
@@ -92,7 +92,7 @@ struct AppInfo {
 #[derive(Serialize)]
 struct LoadedConfig {
     config: Config,
-    /// 解析失败回退默认值时的原因（含备份去向），由前端提示用户；正常加载为 `None`。
+    /// 解析失败回退默认值时的原因（含备份去向）；正常加载为 `None`。
     fallback: Option<String>,
 }
 
@@ -104,14 +104,14 @@ fn load_config() -> Result<LoadedConfig, String> {
 }
 
 /// 入参用 JSON 值而非 `Config`：经 [`Config::from_value`] 剥离 `null` 后再反序列化，
-/// 界面上被清空的输入框（提交 `null`）不会导致整份配置保存失败。
+/// 界面上被清空的输入框不会导致整份配置保存失败。
 #[tauri::command]
 async fn save_config(config: serde_json::Value) -> Result<(), String> {
     blocking(move || {
         let config = Config::from_value(config).map_err(|e| e.to_string())?;
         i18n::set_from_pref(&config.setting.language);
         config.save(&config_path()).map_err(|e| e.to_string())?;
-        // 通知核心热重载；核心据此同步语言。核心未运行时忽略错误。
+        // 通知核心热重载；核心未运行时忽略错误。
         let _ = notify_core(&Command::ReloadConfig);
         Ok(())
     })
@@ -151,8 +151,7 @@ async fn show_all_windows() -> Result<(), String> {
     blocking(|| notify_core(&Command::Show).map(|_| ())).await
 }
 
-/// 把恢复工具的窗口操作交给核心执行；核心未应答（未运行 / 出错）时返回 false，
-/// 由调用方退回直接操作。
+/// 把恢复工具的窗口操作交给核心执行；核心未应答时返回 false，由调用方退回直接操作。
 fn try_core_window_op(command: &Command) -> bool {
     matches!(
         PipeClient::connect_default().fast().send(command),
@@ -160,8 +159,7 @@ fn try_core_window_op(command: &Command) -> bool {
     )
 }
 
-/// 恢复显示指定窗口（窗口恢复工具）。优先经核心释放并更新记录；
-/// 核心不在运行才直接对句柄 ShowWindow。
+/// 恢复显示指定窗口（窗口恢复工具）；核心不在运行才直接对句柄 ShowWindow。
 #[tauri::command]
 async fn show_windows(hwnds: Vec<i64>) {
     blocking(move || {
@@ -179,8 +177,7 @@ async fn show_windows(hwnds: Vec<i64>) {
     .await
 }
 
-/// 隐藏指定窗口（窗口恢复工具）。优先经核心纳入隐藏记录（不施加静音 / 冻结）；
-/// 核心不在运行才直接对句柄隐藏。
+/// 隐藏指定窗口（窗口恢复工具），不施加静音 / 冻结；核心不在运行才直接隐藏。
 #[tauri::command]
 async fn hide_windows(hwnds: Vec<i64>) {
     blocking(move || {
@@ -198,37 +195,41 @@ async fn hide_windows(hwnds: Vec<i64>) {
     .await
 }
 
-/// 冻结指定进程（窗口恢复工具）。`whole_tree` 为真时先展开为整棵子进程树；
-/// `enhanced` 为真且 pssuspend64.exe 可用时走增强冻结，否则普通冻结。尽力而为，
-/// 失败个数汇总到错误信息。直接操作，不经核心的隐藏状态跟踪。
+/// 冻结指定进程（窗口恢复工具）。`scope` 为作用范围（`self` / `tree` / `image`），
+/// `enhanced` 为真且 pssuspend64.exe 可用时走增强冻结。失败个数汇总到错误信息。
 #[tauri::command]
-async fn freeze_pids(pids: Vec<u32>, enhanced: bool, whole_tree: bool) -> Result<(), String> {
-    run_freeze(pids, enhanced, whole_tree, true).await
+async fn freeze_pids(pids: Vec<u32>, enhanced: bool, scope: String) -> Result<(), String> {
+    run_freeze(pids, enhanced, scope, true).await
 }
 
-/// 解冻指定进程（窗口恢复工具）。参数含义同 [`freeze_pids`]。
+/// 解冻指定进程（窗口恢复工具）；参数含义同 [`freeze_pids`]。
 #[tauri::command]
-async fn resume_pids(pids: Vec<u32>, enhanced: bool, whole_tree: bool) -> Result<(), String> {
-    run_freeze(pids, enhanced, whole_tree, false).await
+async fn resume_pids(pids: Vec<u32>, enhanced: bool, scope: String) -> Result<(), String> {
+    run_freeze(pids, enhanced, scope, false).await
 }
 
 /// freeze_pids / resume_pids 的公共实现：`suspend=true` 冻结，否则解冻。
 async fn run_freeze(
     pids: Vec<u32>,
     enhanced: bool,
-    whole_tree: bool,
+    scope: String,
     suspend: bool,
 ) -> Result<(), String> {
     blocking(move || {
         use zonedeck_core::freeze;
         let dir = exe_dir();
         let use_enhanced = enhanced && freeze::pssuspend_available(&dir);
-        let targets = if whole_tree {
-            zonedeck_core::hide::expand_descendants(&pids, &freeze::process_tree())
-        } else {
-            pids
-        };
         let names = freeze::process_names();
+        // 与核心的 `scoped_pids` 同一套范围语义。
+        let targets = match zonedeck_common::config::normalize_power_scope(&scope).as_str() {
+            zonedeck_common::POWER_SCOPE_TREE => {
+                zonedeck_core::hide::expand_descendants(&pids, &freeze::process_tree())
+            }
+            zonedeck_common::POWER_SCOPE_IMAGE => {
+                zonedeck_core::hide::expand_same_image(&pids, &names)
+            }
+            _ => pids,
+        };
         let targets: Vec<u32> = targets
             .into_iter()
             .filter(|pid| {
@@ -297,7 +298,7 @@ struct AutostartStatus {
 async fn autostart_status() -> AutostartStatus {
     blocking(|| {
         use zonedeck_core::autostart::Method;
-        // 用核心 exe 路径查询，与核心写入的自启项一致。
+        // 用核心 exe 路径查询。
         let status =
             zonedeck_core::autostart::Autostart::for_exe(exe_dir().join(CORE_EXE)).status();
         let method = match status {
@@ -318,9 +319,9 @@ struct CoreStatus {
     running: bool,
     hidden: bool,
     elevated: bool,
-    /// 核心是否正在监听热键与鼠标（由核心回报）。
+    /// 核心是否正在监听热键与鼠标。
     monitoring: bool,
-    /// 自动隐藏当前是否启用（托盘菜单也可切换，须回读对齐界面）。
+    /// 自动隐藏当前是否启用。
     auto_hide_enabled: bool,
 }
 
@@ -332,7 +333,7 @@ const CORE_OFFLINE: CoreStatus = CoreStatus {
     auto_hide_enabled: false,
 };
 
-/// 核心状态：单次管道往返 + 快速失败（核心未运行时立即返回，不重试）。
+/// 核心状态：单次管道往返 + 快速失败，核心未运行时立即返回。
 #[tauri::command]
 async fn core_status() -> CoreStatus {
     blocking(|| {
@@ -372,7 +373,7 @@ async fn start_core(elevated: bool) -> Result<bool, String> {
     .await
 }
 
-/// 重启核心：先请求旧核心退出释放互斥，再以指定权限重新启动（新实例等待互斥交接）。
+/// 重启核心：先请求旧核心退出释放互斥，再以指定权限重新启动。
 #[tauri::command]
 async fn restart_core(elevated: bool) -> Result<bool, String> {
     let exe = core_exe_path()?;
@@ -399,7 +400,7 @@ async fn quit_core() -> Result<(), String> {
     .await
 }
 
-/// 停用 / 恢复核心的热键与鼠标监控。返回核心是否应答（未运行时返回 false）。
+/// 停用 / 恢复核心的热键与鼠标监控；返回核心是否应答。
 #[tauri::command]
 async fn set_hotkeys_enabled(enabled: bool) -> Result<bool, String> {
     blocking(move || {
@@ -422,8 +423,7 @@ async fn pssuspend_available() -> bool {
 }
 
 /// 一批正则各自命中随机样本的条数；`None` 表示该条正则编译失败。
-/// 界面据此提示「可能过宽」。判定跑在这里而不是前端：与核心同一个 `regex` 引擎，
-/// `(?i)` 这类内联标志 JS 的 RegExp 根本编译不了，放前端必然误判。
+/// 判定放在后端，与核心共用同一个 `regex` 引擎。
 #[tauri::command]
 async fn regex_breadth(patterns: Vec<String>) -> Vec<Option<usize>> {
     blocking(move || {
@@ -436,7 +436,6 @@ async fn regex_breadth(patterns: Vec<String>) -> Vec<Option<usize>> {
 }
 
 /// 白名单里不可删除的内置项（永不冻结的自有进程），供界面渲染锁定行。
-/// 由后端吐出而非前端另抄一份常量，避免两边漂移。
 #[derive(Serialize)]
 struct BuiltinWhitelistEntry {
     /// 稳定标识，界面据此查本地化的角色名。
@@ -464,7 +463,7 @@ fn startup_action() -> Option<String> {
         .find(|a| a == zonedeck_common::ARG_RESTORE || a == zonedeck_common::ARG_ABOUT)
 }
 
-/// 打开日志目录（`<数据目录>/logs`）；目录不存在时先创建，再用资源管理器打开。
+/// 打开日志目录（`<数据目录>/logs`）；目录不存在时先创建。
 #[tauri::command]
 async fn open_log_dir() -> Result<(), String> {
     blocking(|| {
@@ -475,7 +474,7 @@ async fn open_log_dir() -> Result<(), String> {
     .await
 }
 
-/// 数据目录及其由来。界面据 `kind` 判断是否要提示便携版写不进程序目录。
+/// 数据目录及其由来；界面据 `kind` 判断是否要提示写不进程序目录。
 #[tauri::command]
 fn data_location() -> DataLocation {
     use zonedeck_common::paths::DataDirKind;
@@ -495,7 +494,7 @@ fn data_location() -> DataLocation {
 fn app_info() -> AppInfo {
     AppInfo {
         name: zonedeck_common::APP_NAME,
-        // 程序版本（非配置 schema 版本 APP_CONFIG_VERSION）。
+        // 程序版本，非配置 schema 版本。
         version: env!("CARGO_PKG_VERSION"),
         website: "https://github.com/IvanHanloth/ZoneDeck",
         author: "Ivan Hanloth",
@@ -505,7 +504,7 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接。仅放行 http/https/mailto（与前端 markdown 白名单一致）。
+/// 用系统默认浏览器打开外部链接；仅放行 http/https/mailto。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("mailto:") {
@@ -514,8 +513,7 @@ async fn open_external(url: String) -> Result<(), String> {
     blocking(move || zonedeck_core::shell::open(&url)).await
 }
 
-/// 项目公开链接（主页 / 仓库 / 文档等）。带缓存（内存 + 数据目录下的磁盘文件，
-/// 有效期一天），过期才请求 Verhub；请求失败退回过期缓存。
+/// 项目公开链接（主页 / 仓库 / 文档等），带内存 + 磁盘缓存，有效期一天。
 #[tauri::command]
 async fn verhub_project_links() -> Result<verhub::ProjectLinks, String> {
     verhub::project_links(&data_dir().join("verhub_cache.json"))
@@ -523,7 +521,7 @@ async fn verhub_project_links() -> Result<verhub::ProjectLinks, String> {
         .map_err(|e| e.to_string())
 }
 
-/// 检查更新。`required=true` 即强制更新，界面须阻断使用。
+/// 检查更新；`required=true` 即强制更新，界面须阻断使用。
 #[tauri::command]
 async fn verhub_check_update(include_preview: bool) -> Result<verhub::CheckUpdate, String> {
     verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview)
@@ -556,7 +554,6 @@ async fn verhub_submit_feedback(
         return Err(i18n::t(Msg::ErrFeedbackEmpty).to_string());
     }
     let contact = verhub::normalize_contact(&contact);
-    // 转换成 Issue 后要靠 GitHub 账号跟进，缺了服务端也不受理。
     if forward_to_github && contact.is_none() {
         return Err(i18n::t(Msg::ErrFeedbackContactRequired).to_string());
     }
@@ -586,7 +583,7 @@ async fn verhub_upload_log(content: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 核心最近一次运行的日志：从该次运行的 `[START]` 起至今，压到上报预算以内。
+/// 核心最近一次运行的日志，压到上报预算以内。
 #[tauri::command]
 async fn current_session_log() -> String {
     blocking(move || zonedeck_core::logging::latest_session(&log_dir(), verhub::LOG_EXCERPT_MAX))
@@ -660,7 +657,7 @@ pub fn run() {
             verhub_upload_log,
             current_session_log,
         ])
-        // 兜底：前端起不来时，5 秒后强制显示窗口。
+        // 前端起不来时 5 秒后强制显示窗口。
         .setup(|app| {
             if let Some(window) = app.get_webview_window("main") {
                 std::thread::spawn(move || {

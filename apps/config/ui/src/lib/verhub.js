@@ -1,8 +1,8 @@
-// Verhub（版本 / 公告 / 反馈 / 日志）的前端封装；HTTP 实际在 Rust 侧完成。
+// Verhub（版本 / 公告 / 反馈 / 日志）的前端封装；HTTP 在 Rust 侧完成。
 
 import { invoke } from "./ipc.js";
 
-/** 项目公开链接（主页 / 仓库 / 文档等）。后端带缓存，可随意调用。 */
+/** 项目公开链接；后端带缓存。 */
 export function projectLinks() {
   return invoke("verhub_project_links");
 }
@@ -22,10 +22,7 @@ export function feedbackOptions() {
   return invoke("verhub_feedback_options");
 }
 
-/**
- * 提交反馈。rating 为 1..5 或 null；contact 可空。
- * forwardToGithub 为 true 时由 Verhub 机器人转成 GitHub Issue，此时 contact 必填。
- */
+/** 提交反馈；rating 为 1..5 或 null，forwardToGithub 为 true 时 contact 必填。 */
 export function submitFeedback({ content, rating = null, contact = "", forwardToGithub = false }) {
   return invoke("verhub_submit_feedback", { content, rating, contact, forwardToGithub });
 }
@@ -35,7 +32,7 @@ export function uploadLog(content) {
   return invoke("verhub_upload_log", { content });
 }
 
-/** 核心最近一次运行的日志（从该次运行的 [START] 起至今，后端已压到上报预算内）。 */
+/** 核心最近一次运行的日志，后端已压到上报预算内。 */
 export function currentSessionLog() {
   return invoke("current_session_log");
 }

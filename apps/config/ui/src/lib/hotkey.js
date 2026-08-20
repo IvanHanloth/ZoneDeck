@@ -1,4 +1,4 @@
-// 热键录制：把键盘事件转换为核心可解析的热键字符串（如 "Ctrl+Alt+Q"）。
+// 热键录制：把键盘事件转换为核心可解析的热键字符串。
 
 const MODIFIER_KEYS = new Set(["Control", "Alt", "Shift", "Meta"]);
 
@@ -32,7 +32,7 @@ export function keyName(event) {
   return KEY_MAP[k] || null;
 }
 
-/** 事件当下按住的修饰键组合，如 "Ctrl+Shift"；无修饰键返回空串。 */
+/** 事件当下按住的修饰键组合；无修饰键返回空串。 */
 export function modifiersFromEvent(event) {
   const parts = [];
   if (event.ctrlKey) parts.push("Ctrl");

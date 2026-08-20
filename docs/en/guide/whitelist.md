@@ -17,10 +17,10 @@ Every entry carries three independent switches:
 | Switch | Effect |
 | --- | --- |
 | **Skip hiding** | The program's windows are never hidden; they stay on the desktop |
-| **Skip freezing** | Windows are hidden as usual, but the process is not [frozen](/en/guide/freeze), so background work continues |
-| **Skip muting** | Windows are hidden as usual, but the program is not muted |
+| **Skip freezing** | The process is never [frozen](/en/guide/freeze), so background work continues |
+| **Skip muting** | The program is never muted |
 
-A program with only "Skip freezing" ticked still gets hidden; a program with "Skip hiding" ticked has none of the later steps applied at all.
+The three switches are **independent**. Whether freezing and muting kick in depends on whether the program still has a window left on the desktop — while a window is open neither is applied, and once it tucks itself away to the tray both are.
 
 ## Adding an entry
 

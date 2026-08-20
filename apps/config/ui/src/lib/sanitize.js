@@ -1,7 +1,5 @@
-// 保存前的配置数字字段修正。
-//
-// `type="number"` 输入框被清空时，Svelte 的 `bind:value` 会得到 `null`；
-// 后端对应字段为 u32，收到 `null` 会整单拒绝保存。故写盘前统一回落默认值并钳制范围。
+// 保存前的配置数字字段修正：输入框被清空时 `bind:value` 会得到 `null`，
+// 而后端字段为 u32，故写盘前统一回落默认值并钳制范围。
 
 import { MAX_CLICKS, MAX_MULTI_CLICK_MS, MIN_MULTI_CLICK_MS } from "./pointer.js";
 
@@ -13,7 +11,7 @@ const MAX_LOG_RETENTION_DAYS = 365;
 
 export const DEFAULT_AUTO_HIDE_TIME = 5;
 
-/** 取整并钳到 [min, max]；非有限数字（null / NaN / 空串）回落 fallback。 */
+/** 取整并钳到 [min, max]；非有限数字回落 fallback。 */
 export function clampInt(value, min, max, fallback) {
   const n =
     typeof value === "number" && Number.isFinite(value) ? Math.round(value) : fallback;

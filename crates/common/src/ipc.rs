@@ -13,27 +13,26 @@ pub enum Command {
     ReloadConfig,
     GetState,
     GetElevation,
-    /// 一次往返取回全部状态（隐藏态 + 权限），替代 GetState + GetElevation 两连发。
+    /// 一次往返取回全部状态（隐藏态 + 权限）。
     GetStatus,
     Hide,
     Show,
     Toggle,
     SetAutostart {
         enabled: bool,
-        /// `true` 注册最高权限计划任务，`false` 用普通权限。仅在 `enabled=true` 时有意义。
+        /// `true` 注册最高权限计划任务；仅在 `enabled=true` 时有意义。
         admin: bool,
     },
     /// 临时停用 / 恢复全局热键与鼠标监控。停用有状态，须持续心跳续期。
     SetHotkeys {
         enabled: bool,
     },
-    /// 窗口恢复工具：恢复显示指定句柄。在核心隐藏记录里的窗口按整进程释放
-    /// （连同解冻 / 取消静音）；不在记录里的句柄直接恢复显示。
+    /// 窗口恢复工具：恢复显示指定句柄。在隐藏记录里的窗口按整进程释放，
+    /// 不在记录里的直接恢复显示。
     ReleaseWindows {
         hwnds: Vec<i64>,
     },
-    /// 窗口恢复工具：隐藏指定句柄并纳入核心隐藏记录（享受崩溃恢复保护），
-    /// 不施加静音 / 冻结 / 暂停键。
+    /// 窗口恢复工具：隐藏指定句柄并纳入核心隐藏记录，不施加静音 / 冻结 / 暂停键。
     AdoptWindows {
         hwnds: Vec<i64>,
     },
@@ -50,8 +49,8 @@ pub enum Response {
     Elevated {
         elevated: bool,
     },
-    /// `monitoring`：核心是否正在监听热键与鼠标（被 `SetHotkeys` 停用时为 false）。
-    /// `auto_hide_enabled`：自动隐藏当前是否启用（托盘菜单与设置界面均可切换，须回传对齐）。
+    /// `monitoring`：核心是否正在监听热键与鼠标。
+    /// `auto_hide_enabled`：自动隐藏当前是否启用。
     Status {
         hidden: bool,
         elevated: bool,

@@ -5,6 +5,7 @@
   import BindingPanel from "./components/BindingPanel.svelte";
   import WhitelistPanel from "./components/WhitelistPanel.svelte";
   import HotkeysPanel from "./components/HotkeysPanel.svelte";
+  import PowerPanel from "./components/PowerPanel.svelte";
   import OptionsPanel from "./components/OptionsPanel.svelte";
   import NotificationsPanel from "./components/NotificationsPanel.svelte";
   import AboutPanel from "./components/AboutPanel.svelte";
@@ -40,6 +41,7 @@
     { id: "whitelist", labelKey: "tab.whitelist" },
     { id: "hotkeys", labelKey: "tab.hotkeys" },
     { id: "notify", labelKey: "tab.notify" },
+    { id: "power", labelKey: "tab.power" },
     { id: "options", labelKey: "tab.options" },
     { id: "about", labelKey: "tab.about" },
   ];
@@ -50,26 +52,26 @@
     if (pref) setLangPref(pref);
   });
 
-  // 加载阶段不自动保存；loadAll 完成后才武装。普通 let 不参与响应式追踪。
+  // 加载阶段不自动保存；loadAll 完成后才武装。
   let autoSaveReady = false;
 
-  // 自动保存：任何配置或绑定改动，停顿后自动写盘（scheduleSave 内部 debounce）。
+  // 任何配置或绑定改动，停顿后自动写盘。
   $effect(() => {
     const cfg = app.config;
     if (!cfg) return;
-    // 深度读取以建立对所有字段的依赖追踪（含 window_rules / process_rules）。
+    // 深度读取以建立对所有字段的依赖追踪。
     JSON.stringify($state.snapshot(cfg));
     if (!autoSaveReady) return;
     scheduleSave();
   });
 
   onMount(() => {
-    // main.js 已在挂载前应用过一次，这里只负责跟随系统变化。
+    // main.js 已在挂载前应用过一次，此处只跟随系统变化。
     const media = matchMedia("(prefers-color-scheme: dark)");
     const onSystemTheme = () => applyTheme(loadPreference());
     media.addEventListener("change", onSystemTheme);
 
-    // 配置到手后才淡掉启动屏；失败时同样要淡掉，否则会一直卡住。
+    // 配置到手后才淡掉启动屏；失败时同样要淡掉。
     loadAll()
       .then(() => {
         autoSaveReady = true;
@@ -79,8 +81,7 @@
       .finally(hideSplash);
     const stopPolling = startStatusPolling(2000);
 
-    // 核心托盘的「窗口恢复工具」/「关于」会带参数拉起本程序：
-    // 冷启动时从启动参数读到，已在运行时则由单实例插件发来对应事件。
+    // 托盘直达：冷启动时从启动参数读，已在运行时由单实例插件发来事件。
     invoke("startup_action").then((a) => {
       if (a === "restore") openRestoreTool();
       else if (a === "about") openAboutTab();
@@ -88,19 +89,18 @@
     const stopRestoreEvent = onAppEvent("open-restore", openRestoreTool);
     const stopAboutEvent = onAppEvent("open-about", openAboutTab);
 
-    // 首次启动：若核心未运行，自动拉起（仅本次，不与轮询重复）。
+    // 首次启动时若核心未运行则自动拉起。
     refreshStatus().then(() => {
       if (app.status.running === false) startCore(false);
     });
 
-    // 跟踪最大化状态（控制圆角 / 缩放热区 / 还原按钮图标）。
+    // 跟踪最大化状态，控制圆角 / 缩放热区 / 还原按钮图标。
     win.isMaximized().then((m) => (app.maximized = m));
     const resizedReg = win.onResized(async () => {
       app.maximized = await win.isMaximized();
     });
 
-    // 关窗前把未落盘的改动写完，debounce 中的最后一次改动不得静默丢失。
-    // 写盘失败时留在窗口（错误框已弹出）；此时已无待存改动，再次关闭不再阻拦。
+    // 关窗前把未落盘的改动写完；写盘失败时留在窗口，再次关闭不再阻拦。
     const closeReg = win.onCloseRequested(async (e) => {
       if (!hasUnsavedChanges()) return;
       e.preventDefault();
@@ -111,8 +111,7 @@
       stopPolling();
       stopRestoreEvent();
       stopAboutEvent();
-      // 注册是异步完成的：清理挂在注册的 promise 上，卸载先于注册完成时
-      // 监听器也能解除，不会残留旧监听器绕过关窗拦截。
+      // 清理挂在注册的 promise 上，卸载先于注册完成时监听器也能解除。
       resizedReg.then((fn) => fn());
       closeReg.then((fn) => fn());
       media.removeEventListener("change", onSystemTheme);
@@ -146,6 +145,8 @@
       <WhitelistPanel />
     {:else if app.tab === "hotkeys"}
       <HotkeysPanel />
+    {:else if app.tab === "power"}
+      <PowerPanel />
     {:else if app.tab === "options"}
       <OptionsPanel />
     {:else if app.tab === "notify"}
@@ -162,7 +163,7 @@
   <DataNoticeModal />
   <BroadRegexModal />
   <ErrorReportModal />
-  <!-- 放最后：强制更新的遮罩层级最高，压住其它一切弹窗 -->
+  <!-- 放最后，强制更新的遮罩层级最高 -->
   <UpdateModal />
   <Toast />
   <ResizeHandles />
