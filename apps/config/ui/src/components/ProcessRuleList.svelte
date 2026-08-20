@@ -1,5 +1,5 @@
 <script>
-  // 「进程隐藏」规则（粗粒度）：按可执行文件路径隐藏该程序的所有窗口，而非单个窗口。
+  // 「进程隐藏」规则：按可执行文件路径隐藏该程序的所有窗口。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";

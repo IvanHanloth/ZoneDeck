@@ -1,4 +1,4 @@
-// 全局应用状态（Svelte 5 runes）：配置双向绑定的单一数据源 + 核心状态轮询。
+// 全局应用状态：配置双向绑定的单一数据源 + 核心状态轮询。
 
 import { invoke } from "./ipc.js";
 import { setLangPref, t } from "./i18n.svelte.js";
@@ -9,39 +9,39 @@ import { createBreadthGuard } from "./regexcheck.js";
 import * as verhub from "./verhub.js";
 
 export const app = $state({
-  /** config.json 的完整内容；表单直接 bind 到它的字段（双向绑定）。 */
+  /** config.json 的完整内容；表单直接 bind 到它的字段。 */
   config: null,
-  /** 当前所有存活窗口（左侧「现有窗口」选择区数据源）。 */
+  /** 当前所有存活窗口。 */
   available: [],
   /** 进程列表搜索关键字。 */
   search: "",
   /** 现有窗口过滤开关：默认只显示有标题的可见窗口。 */
   showBackground: false,
   showUntitled: false,
-  /** exe 路径 → PNG data URI；null 表示查询过但无图标（负缓存）。 */
+  /** exe 路径 → PNG data URI；null 表示查询过但无图标。 */
   icons: {},
-  /** 核心状态；running 为 null 表示首次检测尚未返回。monitoring 由核心回报。 */
+  /** 核心状态；running 为 null 表示首次检测尚未返回。 */
   status: { running: null, hidden: false, elevated: false, monitoring: true, auto_hide_enabled: false },
   autostart: false,
-  /** 当前自启注册方式："task"｜"registry"｜null（未注册）。 */
+  /** 当前自启注册方式："task"｜"registry"｜null。 */
   autostartMethod: null,
   info: null,
-  /** Verhub 上的项目公开链接（主页 / 仓库 / 文档等）；null 时用内置回退链接。 */
+  /** Verhub 上的项目公开链接；null 时用内置回退链接。 */
   project: null,
   maximized: false,
   saving: false,
-  /** 程序目录下是否存在 pssuspend64.exe（增强冻结的前置条件）。 */
+  /** 程序目录下是否存在 pssuspend64.exe。 */
   pssuspend: false,
-  /** 当前分页；托盘「窗口恢复工具」会把它切到 options。 */
+  /** 当前分页。 */
   tab: "binding",
-  /** 窗口恢复工具弹窗（可由托盘菜单直接拉起，故提升到全局）。 */
+  /** 窗口恢复工具弹窗，可由托盘菜单直接拉起。 */
   restoreOpen: false,
-  /** 停用请求已发出、核心尚未确认的空档（状态栏据此显示「暂停中…」）。 */
+  /** 停用请求已发出、核心尚未确认的空档。 */
   monitorPending: false,
 
   /** check-update 的结果；required 为 true 即强制更新。 */
   update: null,
-  /** 更新弹窗是否打开。强制更新时它关不掉（见 UpdateModal）。 */
+  /** 更新弹窗是否打开；强制更新时关不掉。 */
   updateOpen: false,
   updateChecking: false,
   /** 公告列表（从新到旧）。 */
@@ -50,11 +50,11 @@ export const app = $state({
   pendingAnnouncement: null,
   /** 出错报告 { message, detail }；有值即弹出错误框。 */
   errorReport: null,
-  /** 数据目录 { dir, program_dir, kind }；kind 为 portable_fallback 时提示权限问题。 */
+  /** 数据目录 { dir, program_dir, kind }。 */
   dataLocation: null,
   /** 便携版回退提示弹窗是否打开。 */
   dataNoticeOpen: false,
-  /** 白名单里不可删除的内置项 [{ key, names }]，由后端吐出。 */
+  /** 白名单里不可删除的内置项 [{ key, names }]。 */
   whitelistBuiltins: [],
   /** 待提示的过宽正则 [{ kind, pattern, hits }]；有值即弹窗。 */
   broadRegex: null,
@@ -63,11 +63,10 @@ export const app = $state({
 });
 
 // 按「理由」计数暂停核心监控，最后一个理由撤销后才恢复。
-// 监控状态一律以核心回报的 status.monitoring 为准（见 refreshStatus）。
 
 const suspenders = new Set();
 let heartbeat = null;
-/** 请求序号：先发的慢应答不能覆盖后发的结果。 */
+/** 请求序号，防止慢应答覆盖后发的结果。 */
 let monitorSeq = 0;
 
 /** 以 reason 为名义请求停用监控；同名重复请求是幂等的。 */
@@ -95,7 +94,7 @@ async function applyMonitoring(enabled) {
   }
   if (seq !== monitorSeq) return;
   app.monitorPending = false;
-  // 停用期间持续心跳续期（核心侧看门狗认心跳）。
+  // 停用期间持续心跳续期。
   if (!enabled) {
     heartbeat = setInterval(() => {
       invoke("set_hotkeys_enabled", { enabled: false }).catch(() => {});
@@ -104,16 +103,16 @@ async function applyMonitoring(enabled) {
   refreshStatus();
 }
 
-/** 心跳间隔，须显著小于核心 ipc.rs 的 SUSPEND_TIMEOUT_MS(15s)。 */
+/** 心跳间隔，须显著小于核心的 SUSPEND_TIMEOUT_MS。 */
 const SUSPEND_HEARTBEAT_MS = 4000;
 
-/** 打开「窗口恢复工具」并切到对应分页（供托盘直达使用）。 */
+/** 打开「窗口恢复工具」并切到对应分页。 */
 export function openRestoreTool() {
   app.tab = "options";
   app.restoreOpen = true;
 }
 
-/** 重新检测 pssuspend64.exe；放入文件后无需重启即可启用增强冻结。 */
+/** 重新检测 pssuspend64.exe。 */
 export async function refreshPssuspend() {
   try {
     app.pssuspend = !!(await invoke("pssuspend_available"));
@@ -123,7 +122,7 @@ export async function refreshPssuspend() {
   }
 }
 
-/** 切到「关于与反馈」分页（供托盘直达使用）。 */
+/** 切到「关于与反馈」分页。 */
 export function openAboutTab() {
   app.tab = "about";
 }
@@ -144,10 +143,9 @@ export async function loadAll() {
   const tasks = [
     invoke("load_config").then((loaded) => {
       app.config = loaded.config;
-      // 界面语言先于首帧生效，避免加载后文案跳变。
+      // 界面语言先于首帧生效。
       setLangPref(loaded.config?.setting?.language);
-      // 配置损坏已回退默认值：原因（含备份去向）必须让用户看到，
-      // 否则规则凭空消失且第一次改动就会把默认值写回原文件。
+      // 配置损坏已回退默认值，原因与备份去向必须让用户看到。
       if (loaded.fallback) reportError(t("state.configFallback"), loaded.fallback);
       return refreshWindows();
     }),
@@ -161,11 +159,11 @@ export async function loadAll() {
     }),
     invoke("data_location").then((loc) => {
       app.dataLocation = loc;
-      // 回退即程序目录写不进去，须提示用户。
+      // 回退即程序目录写不进去。
       app.dataNoticeOpen = loc?.kind === "portable_fallback";
     }),
   ];
-  // 拉取失败静默：「关于」页有内置回退链接。
+  // 拉取失败静默，「关于」页有内置回退链接。
   verhub
     .projectLinks()
     .then((p) => (app.project = p))
@@ -175,7 +173,7 @@ export async function loadAll() {
   if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);
 }
 
-/** 回读开机自启真实状态（是否已注册 + 注册方式）。 */
+/** 回读开机自启真实状态。 */
 async function refreshAutostart() {
   const v = await invoke("autostart_status");
   app.autostart = !!v?.enabled;
@@ -203,12 +201,12 @@ async function loadIcons(windows) {
 
 // 自动保存：改动即存，带 debounce；关窗前由 flushSave 兜底。
 
-/** 正则过宽检查器；判定在后端（与核心同一个 regex 引擎）。 */
+/** 正则过宽检查器；判定在后端。 */
 const breadthGuard = createBreadthGuard((patterns) =>
   invoke("regex_breadth", { patterns }),
 );
 
-/** 弹窗关闭后要 resolve 的回调；同一时刻只会有一个弹窗。 */
+/** 弹窗关闭后要 resolve 的回调。 */
 let broadRegexResolve = null;
 
 function closeBroadRegex() {
@@ -217,7 +215,7 @@ function closeBroadRegex() {
   broadRegexResolve = null;
 }
 
-/** 「仍然保存」：确认这批正则无误，此后不再提醒、不再标红。 */
+/** 「仍然保存」：此后不再提醒、不再标红。 */
 export function acknowledgeBroadRegex() {
   const patterns = (app.broadRegex ?? []).map((i) => i.pattern);
   breadthGuard.acknowledge(patterns);
@@ -225,20 +223,17 @@ export function acknowledgeBroadRegex() {
   closeBroadRegex();
 }
 
-/** 「我知道了」：关掉弹窗且此后不再打断保存，但红框留着等用户回去改。 */
+/** 「我知道了」：不再打断保存，但保留标红。 */
 export function dismissBroadRegex() {
   breadthGuard.dismiss((app.broadRegex ?? []).map((i) => i.pattern));
   closeBroadRegex();
 }
 
-/**
- * 写盘前的过宽正则检查。**不拦保存**——无论用户点哪个按钮都会继续写盘，
- * 差别只在此后还提不提醒、还标不标红。
- */
+/** 写盘前的过宽正则检查；不拦保存，只决定此后提不提醒、标不标红。 */
 async function warnOnBroadRegex(config) {
   const { broad, toWarn } = await breadthGuard.inspect(config);
   const patterns = new Set(broad.map((i) => i.pattern));
-  // 用户改好、删掉或确认无误的正则，红框要跟着消失。
+  // 用户改好、删掉或确认无误的正则，红框跟着消失。
   if (patterns.size > 0 || app.broadPatterns.size > 0) app.broadPatterns = patterns;
   if (toWarn.length === 0) return;
   app.broadRegex = toWarn;
@@ -273,7 +268,7 @@ export function flushSave() {
   return autosave.flush();
 }
 
-/** 是否还有未落盘的改动（排队中或写盘中）；状态回读不得覆盖它们。 */
+/** 是否还有未落盘的改动；状态回读不得覆盖它们。 */
 export function hasUnsavedChanges() {
   return autosave.dirty;
 }
@@ -314,7 +309,7 @@ export async function setAutostart(enabled, admin) {
   try {
     await invoke("set_autostart", { enabled, admin });
     app.autostart = enabled;
-    // 计划任务可能回退到注册表，回读真实注册方式。
+    // 计划任务可能回退到注册表。
     await refreshAutostart();
     toast(t(enabled ? "state.autostartOn" : "state.autostartOff"));
   } catch (err) {
@@ -323,10 +318,7 @@ export async function setAutostart(enabled, admin) {
   }
 }
 
-/**
- * 检查更新。`manual` 为 true 时无论结果都给出提示；
- * 自动检查仅在有更新时弹窗，失败静默。
- */
+/** 检查更新；`manual` 为 true 时无论结果都给出提示，自动检查失败静默。 */
 export async function checkForUpdate(manual = false) {
   if (app.updateChecking) return;
   app.updateChecking = true;
@@ -343,14 +335,14 @@ export async function checkForUpdate(manual = false) {
   }
 }
 
-/** 拉公告；启动时顺带挑出「比已读那条更新」的一条弹给用户。 */
+/** 拉公告；启动时挑出比已读那条更新的一条弹给用户。 */
 export async function loadAnnouncements({ popNew = false } = {}) {
   try {
     const list = await verhub.announcements(20);
     app.announcements = list;
     if (!popNew) return;
     const seen = app.config?.verhub?.seen_announcement_id ?? "";
-    // 置顶公告优先，否则取最新一条；已读过的不再弹出。
+    // 置顶公告优先，否则取最新一条。
     const newest = list.find((a) => a.is_pinned) ?? list[0];
     if (newest && newest.id !== seen) app.pendingAnnouncement = newest;
   } catch {
@@ -358,7 +350,7 @@ export async function loadAnnouncements({ popNew = false } = {}) {
   }
 }
 
-/** 记住这条公告已读，下次启动不再弹出。 */
+/** 记住这条公告已读。 */
 export function markAnnouncementSeen(id) {
   app.pendingAnnouncement = null;
   if (!app.config || !id) return;
@@ -371,7 +363,7 @@ export function reportError(message, detail = "") {
   app.errorReport = { message, detail: String(detail) };
 }
 
-/** 托盘菜单也能切换自动隐藏；以核心回报为准回读界面，但不覆盖用户尚未保存的改动。 */
+/** 以核心回报回读自动隐藏开关，但不覆盖用户尚未保存的改动。 */
 function syncAutoHideFromCore() {
   if (!app.config || !app.status.running) return;
   if (autosave.dirty) return;
@@ -388,11 +380,11 @@ export async function refreshStatus() {
     app.status = { running: false, hidden: false, elevated: false, monitoring: false, auto_hide_enabled: false };
   }
   syncAutoHideFromCore();
-  // 核心在停用期间重启过（新实例默认监听），重新按下停用。
+  // 核心在停用期间重启过，重新按下停用。
   if (suspenders.size > 0 && app.status.running && app.status.monitoring) {
     invoke("set_hotkeys_enabled", { enabled: false }).catch(() => {});
   }
-  // 回读开机自启真实状态，与托盘保持一致。
+  // 回读开机自启真实状态。
   try {
     await refreshAutostart();
   } catch {
@@ -400,7 +392,7 @@ export async function refreshStatus() {
   }
 }
 
-/** 启动轮询；返回停止函数。页面不可见时暂停，恢复可见立即刷新。 */
+/** 启动轮询，返回停止函数；页面不可见时暂停。 */
 export function startStatusPolling(intervalMs = 2000) {
   refreshStatus();
   const timer = setInterval(() => {

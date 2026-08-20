@@ -1,7 +1,7 @@
-//! 托盘图标状态角标：在基础图标右下角叠加一个彩色圆点，反映核心当前状态。
+//! 托盘图标状态角标：在基础图标右下角叠加一个彩色圆点。
 //!
-//! 四种颜色各自绑定一个状态源（见 `TrayBadges`），多个绑定状态同时活跃时
-//! 按 **红 > 绿 > 黄 > 蓝** 的优先级只显示一个圆点；置空的颜色不参与。
+//! 四种颜色各自绑定一个状态源（见 `TrayBadges`），多个同时活跃时按
+//! 红 > 绿 > 黄 > 蓝 只显示一个；置空的颜色不参与。
 
 use std::collections::HashMap;
 
@@ -17,7 +17,7 @@ use zonedeck_common::config::{
 
 use crate::icon::IconRgba;
 
-/// 角标描边，使圆点在深浅任务栏背景上都衬得出边界。
+/// 角标描边，使圆点在深浅背景上都衬得出边界。
 const BADGE_RING: [u8; 4] = [0xFF, 0xFF, 0xFF, 0xFF];
 
 /// 角标颜色，declaration 顺序即显示优先级（红最高）。
@@ -53,7 +53,7 @@ pub struct TrayStatus {
     pub freeze: bool,
     /// 核心正以管理员身份运行。
     pub elevated: bool,
-    /// 热键与鼠标监控已被临时停用（见 `Command::SetHotkeys`）。
+    /// 热键与鼠标监控已被临时停用。
     pub monitor_paused: bool,
 }
 
@@ -83,8 +83,7 @@ pub fn active_badge(badges: &TrayBadges, status: &TrayStatus) -> Option<BadgeCol
     .map(|(color, _)| color)
 }
 
-/// 在顶到底 RGBA 像素的右下角叠加一个带白色描边的实心圆点。
-/// 直径约为图标边长的 44%，边缘做 1px 线性过渡抗锯齿。
+/// 在顶到底 RGBA 像素的右下角叠加一个带白色描边的实心圆点，直径约为边长的 44%。
 /// `pixels` 长度必须等于 `width*height*4`，否则不做任何修改。
 fn overlay_badge(pixels: &mut [u8], width: u32, height: u32, color: [u8; 4]) {
     if width == 0 || height == 0 || pixels.len() != (width * height * 4) as usize {
@@ -101,7 +100,7 @@ fn overlay_badge(pixels: &mut [u8], width: u32, height: u32, color: [u8; 4]) {
             let dx = x as f32 - cx;
             let dy = y as f32 - cy;
             let dist = (dx * dx + dy * dy).sqrt();
-            // 覆盖率：圆内 1，圆外 0，边界 1px 内线性过渡。
+            // 圆内 1，圆外 0，边界 1px 内线性过渡。
             let dot = (radius + 0.5 - dist).clamp(0.0, 1.0);
             let outline = (radius + ring + 0.5 - dist).clamp(0.0, 1.0) - dot;
             if dot <= 0.0 && outline <= 0.0 {
@@ -188,7 +187,7 @@ fn rgba_to_hicon(icon: &IconRgba) -> Option<HICON> {
     }
 }
 
-/// 基础图标 + 各颜色角标的 HICON 缓存；缓存的 HICON 随进程存活，不逐个销毁。
+/// 基础图标 + 各颜色角标的 HICON 缓存；随进程存活，不逐个销毁。
 pub struct TrayIconSet {
     base: HICON,
     base_rgba: Option<IconRgba>,
@@ -317,7 +316,7 @@ mod tests {
 
     #[test]
     fn empty_binding_skips_color_and_falls_through() {
-        // 红色置空：即使有隐藏窗口，也应轮到下一个活跃颜色。
+        // 红色置空后应轮到下一个活跃颜色。
         let b = TrayBadges {
             red: String::new(),
             ..TrayBadges::default()
@@ -365,7 +364,7 @@ mod tests {
 
     #[test]
     fn rebinding_a_color_changes_its_trigger() {
-        // 绿色改绑「存在隐藏窗口」：隐藏时显示绿点（红色已置空）。
+        // 绿色改绑「存在隐藏窗口」，红色已置空。
         let b = TrayBadges {
             red: String::new(),
             green: zonedeck_common::config::TRAY_STATUS_HIDDEN.to_string(),

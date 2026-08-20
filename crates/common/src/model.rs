@@ -37,7 +37,7 @@ pub struct WindowInfo {
     pub pid: u32,
     #[serde(default, deserialize_with = "de_null_default")]
     pub path: String,
-    /// 枚举时该窗口是否可见；不参与窗口身份判定。
+    /// 枚举时该窗口是否可见；不参与身份判定。
     #[serde(default = "default_visible")]
     pub visible: bool,
 }
@@ -224,10 +224,7 @@ impl ProcessRule {
 }
 
 /// 白名单条目：声明某个程序在哪些模式下应被跳过。
-///
-/// 匹配方式与 [`ProcessRule`] 同构（`by_name` 决定看映像名还是完整路径，`regex` 为
-/// `Some` 时按对应主体做正则），但默认按**文件名**匹配：白名单放宽比放窄安全，
-/// 换个安装目录就失效的保护形同虚设。
+/// 匹配方式与 [`ProcessRule`] 同构，但默认按文件名匹配。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WhitelistRule {
     #[serde(default, deserialize_with = "de_null_default")]
@@ -243,10 +240,10 @@ pub struct WhitelistRule {
     /// 隐藏时跳过该程序的窗口。
     #[serde(default)]
     pub ignore_hide: bool,
-    /// 隐藏后不冻结该程序的进程。
+    /// 不冻结该程序的进程。
     #[serde(default)]
     pub ignore_freeze: bool,
-    /// 隐藏后不静音该程序的进程。
+    /// 不静音该程序的进程。
     #[serde(default)]
     pub ignore_mute: bool,
 }
@@ -266,8 +263,7 @@ impl PartialEq for WhitelistRule {
 impl Eq for WhitelistRule {}
 
 impl WhitelistRule {
-    /// 由现有窗口构造一条精确条目（同时记下文件名与路径，供界面切换匹配依据）。
-    /// 三个模式开关一律置假，由界面逐项勾选。
+    /// 由现有窗口构造一条精确条目；三个模式开关一律置假。
     pub fn from_window(w: &WindowInfo) -> Self {
         Self {
             process: w.process.clone(),
@@ -298,7 +294,7 @@ impl WhitelistRule {
         self.regex.is_some()
     }
 
-    /// 三个模式全关的条目不起任何作用，匹配时可直接跳过。
+    /// 三个模式全关的条目不起任何作用。
     pub fn is_inert(&self) -> bool {
         !self.ignore_hide && !self.ignore_freeze && !self.ignore_mute
     }

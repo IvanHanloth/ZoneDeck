@@ -1,5 +1,5 @@
 <script>
-  // 保存时发现「可能过宽」的正则：两个按钮都已写盘，区别只在此后还提不提醒。
+  // 保存时发现「可能过宽」的正则；两个按钮都已写盘，区别只在此后还提不提醒。
   import Modal from "./Modal.svelte";
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import { BREADTH_SAMPLES } from "../lib/regexcheck.js";
@@ -8,7 +8,7 @@
 
   const items = $derived(app.broadRegex ?? []);
 
-  // 从标题栏叉号 / Esc / 点遮罩关闭，等同「我知道了」：标红保留。
+  // 叉号 / Esc / 点遮罩关闭等同「我知道了」，标红保留。
   function onOpenChange(v) {
     if (!v) dismissBroadRegex();
   }

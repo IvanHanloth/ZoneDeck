@@ -48,6 +48,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/options) |
 | `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/options) |
+| `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/options) |
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/options) |
 | `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/options) |
 | `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/options) |
@@ -55,7 +56,8 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [增強凍結](/zh-tw/guide/freeze) |
-| `freeze_whole_tree` | bool | `false` | [凍結完整程序](/zh-tw/guide/freeze) |
+| `power_scope` | string | `"self"` | [作用範圍](/zh-tw/guide/freeze)：`self`（僅目標程序）｜`tree`（及所有子程序）｜`image`（同映像名稱的所有實例）；同時決定凍結與降低記憶體佔用的涵蓋面，未知取值歸一為 `self` |
+| `trim_memory_after_freeze` | bool | `false` | [降低記憶體佔用](/zh-tw/guide/freeze)（僅對被凍結的程序生效） |
 | `show_float_window` | bool | `false` | 浮動視窗（開發中） |
 | `mouse` | object | 見下 | [滑鼠按鍵隱藏](/zh-tw/guide/hotkeys) |
 | `auto_hide_enabled` | bool | `false` | [閒置自動隱藏](/zh-tw/guide/hotkeys) |
@@ -70,6 +72,10 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 
 ::: details 舊版扁平滑鼠開關（已淘汰）
 `middle_button_hide`／`side_button1_hide`／`side_button2_hide` 僅用於還原序列化移轉，移轉後歸零、不再寫回檔案。請使用 `mouse` 結構。
+:::
+
+::: details 舊版「凍結完整程序」開關（已淘汰）
+`freeze_whole_tree` 僅用於還原序列化移轉：讀取時若設定檔裡沒有 `power_scope`，`true` 移轉為 `power_scope: "tree"`、`false` 移轉為 `"self"`，隨後歸零、不再寫回檔案。已明確設定過 `power_scope` 的檔案不受它影響。
 :::
 
 ### `setting.mouse`

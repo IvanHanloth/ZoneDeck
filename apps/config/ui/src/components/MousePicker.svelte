@@ -1,5 +1,5 @@
 <script>
-  // 鼠标按键选择器；图形是下方内联的 SVG，各按键区域为独立可点击的 path。
+  // 鼠标按键选择器；各按键区域为独立可点击的 path。
   import ModifierRecorder from "./ModifierRecorder.svelte";
   import { MOUSE_PARTS, describeTrigger } from "../lib/pointer.js";
   import { t } from "../lib/i18n.svelte.js";

@@ -1,5 +1,5 @@
 //! 副作用专职线程：把静音 / 冻结 / 暂停键等慢操作挪出窗口消息循环。
-//! 任务经 [`AsyncEffects`] 入队，由单线程按 FIFO 顺序执行；通道无界，事件不丢。
+//! 任务经 [`AsyncEffects`] 入队，由单线程按 FIFO 顺序执行。
 
 use std::sync::mpsc::{Sender, channel};
 use std::thread::JoinHandle;
@@ -13,6 +13,7 @@ enum Task {
     SettleBeforeFreeze,
     Suspend { pid: u32, enhanced: bool },
     Resume { pid: u32, enhanced: bool },
+    TrimWorkingSet { pid: u32 },
     SendPause,
     Quit,
 }
@@ -26,20 +27,21 @@ impl Task {
             Task::SettleBeforeFreeze => "冻结前静置".to_string(),
             Task::Suspend { pid, enhanced } => format!("冻结 (pid={pid}, 增强={enhanced})"),
             Task::Resume { pid, enhanced } => format!("解冻 (pid={pid}, 增强={enhanced})"),
+            Task::TrimWorkingSet { pid } => format!("清空工作集 (pid={pid})"),
             Task::SendPause => "发送媒体暂停键".to_string(),
             Task::Quit => "结束副作用线程".to_string(),
         }
     }
 }
 
-/// 副作用线程句柄。`shutdown` 排干队列后退出，保证退出前解冻 / 取消静音已生效。
+/// 副作用线程句柄；`shutdown` 排干队列后退出。
 pub struct EffectsWorker {
     tx: Sender<Task>,
     handle: Option<JoinHandle<()>>,
 }
 
 impl EffectsWorker {
-    /// 启动专职线程；`inner` 是真正执行副作用的实现（生产为 `WinEffects`）。
+    /// 启动专职线程；`inner` 是真正执行副作用的实现。
     pub fn spawn<E: Effects + Send + 'static>(inner: E) -> Self {
         let (tx, rx) = channel::<Task>();
         let handle = std::thread::Builder::new()
@@ -51,6 +53,7 @@ impl EffectsWorker {
                         Task::SettleBeforeFreeze => inner.settle_before_freeze(),
                         Task::Suspend { pid, enhanced } => inner.suspend(pid, enhanced),
                         Task::Resume { pid, enhanced } => inner.resume(pid, enhanced),
+                        Task::TrimWorkingSet { pid } => inner.trim_working_set(pid),
                         Task::SendPause => inner.send_pause(),
                         Task::Quit => break,
                     }
@@ -90,7 +93,7 @@ impl EffectsWorker {
     }
 }
 
-/// 把每个副作用调用转成任务入队的 [`Effects`] 实现。克隆廉价。
+/// 把每个副作用调用转成任务入队的 [`Effects`] 实现。
 #[derive(Clone)]
 pub struct AsyncEffects {
     tx: Sender<Task>,
@@ -120,6 +123,9 @@ impl Effects for AsyncEffects {
     fn resume(&self, pid: u32, enhanced: bool) {
         self.send(Task::Resume { pid, enhanced });
     }
+    fn trim_working_set(&self, pid: u32) {
+        self.send(Task::TrimWorkingSet { pid });
+    }
     fn send_pause(&self) {
         self.send(Task::SendPause);
     }
@@ -130,7 +136,7 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
-    /// 线程安全的记录用 Effects：按调用顺序记下每个动作。
+    /// 按调用顺序记下每个动作。
     #[derive(Clone, Default)]
     struct Recorder {
         calls: Arc<Mutex<Vec<String>>>,
@@ -152,6 +158,9 @@ mod tests {
         fn resume(&self, pid: u32, _enhanced: bool) {
             self.calls.lock().unwrap().push(format!("resume:{pid}"));
         }
+        fn trim_working_set(&self, pid: u32) {
+            self.calls.lock().unwrap().push(format!("trim:{pid}"));
+        }
         fn send_pause(&self) {
             self.calls.lock().unwrap().push("pause".into());
         }
@@ -163,11 +172,12 @@ mod tests {
         let worker = EffectsWorker::spawn(recorder.clone());
         let effects = worker.effects();
 
-        // 暂停键必须先于冻结执行（冻结后的进程收不到按键）；静置须紧挨在冻结前。
+        // 暂停键先于冻结、静置紧挨冻结前、清空工作集排在冻结之后。
         effects.send_pause();
         effects.mute(100, true);
         effects.settle_before_freeze();
         effects.suspend(100, false);
+        effects.trim_working_set(100);
         effects.resume(100, false);
 
         worker.shutdown(Duration::from_secs(5));
@@ -179,6 +189,7 @@ mod tests {
                 "mute:100:true",
                 "settle",
                 "suspend:100",
+                "trim:100",
                 "resume:100"
             ],
             "任务应按入队顺序全部执行完毕（shutdown 排干队列）"
@@ -190,7 +201,7 @@ mod tests {
         let worker = EffectsWorker::spawn(Recorder::default());
         let effects = worker.effects();
         worker.shutdown(Duration::from_secs(5));
-        // 线程已退出，入队应静默失败（记日志）而非 panic。
+        // 线程已退出，入队应静默失败而非 panic。
         effects.mute(1, true);
         effects.send_pause();
     }

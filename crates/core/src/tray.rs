@@ -17,10 +17,10 @@ use crate::util::to_wide_null;
 
 const TRAY_ID: u32 = 1;
 
-/// 定时重试挂载的上限：仅作为 TaskbarCreated 广播的兜底，超限后靠广播补挂。
+/// 定时重试挂载的上限；超限后靠 TaskbarCreated 广播补挂。
 const MAX_TRAY_RETRY: u32 = 30;
 
-/// TaskbarCreated 广播消息 ID：explorer（重）建任务栏时向所有顶层窗口广播。
+/// TaskbarCreated 广播消息 ID；explorer 重建任务栏时向所有顶层窗口广播。
 pub(crate) fn taskbar_created_msg() -> u32 {
     static MSG: OnceLock<u32> = OnceLock::new();
     *MSG.get_or_init(|| unsafe { RegisterWindowMessageW(w!("TaskbarCreated")) })
@@ -31,7 +31,7 @@ fn should_retry(desired: bool, visible: bool, attempts: u32) -> bool {
     desired && !visible && attempts < MAX_TRAY_RETRY
 }
 
-/// 嵌入 exe 的主图标资源 ID（tauri-winres 默认，即 IDI_APPLICATION）。
+/// 嵌入 exe 的主图标资源 ID。
 const APP_ICON_RESOURCE_ID: u16 = 32512;
 
 fn fill_wide(dst: &mut [u16], src: &str) {
@@ -104,7 +104,7 @@ fn load_icon_from_file() -> Option<HICON> {
 
 pub struct TrayIcon {
     hwnd: HWND,
-    /// 业务层期望的可见性（如「同时隐藏 ZoneDeck 托盘图标」时为 false）。
+    /// 业务层期望的可见性。
     desired: bool,
     /// 图标是否实际已挂到任务栏（NIM_ADD 成功）。
     visible: bool,
@@ -163,7 +163,7 @@ impl TrayIcon {
         self.visible = false;
     }
 
-    /// 尝试把图标挂到任务栏，返回挂载后是否可见。已可见时直接成功。
+    /// 尝试把图标挂到任务栏，返回挂载后是否可见。
     fn try_add(&mut self) -> bool {
         if self.visible {
             return true;
@@ -176,9 +176,9 @@ impl TrayIcon {
         self.visible
     }
 
-    /// 任务栏（重）建后重挂图标：覆盖 explorer 重启，以及开机计划任务先于任务栏启动的场景。
+    /// 任务栏重建后重挂图标。
     pub fn on_taskbar_created(&mut self) {
-        // 旧图标已随任务栏一起消失，重置实际状态后按期望重挂。
+        // 旧图标已随任务栏一起消失，重置实际状态后重挂。
         self.visible = false;
         self.retry_attempts = 0;
         if self.desired && self.try_add() {
@@ -186,7 +186,7 @@ impl TrayIcon {
         }
     }
 
-    /// 定时兜底重试：图标应显示但尚未挂上时再试一次。返回是否仍需继续重试。
+    /// 图标应显示但尚未挂上时再试一次，返回是否仍需继续重试。
     pub fn retry_pending(&mut self) -> bool {
         if !should_retry(self.desired, self.visible, self.retry_attempts) {
             return false;
@@ -207,8 +207,7 @@ impl TrayIcon {
         self.visible
     }
 
-    /// 替换托盘图标（状态角标变化时调用）。已挂载时立即 NIM_MODIFY 生效，
-    /// 未挂载时仅记下句柄，待补挂时一并带上。图标未变化时不重复提交。
+    /// 替换托盘图标；未挂载时仅记下句柄，待补挂时一并带上。
     pub fn set_icon(&mut self, icon: HICON) {
         if self.icon == icon {
             return;
@@ -217,7 +216,7 @@ impl TrayIcon {
         self.modify_if_visible();
     }
 
-    /// 替换悬浮提示文字（空串 = 悬停不显示任何文字）。文字未变化时不重复提交。
+    /// 替换悬浮提示文字；空串表示悬停不显示任何文字。
     pub fn set_tip(&mut self, tip: &str) {
         if self.tip == tip {
             return;
@@ -236,8 +235,7 @@ impl TrayIcon {
         }
     }
 
-    /// 弹出气泡通知。样式统一：`title` 为状态短语，`message` 为补充详情。
-    /// `message` 不可为空——`szInfo` 为空时 Shell_NotifyIcon 不弹任何气泡。
+    /// 弹出气泡通知；`title` 为状态短语，`message` 为补充详情且不可为空。
     pub fn balloon(&self, title: &str, message: &str) {
         if !self.visible {
             return;

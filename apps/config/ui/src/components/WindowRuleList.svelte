@@ -1,5 +1,5 @@
 <script>
-  // 「窗口隐藏」规则（细粒度）：精确规则显示标题 + 进程 + 追溯状态。
+  // 「窗口隐藏」规则：精确规则显示标题 + 进程 + 追溯状态。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";

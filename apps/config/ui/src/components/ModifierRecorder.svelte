@@ -7,7 +7,7 @@
 
   let { value = $bindable(""), compact = false } = $props();
 
-  // 每个录制器一个独立的停用理由（对象身份即标识）。
+  // 每个录制器一个独立的停用理由。
   const REASON = { recorder: "modifier" };
 
   let recording = $state(false);

@@ -1,5 +1,5 @@
 <script>
-  // 无边框窗口的八向缩放热区：命中后交给系统原生缩放（startResizeDragging）。
+  // 无边框窗口的八向缩放热区，命中后交给系统原生缩放。
   import { win } from "../lib/ipc.js";
   import { app } from "../lib/state.svelte.js";
 

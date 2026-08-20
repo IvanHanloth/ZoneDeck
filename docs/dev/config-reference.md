@@ -48,6 +48,7 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [隐藏后静音](/guide/options#隐藏窗口后静音) |
 | `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/options#隐藏前发送暂停键) |
+| `minimize_before_hide` | bool | `false` | [隐藏前先最小化窗口](/guide/options#隐藏前先最小化窗口) |
 | `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/options#同时隐藏当前活动窗口) |
 | `click_to_hide` | bool | `true` | [单击托盘切换隐藏](/guide/options#单击托盘图标切换隐藏) |
 | `hide_icon_after_hide` | bool | `false` | [同时隐藏 ZoneDeck 托盘图标](/guide/options#同时隐藏-zonedeck-托盘图标) |
@@ -55,7 +56,8 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `tray_show_tooltip` | bool | `true` | [显示图标悬浮名称](/guide/notifications#显示图标悬浮名称) |
 | `freeze_after_hide` | bool | `false` | [进程冻结总开关](/guide/freeze#隐藏窗口时冻结进程) |
 | `enhanced_freeze` | bool | `false` | [增强冻结](/guide/freeze#使用增强冻结) |
-| `freeze_whole_tree` | bool | `false` | [冻结完整进程](/guide/freeze#冻结完整进程) |
+| `power_scope` | string | `"self"` | [作用范围](/guide/freeze#作用范围)：`self`（仅目标进程）｜`tree`（及所有子进程）｜`image`（同映像名的所有实例）；同时决定冻结与降低内存占用的覆盖面，未知取值归一为 `self` |
+| `trim_memory_after_freeze` | bool | `false` | [降低内存占用](/guide/freeze#降低内存占用)（仅对被冻结的进程生效） |
 | `show_float_window` | bool | `false` | 悬浮窗（开发中） |
 | `mouse` | object | 见下 | [鼠标按键隐藏](/guide/hotkeys#鼠标按键隐藏) |
 | `auto_hide_enabled` | bool | `false` | [空闲自动隐藏](/guide/hotkeys#空闲自动隐藏) |
@@ -72,6 +74,10 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 
 ::: details 旧版扁平鼠标开关（已废弃）
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` 仅用于反序列化迁移，迁移后清零、不再写回文件。请使用 `mouse` 结构。
+:::
+
+::: details 旧版「冻结完整进程」开关（已废弃）
+`freeze_whole_tree` 仅用于反序列化迁移：读取时若配置里没有 `power_scope`，`true` 迁移为 `power_scope: "tree"`、`false` 迁移为 `"self"`，随后清零、不再写回文件。已显式配过 `power_scope` 的文件不受它影响。
 :::
 
 ### `setting.mouse`

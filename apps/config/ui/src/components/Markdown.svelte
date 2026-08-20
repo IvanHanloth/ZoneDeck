@@ -1,5 +1,5 @@
 <script>
-  // 渲染公告 / 更新日志里的 Markdown。样式取 GitHub 的观感，但按弹窗尺寸收紧了间距。
+  // 渲染公告 / 更新日志里的 Markdown。
   import { renderMarkdown } from "../lib/markdown.js";
   import { toast } from "../lib/state.svelte.js";
   import { openExternal } from "../lib/verhub.js";
@@ -9,7 +9,7 @@
 
   const html = $derived(renderMarkdown(source));
 
-  // 链接一律交给系统浏览器：webview 内真导航后回不到配置界面。
+  // 链接一律交给系统浏览器，webview 内导航后回不到配置界面。
   function onClick(e) {
     const a = e.target.closest?.("a[href]");
     if (!a) return;
@@ -32,7 +32,7 @@
     line-height: 1.65;
     word-break: break-word;
   }
-  /* 渲染结果由 {@html} 注入，拿不到 Svelte 的作用域类名，只能用 :global。 */
+  /* 渲染结果由 {@html} 注入，拿不到作用域类名，只能用 :global。 */
   .md :global(> *:first-child) {
     margin-top: 0;
   }

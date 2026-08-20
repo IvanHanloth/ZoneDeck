@@ -48,6 +48,7 @@ The settings window reads and writes the configuration automatically. This page 
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [Mute after hiding](/en/guide/options) |
 | `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/options) |
+| `minimize_before_hide` | bool | `false` | [Minimise windows before hiding](/en/guide/options) |
 | `hide_current` | bool | `true` | [Also hide the active window](/en/guide/options) |
 | `click_to_hide` | bool | `true` | [Toggle hiding by clicking the tray icon](/en/guide/options) |
 | `hide_icon_after_hide` | bool | `false` | [Also hide ZoneDeck's tray icon](/en/guide/options) |
@@ -55,7 +56,8 @@ The settings window reads and writes the configuration automatically. This page 
 | `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [Enhanced freezing](/en/guide/freeze) |
-| `freeze_whole_tree` | bool | `false` | [Freeze the whole process tree](/en/guide/freeze) |
+| `power_scope` | string | `"self"` | [Scope](/en/guide/freeze): `self` (target process only) ｜ `tree` (and all its children) ｜ `image` (all instances of the same image name); governs both freezing and memory trimming, unknown values normalise to `self` |
+| `trim_memory_after_freeze` | bool | `false` | [Reduce memory usage](/en/guide/freeze) (frozen processes only) |
 | `show_float_window` | bool | `false` | Floating window (in development) |
 | `mouse` | object | See below | [Hiding with mouse buttons](/en/guide/hotkeys) |
 | `auto_hide_enabled` | bool | `false` | [Auto-hide when idle](/en/guide/hotkeys) |
@@ -70,6 +72,10 @@ The settings window reads and writes the configuration automatically. This page 
 
 ::: details Legacy flat mouse switches (deprecated)
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` exist only for deserialisation and migration; they are cleared afterwards and never written back. Use the `mouse` structure instead.
+:::
+
+::: details Legacy "freeze the whole process tree" switch (deprecated)
+`freeze_whole_tree` exists only for deserialisation and migration: if a config has no `power_scope`, `true` migrates to `power_scope: "tree"` and `false` to `"self"`, after which the old key is cleared and never written back. Configs that already set `power_scope` explicitly are unaffected.
 :::
 
 ### `setting.mouse`

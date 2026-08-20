@@ -22,7 +22,7 @@
   const v = $derived(app.config.verhub);
   const year = new Date().getFullYear();
 
-  // 链接以 Verhub 项目信息为准（后端带缓存），拉不到时退回内置地址。
+  // 链接以 Verhub 项目信息为准，拉不到时退回内置地址。
   const links = $derived(app.project);
   const homepageUrl = $derived(links?.website_url || "https://zonedeck.ivan-hanloth.cn/");
   const repoUrl = $derived(links?.repo_url || info?.website || "https://github.com/IvanHanloth/ZoneDeck");
@@ -35,12 +35,11 @@
   let hoverRating = $state(0);
   let contact = $state("");
   let sending = $state(false);
-  // 服务端说了算：项目未开放转换时不显示该选项。拉取失败按未开放处理。
+  // 项目未开放转换时不显示该选项；拉取失败按未开放处理。
   let forwardAvailable = $state(false);
   let forwardToGithub = $state(false);
 
   const litStars = $derived(hoverRating || rating);
-  // 转成 Issue 后要靠 GitHub 账号跟进，缺了服务端也不受理。
   const forwardNeedsContact = $derived(forwardToGithub && !contact.trim());
 
   async function open(url) {
@@ -79,7 +78,7 @@
     if (app.announcements.length === 0) loadAnnouncements();
   });
 
-  // 进「关于」页问一次服务端有没有开放转换为 Issue；失败静默，选项不显示。
+  // 问一次服务端有没有开放转换为 Issue；失败静默。
   $effect(() => {
     feedbackOptions()
       .then((o) => (forwardAvailable = !!o?.github_forward_available))
@@ -394,7 +393,7 @@
   .fb-issue-label {
     font-weight: 600;
   }
-  /* 说明走原生 title 气泡，这里只留一个可发现性提示。 */
+  /* 说明走原生 title 气泡。 */
   .fb-issue :global(svg) {
     flex: none;
     color: var(--muted);

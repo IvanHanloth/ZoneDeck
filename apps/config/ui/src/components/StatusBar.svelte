@@ -34,7 +34,7 @@
     }
   }
 
-  // 显示核心回报的真实监控状态（core_status.monitoring）。
+  // 显示核心回报的真实监控状态。
   const monitoring = $derived(app.status.monitoring);
   const monitorText = $derived(
     app.monitorPending
@@ -224,7 +224,7 @@
     border-color: currentColor;
   }
 
-  /* hover 底色一律由 currentColor 派生：各 .act 变体的 color 已经是权威来源，
+  /* hover 底色一律由 currentColor 派生：
      再手写一份 rgba 只会在换主题时脱钩（暗主题的 --warn / --danger 与亮主题不同值）。 */
   .act.ok {
     color: var(--ok);

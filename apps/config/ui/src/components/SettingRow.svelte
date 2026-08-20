@@ -1,6 +1,5 @@
 <script>
-  // icon 传 unplugin-icons 组件本身（如 ~icons/lucide/bell）；
-  // iconColor 只在图标本身要表意颜色时给（托盘角标那几行），其余留空走 --muted。
+  // icon 传 unplugin-icons 组件本身；iconColor 留空时走 --muted。
   let {
     icon: Icon = null,
     iconColor = "",
@@ -38,13 +37,13 @@
   .row:last-child {
     border-bottom: none;
   }
-  /* 置灰：淡化图标、标题与描述，交由控件自身处理禁用态。 */
+  /* 置灰：淡化图标、标题与描述，禁用态交由控件自身处理。 */
   .row.disabled .icon,
   .row.disabled .label,
   .row.disabled .desc {
     opacity: 0.45;
   }
-  /* 图标与文字同属一块：描述换行、或控件比文字高时，图标都跟标题那一行对齐。 */
+  /* 图标与文字同属一块，描述换行时图标仍跟标题那一行对齐。 */
   .main {
     display: flex;
     align-items: flex-start;

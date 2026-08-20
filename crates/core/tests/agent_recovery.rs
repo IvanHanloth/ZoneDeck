@@ -15,7 +15,7 @@ use zonedeck_core::agent::{self, AgentOptions};
 use zonedeck_core::hide::Target;
 use zonedeck_core::recovery::{self, Snapshot};
 
-/// 在带消息循环的独立线程上创建一个“已被隐藏”的窗口。
+/// 在带消息循环的独立线程上创建一个已被隐藏的窗口。
 fn spawn_hidden_window() -> (i64, u32, std::thread::JoinHandle<()>) {
     let (tx, rx) = std::sync::mpsc::channel::<(i64, u32)>();
     let handle = std::thread::spawn(move || unsafe {
@@ -66,7 +66,6 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
         .unwrap();
 
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
-    // save 会盖上版本与本次开机时刻，等价于核心崩溃前留下的真实快照。
     // 测试窗口属于本进程，pid 须如实填写，否则恢复侧的身份校验会拦下它。
     recovery::save(
         &recovery_path,
@@ -89,7 +88,6 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
 
-    // 能应答 IPC 即代表启动流程已完成。
     let client = PipeClient::new(pipe);
     let state = client.send(&Command::GetState).unwrap();
     assert_eq!(
@@ -129,7 +127,7 @@ fn agent_discards_snapshot_from_a_previous_boot() {
         .save(&config_path)
         .unwrap();
 
-    // 手工构造「上一次开机」留下的快照：boot_time_ms 远早于本次开机。
+    // 手工构造「上一次开机」留下的快照。
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
     let stale = Snapshot {
         schema: recovery::SCHEMA_CURRENT,

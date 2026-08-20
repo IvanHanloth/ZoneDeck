@@ -17,14 +17,14 @@ export function groupByProcess(windows) {
   );
 }
 
-/** 需要请求图标的去重路径列表（跳过已缓存的，含"无图标"负缓存）。 */
+/** 需要请求图标的去重路径列表，跳过已缓存的。 */
 export function iconPathsToFetch(windows, cache) {
   return [...new Set(windows.map((w) => w.path))].filter(
     (p) => p && !(p in cache),
   );
 }
 
-/** 按标题 / 进程名 / 路径模糊搜索（不区分大小写）。空查询返回全部。 */
+/** 按标题 / 进程名 / 路径模糊搜索，不区分大小写；空查询返回全部。 */
 export function filterWindows(windows, query) {
   const q = (query || "").trim().toLowerCase();
   if (!q) return windows;
@@ -35,7 +35,7 @@ export function filterWindows(windows, query) {
   );
 }
 
-/** 拆成「可见」与「后台（不可见）」两组。visible 缺省视为 true（兼容旧数据）。 */
+/** 拆成「可见」与「后台」两组；visible 缺省视为 true。 */
 export function splitByVisibility(windows) {
   const visible = [];
   const hidden = [];
@@ -45,12 +45,7 @@ export function splitByVisibility(windows) {
   return { visible, hidden };
 }
 
-/**
- * 与核心 `zonedeck_common::NO_TITLE` 一致的占位标题。
- *
- * 它是跨进程、写进配置文件的哨兵值，不随界面语言变化；展示时用
- * `t("common.noTitleWindow")` 翻译。
- */
+/** 与核心 `zonedeck_common::NO_TITLE` 一致的占位标题；不随界面语言变化。 */
 export const NO_TITLE = "无标题窗口";
 
 /** 转义正则元字符。 */
@@ -114,10 +109,7 @@ export function newProcessRegexRule(seedProcess) {
   };
 }
 
-/**
- * 由现有窗口构造一条白名单条目。三个忽略开关一律置假，由用户逐项勾选；
- * 默认按文件名匹配 —— 换个安装目录就失效的白名单形同虚设。
- */
+/** 由现有窗口构造一条白名单条目；三个忽略开关置假，默认按文件名匹配。 */
 export function whitelistRuleFromWindow(w) {
   return {
     process: w.process,
@@ -168,7 +160,7 @@ export function isRegexRule(rule) {
   return rule && rule.regex != null;
 }
 
-/** 一条窗口规则是否与某窗口指向同一目标（用于去重，仅针对精确规则）。 */
+/** 一条精确窗口规则是否与某窗口指向同一目标，用于去重。 */
 function windowRuleCoversWindow(rule, w) {
   if (isRegexRule(rule)) return false;
   if (rule.hwnd && rule.hwnd === w.hwnd) return true;

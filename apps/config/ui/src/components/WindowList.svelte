@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  // 标题栏样式对齐 WindowRuleList（隐藏窗口）。
+  // 标题栏样式对齐 WindowRuleList。
   import IconAppWindow from "~icons/lucide/app-window";
   import IconSearch from "~icons/lucide/search";
   import IconX from "~icons/lucide/x";

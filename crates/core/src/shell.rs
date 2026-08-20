@@ -5,10 +5,8 @@ use windows::core::{PCWSTR, w};
 use crate::util::to_wide_null;
 
 /// 用系统默认程序打开路径或 URL。
-///
-/// 必须走 ShellExecute 的 "open" 动词：本进程以管理员运行时（如配置程序由
-/// 已提权的核心拉起），直接 `CreateProcess` 启动 explorer.exe 会被系统拒绝
-/// （OS Error 5）。"open" 交由 Shell 处理，不受完整性级别限制。
+/// 必须走 ShellExecute 的 open 动词：本进程提权时直接 `CreateProcess` 启动
+/// explorer.exe 会被系统拒绝。
 pub fn open(target: &str) -> Result<(), String> {
     let wide = to_wide_null(target);
     let result = unsafe {

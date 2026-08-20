@@ -11,13 +11,13 @@ export function nextTheme(current) {
   return THEMES[(i + 1) % THEMES.length] ?? "auto";
 }
 
-/** 把偏好解析为实际配色：auto 时跟随系统。 */
+/** 把偏好解析为实际配色；auto 时跟随系统。 */
 export function resolveTheme(preference, systemDark) {
   if (preference === "light" || preference === "dark") return preference;
   return systemDark ? "dark" : "light";
 }
 
-/** 主题图标（标题栏按钮显示）。 */
+/** 主题图标。 */
 export function themeIcon(preference) {
   return { auto: "◐", light: "☀", dark: "🌙" }[preference] ?? "◐";
 }

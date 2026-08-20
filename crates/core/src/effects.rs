@@ -5,23 +5,21 @@ use std::time::Duration;
 use crate::{audio, freeze, input, log_warn, logging};
 
 /// 隐藏 / 恢复的副作用（静音、冻结、暂停键）。
-///
-/// 实现可以是异步的（如 [`crate::effects_worker::AsyncEffects`]）：调用方
-/// 不得依赖「方法返回即动作已生效」，只能依赖调用顺序与执行顺序一致（FIFO）。
+/// 实现可以是异步的，调用方只能依赖调用顺序与执行顺序一致（FIFO）。
 pub trait Effects {
     fn mute(&self, pid: u32, mute: bool);
     /// 冻结整批进程前静置一次，见 [`FREEZE_SETTLE_DELAY`]。
     fn settle_before_freeze(&self);
     fn suspend(&self, pid: u32, enhanced: bool);
     fn resume(&self, pid: u32, enhanced: bool);
-    /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。检测由实现负责。
+    /// 清空进程工作集，压低其内存占用；只对已挂起的进程有意义，须排在
+    /// [`Effects::suspend`] 之后。
+    fn trim_working_set(&self, pid: u32);
+    /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。
     fn send_pause(&self);
 }
 
-/// 冻结前的静置时长。
-///
-/// 冻结让进程彻底停止响应消息：隐藏动作没画完就冻结会留下残影，已发出的媒体
-/// 暂停键也需要这段时间被目标程序处理掉。静音走音频会话，不受影响，故不等。
+/// 冻结前的静置时长：留给隐藏动作画完、媒体暂停键被目标程序处理掉。
 const FREEZE_SETTLE_DELAY: Duration = Duration::from_millis(200);
 
 pub struct WinEffects {
@@ -93,13 +91,21 @@ impl Effects for WinEffects {
         }
         match freeze::resume_process(pid) {
             Ok(()) => logging::debug(&format!("普通解冻成功 (pid={pid})")),
-            // 不升级为 error：身份校验后仍可能竞态（解冻前进程恰好退出）。
+            // 不升级为 error：身份校验后仍可能竞态。
             Err(e) => log_warn!("解冻失败 (pid={pid}): {e}"),
         }
     }
 
+    fn trim_working_set(&self, pid: u32) {
+        match freeze::trim_working_set(pid) {
+            Ok(()) => logging::debug(&format!("已清空工作集 (pid={pid})")),
+            // 不升级为 error：受保护进程拿不到 PROCESS_SET_QUOTA 是可预期的。
+            Err(e) => log_warn!("清空工作集失败，该进程的内存占用不会下降 (pid={pid}): {e}"),
+        }
+    }
+
     fn send_pause(&self) {
-        // 没有音视频在播放时不发键，避免把静止的播放器切成播放。
+        // 没有音视频在播放时不发键。
         if audio::is_audio_playing() {
             input::send_media_pause();
         }

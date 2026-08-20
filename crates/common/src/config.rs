@@ -32,6 +32,25 @@ pub const MAX_MULTI_CLICK_MS: u32 = 1000;
 /// 最多支持三连击。
 pub const MAX_CLICKS: u8 = 3;
 
+/// 能效控制的作用范围：冻结与清空工作集共用。仅命中窗口所属的进程本身。
+pub const POWER_SCOPE_SELF: &str = "self";
+/// 目标进程及其全部后代进程（不同名的子 exe、渲染进程等）。
+pub const POWER_SCOPE_TREE: &str = "tree";
+/// 与目标进程同一映像名的所有进程，不看亲缘关系。
+pub const POWER_SCOPE_IMAGE: &str = "image";
+/// 全部合法取值。
+pub const POWER_SCOPES: [&str; 3] = [POWER_SCOPE_SELF, POWER_SCOPE_TREE, POWER_SCOPE_IMAGE];
+
+/// 归一作用范围：忽略大小写与首尾空白，无法识别时回落 [`POWER_SCOPE_SELF`]。
+pub fn normalize_power_scope(value: &str) -> String {
+    let v = value.trim().to_ascii_lowercase();
+    if POWER_SCOPES.contains(&v.as_str()) {
+        v
+    } else {
+        POWER_SCOPE_SELF.to_string()
+    }
+}
+
 fn default_hide_hotkey() -> String {
     DEFAULT_HIDE_HOTKEY.to_string()
 }
@@ -80,7 +99,6 @@ fn default_language() -> String {
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
-    /// 带上出错的路径，便于区分目录不可写与被拦截。
     #[error("配置文件读写错误: {source}（路径: {path}）")]
     Io {
         path: String,
@@ -287,10 +305,8 @@ fn default_badge_blue() -> String {
     TRAY_STATUS_FREEZE.to_string()
 }
 
-/// 托盘图标状态角标：四种颜色各自绑定一个状态源。
-///
-/// 多个绑定状态同时活跃时按 **红 > 绿 > 黄 > 蓝** 的优先级只显示一个圆点；
-/// 置空（`""`）表示该颜色不显示。
+/// 托盘图标状态角标：四种颜色各自绑定一个状态源，多个同时活跃时按
+/// 红 > 绿 > 黄 > 蓝 只显示一个；置空表示不显示该颜色。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TrayBadges {
     #[serde(default = "default_badge_red")]
@@ -315,7 +331,7 @@ impl Default for TrayBadges {
 }
 
 impl TrayBadges {
-    /// 未知状态源归一为置空，避免手改配置后角标行为不可预测。幂等。
+    /// 未知状态源归一为置空。幂等。
     pub fn normalize(&mut self) {
         for v in [
             &mut self.red,
@@ -336,6 +352,9 @@ pub struct Setting {
     pub mute_after_hide: bool,
     #[serde(default)]
     pub send_before_hide: bool,
+    /// 隐藏前先把窗口最小化，恢复时还原成隐藏前的形态；本就最小化的保持最小化。
+    #[serde(default)]
+    pub minimize_before_hide: bool,
     #[serde(default = "default_true")]
     pub hide_current: bool,
     #[serde(default = "default_true")]
@@ -352,16 +371,22 @@ pub struct Setting {
     pub freeze_after_hide: bool,
     #[serde(default)]
     pub enhanced_freeze: bool,
-    /// 递归冻结命中程序的整棵子进程树（不同名子 exe / 渲染进程等），
-    /// 对普通与增强冻结均生效。
+    /// 能效控制的作用范围（[`POWER_SCOPE_SELF`] 等），同时决定冻结与清空工作集
+    /// 覆盖到哪些进程。缺省为空串，由 [`Setting::normalize`] 填上。
     #[serde(default)]
+    pub power_scope: String,
+    /// 仅用于反序列化迁移，迁移后清零、不再写回文件。
+    #[serde(default, skip_serializing)]
     pub freeze_whole_tree: bool,
+    /// 冻结后清空进程工作集，压低内存占用。仅对被冻结的进程生效。
+    #[serde(default)]
+    pub trim_memory_after_freeze: bool,
     #[serde(default)]
     pub show_float_window: bool,
-    /// 鼠标触发条件；缺这一节的老配置读进来是「全关」。
+    /// 鼠标触发条件；缺这一节时全关。
     #[serde(default = "MouseSetting::all_off")]
     pub mouse: MouseSetting,
-    /// 旧版扁平鼠标开关，仅用于反序列化迁移；迁移后清零、不再写回文件。
+    /// 仅用于反序列化迁移，迁移后清零、不再写回文件。
     #[serde(default, skip_serializing)]
     pub middle_button_hide: bool,
     #[serde(default, skip_serializing)]
@@ -391,11 +416,10 @@ pub struct Setting {
     /// 日志输出等级：`debug`／`info`／`warn`／`error`，低于它的日志不写入文件。
     #[serde(default = "default_log_level")]
     pub log_level: String,
-    /// 开机自启是否以管理员身份启动：`true` 注册最高权限计划任务，`false` 用普通权限。
-    /// 仅影响计划任务方式；注册表回退始终以普通权限运行。
+    /// 开机自启是否以管理员身份启动，仅影响计划任务方式。
     #[serde(default)]
     pub autostart_admin: bool,
-    /// 界面语言：`auto` 跟随系统，或 `zh-CN`／`en`／`zh-TW`。核心与配置程序共用。
+    /// 界面语言：`auto`／`zh-CN`／`en`／`zh-TW`，核心与配置程序共用。
     #[serde(default = "default_language")]
     pub language: String,
 }
@@ -405,6 +429,7 @@ impl Default for Setting {
         Self {
             mute_after_hide: true,
             send_before_hide: false,
+            minimize_before_hide: false,
             hide_current: true,
             click_to_hide: true,
             hide_icon_after_hide: false,
@@ -412,7 +437,9 @@ impl Default for Setting {
             tray_show_tooltip: true,
             freeze_after_hide: false,
             enhanced_freeze: false,
+            power_scope: POWER_SCOPE_SELF.to_string(),
             freeze_whole_tree: false,
+            trim_memory_after_freeze: false,
             show_float_window: false,
             mouse: MouseSetting::default(),
             middle_button_hide: false,
@@ -435,7 +462,7 @@ impl Default for Setting {
 }
 
 impl Setting {
-    /// 迁移旧版扁平鼠标开关，并把连击次数、连击窗口夹到合法范围。幂等。
+    /// 迁移旧版扁平鼠标开关与「冻结完整进程」，并把连击次数、连击窗口夹到合法范围。幂等。
     pub fn normalize(&mut self) {
         if !self.mouse.any_enabled() {
             self.mouse.middle.enabled = self.middle_button_hide;
@@ -445,6 +472,17 @@ impl Setting {
         self.middle_button_hide = false;
         self.side_button1_hide = false;
         self.side_button2_hide = false;
+        // 空串表示配置文件里没有这个键，此时才看旧开关。
+        if self.power_scope.is_empty() {
+            self.power_scope = if self.freeze_whole_tree {
+                POWER_SCOPE_TREE
+            } else {
+                POWER_SCOPE_SELF
+            }
+            .to_string();
+        }
+        self.freeze_whole_tree = false;
+        self.power_scope = normalize_power_scope(&self.power_scope);
         self.tray_badges.normalize();
         self.mouse.normalize();
         self.language = crate::i18n::normalize_pref(&self.language);
@@ -500,9 +538,7 @@ pub struct Config {
     /// 配置 schema 版本（[`APP_CONFIG_VERSION`]），结构变动时才动。
     #[serde(default = "default_version")]
     pub version: String,
-    /// 上次运行过的**程序**版本（[`crate::APP_VERSION`]）。
-    /// 与之不符即「更新后首次启动」，核心据此自动拉起配置程序。
-    /// 缺省置空：老配置与全新配置都会被判为版本已变，各弹一次。
+    /// 上次运行过的程序版本（[`crate::APP_VERSION`]）；与之不符即「更新后首次启动」。
     #[serde(default)]
     pub app_version: String,
     #[serde(default)]
@@ -524,13 +560,11 @@ pub struct Config {
     #[serde(default)]
     pub process_rules: Vec<ProcessRule>,
     /// 白名单：逐进程声明忽略隐藏 / 冻结 / 静音，见 [`Config::whitelist`]。
-    ///
-    /// 用 `Option` 只为分辨「文件里没有这个键」与「用户清空了列表」：前者
-    /// （老配置 / 全新配置）由 [`Config::normalize`] 播种默认项，后者保持为空。
-    /// 归一后恒为 `Some`，写出的永远是数组。
+    /// `None` 表示文件里没有这个键，由 [`Config::normalize`] 播种默认项；
+    /// 归一后恒为 `Some`。
     #[serde(default)]
     pub whitelist: Option<Vec<WhitelistRule>>,
-    /// 旧版扁平绑定，仅用于反序列化迁移；迁移后清空、不再序列化。
+    /// 仅用于反序列化迁移，迁移后清空、不再序列化。
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hide_binding: Vec<WindowInfo>,
 }
@@ -554,11 +588,9 @@ impl Default for Config {
     }
 }
 
-/// 全新配置预置的白名单。
-///
-/// 文件资源管理器是桌面与任务栏本身：隐藏它会让桌面图标一并消失，冻结它会让整个
-/// 外壳卡住，两者都不是用户想要的。用户可以删掉这条。
-/// ZoneDeck 自身的强制保护不在这里，见 [`crate::matching::BUILTIN_FREEZE_GUARDS`]。
+/// 全新配置预置的白名单：文件资源管理器就是桌面与任务栏本身，隐藏或冻结它会让
+/// 外壳失效。这是普通条目，用户可以删掉。
+/// ZoneDeck 自身的强制保护见 [`crate::matching::BUILTIN_FREEZE_GUARDS`]。
 fn default_whitelist() -> Vec<WhitelistRule> {
     vec![WhitelistRule {
         process: "explorer.exe".to_string(),
@@ -576,9 +608,8 @@ impl Config {
         Self::from_value(serde_json::from_str(s)?)
     }
 
-    /// 同 [`Config::from_json`]，入参为已解析的 JSON 值（配置程序 `save_config`
-    /// 收到的前端数据走此入口）。反序列化前先剥离 `null`：配置界面的输入框被
-    /// 清空时会提交 `null`，应按「字段缺失」回落默认值，而不是整份配置失败。
+    /// 同 [`Config::from_json`]，入参为已解析的 JSON 值。反序列化前先剥离 `null`，
+    /// 按「字段缺失」回落默认值。
     pub fn from_value(mut value: serde_json::Value) -> Result<Self, ConfigError> {
         strip_nulls(&mut value);
         let mut config: Config = serde_json::from_value(value)?;
@@ -591,8 +622,7 @@ impl Config {
     }
 
     /// 无副作用的加载：解析失败回退默认值，原文件保持原样，回退原因被丢弃。
-    /// 适合顺带读取配置的场景（如启动早期读日志参数）；把结果作为本次生效
-    /// 配置时应使用 [`Config::load_reporting`]，以便隔离损坏文件并记录原因。
+    /// 把结果作为本次生效配置时应改用 [`Config::load_reporting`]。
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
         match std::fs::read_to_string(path) {
             Ok(s) => Ok(Self::from_json(&s).unwrap_or_default()),
@@ -602,9 +632,7 @@ impl Config {
     }
 
     /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
-    /// 回退保证核心总能启动；解析失败的原文件先改名为同目录 `*.bad` 备份，
-    /// 随后写入的默认配置才不会把用户数据永久覆写。备份去向包含在报告里，
-    /// 须由调用方记进日志。
+    /// 解析失败的原文件改名为同目录 `*.bad` 备份，去向包含在报告里。
     /// 返回 `(配置, 回退原因)`；解析成功或文件不存在时第二项为 `None`。
     pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
         match std::fs::read_to_string(path) {
@@ -627,22 +655,19 @@ impl Config {
                 .collect();
         }
         self.hide_binding.clear();
-        // 缺这一节的配置（老配置与全新配置）播种默认白名单；`[]` 是用户清空的结果，
-        // 不再播种，否则删掉的条目每次启动都会长回来。
+        // 缺这一节的配置播种默认白名单；`[]` 是用户清空的结果，不再播种。
         if self.whitelist.is_none() {
             self.whitelist = Some(default_whitelist());
         }
         self.setting.normalize();
     }
 
-    /// 当前生效的白名单。[`Config::normalize`] 之后恒非空 `Option`，此处对未归一的
-    /// 配置回落空表。
+    /// 当前生效的白名单；未归一的配置回落空表。
     pub fn whitelist(&self) -> &[WhitelistRule] {
         self.whitelist.as_deref().unwrap_or_default()
     }
 
-    /// 写入配置。先写同目录下的临时文件再原子替换，写到一半失败也不会
-    /// 把原文件截断成半截。
+    /// 写入配置：先写同目录临时文件再原子替换。
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
         let json = self.to_json()?;
         if let Some(parent) = path.parent()
@@ -652,7 +677,6 @@ impl Config {
         }
         let tmp = tmp_path(path);
         std::fs::write(&tmp, json).map_err(|e| ConfigError::io(&tmp, e))?;
-        // Windows 下 rename 走 MOVEFILE_REPLACE_EXISTING，同目录替换是原子的。
         std::fs::rename(&tmp, path).map_err(|e| {
             let _ = std::fs::remove_file(&tmp);
             ConfigError::io(path, e)
@@ -660,8 +684,7 @@ impl Config {
     }
 }
 
-/// 递归剥离 JSON 中的 `null`：对象里值为 `null` 的键按「字段缺失」处理
-/// （反序列化时走 serde 默认值），数组里的 `null` 元素直接丢弃。
+/// 递归剥离 JSON 中的 `null`：对象里的键按「字段缺失」处理，数组里的元素丢弃。
 fn strip_nulls(value: &mut serde_json::Value) {
     match value {
         serde_json::Value::Object(map) => {
@@ -687,14 +710,10 @@ fn tmp_path(path: &Path) -> std::path::PathBuf {
     path.with_file_name(name)
 }
 
-/// 把解析失败的配置文件改名为同目录 `*.bad` 备份，返回供调用方记日志的完整
-/// 回退原因。备份失败不阻断回退（核心必须能启动），但原因里须注明数据仍会
-/// 被随后的保存覆写。
+/// 把解析失败的配置文件改名为同目录 `*.bad` 备份，返回供调用方记日志的回退原因。
+/// 备份失败不阻断回退，但原因里会注明数据仍会被随后的保存覆写。
 fn quarantine_corrupt(path: &Path, parse_error: &ConfigError) -> String {
     let backup = bad_path(path);
-    // Windows 下 rename 覆盖已存在的目标文件（与 save() 的原子替换同一前提），
-    // 旧备份直接被顶替；多个进程同时加载同一份损坏文件时，后完成改名的一方
-    // 以 NotFound 失败，不会动先到者刚建立的备份。
     match std::fs::rename(path, &backup) {
         Ok(()) => format!("{parse_error}（原文件已备份为 {}）", backup.display()),
         Err(e) => format!("{parse_error}（备份原文件失败，随后的保存会将其覆盖: {e}）"),
@@ -908,14 +927,19 @@ mod tests {
         assert!(c.setting.hide_current);
         assert!(c.setting.click_to_hide);
         assert!(!c.setting.freeze_after_hide);
-        assert!(!c.setting.freeze_whole_tree);
+        assert_eq!(
+            c.setting.power_scope, POWER_SCOPE_SELF,
+            "作用范围默认只管自己"
+        );
+        assert!(!c.setting.minimize_before_hide, "隐藏前先最小化默认关闭");
+        assert!(!c.setting.trim_memory_after_freeze, "降低内存占用默认关闭");
         assert_eq!(c.setting.auto_hide_time, 5);
         assert_eq!(c.setting.log_retention_days, 7, "日志保留天数默认 7");
         assert_eq!(c.setting.log_level, "warn", "日志等级默认只记警告及以上");
         assert!(!c.setting.autostart_admin, "自启默认普通权限");
     }
 
-    /// 配置界面的数字输入框被清空时会提交 `null`；不应导致整份配置保存失败。
+    /// 数字输入框被清空时会提交 `null`，不应导致整份配置保存失败。
     #[test]
     fn null_numeric_fields_fall_back_to_defaults() {
         let c = Config::from_json(
@@ -1003,8 +1027,7 @@ mod tests {
         }
     }
 
-    /// 穷举防护：配置里的**任意**字段（含整节对象、数组元素）为 `null` 时，
-    /// 读取与保存都不得失败。新增字段若缺 `#[serde(default)]` 会使本测试失败。
+    /// 配置里任意字段为 `null` 时读取与保存都不得失败。
     #[test]
     fn any_field_set_to_null_still_parses() {
         let base: serde_json::Value =
@@ -1020,13 +1043,13 @@ mod tests {
         }
     }
 
-    /// 整份配置为 `null` 或非对象时按损坏处理（仍是错误），不在容错范围内。
+    /// 整份配置为 `null` 或非对象时按损坏处理。
     #[test]
     fn top_level_null_is_still_an_error() {
         assert!(Config::from_json("null").is_err());
     }
 
-    /// [`Config::from_value`] 与 [`Config::from_json`] 行为一致（save_config 走该入口）。
+    /// [`Config::from_value`] 与 [`Config::from_json`] 行为一致。
     #[test]
     fn from_value_strips_nulls_like_from_json() {
         let v = serde_json::json!({"setting": {"auto_hide_time": null}});
@@ -1155,7 +1178,79 @@ mod tests {
         assert!(back.setting.autostart_admin, "写回后应保留");
     }
 
-    /// 已存在的配置文件读出来的「什么都没配」：除 mouse 全关外，其余同默认值。
+    #[test]
+    fn minimize_and_trim_memory_round_trip() {
+        let c = Config::from_json(
+            r#"{"setting": {"minimize_before_hide": true, "trim_memory_after_freeze": true}}"#,
+        )
+        .unwrap();
+        assert!(c.setting.minimize_before_hide);
+        assert!(c.setting.trim_memory_after_freeze);
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert!(back.setting.minimize_before_hide, "写回后应保留");
+        assert!(back.setting.trim_memory_after_freeze, "写回后应保留");
+
+        // 老配置没有这两个键，两项功能都不该被打开。
+        let old = Config::from_json(r#"{"setting": {"mute_after_hide": true}}"#).unwrap();
+        assert!(!old.setting.minimize_before_hide);
+        assert!(!old.setting.trim_memory_after_freeze);
+    }
+
+    #[test]
+    fn power_scope_round_trips_and_normalizes() {
+        assert_eq!(Setting::default().power_scope, POWER_SCOPE_SELF);
+
+        for scope in POWER_SCOPES {
+            let c = Config::from_json(&format!(r#"{{"setting": {{"power_scope": "{scope}"}}}}"#))
+                .unwrap();
+            assert_eq!(c.setting.power_scope, scope);
+            let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+            assert_eq!(back.setting.power_scope, scope, "写回后应保留");
+        }
+
+        assert_eq!(
+            normalize_power_scope(" TREE "),
+            POWER_SCOPE_TREE,
+            "忽略大小写与空白"
+        );
+        assert_eq!(
+            normalize_power_scope("everything"),
+            POWER_SCOPE_SELF,
+            "未知范围回落到最保守的「仅目标进程」"
+        );
+        let c = Config::from_json(r#"{"setting": {"power_scope": "everything"}}"#).unwrap();
+        assert_eq!(c.setting.power_scope, POWER_SCOPE_SELF);
+    }
+
+    /// 「冻结完整进程」迁移为作用范围，且不再写回文件。
+    #[test]
+    fn legacy_freeze_whole_tree_migrates_to_power_scope() {
+        let c = Config::from_json(r#"{"setting": {"freeze_whole_tree": true}}"#).unwrap();
+        assert_eq!(c.setting.power_scope, POWER_SCOPE_TREE);
+        assert!(!c.setting.freeze_whole_tree, "迁移后旧字段清零");
+
+        let json = c.to_json().unwrap();
+        assert!(
+            !json.contains("freeze_whole_tree"),
+            "旧字段不应写回: {json}"
+        );
+
+        let off = Config::from_json(r#"{"setting": {"freeze_whole_tree": false}}"#).unwrap();
+        assert_eq!(off.setting.power_scope, POWER_SCOPE_SELF);
+    }
+
+    /// 已显式配过范围的文件不受旧开关影响。
+    #[test]
+    fn explicit_power_scope_wins_over_legacy_flag() {
+        let c = Config::from_json(
+            r#"{"setting": {"freeze_whole_tree": true, "power_scope": "image"}}"#,
+        )
+        .unwrap();
+        assert_eq!(c.setting.power_scope, POWER_SCOPE_IMAGE);
+    }
+
+    /// 「什么都没配」的配置文件：除 mouse 全关外，其余同默认值。
     fn setting_from_old_file() -> Setting {
         Setting {
             mouse: MouseSetting::all_off(),
@@ -1195,7 +1290,7 @@ mod tests {
         assert!(c.process_rules[1].is_regex());
     }
 
-    /// 老配置没有 `whitelist` 键：播种默认项，老用户升级后同样受保护。
+    /// 没有 `whitelist` 键时播种默认项。
     #[test]
     fn missing_whitelist_is_seeded_with_explorer() {
         let c = Config::from_json(r#"{"setting": {}}"#).unwrap();
@@ -1209,7 +1304,7 @@ mod tests {
         assert_eq!(Config::default().whitelist(), c.whitelist(), "全新配置一致");
     }
 
-    /// 用户清空白名单后必须保持为空，否则删掉的条目每次启动都会长回来。
+    /// 用户清空白名单后必须保持为空。
     #[test]
     fn emptied_whitelist_is_not_reseeded() {
         let c = Config::from_json(r#"{"whitelist": []}"#).unwrap();
@@ -1236,7 +1331,7 @@ mod tests {
         assert_eq!(back.whitelist, c.whitelist, "写回后应保留");
     }
 
-    /// 归一后 `whitelist` 恒为 `Some`：前端与配置文件永远看到数组，不会是 null。
+    /// 归一后 `whitelist` 恒为 `Some`，写出的永远是数组。
     #[test]
     fn whitelist_is_always_written_as_an_array() {
         let json = Config::from_json(r#"{"whitelist": []}"#)

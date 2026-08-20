@@ -1,4 +1,4 @@
-// 界面语言：catalog 查表 + 语言解析。与核心 crates/common/src/i18n.rs 共用语言标签。
+// 界面语言：catalog 查表 + 语言解析；与核心共用语言标签。
 
 import zhCN from "../locales/zh-CN.js";
 import en from "../locales/en.js";
@@ -7,7 +7,7 @@ import zhTW from "../locales/zh-TW.js";
 /** 配置中表示「跟随系统」的语言偏好值。 */
 export const LANG_AUTO = "auto";
 
-/** 语言标签 → catalog；键顺序即配置界面的展示顺序。 */
+/** 语言标签 → catalog；键顺序即展示顺序。 */
 const CATALOGS = {
   "zh-CN": zhCN,
   en,
@@ -17,17 +17,14 @@ const CATALOGS = {
 /** 可选语言标签（不含 auto）。 */
 export const LANGS = Object.keys(CATALOGS);
 
-/** 语言的自称，用于语言选择器；不随界面语言变化。 */
+/** 语言的自称，不随界面语言变化。 */
 export const LANG_NAMES = {
   "zh-CN": "简体中文",
   en: "English",
   "zh-TW": "繁體中文",
 };
 
-/**
- * 按 BCP-47 标签解析语言，无法归类时返回 null。
- * 中文按 script/region 子标签区分正体与简体，与核心 `Lang::from_tag` 保持一致。
- */
+/** 按 BCP-47 标签解析语言，无法归类时返回 null；中文按 script/region 区分正简。 */
 export function fromTag(tag) {
   if (!tag) return null;
   const parts = String(tag).trim().replace(/_/g, "-").toLowerCase().split("-").filter(Boolean);
@@ -45,10 +42,7 @@ export function normalizePref(pref) {
   return fromTag(pref) ?? LANG_AUTO;
 }
 
-/**
- * 解析实际生效的语言。pref 为具体语言时直接采用；为 auto 或非法值时依据
- * systemTag 推断，推断不出时回落到简体中文。
- */
+/** 解析实际生效的语言；pref 为 auto 或非法值时依据 systemTag 推断。 */
 export function resolve(pref, systemTag) {
   if (String(pref ?? "").trim().toLowerCase() !== LANG_AUTO) {
     const lang = fromTag(pref);
@@ -59,7 +53,7 @@ export function resolve(pref, systemTag) {
 
 const current = $state({ lang: "zh-CN" });
 
-/** 按配置里的语言偏好设定当前语言；pref 为 auto 时跟随浏览器/系统语言。 */
+/** 按配置里的语言偏好设定当前语言。 */
 export function setLangPref(pref) {
   current.lang = resolve(pref, globalThis.navigator?.language);
   // 字体回退与断行规则依赖根元素的 lang。
@@ -74,8 +68,8 @@ export function lang() {
 }
 
 /**
- * 取当前语言下的文案。`params` 用于替换文案里的 `{名字}` 占位符。
- * 缺失的键回落到简体中文，仍缺失时返回键本身，便于开发期发现漏译。
+ * 取当前语言下的文案；`params` 用于替换 `{名字}` 占位符。
+ * 缺失的键回落到简体中文，仍缺失时返回键本身。
  */
 export function t(key, params) {
   const text = CATALOGS[current.lang]?.[key] ?? CATALOGS["zh-CN"][key] ?? key;

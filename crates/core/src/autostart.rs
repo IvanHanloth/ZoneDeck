@@ -11,7 +11,7 @@ use crate::util::to_wide_null;
 const RUN_SUBKEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 pub const REG_VALUE_NAME: &str = "ZoneDeck Application";
 pub const TASK_NAME: &str = "ZoneDeckAutostart";
-/// 改名（Boss Key → ZoneDeck）前注册的自启名称，仅用于清理旧残留。
+/// 改名前注册的自启名称，仅用于清理旧残留。
 pub const LEGACY_REG_VALUE_NAME: &str = "Boss Key Application";
 pub const LEGACY_TASK_NAME: &str = "BossKeyAutostart";
 
@@ -103,8 +103,7 @@ impl Autostart {
     }
 }
 
-/// 安装器在清理旧自启前写下的迁移标记（见 ZoneDeck.iss）：安装器必须先删掉旧
-/// 看门狗任务才能安全替换文件，核心首启时旧残留已不在，只能凭此标记得知用户
+/// 安装器在清理旧自启前写下的迁移标记（见 ZoneDeck.iss），核心凭此得知用户
 /// 此前开着自启。
 pub const MIGRATION_MARKER_SUBKEY: &str = r"Software\ZoneDeck";
 pub const MIGRATION_MARKER_VALUE: &str = "MigrateAutostart";
@@ -121,7 +120,7 @@ pub enum LegacyMigration {
 
 /// 自启的品牌迁移：发现旧名称残留（[`LEGACY_TASK_NAME`]、[`LEGACY_REG_VALUE_NAME`]）
 /// 或安装器迁移标记时，先确保自启已在新名称下注册，成功后再清理旧残留与标记。
-/// 注册失败时保留信号下次启动重试——"先删后建"会在注册失败时把用户的自启弄丢。
+/// 注册失败时保留信号下次启动重试。
 pub fn migrate_legacy(admin: bool) -> LegacyMigration {
     let legacy = LegacySignals {
         run_subkey: RUN_SUBKEY,
@@ -160,8 +159,7 @@ impl LegacySignals {
             || task_exists(self.task_name)
     }
 
-    /// 清除残留与标记。旧任务可能是管理员级而当前进程无权删除：记 warn 保留，
-    /// 待下次以管理员身份运行时再清；期间新名称已注册，不会重复注册。
+    /// 清除残留与标记；无权删除时记 warn 保留，待下次以管理员身份运行时再清。
     fn clear(&self) {
         registry_delete(self.run_subkey, self.run_value_name);
         registry_delete(self.marker_subkey, MIGRATION_MARKER_VALUE);
@@ -327,7 +325,7 @@ fn current_user() -> Option<String> {
     }
 }
 
-/// 将 XML 以 UTF-16LE（带 BOM）写入文件——schtasks /XML 的规范编码。
+/// 将 XML 以 UTF-16LE（带 BOM）写入文件，schtasks /XML 的规范编码。
 fn write_task_xml(path: &Path, xml: &str) -> std::io::Result<()> {
     let mut bytes: Vec<u8> = vec![0xFF, 0xFE];
     for unit in xml.encode_utf16() {
@@ -350,13 +348,13 @@ fn task_create_from_xml(task_name: &str, xml: &str) -> bool {
 }
 
 fn task_create(task_name: &str, exe: &str, level: RunLevel) -> bool {
-    // 优先 XML 方式（带失败自动重启）。
+    // 优先 XML 方式，带失败自动重启。
     if let Some(user) = current_user()
         && task_create_from_xml(task_name, &task_xml(exe, &user, level))
     {
         return true;
     }
-    // 回退：老式命令行注册。
+    // 回退到老式命令行注册。
     let tr = format!("\"{exe}\"");
     schtasks(&[
         "/Create",
@@ -570,8 +568,7 @@ mod tests {
     #[test]
     #[ignore = "需要管理员权限，非提权环境下会失败"]
     fn xml_task_registers_and_deletes_via_schtasks() {
-        // 用 LeastPrivilege 验证 XML 能被 schtasks 接受（HighestAvailable 需要管理员，
-        // 在非提权测试环境会失败，那是权限问题而非 XML 问题）。
+        // 用 LeastPrivilege 验证 XML 能被 schtasks 接受；HighestAvailable 需要管理员。
         let task_name = "ZoneDeckTest_XmlRegistration";
         let _guard = TaskCleanup(task_name);
 

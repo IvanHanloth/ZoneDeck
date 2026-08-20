@@ -1,7 +1,7 @@
 //! 低级鼠标钩子：承载鼠标按键绑定与四角触发。
 //!
 //! 回调只做判定与 `PostMessageW`，重活都在代理窗口的消息处理里；
-//! 由 [`crate::input_hooks`] 的专职线程安装，鼠标移动这条最热的路径上不加锁。
+//! 由 [`crate::input_hooks`] 的专职线程安装。
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicI32, AtomicIsize, AtomicU32, AtomicU64, Ordering::Relaxed};
@@ -53,8 +53,6 @@ static SCREEN_W: AtomicI32 = AtomicI32::new(0);
 static SCREEN_H: AtomicI32 = AtomicI32::new(0);
 static LAST_CORNER: AtomicU64 = AtomicU64::new(0);
 /// 上一个鼠标位置与时刻，用来估算甩入角落的速度；时刻为 0 表示尚无采样。
-/// 分两个原子存而不用锁：该路径每次鼠标移动都要走，且只被钩子线程读写，
-/// 故不需要跨原子的一致性。
 static LAST_MOVE_POS: AtomicU64 = AtomicU64::new(0);
 static LAST_MOVE_MS: AtomicU64 = AtomicU64::new(0);
 static BUTTONS: Mutex<Buttons> = Mutex::new(Buttons::new());
@@ -258,7 +256,7 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
             y: data.pt.y,
             ms: now,
         };
-        // 须在下面的早退之前记下采样，供下次算速度。
+        // 须在早退之前记下采样，供下次算速度。
         let previous = swap_last_move(sample);
 
         if now.wrapping_sub(LAST_CORNER.load(Relaxed)) < CORNER_COOLDOWN_MS {
@@ -268,7 +266,6 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
         if !corner_hit(sample.x, sample.y, w, h, flags) {
             return;
         }
-        // 开了「仅快速移动」时，慢慢挪到角落不触发。
         if flags & F_FAST != 0 && !previous.is_some_and(|p| is_fast_move(p, sample)) {
             return;
         }
@@ -307,7 +304,7 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
             let data = &*(lparam.0 as *const MSLLHOOKSTRUCT);
             handle_event(wparam.0 as u32, data);
         }
-        // 永远放行，只观察不吞事件。
+        // 只观察，不吞事件。
         CallNextHookEx(None, ncode, wparam, lparam)
     }
 }
@@ -318,10 +315,10 @@ pub struct MouseHook {
 
 impl MouseHook {
     /// 安装钩子；须在 [`crate::input_hooks`] 的专职线程上调用。
-    /// 触发条件由 [`set_flags`] 单独设置，本函数不读配置。
+    /// 触发条件由 [`set_flags`] 单独设置。
     pub fn install(agent_hwnd: HWND) -> Option<MouseHook> {
         HWND_RAW.store(agent_hwnd.0 as isize, Relaxed);
-        // 上一轮的采样已过时，不能拿来算速度。
+        // 上一轮的采样已过时。
         LAST_MOVE_MS.store(0, Relaxed);
         unsafe {
             SCREEN_W.store(GetSystemMetrics(SM_CXSCREEN), Relaxed);
@@ -348,7 +345,7 @@ mod tests {
     use super::*;
     use crate::hotkey::{MOD_CONTROL, MOD_SHIFT};
 
-    /// 关掉默认开启的中键，以便逐项验证触发条件。
+    /// 关掉默认开启的中键。
     fn setting_with(mutate: impl FnOnce(&mut Setting)) -> Setting {
         let mut s = Setting::default();
         s.mouse.middle.enabled = false;
@@ -458,7 +455,7 @@ mod tests {
 
     #[test]
     fn positions_survive_the_atomic_round_trip() {
-        // 主屏左侧 / 上方的显示器坐标为负，打包不能丢符号。
+        // 主屏左侧 / 上方的显示器坐标为负。
         for (x, y) in [(0, 0), (1919, 1079), (-1920, -300), (i32::MIN, i32::MAX)] {
             assert_eq!(unpack_pos(pack_pos(x, y)), (x, y));
         }

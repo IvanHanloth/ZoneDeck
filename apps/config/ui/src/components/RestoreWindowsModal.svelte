@@ -15,7 +15,7 @@
   let showUntitled = $state(false);
   let busy = $state(false);
 
-  // 过滤在父层完成后再交给 WindowList（与 BindingPanel 一致），使搜索/后台过滤真正生效。
+  // 过滤在父层完成后再交给 WindowList。
   const shown = $derived(
     applyListFilters(windows, { showBackground, showUntitled, search }),
   );
@@ -31,7 +31,7 @@
     }
   });
 
-  /** 选中的句柄映射到去重后的 PID（冻结/解冻按进程粒度）。 */
+  /** 选中的句柄映射到去重后的 PID。 */
   function selectedPids() {
     const pids = windows
       .filter((w) => selected.includes(w.hwnd))
@@ -40,10 +40,10 @@
     return [...new Set(pids)];
   }
 
-  // 冻结/解冻跟随全局设置：增强冻结可用即用、遵循「冻结完整进程」。
+  // 冻结 / 解冻跟随「能效控制」里的设置。
   const freezeArgs = $derived({
     enhanced: !!(app.config?.setting?.enhanced_freeze && app.pssuspend),
-    whole_tree: !!app.config?.setting?.freeze_whole_tree,
+    scope: app.config?.setting?.power_scope ?? "self",
   });
 
   async function run(label, fn) {

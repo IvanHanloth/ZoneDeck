@@ -16,7 +16,7 @@
   const n = $derived(app.config.notifications);
   const s = $derived(app.config.setting);
 
-  // 四种角标颜色，顺序即优先级（红最高），与核心 tray_badge.rs 保持一致。
+  // 四种角标颜色，顺序即优先级；与核心 tray_badge.rs 一致。
   const BADGE_COLORS = [
     { key: "red", labelKey: "notify.badgeRed", css: "#f44336" },
     { key: "green", labelKey: "notify.badgeGreen", css: "#4caf50" },
@@ -24,7 +24,7 @@
     { key: "blue", labelKey: "notify.badgeBlue", css: "#2196f3" },
   ];
 
-  // 可绑定的状态源；"" 表示不显示该颜色。取值与 crates/common 的 TRAY_STATUSES 一致。
+  // 可绑定的状态源；"" 表示不显示该颜色，取值与 TRAY_STATUSES 一致。
   const BADGE_STATUSES = [
     { labelKey: "notify.statusNone", value: "" },
     { value: "hidden", labelKey: "notify.statusHidden" },
@@ -35,7 +35,7 @@
     { value: "monitor_paused", labelKey: "notify.statusMonitorPaused" },
   ];
 
-  // 行首的圆环就是色板：未绑定状态时淡化，一眼看出这一档没启用。
+  // 行首的圆环即色板，未绑定状态时淡化。
   function badgeColor(color) {
     return s.tray_badges[color.key]
       ? color.css

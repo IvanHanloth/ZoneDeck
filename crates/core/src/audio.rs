@@ -65,9 +65,7 @@ unsafe fn mute_matching_sessions(pid: u32, mute: bool) -> Result<()> {
 }
 
 /// 默认播放设备上是否有音频会话正处于「活动播放」状态。
-///
-/// 用于隐藏前判断当前是否真的有音视频在播放：媒体「播放/暂停」是切换键，
-/// 若此刻没有东西在播放却发送它，反而会把静止的播放器切成播放。
+/// 媒体「播放/暂停」是切换键，没在播放时发送反而会把播放器切成播放。
 pub fn is_audio_playing() -> bool {
     unsafe {
         let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
@@ -127,7 +125,7 @@ mod tests {
 
     #[test]
     fn is_audio_playing_does_not_panic() {
-        // 环境不确定，只验证能安全求值（无音频会话时应为 false）。
+        // 环境不确定，只验证能安全求值。
         let _ = is_audio_playing();
     }
 }

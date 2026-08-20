@@ -1,7 +1,5 @@
 //! Verhub 客户端：版本 / 公告 / 反馈 / 日志 / 项目链接，基于官方 verhub-sdk。
-//!
-//! 只用公开端点（无需凭据）。HTTP 由 SDK 完成；本模块把 SDK 的响应类型映射成
-//! 前端 IPC 契约所需的可序列化 DTO，字段名保持不变。
+//! 只用公开端点；本模块把 SDK 的响应类型映射成前端 IPC 契约所需的 DTO。
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -17,7 +15,7 @@ use verhub_sdk::models::{
 /// Verhub 基础路径。
 pub const BASE_URL: &str = "https://verhub.hanloth.cn/api/v1";
 pub const PROJECT_KEY: &str = "ivanhanloth-zonedeck";
-/// 客户端平台（本程序只发行 Windows 版）。
+/// 客户端平台。
 pub const PLATFORM: Platform = Platform::Windows;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -27,7 +25,7 @@ pub const LOG_EXCERPT_MAX: usize = LOG_CONTENT_MAX * 3 / 5;
 
 type Result<T> = verhub_sdk::Result<T>;
 
-/// 构造公开接口客户端；User-Agent 追加 `ZoneDeck/{版本}` 以便服务端识别。
+/// 构造公开接口客户端；User-Agent 追加 `ZoneDeck/{版本}`。
 fn client() -> Result<VerhubClient> {
     VerhubClient::builder(BASE_URL)
         .project_key(PROJECT_KEY)
@@ -168,9 +166,9 @@ pub async fn announcements(limit: u32) -> Result<Vec<Announcement>> {
 /// 反馈提交选项：服务端决定本项目能否把反馈转换为 GitHub Issue。
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct FeedbackOptions {
-    /// 是否开放「转换为 Issue」。为假时前端不显示该选项。
+    /// 是否开放「转换为 Issue」。
     pub github_forward_available: bool,
-    /// 选择转换时联系方式是否必填；转换不可用时恒为假。
+    /// 选择转换时联系方式是否必填。
     pub contact_required_for_forward: bool,
 }
 
@@ -182,16 +180,14 @@ pub async fn feedback_options() -> Result<FeedbackOptions> {
     })
 }
 
-/// 规整联系方式：只有空白等同于未填写。
+/// 规整联系方式：只有空白视为未填写。
 pub fn normalize_contact(contact: &str) -> Option<String> {
     let trimmed = contact.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 /// 提交客户端反馈。`rating` 为 1..=5；`custom_data` 携带附加信息。
-///
-/// `forward_to_github` 为真时由 Verhub 侧的机器人把这条反馈建成 GitHub Issue：
-/// 联系方式必填（SDK 本地即拒绝），且 Issue 创建失败时整条反馈不会被记录。
+/// `forward_to_github` 为真时联系方式必填，且 Issue 创建失败会导致整条反馈丢失。
 pub async fn submit_feedback(
     content: String,
     rating: Option<u8>,
@@ -227,7 +223,7 @@ pub async fn upload_log(content: &str, device_info: serde_json::Value) -> Result
 /// 项目公开链接的缓存有效期。
 const PROJECT_CACHE_TTL_SECS: i64 = 24 * 60 * 60;
 
-/// 项目公开链接。所有字段都可能缺省（Verhub 上未填写）；前端须自备回退链接。
+/// 项目公开链接；所有字段都可能缺省，前端须自备回退链接。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectLinks {
     pub name: Option<String>,
@@ -240,7 +236,7 @@ pub struct ProjectLinks {
     pub fetched_at: i64,
 }
 
-/// 进程内缓存，避免每次都读盘。
+/// 进程内缓存。
 static PROJECT_CACHE: Mutex<Option<ProjectLinks>> = Mutex::new(None);
 
 fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
@@ -255,7 +251,7 @@ fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
     }
 }
 
-/// 缓存是否仍在有效期内。`fetched_at` 在未来（时钟回拨）按过期处理。
+/// 缓存是否仍在有效期内；`fetched_at` 在未来按过期处理。
 fn cache_fresh(links: &ProjectLinks, now: i64) -> bool {
     (0..PROJECT_CACHE_TTL_SECS).contains(&(now - links.fetched_at))
 }
@@ -270,13 +266,13 @@ fn cache_put(links: ProjectLinks) {
     }
 }
 
-/// 读磁盘缓存；文件不存在或损坏一律当作没有缓存。
+/// 读磁盘缓存；文件不存在或损坏当作没有缓存。
 fn read_cache_file(path: &Path) -> Option<ProjectLinks> {
     let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
-/// 写磁盘缓存；尽力而为，写失败只影响下次冷启动的命中率。
+/// 写磁盘缓存；尽力而为。
 fn write_cache_file(path: &Path, links: &ProjectLinks) {
     if let Ok(json) = serde_json::to_string_pretty(links) {
         let _ = std::fs::write(path, json);
@@ -290,7 +286,7 @@ fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// 项目公开链接：内存缓存 → 磁盘缓存（`cache_path`）→ Verhub API 逐级回退。
+/// 项目公开链接：内存缓存 → 磁盘缓存 → Verhub API 逐级回退。
 /// API 拉取失败时退回过期缓存，完全没有缓存才报错。
 pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
     let now = unix_now();
@@ -319,14 +315,14 @@ pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
     }
 }
 
-/// 截到上限以内，按字符边界切以避免切碎多字节字符。
+/// 截到上限以内，按字符边界切。
 fn truncate_log(content: &str) -> String {
     if content.len() <= LOG_CONTENT_MAX {
         return content.to_string();
     }
     const MARK: &str = "…（日志过长，已截断前半部分）\n";
     let budget = LOG_CONTENT_MAX - MARK.len();
-    // 保留末尾（出错现场）。
+    // 保留末尾的出错现场。
     let start = content.len() - budget;
     let start = (start..content.len())
         .find(|i| content.is_char_boundary(*i))
