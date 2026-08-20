@@ -1,5 +1,5 @@
 <script>
-  import Modal from "./Modal.svelte";
+  import ContentDialog from "./fluent/ContentDialog.svelte";
   import WindowList from "./WindowList.svelte";
   import { invoke } from "../lib/ipc.js";
   import { app, toast } from "../lib/state.svelte.js";
@@ -94,7 +94,7 @@
   }
 </script>
 
-<Modal title={t("restore.title")} bind:open>
+<ContentDialog title={t("restore.title")} bind:open>
   <p class="hint">
     {t("restore.hintLine1")}<br />
     {t("restore.hintLine2")}
@@ -119,11 +119,11 @@
     <button class="btn" disabled={busy} onclick={resumeSel}>{t("restore.resumeProcesses")}</button>
     <button class="btn primary" disabled={busy} onclick={showSel}>{t("restore.showWindows")}</button>
   {/snippet}
-</Modal>
+</ContentDialog>
 
 <style>
   .hint {
-    color: var(--muted);
+    color: var(--text-2);
     font-size: 12.5px;
     line-height: 1.6;
     margin-bottom: 10px;

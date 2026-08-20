@@ -1,11 +1,12 @@
 <script>
-  import { onMount } from "svelte";
   // 标题栏样式对齐 WindowRuleList。
   import IconAppWindow from "~icons/lucide/app-window";
   import IconSearch from "~icons/lucide/search";
   import IconX from "~icons/lucide/x";
   import IconRefresh from "~icons/lucide/refresh-cw";
   import IconChevronDown from "~icons/lucide/chevron-down";
+  import CheckBox from "./fluent/CheckBox.svelte";
+  import Flyout from "./fluent/Flyout.svelte";
   import { groupByProcess, splitByVisibility } from "../lib/grouping.js";
   import { t } from "../lib/i18n.svelte.js";
   import { NO_TITLE } from "../lib/grouping.js";
@@ -23,7 +24,7 @@
 
   let searchOpen = $state(false);
   let menuOpen = $state(false);
-  let menuContainer;
+  let menuBtn = $state(null);
 
   const parts = $derived(splitByVisibility(windows));
 
@@ -31,16 +32,6 @@
     searchOpen = !searchOpen;
     if (!searchOpen) search = "";
   }
-
-  onMount(() => {
-    function handleClickOutside(e) {
-      if (menuOpen && menuContainer && !menuContainer.contains(e.target)) {
-        menuOpen = false;
-      }
-    }
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
-  });
 </script>
 
 <div class="list-box">
@@ -48,11 +39,11 @@
     <span class="title-text"><IconAppWindow width="15" height="15" /> {title}</span>
     <span class="count">{windows.length}</span>
     <div class="tools">
-      <button class="mini" title={t("windowList.refresh")} onclick={() => onrefresh?.()}>
+      <button class="mini icon" title={t("windowList.refresh")} aria-label={t("windowList.refresh")} onclick={() => onrefresh?.()}>
         <IconRefresh width="14" height="14" />
       </button>
       <button
-        class="mini"
+        class="mini icon"
         class:active={searchOpen}
         title={t("common.search")}
         aria-label={t("common.search")}
@@ -60,29 +51,24 @@
       >
         <IconSearch width="14" height="14" />
       </button>
-      <div class="menu-container" bind:this={menuContainer}>
-        <button
-          class="mini"
-          class:active={menuOpen}
-          onclick={() => menuOpen = !menuOpen}
-          title={t("windowList.moreOptions")}
-          aria-label={t("windowList.moreOptions")}
-        >
-          <IconChevronDown width="14" height="14" />
-        </button>
-        {#if menuOpen}
-          <div class="dropdown-menu">
-            <label class="menu-item">
-              <input type="checkbox" bind:checked={showBackground} />
-              <span>{t("windowList.backgroundProcesses")}</span>
-            </label>
-            <label class="menu-item">
-              <input type="checkbox" bind:checked={showUntitled} />
-              <span>{t("windowList.untitledWindows")}</span>
-            </label>
-          </div>
-        {/if}
-      </div>
+      <button
+        bind:this={menuBtn}
+        class="mini icon"
+        class:active={menuOpen}
+        aria-haspopup="true"
+        aria-expanded={menuOpen}
+        title={t("windowList.moreOptions")}
+        aria-label={t("windowList.moreOptions")}
+        onclick={() => (menuOpen = !menuOpen)}
+      >
+        <IconChevronDown width="14" height="14" />
+      </button>
+      <Flyout bind:open={menuOpen} anchor={menuBtn} align="end" minWidth={180}>
+        <div class="menu">
+          <div class="menu-item"><CheckBox block bind:checked={showBackground} label={t("windowList.backgroundProcesses")} /></div>
+          <div class="menu-item"><CheckBox block bind:checked={showUntitled} label={t("windowList.untitledWindows")} /></div>
+        </div>
+      </Flyout>
     </div>
   </div>
 
@@ -105,9 +91,9 @@
     </div>
   {/if}
 
-  <div class="win-list" role="listbox" aria-label={title}>
+  <div class="lv-body" role="listbox" aria-label={title}>
     {#if windows.length === 0}
-      <p class="hint empty">{t("common.empty")}</p>
+      <p class="hint lv-empty">{t("common.empty")}</p>
     {:else}
       {@render section(parts.visible, null)}
       {#if parts.hidden.length}
@@ -133,11 +119,12 @@
           <span class="name">{group.process}</span>
         </div>
         {#each group.windows as w (w.hwnd + "-" + w.process)}
-          <label class="win-item" title={w.path}>
-            <input type="checkbox" bind:group={selected} value={w.hwnd} />
-            <span class="wtitle">{w.title === NO_TITLE ? t("common.noTitleWindow") : w.title}</span>
-            <span class="meta">PID {w.PID}</span>
-          </label>
+          <div class="lv-row win-item">
+            <CheckBox block small bind:group={selected} value={w.hwnd} title={w.path}>
+              <span class="wtitle">{w.title === NO_TITLE ? t("common.noTitleWindow") : w.title}</span>
+              <span class="meta">PID {w.PID}</span>
+            </CheckBox>
+          </div>
         {/each}
       </div>
     {/each}
@@ -145,152 +132,51 @@
 {/snippet}
 
 <style>
-  .list-box {
+  .menu {
     display: flex;
     flex-direction: column;
-    min-height: 0;
-    min-width: 0;
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
+    gap: 2px;
   }
-
-  .list-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
-    flex: none;
-    flex-wrap: wrap;
-    row-gap: 6px;
-  }
-  .title-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text);
-  }
-  .count {
-    font-weight: 500;
-    font-size: 12px;
-    background: var(--hover);
-    border-radius: 99px;
-    padding: 1px 8px;
-  }
-  .tools {
-    margin-left: auto;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .mini {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: var(--text);
-    border: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .mini:hover {
-    background: var(--hover);
-    border-color: var(--accent);
-  }
-  .mini.active {
-    color: var(--on-accent);
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-
-  .menu-container {
-    position: relative;
-  }
-
-  .dropdown-menu {
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    padding: 4px 0;
-    margin-top: 4px;
-    min-width: 140px;
-    z-index: 100;
-  }
-
   .menu-item {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    cursor: pointer;
-    user-select: none;
-    color: var(--text);
+    padding: 7px 10px;
+    border-radius: var(--r-control);
     font-size: 12px;
-    transition: background 0.12s;
+    transition: background var(--dur-fast) var(--ease-standard);
   }
   .menu-item:hover {
-    background: var(--hover);
-  }
-  .menu-item input[type="checkbox"] {
-    cursor: pointer;
-    accent-color: var(--accent);
-    width: 14px;
-    height: 14px;
-    flex: none;
+    background: var(--subtle-hover);
   }
 
   .search {
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--muted);
+    gap: 8px;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-2);
     flex: none;
-  }
-  .search:focus-within {
-    border-color: var(--accent);
   }
   .search input {
     flex: 1;
+    min-width: 0;
     border: none;
     background: none;
     padding: 0;
+    font: inherit;
     color: var(--text);
+    user-select: text;
+    cursor: text;
   }
   .search input:focus {
     outline: none;
   }
   .clear {
     display: inline-flex;
-    color: var(--muted);
+    color: var(--text-2);
   }
   .clear:hover {
     color: var(--text);
-  }
-
-  .win-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px;
-  }
-
-  .empty {
-    text-align: center;
-    padding: 24px 0;
   }
 
   .section-label {
@@ -299,16 +185,16 @@
     gap: 6px;
     margin: 8px 6px 4px;
     padding-top: 8px;
-    border-top: 1px dashed var(--border);
-    font-size: 11.5px;
+    border-top: 1px solid var(--divider);
+    font-size: 11px;
     font-weight: 600;
-    color: var(--muted);
+    color: var(--text-2);
     text-transform: uppercase;
     letter-spacing: 0.03em;
   }
   .section-label span {
     font-weight: 500;
-    background: var(--hover);
+    background: var(--control-alt);
     border-radius: 99px;
     padding: 0 6px;
   }
@@ -319,11 +205,11 @@
   .proc-name {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-weight: 600;
-    color: var(--muted);
-    padding: 4px 6px;
-    font-size: 12.5px;
+    color: var(--text-2);
+    padding: 4px 8px;
+    font-size: 12px;
   }
   .proc-icon {
     width: 16px;
@@ -334,7 +220,6 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    font-size: 12px;
     opacity: 0.55;
   }
   .proc-name .name {
@@ -344,28 +229,16 @@
   }
 
   .win-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px 5px 20px;
-    border-radius: 6px;
-    cursor: pointer;
+    margin-left: 14px;
   }
-  .win-item:hover {
-    background: var(--hover);
-  }
-  .win-item input {
-    accent-color: var(--accent);
-    flex: none;
-  }
-  .win-item .wtitle {
+  .wtitle {
     flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .win-item .meta {
-    color: var(--muted);
+  .meta {
+    color: var(--text-2);
     font-size: 12px;
     flex: none;
   }

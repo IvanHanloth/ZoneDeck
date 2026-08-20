@@ -87,11 +87,12 @@
     flex: 1;
     min-width: 5.5em;
     font-family: inherit;
-    font-size: 12.5px;
+    font-size: 12px;
     text-align: center;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    background: var(--control);
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    border-radius: var(--r-control);
     padding: 4px 8px;
     white-space: nowrap;
     overflow: hidden;
@@ -99,6 +100,7 @@
   }
   .combo.recording {
     border-color: var(--accent);
+    border-bottom-color: var(--accent);
     color: var(--accent);
     animation: pulse 1.2s ease-in-out infinite;
   }
@@ -108,7 +110,8 @@
     }
   }
   .rec .btn {
-    padding: 4px 9px;
-    font-size: 12.5px;
+    min-height: 26px;
+    padding: 3px 9px;
+    font-size: 12px;
   }
 </style>

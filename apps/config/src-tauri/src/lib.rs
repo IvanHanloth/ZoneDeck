@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use serde::Serialize;
@@ -608,6 +609,33 @@ fn os_description() -> String {
     }
 }
 
+/// 从 `cmd /C ver` 的横幅里取内部版本号；取不到按 0 处理。
+/// `10.0.` 这一段不随系统语言变化，据它定位后面的 build 号。
+fn parse_build(desc: &str) -> u32 {
+    desc.split_once("10.0.")
+        .and_then(|(_, rest)| {
+            rest.split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|n| n.parse().ok())
+        })
+        .unwrap_or(0)
+}
+
+/// 窗口背景材质。Mica 由 DWM 绘制，只有 Win11 22000+ 有；
+/// Tauri 的 `apply_effects` 会吞掉失败，所以这里自己判版本。
+/// 界面据此决定 body 留透明（让 Mica 透上来）还是自己铺一层不透明底色。
+#[tauri::command]
+fn backdrop_kind() -> &'static str {
+    static KIND: OnceLock<&'static str> = OnceLock::new();
+    KIND.get_or_init(|| {
+        if parse_build(&os_description()) >= 22000 {
+            "mica"
+        } else {
+            "solid"
+        }
+    })
+}
+
 pub fn run() {
     tauri::Builder::default()
         // 单实例：重复启动时激活已有窗口。必须是注册的第一个插件。
@@ -647,6 +675,7 @@ pub fn run() {
             whitelist_builtins,
             startup_action,
             app_info,
+            backdrop_kind,
             data_location,
             open_external,
             verhub_project_links,
@@ -657,18 +686,32 @@ pub fn run() {
             verhub_upload_log,
             current_session_log,
         ])
-        // 前端起不来时 5 秒后强制显示窗口。
-        .setup(|app| {
-            if let Some(window) = app.get_webview_window("main") {
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    if !window.is_visible().unwrap_or(false) {
-                        let _ = window.show();
-                    }
-                });
-            }
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("运行 ZoneDeck 配置程序时出错");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_build;
+
+    #[test]
+    fn build_number_comes_from_the_ver_banner() {
+        assert_eq!(
+            parse_build("Microsoft Windows [版本 10.0.26200.1234]"),
+            26200
+        );
+        assert_eq!(
+            parse_build("Microsoft Windows [Version 10.0.22000.1]"),
+            22000
+        );
+        // 少了 revision 段也要取得到
+        assert_eq!(parse_build("Microsoft Windows [Version 10.0.19045]"), 19045);
+    }
+
+    #[test]
+    fn unparsable_banner_falls_back_to_no_mica() {
+        assert_eq!(parse_build("Windows"), 0);
+        assert_eq!(parse_build(""), 0);
+        assert_eq!(parse_build("Microsoft Windows [Version 10.0.]"), 0);
+    }
 }

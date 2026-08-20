@@ -173,26 +173,26 @@
   }
 
   .panel {
-    fill: var(--surface);
-    stroke: var(--border);
+    fill: var(--illustration);
+    stroke: var(--illustration-edge);
     stroke-width: 2;
   }
   .stand {
-    fill: var(--border);
+    fill: var(--illustration-edge);
   }
 
   .s0.off,
   .s1.off {
-    stop-color: var(--muted);
+    stop-color: var(--illustration-line);
     stop-opacity: 0;
   }
   .s2.off {
-    stop-color: var(--muted);
-    stop-opacity: 0.12;
+    stop-color: var(--illustration-line);
+    stop-opacity: 0.18;
   }
   .s3.off {
-    stop-color: var(--muted);
-    stop-opacity: 0.35;
+    stop-color: var(--illustration-line);
+    stop-opacity: 0.5;
   }
   .s0.on,
   .s1.on {
@@ -243,19 +243,19 @@
     opacity: 0;
   }
   .win-body {
-    fill: var(--surface);
-    stroke: var(--border);
+    fill: color-mix(in srgb, var(--illustration-edge) 25%, var(--illustration));
+    stroke: var(--illustration-edge);
     stroke-width: 2;
   }
   .win-bar {
-    fill: var(--border);
+    fill: var(--illustration-edge);
   }
   .win-dot {
-    fill: var(--muted);
+    fill: var(--illustration-line);
     opacity: 0.7;
   }
   .win-line {
-    fill: var(--border);
+    fill: var(--illustration-edge);
   }
 
   .cursor {
@@ -271,7 +271,7 @@
   }
   .cursor path {
     fill: var(--text);
-    stroke: var(--surface);
+    stroke: var(--illustration);
     stroke-width: 1.5;
     stroke-linejoin: round;
   }
@@ -283,10 +283,10 @@
     min-height: 20px;
     text-align: center;
     color: var(--text);
-    font-size: 12.5px;
-    line-height: 1.6;
+    font-size: 12px;
+    line-height: 18px;
   }
   .caption.dim {
-    color: var(--muted);
+    color: var(--text-2);
   }
 </style>

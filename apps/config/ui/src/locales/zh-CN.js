@@ -13,6 +13,9 @@ export default {
   "tab.options": "其他选项",
   "tab.about": "关于与反馈",
 
+  "nav.expand": "展开导航",
+  "nav.collapse": "折叠导航",
+
   "common.close": "关闭",
   "common.cancel": "取消",
   "common.record": "录制",
@@ -20,6 +23,10 @@ export default {
   "common.open": "打开",
   "common.empty": "（空）",
   "common.search": "搜索",
+  "common.on": "开",
+  "common.off": "关",
+  "common.expand": "展开",
+  "common.collapse": "收起",
   "common.unknownProcess": "（未知进程）",
   "common.noTitleWindow": "无标题窗口",
 
@@ -154,7 +161,10 @@ export default {
   "hotkeys.idleTimeDesc": "无操作达到该时长后触发自动隐藏。",
   "hotkeys.minutes": "分钟",
 
-  "recorder.pressCombo": "请按下组合键…",
+  "recorder.edit": "更改快捷键",
+  "recorder.dialogHint": "按下组合键以更改此快捷键。修饰键（Ctrl / Alt / Shift / Win）需要与其他键搭配。",
+  "recorder.waiting": "等待按键…",
+  "common.save": "保存",
   "recorder.disabled": "已关闭",
   "recorder.holdModifiers": "按住修饰键…",
   "recorder.none": "无",
@@ -228,7 +238,6 @@ export default {
   "options.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",
 
-  "power.scopeCard": "作用范围",
   "power.scope": "作用范围",
   "power.scopeDesc":
     "决定冻结和降低内存覆盖到哪些进程。范围越大效果越彻底，也越可能影响到其他的后台任务。",
@@ -323,6 +332,13 @@ export default {
   "about.contactPlaceholder": "联系方式（可选，邮箱 / QQ 等）",
   "about.contactPlaceholderGithub": "GitHub 账号（必填，如 @IvanHanloth）",
   "about.contactNotice": "如果不留联系方式，我们无法直接对反馈进行回复和响应。",
+  "about.issueGuideTitle": "转换为 GitHub Issue 功能指南",
+  "about.issueGuideScope": "仅程序缺陷、功能反馈与功能请求适合转换为 Issue。请勿提交与程序无关的内容，抱怨、吐槽类反馈会占用问题列表，影响开发进度。",
+  "about.issueGuideBot": "Issue 将由 Verhub 机器人代为创建，并提及对应的 Github 账号。",
+  "about.issueGuideContact": "使用此功能时请在联系方式一栏填写 GitHub 用户名（如@IvanHanloth）而非邮箱地址等，否则你将无法收到来自github的提示。",
+  "about.issueGuidePrivacy": "请注意，GitHub Issue 对所有人可见，避免在反馈内容中包含个人隐私信息。此功能由Verhub提供，相关隐私政策适用。",
+  "about.issueGuideWhy": "转化为Github Issue便于开发者统一管理与追踪进展。",
+  "about.issueGuideAgree": "我已了解",
   "about.forwardToIssue": "同时转换为 GitHub Issue",
   "about.forwardToIssueDesc": "提交后由 Verhub 机器人自动转换为 GitHub Issue，不要求特别的网络环境，也不需要登录 GitHub 账号；选择转换时必须留下 GitHub 账号，以便在 Issue 中跟进。",
   "about.contactRequiredForIssue": "转换为 Issue 需要留下 GitHub 账号",
@@ -351,7 +367,6 @@ export default {
   "restore.resumed": "已解冻 {n} 个进程",
   "restore.actionFailed": "{action}失败：{err}",
 
-  "update.aria": "发现新版本",
   "update.forcedTitle": "必须更新后才能继续使用",
   "update.title": "发现新版本",
   "update.later": "稍后再说",

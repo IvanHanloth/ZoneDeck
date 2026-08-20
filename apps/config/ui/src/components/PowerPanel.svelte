@@ -1,6 +1,10 @@
 <script>
-  import SettingRow from "./SettingRow.svelte";
-  import Toggle from "./Toggle.svelte";
+  import SettingsGroup from "./fluent/SettingsGroup.svelte";
+  import SettingsCard from "./fluent/SettingsCard.svelte";
+  import SettingsExpander from "./fluent/SettingsExpander.svelte";
+  import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
+  import ComboBox from "./fluent/ComboBox.svelte";
+  import InfoBar from "./fluent/InfoBar.svelte";
   import IconCrosshair from "~icons/lucide/crosshair";
   import IconSnowflake from "~icons/lucide/snowflake";
   import IconZap from "~icons/lucide/zap";
@@ -16,6 +20,9 @@
     { value: "tree", label: "power.scopeTree" },
     { value: "image", label: "power.scopeImage" },
   ];
+  const scopeOptions = $derived(
+    SCOPES.map((sc) => ({ value: sc.value, label: t(sc.label) })),
+  );
 
   async function openLink(url) {
     try {
@@ -38,42 +45,24 @@
     return reasons;
   });
   const enhancedDisabled = $derived(enhancedBlocked.length > 0);
+
+  // 主开关一开就把子项摊开，省得用户再点一次才看见。
+  // 展开态由 SettingsExpander 的 autoExpand 负责联动，这里只存状态。
+  let expanded = $state(false);
 </script>
 
-<div class="panel-stack">
-  <section class="fcard">
-    <h3>{t("power.scopeCard")}</h3>
-    <SettingRow
-      icon={IconCrosshair}
-      label={t("power.scope")}
-      disabled={freezeOff}
-      description={t("power.scopeDesc")}
-    >
-      {#snippet control()}
-        <select
-          class="sel"
-          bind:value={s.power_scope}
-          disabled={freezeOff}
-          title={freezeOff ? t("power.needFreezeFirst") : ""}
-        >
-          {#each SCOPES as scope (scope.value)}
-            <option value={scope.value}>{t(scope.label)}</option>
-          {/each}
-        </select>
-      {/snippet}
-    </SettingRow>
-  </section>
+<SettingsGroup title={t("power.freezeCard")}>
+  <SettingsExpander
+    bind:open={expanded}
+    autoExpand={s.freeze_after_hide}
+    icon={IconSnowflake}
+    label={t("power.freezeAfterHide")}
+    description={t("power.freezeAfterHideDesc")}
+  >
+    {#snippet control()}<ToggleSwitch bind:checked={s.freeze_after_hide} />{/snippet}
 
-  <section class="fcard">
-    <h3>{t("power.freezeCard")}</h3>
-    <SettingRow
-      icon={IconSnowflake}
-      label={t("power.freezeAfterHide")}
-      description={t("power.freezeAfterHideDesc")}
-    >
-      {#snippet control()}<Toggle bind:checked={s.freeze_after_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow
+    <SettingsCard
+      variant="sub"
       icon={IconZap}
       label={t("power.enhancedFreeze")}
       disabled={freezeOff || enhancedDisabled}
@@ -82,7 +71,7 @@
         : t("power.enhancedFreezeDesc")}
     >
       {#snippet control()}
-        <Toggle
+        <ToggleSwitch
           bind:checked={s.enhanced_freeze}
           disabled={freezeOff || enhancedDisabled}
           title={freezeOff
@@ -92,75 +81,76 @@
               : ""}
         />
       {/snippet}
-    </SettingRow>
-    <div class="note" class:disabled={freezeOff}>
-      {t("power.freezeNoteBefore")}
-      <button class="link" onclick={() => openLink("https://download.sysinternals.com/files/PSTools.zip")} disabled={freezeOff}>PSTools</button>
-      {t("power.freezeNoteAfter")}
-      <button class="link" onclick={refreshPssuspend} disabled={freezeOff}>{t("power.recheck")}</button>
-    </div>
-  </section>
+    </SettingsCard>
 
-  <section class="fcard">
-    <h3>{t("power.memoryCard")}</h3>
-    <SettingRow
-      icon={IconMemoryStick}
-      label={t("power.trimMemory")}
+    <SettingsCard
+      variant="sub"
+      icon={IconCrosshair}
+      label={t("power.scope")}
       disabled={freezeOff}
-      description={t("power.trimMemoryDesc")}
+      description={t("power.scopeDesc")}
     >
       {#snippet control()}
-        <Toggle
-          bind:checked={s.trim_memory_after_freeze}
+        <ComboBox
+          bind:value={s.power_scope}
+          options={scopeOptions}
           disabled={freezeOff}
           title={freezeOff ? t("power.needFreezeFirst") : ""}
+          ariaLabel={t("power.scope")}
         />
       {/snippet}
-    </SettingRow>
-  </section>
-</div>
+    </SettingsCard>
+
+    <div class="sub-note">
+      <InfoBar disabled={freezeOff}>
+        {t("power.freezeNoteBefore")}
+        <button
+          class="link"
+          onclick={() => openLink("https://download.sysinternals.com/files/PSTools.zip")}
+          disabled={freezeOff}>PSTools</button
+        >
+        {t("power.freezeNoteAfter")}
+        <button class="link" onclick={refreshPssuspend} disabled={freezeOff}>
+          {t("power.recheck")}
+        </button>
+      </InfoBar>
+    </div>
+  </SettingsExpander>
+</SettingsGroup>
+
+<SettingsGroup title={t("power.memoryCard")}>
+  <SettingsCard
+    icon={IconMemoryStick}
+    label={t("power.trimMemory")}
+    disabled={freezeOff}
+    description={t("power.trimMemoryDesc")}
+  >
+    {#snippet control()}
+      <ToggleSwitch
+        bind:checked={s.trim_memory_after_freeze}
+        disabled={freezeOff}
+        title={freezeOff ? t("power.needFreezeFirst") : ""}
+      />
+    {/snippet}
+  </SettingsCard>
+</SettingsGroup>
 
 <style>
-  .note {
-    padding: 10px 14px;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.6;
-    border-top: 1px solid var(--border);
+  .sub-note {
+    padding: 12px 16px 16px 20px;
+    border-top: 1px solid var(--divider);
   }
-  .note.disabled {
-    opacity: 0.45;
-  }
-  .note .link {
+  .link {
     color: var(--accent);
-    background: none;
-    border: none;
-    padding: 0;
     font: inherit;
-    cursor: pointer;
+    padding: 0;
   }
-  .note .link:hover {
+  .link:hover {
     text-decoration: underline;
   }
-  .note .link:disabled {
-    color: var(--muted);
+  .link:disabled {
+    color: var(--text-disabled);
     cursor: not-allowed;
     text-decoration: none;
-  }
-  .sel {
-    padding: 5px 10px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 13px;
-  }
-  .sel:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-  .sel:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
   }
 </style>

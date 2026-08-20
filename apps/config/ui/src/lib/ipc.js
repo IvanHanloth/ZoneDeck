@@ -165,6 +165,9 @@ function mockInvoke(cmd, args) {
       });
     case "startup_action":
       return null;
+    // 浏览器预览没有 DWM，一律走不透明底色。
+    case "backdrop_kind":
+      return "solid";
     case "set_autostart":
       mockAutostart = !!args?.enabled;
       return null;
@@ -252,7 +255,6 @@ export function onAppEvent(name, handler) {
 
 /** 窗口控制：浏览器预览时静默降级为 no-op。 */
 export const win = {
-  show: () => IN_TAURI && getCurrentWindow().show(),
   minimize: () => IN_TAURI && getCurrentWindow().minimize(),
   toggleMaximize: () => IN_TAURI && getCurrentWindow().toggleMaximize(),
   close: () => IN_TAURI && getCurrentWindow().close(),
