@@ -1,9 +1,10 @@
 <script>
   import { t } from "../lib/i18n.svelte.js";
-  import SettingRow from "./SettingRow.svelte";
-  import Toggle from "./Toggle.svelte";
-  import IconBell from "~icons/lucide/bell";
-  import IconCircleDot from "~icons/lucide/circle-dot";
+  import SettingsGroup from "./fluent/SettingsGroup.svelte";
+  import SettingsCard from "./fluent/SettingsCard.svelte";
+  import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
+  import ComboBox from "./fluent/ComboBox.svelte";
+  import InfoBar from "./fluent/InfoBar.svelte";
   import IconPlay from "~icons/lucide/play";
   import IconCircleStop from "~icons/lucide/circle-stop";
   import IconPower from "~icons/lucide/power";
@@ -35,77 +36,52 @@
     { value: "monitor_paused", labelKey: "notify.statusMonitorPaused" },
   ];
 
+  const badgeOptions = $derived(
+    BADGE_STATUSES.map((st) => ({ value: st.value, label: t(st.labelKey) })),
+  );
+
   // 行首的圆环即色板，未绑定状态时淡化。
   function badgeColor(color) {
     return s.tray_badges[color.key]
       ? color.css
-      : `color-mix(in srgb, ${color.css} 30%, var(--surface))`;
+      : `color-mix(in srgb, ${color.css} 30%, var(--card))`;
   }
 </script>
 
-<div class="panel-stack">
-  <section class="fcard">
-    <h3><IconBell width="16" height="16" /> {t("notify.card")}</h3>
-    <SettingRow icon={IconPlay} label={t("notify.onStart")} description={t("notify.onStartDesc")}>
-      {#snippet control()}<Toggle bind:checked={n.on_start} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconCircleStop} label={t("notify.onQuit")} description={t("notify.onQuitDesc")}>
-      {#snippet control()}<Toggle bind:checked={n.on_quit} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconPower} label={t("notify.onAutostart")} description={t("notify.onAutostartDesc")}>
-      {#snippet control()}<Toggle bind:checked={n.on_autostart} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconEyeOff} label={t("notify.onHide")} description={t("notify.onHideDesc")}>
-      {#snippet control()}<Toggle bind:checked={n.on_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconEye} label={t("notify.onShow")} description={t("notify.onShowDesc")}>
-      {#snippet control()}<Toggle bind:checked={n.on_show} />{/snippet}
-    </SettingRow>
-  </section>
+<SettingsGroup title={t("notify.card")}>
+  <SettingsCard icon={IconPlay} label={t("notify.onStart")} description={t("notify.onStartDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={n.on_start} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconCircleStop} label={t("notify.onQuit")} description={t("notify.onQuitDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={n.on_quit} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconPower} label={t("notify.onAutostart")} description={t("notify.onAutostartDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={n.on_autostart} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconEyeOff} label={t("notify.onHide")} description={t("notify.onHideDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={n.on_hide} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconEye} label={t("notify.onShow")} description={t("notify.onShowDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={n.on_show} />{/snippet}
+  </SettingsCard>
+</SettingsGroup>
 
-  <section class="fcard">
-    <h3><IconCircleDot width="16" height="16" /> {t("notify.trayCard")}</h3>
-    {#each BADGE_COLORS as color (color.key)}
-      <SettingRow icon={IconCircle} iconColor={badgeColor(color)} label={t(color.labelKey)}>
-        {#snippet control()}
-          <select class="sel" bind:value={s.tray_badges[color.key]}>
-            {#each BADGE_STATUSES as st (st.value)}
-              <option value={st.value}>{t(st.labelKey)}</option>
-            {/each}
-          </select>
-        {/snippet}
-      </SettingRow>
-    {/each}
-    <div class="note">{t("notify.trayPriorityNote")}</div>
-    <SettingRow icon={IconTag} label={t("notify.trayTooltip")} description={t("notify.trayTooltipDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.tray_show_tooltip} />{/snippet}
-    </SettingRow>
-  </section>
-</div>
+<SettingsGroup title={t("notify.trayCard")}>
+  {#each BADGE_COLORS as color (color.key)}
+    <SettingsCard icon={IconCircle} iconColor={badgeColor(color)} label={t(color.labelKey)}>
+      {#snippet control()}
+        <ComboBox
+          bind:value={s.tray_badges[color.key]}
+          options={badgeOptions}
+          ariaLabel={t(color.labelKey)}
+        />
+      {/snippet}
+    </SettingsCard>
+  {/each}
 
-<style>
-  .fcard h3 {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .sel {
-    padding: 5px 10px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 13px;
-  }
-  .sel:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
-  .note {
-    padding: 10px 14px;
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.6;
-    border-top: 1px solid var(--border);
-  }
-</style>
+  <InfoBar>{t("notify.trayPriorityNote")}</InfoBar>
+
+  <SettingsCard icon={IconTag} label={t("notify.trayTooltip")} description={t("notify.trayTooltipDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={s.tray_show_tooltip} />{/snippet}
+  </SettingsCard>
+</SettingsGroup>

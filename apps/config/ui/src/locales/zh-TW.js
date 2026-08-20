@@ -12,6 +12,9 @@ export default {
   "tab.options": "其他選項",
   "tab.about": "關於與意見回饋",
 
+  "nav.expand": "展開導覽",
+  "nav.collapse": "摺疊導覽",
+
   "common.close": "關閉",
   "common.cancel": "取消",
   "common.record": "錄製",
@@ -19,6 +22,10 @@ export default {
   "common.open": "開啟",
   "common.empty": "（空）",
   "common.search": "搜尋",
+  "common.on": "開",
+  "common.off": "關",
+  "common.expand": "展開",
+  "common.collapse": "收合",
   "common.unknownProcess": "（未知程序）",
   "common.noTitleWindow": "無標題視窗",
 
@@ -153,7 +160,10 @@ export default {
   "hotkeys.idleTimeDesc": "無操作達到該時間後觸發自動隱藏。",
   "hotkeys.minutes": "分鐘",
 
-  "recorder.pressCombo": "請按下組合鍵…",
+  "recorder.edit": "變更快速鍵",
+  "recorder.dialogHint": "按下組合鍵以變更此快速鍵。修飾鍵（Ctrl / Alt / Shift / Win）需要與其他按鍵搭配。",
+  "recorder.waiting": "等待按鍵…",
+  "common.save": "儲存",
   "recorder.disabled": "已關閉",
   "recorder.holdModifiers": "按住輔助按鍵…",
   "recorder.none": "無",
@@ -227,7 +237,6 @@ export default {
   "options.minimizeBeforeHideDesc":
     "隱藏前先把視窗最小化，復原時還原成原大小。此功能對降低部分遊戲引擎的背景佔用有效。",
 
-  "power.scopeCard": "作用範圍",
   "power.scope": "作用範圍",
   "power.scopeDesc":
     "決定凍結和降低記憶體涵蓋到哪些程序。範圍越大效果越徹底，也越可能影響到其他的背景工作。",
@@ -324,6 +333,13 @@ export default {
   "about.contactPlaceholder": "聯絡方式（選填，電子郵件／通訊軟體等）",
   "about.contactPlaceholderGithub": "GitHub 帳號（必填，例如 @IvanHanloth）",
   "about.contactNotice": "如果不留聯絡方式，我們無法直接回覆與處理這則意見。",
+  "about.issueGuideTitle": "轉換為 GitHub Issue 功能指南",
+  "about.issueGuideScope": "僅程式缺陷、功能回饋與功能請求適合轉換為 Issue。請勿提交與程式無關的內容，抱怨、吐槽類回饋會佔用問題列表，影響開發進度。",
+  "about.issueGuideBot": "Issue 將由 Verhub 機器人代為建立，並提及對應的 GitHub 帳號。",
+  "about.issueGuideContact": "使用此功能時請在聯絡方式欄位填寫 GitHub 使用者名稱（如 @IvanHanloth）而非電子郵件地址等，否則你將無法收到來自 GitHub 的通知。",
+  "about.issueGuidePrivacy": "請注意，GitHub Issue 對所有人可見，避免在回饋內容中包含個人隱私資訊。此功能由 Verhub 提供，相關隱私權政策適用。",
+  "about.issueGuideWhy": "轉換為 GitHub Issue 便於開發者統一管理與追蹤進度。",
+  "about.issueGuideAgree": "我已了解",
   "about.forwardToIssue": "同時轉換為 GitHub Issue",
   "about.forwardToIssueDesc": "送出後由 Verhub 機器人自動轉換為 GitHub Issue，不需要特別的網路環境，也不需要登入 GitHub 帳號；選擇轉換時必須留下 GitHub 帳號，以便在 Issue 中後續追蹤。",
   "about.contactRequiredForIssue": "轉換為 Issue 需要留下 GitHub 帳號",
@@ -352,7 +368,6 @@ export default {
   "restore.resumed": "已解除凍結 {n} 個程序",
   "restore.actionFailed": "{action}失敗：{err}",
 
-  "update.aria": "發現新版本",
   "update.forcedTitle": "必須更新後才能繼續使用",
   "update.title": "發現新版本",
   "update.later": "稍後再說",

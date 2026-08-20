@@ -12,6 +12,9 @@ export default {
   "tab.options": "Options",
   "tab.about": "About & Feedback",
 
+  "nav.expand": "Expand navigation",
+  "nav.collapse": "Collapse navigation",
+
   "common.close": "Close",
   "common.cancel": "Cancel",
   "common.record": "Record",
@@ -19,6 +22,10 @@ export default {
   "common.open": "Open",
   "common.empty": "(empty)",
   "common.search": "Search",
+  "common.on": "On",
+  "common.off": "Off",
+  "common.expand": "Expand",
+  "common.collapse": "Collapse",
   "common.unknownProcess": "(unknown process)",
   "common.noTitleWindow": "Untitled window",
 
@@ -160,7 +167,10 @@ export default {
   "hotkeys.idleTimeDesc": "Auto-hide triggers once there has been no input for this long.",
   "hotkeys.minutes": "min",
 
-  "recorder.pressCombo": "Press a key combination…",
+  "recorder.edit": "Change shortcut",
+  "recorder.dialogHint": "Press a key combination to change this shortcut. Modifiers (Ctrl / Alt / Shift / Win) need to be paired with another key.",
+  "recorder.waiting": "Waiting for a key…",
+  "common.save": "Save",
   "recorder.disabled": "Disabled",
   "recorder.holdModifiers": "Hold the modifier keys…",
   "recorder.none": "None",
@@ -239,7 +249,6 @@ export default {
   "options.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
-  "power.scopeCard": "Scope",
   "power.scope": "Scope",
   "power.scopeDesc":
     "Decides which processes freezing and memory reduction reach. A wider scope is more thorough, and more likely to affect other background work.",
@@ -338,6 +347,13 @@ export default {
   "about.contactPlaceholder": "Contact (optional — email, QQ, etc.)",
   "about.contactPlaceholderGithub": "GitHub account (required — e.g. @IvanHanloth)",
   "about.contactNotice": "Without a contact there is no way for us to reply to your feedback directly.",
+  "about.issueGuideTitle": "Guide to forwarding feedback as a GitHub Issue",
+  "about.issueGuideScope": "Only bug reports, feature feedback and feature requests are suitable for forwarding as an Issue. Please do not submit content unrelated to the program — complaints and venting crowd the issue list and slow development down.",
+  "about.issueGuideBot": "The Issue is created on your behalf by the Verhub bot, which mentions the GitHub account you provide.",
+  "about.issueGuideContact": "When using this feature, enter your GitHub username in the contact field (for example @IvanHanloth) rather than an email address, otherwise you will not receive notifications from GitHub.",
+  "about.issueGuidePrivacy": "Note that GitHub Issues are visible to everyone, so avoid including personal or private information in your feedback. This feature is provided by Verhub and its privacy policy applies.",
+  "about.issueGuideWhy": "Forwarding to a GitHub Issue lets the developer manage and track it in one place.",
+  "about.issueGuideAgree": "Got it",
   "about.forwardToIssue": "Also convert into a GitHub issue",
   "about.forwardToIssueDesc": "Once submitted, the Verhub bot turns this feedback into a GitHub issue automatically — no special network setup and no GitHub sign-in needed. A GitHub account is required when you choose this, so the issue can be followed up with you.",
   "about.contactRequiredForIssue": "Converting into an issue requires a GitHub account",
@@ -367,7 +383,6 @@ export default {
   "restore.resumed": "Resumed {n} processes",
   "restore.actionFailed": "{action} failed: {err}",
 
-  "update.aria": "New version available",
   "update.forcedTitle": "You must update before continuing",
   "update.title": "New version available",
   "update.later": "Later",

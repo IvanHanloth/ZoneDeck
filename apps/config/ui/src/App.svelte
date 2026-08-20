@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import TitleBar from "./components/TitleBar.svelte";
+  import NavView from "./components/NavView.svelte";
   import ResizeHandles from "./components/ResizeHandles.svelte";
   import BindingPanel from "./components/BindingPanel.svelte";
   import WhitelistPanel from "./components/WhitelistPanel.svelte";
@@ -17,6 +18,13 @@
   import DataNoticeModal from "./components/DataNoticeModal.svelte";
   import BroadRegexModal from "./components/BroadRegexModal.svelte";
   import Toast from "./components/Toast.svelte";
+  import IconAppWindow from "~icons/lucide/app-window";
+  import IconShieldCheck from "~icons/lucide/shield-check";
+  import IconKeyboard from "~icons/lucide/keyboard";
+  import IconBell from "~icons/lucide/bell";
+  import IconZap from "~icons/lucide/zap";
+  import IconSettings from "~icons/lucide/settings";
+  import IconInfo from "~icons/lucide/info";
   import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
     app,
@@ -32,19 +40,34 @@
     startCore,
     startStatusPolling,
   } from "./lib/state.svelte.js";
-  import { hideSplash } from "./lib/splash.js";
   import { setLangPref, t } from "./lib/i18n.svelte.js";
   import { applyTheme, loadPreference } from "./lib/theme.js";
 
-  const TABS = [
-    { id: "binding", labelKey: "tab.binding" },
-    { id: "whitelist", labelKey: "tab.whitelist" },
-    { id: "hotkeys", labelKey: "tab.hotkeys" },
-    { id: "notify", labelKey: "tab.notify" },
-    { id: "power", labelKey: "tab.power" },
-    { id: "options", labelKey: "tab.options" },
-    { id: "about", labelKey: "tab.about" },
+  const NAV = [
+    { id: "binding", labelKey: "tab.binding", icon: IconAppWindow },
+    { id: "whitelist", labelKey: "tab.whitelist", icon: IconShieldCheck },
+    { id: "hotkeys", labelKey: "tab.hotkeys", icon: IconKeyboard },
+    { id: "notify", labelKey: "tab.notify", icon: IconBell },
+    { id: "power", labelKey: "tab.power", icon: IconZap },
+    { id: "options", labelKey: "tab.options", icon: IconSettings },
+    { id: "about", labelKey: "tab.about", icon: IconInfo, footer: true },
   ];
+
+  // 双栏页要撑满可用高度，其余页按内容自然增高后滚动。
+  const FILL_TABS = ["binding", "whitelist"];
+
+  const pageTitle = $derived(
+    t(NAV.find((n) => n.id === app.tab)?.labelKey ?? "tab.binding"),
+  );
+  const PageIcon = $derived(
+    NAV.find((n) => n.id === app.tab)?.icon ?? IconAppWindow,
+  );
+  const fill = $derived(FILL_TABS.includes(app.tab));
+
+  // 导航折叠：窄窗口自动收起，点汉堡后以用户意愿为准。
+  let innerWidth = $state(globalThis.innerWidth ?? 1024);
+  let navOverride = $state(null);
+  const navCollapsed = $derived(navOverride ?? innerWidth < 820);
 
   // 语言偏好改动后立即换文案；核心侧由 save_config 触发的重载配置跟进。
   $effect(() => {
@@ -71,14 +94,11 @@
     const onSystemTheme = () => applyTheme(loadPreference());
     media.addEventListener("change", onSystemTheme);
 
-    // 配置到手后才淡掉启动屏；失败时同样要淡掉。
-    loadAll()
-      .then(() => {
-        autoSaveReady = true;
-        checkForUpdate();
-        loadAnnouncements({ popNew: true });
-      })
-      .finally(hideSplash);
+    loadAll().then(() => {
+      autoSaveReady = true;
+      checkForUpdate();
+      loadAnnouncements({ popNew: true });
+    });
     const stopPolling = startStatusPolling(2000);
 
     // 托盘直达：冷启动时从启动参数读，已在运行时由单实例插件发来事件。
@@ -119,42 +139,48 @@
   });
 </script>
 
+<svelte:window bind:innerWidth />
+
 <div class="window" class:maximized={app.maximized}>
   <TitleBar />
 
-  <div class="tabs" role="tablist" aria-label={t("app.tabsAria")}>
-    {#each TABS as tab (tab.id)}
-      <button
-        class="tab"
-        class:active={app.tab === tab.id}
-        role="tab"
-        aria-selected={app.tab === tab.id}
-        onclick={() => (app.tab = tab.id)}
-      >
-        {t(tab.labelKey)}
-      </button>
-    {/each}
-  </div>
+  <div class="shell">
+    <NavView
+      items={NAV}
+      bind:active={app.tab}
+      collapsed={navCollapsed}
+      ariaLabel={t("app.tabsAria")}
+      ontoggle={() => (navOverride = !navCollapsed)}
+    />
 
-  <main class="content">
-    {#if !app.config}
-      <p class="hint loading">{t("app.loadingConfig")}</p>
-    {:else if app.tab === "binding"}
-      <BindingPanel />
-    {:else if app.tab === "whitelist"}
-      <WhitelistPanel />
-    {:else if app.tab === "hotkeys"}
-      <HotkeysPanel />
-    {:else if app.tab === "power"}
-      <PowerPanel />
-    {:else if app.tab === "options"}
-      <OptionsPanel />
-    {:else if app.tab === "notify"}
-      <NotificationsPanel />
-    {:else}
-      <AboutPanel />
-    {/if}
-  </main>
+    <main class="content">
+      <h1 class="type-subtitle page-title" class:wide={fill}>
+        <PageIcon width="22" height="22" />
+        {pageTitle}
+      </h1>
+      <div class="page-body" class:fill>
+        <div class="page-inner">
+          {#if !app.config}
+            <p class="hint loading">{t("app.loadingConfig")}</p>
+          {:else if app.tab === "binding"}
+            <BindingPanel />
+          {:else if app.tab === "whitelist"}
+            <WhitelistPanel />
+          {:else if app.tab === "hotkeys"}
+            <HotkeysPanel />
+          {:else if app.tab === "power"}
+            <PowerPanel />
+          {:else if app.tab === "options"}
+            <OptionsPanel />
+          {:else if app.tab === "notify"}
+            <NotificationsPanel />
+          {:else}
+            <AboutPanel />
+          {/if}
+        </div>
+      </div>
+    </main>
+  </div>
 
   <StatusBar />
 
@@ -174,9 +200,8 @@
     height: 100vh;
     display: flex;
     flex-direction: column;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-window);
     overflow: hidden;
   }
   .window.maximized {
@@ -184,67 +209,61 @@
     border-radius: 0;
   }
 
-  .tabs {
+  .shell {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    gap: 2px;
-    padding: 8px 14px 0;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    flex: none;
-    overflow-x: auto;
-  }
-  .tab {
-    padding: 8px 16px 9px;
-    border-radius: 8px 8px 0 0;
-    color: var(--muted);
-    font-weight: 500;
-    white-space: nowrap;
-    position: relative;
-  }
-  .tab:hover {
-    background: var(--hover);
-    color: var(--text);
-  }
-  .tab.active {
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .tab.active::after {
-    content: "";
-    position: absolute;
-    left: 12px;
-    right: 12px;
-    bottom: 0;
-    height: 2.5px;
-    border-radius: 2px 2px 0 0;
-    background: var(--accent);
   }
 
   .content {
     flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 14px 16px;
-  }
-  .content :global(.panel-stack) {
+    min-width: 0;
     display: flex;
     flex-direction: column;
+  }
+  /* 标题固定，只有下方内容滚动 —— 也让双栏页拿得到确定的可用高度。
+     左右留白要算上 page-body 的滚动条槽，标题才和卡片左缘对得齐。 */
+  .page-title {
+    --gutter: calc(var(--content-pad) + var(--scrollbar-w));
+    flex: none;
+    display: flex;
+    align-items: center;
     gap: 12px;
-    max-width: 860px;
+    width: min(100%, calc(var(--content-max) + var(--gutter) * 2));
     margin: 0 auto;
+    padding: 2px var(--gutter) 14px;
   }
-  .content :global(.opt-grid) {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 2px 18px;
+  .page-title.wide {
+    width: min(100%, calc(var(--content-max-wide) + var(--gutter) * 2));
   }
-  .content :global(.opt-grid.corners) {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  /* 滚动条贴内容区右缘，不跟着居中的内容走。
+     both-edges 让两侧都预留滚动条的位置，居中的内容才真的对称，
+     标题也才和卡片左缘对得上（否则一律偏左半个滚动条宽）。 */
+  .page-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable both-edges;
+    padding: 0 var(--content-pad) var(--content-pad);
+  }
+  .page-body.fill {
+    overflow: hidden;
+  }
+  .page-inner {
+    width: 100%;
+    max-width: var(--content-max);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+  .page-body.fill .page-inner {
+    height: 100%;
+    max-width: var(--content-max-wide);
   }
 
   .loading {
     text-align: center;
     padding: 48px 0;
   }
-
 </style>

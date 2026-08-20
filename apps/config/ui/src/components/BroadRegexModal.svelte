@@ -1,6 +1,6 @@
 <script>
   // 保存时发现「可能过宽」的正则；两个按钮都已写盘，区别只在此后还提不提醒。
-  import Modal from "./Modal.svelte";
+  import ContentDialog from "./fluent/ContentDialog.svelte";
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import { BREADTH_SAMPLES } from "../lib/regexcheck.js";
   import { t } from "../lib/i18n.svelte.js";
@@ -21,7 +21,7 @@
   };
 </script>
 
-<Modal title={t("broadRegex.title")} bind:open={() => !!app.broadRegex, onOpenChange}>
+<ContentDialog title={t("broadRegex.title")} bind:open={() => !!app.broadRegex, onOpenChange}>
   <p class="lead">
     <IconTriangleAlert width="15" height="15" />
     {t("broadRegex.lead", { total: BREADTH_SAMPLES })}
@@ -43,7 +43,7 @@
     <button class="btn" onclick={dismissBroadRegex}>{t("broadRegex.dismiss")}</button>
     <button class="btn primary" onclick={acknowledgeBroadRegex}>{t("broadRegex.keep")}</button>
   {/snippet}
-</Modal>
+</ContentDialog>
 
 <style>
   .lead {
@@ -65,14 +65,14 @@
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
-    border: 1px solid var(--border);
+    border: 1px solid var(--stroke);
     border-radius: 7px;
-    background: var(--surface-2);
+    background: var(--card-2);
   }
   .source {
     flex: none;
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--text-2);
   }
   .items code {
     flex: 1;
@@ -87,13 +87,13 @@
   .hits {
     flex: none;
     font-size: 11.5px;
-    color: var(--muted);
+    color: var(--text-2);
   }
   .hint {
     margin-top: 10px;
     font-size: 12px;
     line-height: 1.6;
-    color: var(--muted);
+    color: var(--text-2);
   }
   .btn.primary {
     color: var(--on-accent);
@@ -101,7 +101,7 @@
     border-color: var(--accent);
   }
   .btn.primary:hover {
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
+    background: var(--accent-hover);
+    border-color: var(--accent-hover);
   }
 </style>

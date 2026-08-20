@@ -65,7 +65,9 @@
 </div>
 
 <style>
+  /* 容器查询而非媒体查询：左侧导航会吃掉窗口宽度，按整窗算断点会切错 */
   .whitelist {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -75,8 +77,8 @@
   .intro {
     flex: none;
     font-size: 12px;
-    line-height: 1.6;
-    color: var(--muted);
+    line-height: 18px;
+    color: var(--text-2);
   }
   .grid {
     flex: 1;
@@ -102,7 +104,7 @@
     min-width: 0;
   }
 
-  @media (max-width: 720px) {
+  @container (max-width: 520px) {
     .grid {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr 1fr;

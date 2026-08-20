@@ -1,43 +1,150 @@
-/* ---- 设计令牌：亮/暗双主题，由 <html data-theme> 切换 ----
-   accent 用品牌翡翠（见 design/BRAND.md）。它有 21 处是当文字色用的，
+/* ---- Fluent Design 设计令牌：亮/暗双主题，由 <html data-theme> 切换 ----
+   层次体系自下而上：Mica 窗口底 → layer 内容区 → card 卡片 → control 控件。
+   上层一律半透明，让 Mica 的底色透上来；Mica 不可用时由 --solid-bg 兜底。
+
+   accent 用品牌翡翠（见 design/BRAND.md）。它有大量位置是当文字色用的，
    所以亮主题取 #047857（白底 5.48 ✓ AA）而非 #059669（3.77）。
    ok 因此从绿挪到青，否则「已连接」的状态点会和主色糊在一起。 */
 :root {
-  --bg: #f3f4f8;
-  --surface: #ffffff;
-  --surface-2: #f8f9fc;
-  --text: #1a1d27;
-  --muted: #6b7280;
-  --border: #e2e5ec;
+  /* 层次 */
+  --solid-bg: #f3f3f3;
+  --layer: rgba(255, 255, 255, 0.5);
+  --card: rgba(255, 255, 255, 0.7);
+  --card-2: rgba(249, 249, 249, 0.5);
+  --control: rgba(255, 255, 255, 0.7);
+  --control-hover: rgba(249, 249, 249, 0.5);
+  --control-pressed: rgba(249, 249, 249, 0.3);
+  --control-focus: #ffffff;
+  --control-alt: rgba(0, 0, 0, 0.0242);
+
+  /* 描边：strong 专供 elevation border 的底边，比顶边深，做出受光感 */
+  --stroke: rgba(0, 0, 0, 0.0578);
+  --stroke-strong: rgba(0, 0, 0, 0.1622);
+  --stroke-control-strong: rgba(0, 0, 0, 0.4458);
+  --divider: rgba(0, 0, 0, 0.0803);
+
+  /* 文字 */
+  --text: rgba(0, 0, 0, 0.8956);
+  --text-2: rgba(0, 0, 0, 0.6063);
+  --text-3: rgba(0, 0, 0, 0.4458);
+  --text-disabled: rgba(0, 0, 0, 0.3614);
+
+  /* 无底色控件（导航项、图标按钮）的 hover / pressed */
+  --subtle-hover: rgba(0, 0, 0, 0.0373);
+  --subtle-pressed: rgba(0, 0, 0, 0.0241);
+
+  /* 强调色 */
   --accent: #047857;
-  --accent-strong: #065f46;
+  --accent-hover: #065f46;
+  --accent-pressed: rgba(4, 120, 87, 0.9);
+  --accent-disabled: rgba(0, 0, 0, 0.2169);
   --on-accent: #ffffff;
-  --hover: rgba(17, 24, 39, 0.05);
-  --danger: #e5484d;
+  --on-accent-disabled: rgba(255, 255, 255, 0.7);
+
+  /* 语义色 */
+  --danger: #c42b1c;
   --ok: #0e7490;
-  --warn: #d97706;
-  --shadow: 0 8px 28px rgba(15, 23, 42, 0.12);
-  --radius: 10px;
-  --titlebar-h: 40px;
+  --warn: #9d5d00;
+
+  /* 焦点环：外深内浅的双环，Win11 在任何底色上都能看清 */
+  --focus-outer: rgba(0, 0, 0, 0.8956);
+  --focus-inner: #ffffff;
+
+  /* 鼠标 / 屏幕示意图的画布与线条。必须是不透明色 ——
+     层次色全是半透明的，插画用了会糊进卡片底，看不出是个「设备」 */
+  --illustration: #ffffff;
+  --illustration-line: #a6a6a6;
+  --illustration-edge: #e0e0e0;
+
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.14);
+  --shadow-dialog:
+    0 32px 64px rgba(0, 0, 0, 0.19), 0 2px 21px rgba(0, 0, 0, 0.15);
+
   color-scheme: light;
 }
 
 :root[data-theme="dark"] {
-  --bg: #16181f;
-  --surface: #1f222b;
-  --surface-2: #262a35;
-  --text: #e8eaf2;
-  --muted: #9aa1b2;
-  --border: #313644;
+  --solid-bg: #202020;
+  --layer: rgba(58, 58, 58, 0.3);
+  --card: rgba(255, 255, 255, 0.0512);
+  --card-2: rgba(255, 255, 255, 0.0326);
+  --control: rgba(255, 255, 255, 0.0605);
+  --control-hover: rgba(255, 255, 255, 0.0837);
+  --control-pressed: rgba(255, 255, 255, 0.0326);
+  --control-focus: rgba(30, 30, 30, 0.7);
+  --control-alt: rgba(255, 255, 255, 0.0326);
+
+  --stroke: rgba(255, 255, 255, 0.0698);
+  --stroke-strong: rgba(255, 255, 255, 0.093);
+  --stroke-control-strong: rgba(255, 255, 255, 0.5442);
+  --divider: rgba(255, 255, 255, 0.0837);
+
+  --text: #ffffff;
+  --text-2: rgba(255, 255, 255, 0.786);
+  --text-3: rgba(255, 255, 255, 0.5442);
+  --text-disabled: rgba(255, 255, 255, 0.3628);
+
+  --subtle-hover: rgba(255, 255, 255, 0.0605);
+  --subtle-pressed: rgba(255, 255, 255, 0.0419);
+
   --accent: #34d399;
-  --accent-strong: #6ee7b7;
+  --accent-hover: #6ee7b7;
+  --accent-pressed: rgba(52, 211, 153, 0.8);
+  --accent-disabled: rgba(255, 255, 255, 0.1581);
   --on-accent: #10131c;
-  --hover: rgba(255, 255, 255, 0.065);
-  --danger: #ff6369;
+  --on-accent-disabled: rgba(0, 0, 0, 0.53);
+
+  --danger: #ff99a4;
   --ok: #22d3ee;
-  --warn: #f5a623;
-  --shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  --warn: #fce100;
+
+  --focus-outer: #ffffff;
+  --focus-inner: rgba(0, 0, 0, 0.7);
+
+  --illustration: #2b2b2b;
+  --illustration-line: #7a7a7a;
+  --illustration-edge: #3f3f3f;
+
+  --shadow-flyout: 0 8px 16px rgba(0, 0, 0, 0.26);
+  --shadow-dialog:
+    0 32px 64px rgba(0, 0, 0, 0.37), 0 2px 21px rgba(0, 0, 0, 0.37);
+
   color-scheme: dark;
+}
+
+/* ---- 尺寸与节奏 ---- */
+:root {
+  --r-control: 4px;
+  --r-card: 4px;
+  --r-overlay: 8px;
+  --r-window: 8px;
+
+  --titlebar-h: 48px;
+  --statusbar-h: 32px;
+  --nav-w: 240px;
+  --nav-w-collapsed: 48px;
+
+  /* 内容区最大宽度：窄了整行拉通，宽了固定住并居中，不让一行拖成一整屏。
+     双栏页（窗口绑定 / 白名单）信息密度更高，放宽一档。 */
+  --content-max: 1000px;
+  --content-max-wide: 1400px;
+  --content-pad: 24px;
+  --scrollbar-w: 14px;
+
+  /* WinUI 的标准缓动：进场用 standard，退场与位移用 out */
+  --ease-standard: cubic-bezier(0, 0, 0, 1);
+  --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --dur-fast: 83ms;
+  --dur-normal: 167ms;
+  --dur-slow: 333ms;
+
+  --font-ui:
+    "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui,
+    sans-serif;
+  --font-display:
+    "Segoe UI Variable Display", "Segoe UI Variable Text", "Segoe UI",
+    "Microsoft YaHei UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "Cascadia Code", Consolas, monospace;
 }
 
 /* ---- 基础 ---- */
@@ -53,15 +160,22 @@ body {
 }
 
 body {
-  font-family:
-    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", system-ui,
-    sans-serif;
+  font-family: var(--font-ui);
   font-size: 14px;
+  line-height: 20px;
   color: var(--text);
-  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;
+}
+
+/* Mica 生效时窗口背景交给 DWM；不可用时（Win10、浏览器预览）用纯色兜底。
+   两个 class 由 main.js 按后端探测结果写到 <html>。 */
+html.backdrop-mica body {
+  background: transparent;
+}
+html.backdrop-solid body {
+  background: var(--solid-bg);
 }
 
 #app {
@@ -81,96 +195,303 @@ button {
   color: inherit;
   background: none;
   border: none;
-  cursor: pointer;
+  cursor: default;
 }
 
+/* ---- 字体阶梯（WinUI type ramp）---- */
+.type-caption {
+  font-size: 12px;
+  line-height: 16px;
+}
+.type-body-strong {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+.type-subtitle {
+  font-family: var(--font-display);
+  font-size: 20px;
+  line-height: 28px;
+  font-weight: 600;
+}
+.type-title {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 36px;
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.muted {
+  color: var(--text-2);
+}
+
+/* 承载非设置行内容（示意图、列表、长文）的卡片壳 */
+.surface {
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-card);
+}
+.surface.pad {
+  padding: 16px;
+}
+
+/* ---- 焦点环 ---- */
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--focus-outer);
   outline-offset: 1px;
-  border-radius: 4px;
+  box-shadow: 0 0 0 1px var(--focus-inner);
 }
 
-input[type="text"],
-input[type="number"] {
-  font: inherit;
-  color: var(--text);
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  transition: border-color 0.15s;
-}
-input[type="text"]:focus,
-input[type="number"]:focus {
-  border-color: var(--accent);
-  outline: none;
+/* ---- 按钮 ----
+   Fluent 的招牌细节：描边底边比其余三边深，做出「被光从上方照到」的立体感。
+   同一套边框语言贯穿按钮、输入框、下拉框，所以抽成 .elev 供组件复用。 */
+.elev,
+.btn {
+  border: 1px solid var(--stroke);
+  border-bottom-color: var(--stroke-strong);
 }
 
-/* ---- 通用控件 ---- */
 .btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 7px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  gap: 8px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: var(--r-control);
+  background: var(--control);
   color: var(--text);
   transition:
-    background 0.15s,
-    border-color 0.15s,
-    opacity 0.15s;
+    background var(--dur-fast) var(--ease-standard),
+    border-color var(--dur-fast) var(--ease-standard);
   white-space: nowrap;
 }
 .btn:hover {
-  background: var(--hover);
+  background: var(--control-hover);
+}
+.btn:active {
+  background: var(--control-pressed);
+  color: var(--text-2);
+  border-bottom-color: var(--stroke);
 }
 .btn:disabled {
-  opacity: 0.5;
+  background: var(--control-pressed);
+  color: var(--text-disabled);
+  border-bottom-color: var(--stroke);
   cursor: not-allowed;
 }
+
 .btn.primary {
   background: var(--accent);
-  border-color: var(--accent);
   color: var(--on-accent);
-  font-weight: 600;
+  border-color: transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.14);
 }
 .btn.primary:hover {
-  background: var(--accent-strong);
+  background: var(--accent-hover);
 }
+.btn.primary:active {
+  background: var(--accent-pressed);
+  color: var(--on-accent-disabled);
+  border-bottom-color: transparent;
+}
+.btn.primary:disabled {
+  background: var(--accent-disabled);
+  color: var(--text-disabled);
+  border-bottom-color: transparent;
+}
+
+/* 纯图标按钮：正方，无内边距撑宽 */
+.btn.icon {
+  width: 32px;
+  min-width: 32px;
+  padding: 0;
+}
+
+/* 无底色按钮：图标按钮、工具条按钮 */
 .btn.ghost {
-  border-color: transparent;
   background: transparent;
+  border-color: transparent;
 }
 .btn.ghost:hover {
-  background: var(--hover);
+  background: var(--subtle-hover);
+}
+.btn.ghost:active {
+  background: var(--subtle-pressed);
+  color: var(--text-2);
+}
+.btn.ghost:disabled {
+  background: transparent;
 }
 
-.hint {
-  color: var(--muted);
-  font-size: 12.5px;
-  line-height: 1.6;
+/* ---- 滚动条 ----
+   实际轨道 14px，靠透明边框 + background-clip 收成 4px 细条；
+   hover 时边框收窄即变粗，效果接近 WinUI 滚动条的展开。 */
+::-webkit-scrollbar {
+  width: var(--scrollbar-w);
+  height: var(--scrollbar-w);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--text-3);
+  background-clip: padding-box;
+  border: 5px solid transparent;
+  border-radius: 8px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-2);
+  border-width: 4px;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
-.muted {
-  color: var(--muted);
-}
-
-/* Fluent 风格配置卡：标题 + 若干 SettingRow */
-.fcard {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+/* ---- 列表框 ----
+   窗口列表与三个规则列表共用同一套外壳与工具条，抽在这里免得四份副本各走各的。 */
+.list-box {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--r-card);
   overflow: hidden;
 }
-.fcard > h3 {
-  padding: 11px 14px;
-  font-size: 13px;
+
+.list-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border-bottom: 1px solid var(--divider);
+  flex: none;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.list-title .title-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
-  color: var(--muted);
-  background: var(--surface-2);
-  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+.list-title .count {
+  font-size: 12px;
+  color: var(--text-2);
+  background: var(--control-alt);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+.list-title .tools {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* 工具条按钮：比 .btn 矮一档，密集排布不至于撑破标题条 */
+.mini {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 9px;
+  border-radius: var(--r-control);
+  font-size: 12px;
+  color: var(--text);
+  background: var(--control);
+  border: 1px solid var(--stroke);
+  border-bottom-color: var(--stroke-strong);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.mini:hover:not(:disabled) {
+  background: var(--control-hover);
+}
+.mini:active:not(:disabled) {
+  background: var(--control-pressed);
+  color: var(--text-2);
+}
+.mini:disabled {
+  background: var(--control-pressed);
+  color: var(--text-disabled);
+  border-bottom-color: var(--stroke);
+  cursor: not-allowed;
+}
+.mini.primary {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+  border-bottom-color: rgba(0, 0, 0, 0.14);
+}
+.mini.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.mini.icon {
+  width: 28px;
+  padding: 3px;
+}
+.mini.active {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+
+/* 列表行：hover 浮出，选中态带 Win11 的 accent 竖条 */
+.lv-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 4px 10px;
+  border-radius: var(--r-control);
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.lv-row:hover {
+  background: var(--subtle-hover);
+}
+.lv-row:active {
+  background: var(--subtle-pressed);
+}
+.lv-row.sel {
+  background: var(--subtle-hover);
+}
+.lv-row.sel::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  border-radius: 2px;
+  background: var(--accent);
+  translate: 0 -50%;
+}
+.lv-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  flex: none;
+}
+
+.lv-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px;
+}
+.lv-empty {
+  text-align: center;
+  padding: 24px 8px;
 }
 
 @media (prefers-reduced-motion: reduce) {

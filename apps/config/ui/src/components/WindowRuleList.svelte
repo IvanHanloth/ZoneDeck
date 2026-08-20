@@ -5,6 +5,7 @@
   import IconRegex from "~icons/lucide/regex";
   import IconAppWindow from "~icons/lucide/app-window";
   import ScopeSelect from "./ScopeSelect.svelte";
+  import CheckBox from "./fluent/CheckBox.svelte";
   import { NO_TITLE, isRegexRule, traceWindowRule } from "../lib/grouping.js";
   import { t } from "../lib/i18n.svelte.js";
   import { app } from "../lib/state.svelte.js";
@@ -62,17 +63,17 @@
   </div>
 
   <div
-    class="rule-list"
+    class="lv-body"
     role="listbox"
     aria-multiselectable="true"
     aria-label={t("windowRules.aria")}
   >
     {#if rules.length === 0}
-      <p class="hint empty">{t("common.empty")}</p>
+      <p class="hint lv-empty">{t("common.empty")}</p>
     {:else}
       {#each rules as rule, i (i)}
         <div
-          class="rule-row"
+          class="lv-row rule-row"
           class:sel={selected.includes(i)}
           role="option"
           aria-selected={selected.includes(i)}
@@ -80,12 +81,11 @@
           onclick={(e) => onRowClick(e, i)}
           onkeydown={(e) => onRowKey(e, i)}
         >
-          <input
-            type="checkbox"
-            tabindex="-1"
+          <CheckBox
+            small
             checked={selected.includes(i)}
             onchange={() => toggle(i)}
-            aria-label={t("windowRules.selectRule")}
+            ariaLabel={t("windowRules.selectRule")}
           />
           {#if isRegexRule(rule)}
             <span class="regex-tag"><IconRegex width="12" height="12" /> {t("windowRules.titleRegexTag")}</span>
@@ -123,112 +123,12 @@
 </div>
 
 <style>
-  .list-box {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    min-width: 0;
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .list-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
-    flex: none;
-  }
-  .title-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text);
-  }
-  .count {
-    font-weight: 500;
-    font-size: 12px;
-    background: var(--hover);
-    border-radius: 99px;
-    padding: 1px 8px;
-  }
-  .tools {
-    margin-left: auto;
-    display: flex;
-    gap: 6px;
-  }
-  .mini {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: var(--text);
-    border: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .mini:hover:not(:disabled) {
-    background: var(--hover);
-    border-color: var(--accent);
-  }
-  .mini.primary {
-    color: var(--on-accent);
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .mini.primary:hover:not(:disabled) {
-    color: var(--on-accent);
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-  }
-  .mini:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .rule-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 6px;
-  }
-  .empty {
-    text-align: center;
-    padding: 20px 8px;
-  }
-
   .rule-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  .rule-row:hover {
-    background: var(--hover);
-  }
-  .rule-row.sel {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-  }
-  .rule-row.sel:hover {
-    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    cursor: default;
   }
   .rule-row:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus-outer);
     outline-offset: -2px;
-  }
-  .rule-row input[type="checkbox"] {
-    accent-color: var(--accent);
-    flex: none;
-    cursor: pointer;
   }
   .ic {
     width: 16px;
@@ -248,7 +148,7 @@
     white-space: nowrap;
   }
   .rproc {
-    color: var(--muted);
+    color: var(--text-2);
     font-size: 12px;
     flex: none;
     max-width: 40%;
@@ -267,27 +167,31 @@
   .regex-input {
     flex: 1;
     min-width: 0;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-2);
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    border-radius: var(--r-control);
+    background: var(--control);
     color: var(--text);
-    padding: 3px 8px;
-    font-family: ui-monospace, monospace;
+    padding: 4px 8px;
+    font-family: var(--font-mono);
     font-size: 12px;
+    user-select: text;
+    cursor: text;
   }
   .regex-input:focus {
     outline: none;
-    border-color: var(--accent);
+    background: var(--control-focus);
+    border-bottom-color: var(--accent);
   }
   /* 保存时判定为「可能过宽」，见 BroadRegexModal */
   .regex-input.broad {
     border-color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
+    background: color-mix(in srgb, var(--danger) 8%, var(--control));
   }
   .badge {
     flex: none;
     font-size: 11px;
-    padding: 1px 7px;
+    padding: 1px 8px;
     border-radius: 99px;
   }
   .badge.warn {

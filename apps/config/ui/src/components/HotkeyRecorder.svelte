@@ -2,12 +2,17 @@
   import { t } from "../lib/i18n.svelte.js";
   // 录制热键期间暂停核心的全局热键监控，结束后恢复。
   import { onDestroy } from "svelte";
+  import IconPencil from "~icons/lucide/pencil";
+  import IconBan from "~icons/lucide/ban";
   import { comboFromEvent } from "../lib/hotkey.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
-  import Toggle from "./Toggle.svelte";
+  import ContentDialog from "./fluent/ContentDialog.svelte";
+  import SettingsCard from "./fluent/SettingsCard.svelte";
+  import SettingsExpander from "./fluent/SettingsExpander.svelte";
+  import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
 
   let {
-    icon: Icon = null,
+    icon = null,
     label,
     value = $bindable(""),
     intercept = $bindable(false),
@@ -18,126 +23,144 @@
   // 独立理由，避免多个录制器互相撤销停用。
   const REASON = { recorder: "hotkey" };
 
-  let recording = $state(false);
-  let timer = null;
+  let open = $state(false);
+  // 对话框里的待定值，保存前不碰 value。
+  let draft = $state("");
+
+  const keys = $derived(value ? value.split("+") : []);
+  const draftKeys = $derived(draft ? draft.split("+") : []);
 
   function onKeydown(e) {
     e.preventDefault();
     e.stopPropagation();
     const combo = comboFromEvent(e);
     if (!combo) return; // 修饰键或不支持的键，继续等待
-    value = combo;
-    stop();
+    draft = combo;
   }
 
-  function start() {
-    if (recording) return stop();
-    recording = true;
+  function edit() {
+    draft = value;
+    open = true;
     suspendMonitoring(REASON);
     window.addEventListener("keydown", onKeydown, true);
-    timer = setTimeout(stop, 10_000);
   }
 
-  function stop() {
-    if (!recording) return;
-    recording = false;
-    clearTimeout(timer);
+  function teardown() {
     window.removeEventListener("keydown", onKeydown, true);
     resumeMonitoring(REASON);
   }
 
-  function clear() {
-    stop();
-    value = "";
+  function save() {
+    value = draft;
+    open = false;
   }
 
-  onDestroy(stop);
+  // 对话框走 Esc / 遮罩 / 取消关闭时同样要收摊子。
+  $effect(() => {
+    if (!open) teardown();
+  });
+
+  onDestroy(teardown);
 </script>
 
-<div class="row">
-  <span class="head">
-    {#if Icon}
-      <span class="icon" aria-hidden="true"><Icon width="17" height="17" /></span>
+<SettingsExpander {icon} {label}>
+  {#snippet control()}
+    {#if keys.length}
+      <span class="keys">
+        {#each keys as k, i (i)}<kbd class="key">{k}</kbd>{/each}
+      </span>
+    {:else}
+      <span class="none">{t("recorder.disabled")}</span>
     {/if}
-    <span class="label">{label}</span>
-  </span>
-  <kbd class="combo" class:recording class:off={!recording && !value}>
-    {recording ? t("recorder.pressCombo") : value || t("recorder.disabled")}
-  </kbd>
-  <button class="btn" type="button" onclick={clear} disabled={!value || recording}>
-    {t("common.clear")}
-  </button>
-  <button class="btn" type="button" onclick={start}>
-    {recording ? t("common.cancel") : t("common.record")}
-  </button>
-  {#if interceptLabel}
-    <Toggle bind:checked={intercept} label={interceptLabel} title={interceptTitle} />
-  {/if}
-</div>
+    <button
+      class="btn icon"
+      type="button"
+      onclick={edit}
+      title={t("recorder.edit")}
+      aria-label={t("recorder.edit")}
+    >
+      <IconPencil width="14" height="14" />
+    </button>
+  {/snippet}
+
+  <SettingsCard
+    variant="sub"
+    icon={IconBan}
+    label={interceptLabel}
+    description={interceptTitle}
+    disabled={!value}
+  >
+    {#snippet control()}
+      <ToggleSwitch bind:checked={intercept} disabled={!value} />
+    {/snippet}
+  </SettingsCard>
+</SettingsExpander>
+
+<ContentDialog bind:open title={label}>
+  <p class="hint">{t("recorder.dialogHint")}</p>
+  <div class="stage">
+    {#if draftKeys.length}
+      {#each draftKeys as k, i (i)}<kbd class="key big">{k}</kbd>{/each}
+    {:else}
+      <span class="waiting">{t("recorder.waiting")}</span>
+    {/if}
+  </div>
+
+  {#snippet footer()}
+    <button class="btn primary" type="button" onclick={save}>{t("common.save")}</button>
+    <button class="btn" type="button" onclick={() => (draft = "")} disabled={!draft}>
+      {t("common.clear")}
+    </button>
+    <button class="btn" type="button" onclick={() => (open = false)}>{t("common.cancel")}</button>
+  {/snippet}
+</ContentDialog>
 
 <style>
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  /* 图标 + 名称固定宽，右边的录制框才好对齐。 */
-  .head {
-    width: 10.5em;
-    flex: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .icon {
-    flex: none;
+  .keys {
     display: inline-flex;
-    color: var(--muted);
+    align-items: center;
+    gap: 4px;
   }
-  .label {
-    min-width: 0;
-  }
-  .combo {
-    flex: 1;
-    min-width: 0;
+  /* 键帽：accent 实心块，一键一块，和 PowerToys 的快捷键展示一致 */
+  .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: var(--r-control);
+    background: var(--accent);
+    color: var(--on-accent);
     font-family: inherit;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 12px;
-    letter-spacing: 0.03em;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 13px;
+    font-weight: 600;
     white-space: nowrap;
   }
-  .btn {
-    flex: none;
-    min-width: 4.5em;
-    background: var(--surface-2);
+  .key.big {
+    min-width: 56px;
+    height: 56px;
+    padding: 0 18px;
+    font-size: 17px;
+    border-radius: var(--r-card);
   }
-  .btn:hover:not(:disabled) {
-    background: var(--hover);
-  }
-  .combo.recording {
-    border-color: var(--accent);
-    color: var(--accent);
-    animation: pulse 1.2s ease-in-out infinite;
-  }
-  .combo.off {
-    color: var(--muted);
-  }
-  @keyframes pulse {
-    50% {
-      opacity: 0.55;
-    }
+  .none {
+    color: var(--text-3);
+    font-size: 13px;
   }
 
-  @media (max-width: 560px) {
-    .row {
-      flex-wrap: wrap;
-    }
-    .head {
-      width: 100%;
-    }
+  .stage {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    min-height: 96px;
+    margin-top: 20px;
+    padding: 20px;
+    border-radius: var(--r-card);
+    background: var(--card-2);
+  }
+  .waiting {
+    color: var(--text-3);
   }
 </style>

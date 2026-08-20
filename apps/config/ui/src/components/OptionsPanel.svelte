@@ -1,6 +1,9 @@
 <script>
-  import SettingRow from "./SettingRow.svelte";
-  import Toggle from "./Toggle.svelte";
+  import SettingsGroup from "./fluent/SettingsGroup.svelte";
+  import SettingsCard from "./fluent/SettingsCard.svelte";
+  import SettingsExpander from "./fluent/SettingsExpander.svelte";
+  import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
+  import ComboBox from "./fluent/ComboBox.svelte";
   import IconVolumeOff from "~icons/lucide/volume-off";
   import IconAppWindow from "~icons/lucide/app-window";
   import IconMousePointerClick from "~icons/lucide/mouse-pointer-click";
@@ -41,6 +44,18 @@
   ];
   const logDisabled = $derived(s.log_retention_days === 0);
 
+  const logLevelOptions = $derived(
+    LOG_LEVELS.map((l) => ({ value: l.value, label: t(l.label) })),
+  );
+  const logRetentionOptions = $derived([
+    { value: 0, label: t("options.logOff") },
+    ...[3, 7, 14, 30].map((n) => ({ value: n, label: t("options.logDays", { n }) })),
+  ]);
+  const langOptions = $derived([
+    { value: LANG_AUTO, label: t("options.languageAuto") },
+    ...LANGS.map((tag) => ({ value: tag, label: LANG_NAMES[tag] })),
+  ]);
+
   // 自启注册方式的标注；仅在已开启自启时显示。
   const autostartMethodText = $derived(
     !app.autostart
@@ -61,175 +76,136 @@
   const autostartOff = $derived(!app.autostart);
 </script>
 
-<div class="panel-stack">
-  <section class="fcard">
-    <h3>{t("options.generalCard")}</h3>
-    <SettingRow icon={IconVolumeOff} label={t("options.muteAfterHide")} description={t("options.muteAfterHideDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.mute_after_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconAppWindow} label={t("options.hideCurrent")} description={t("options.hideCurrentDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.hide_current} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconMousePointerClick} label={t("options.clickToHide")} description={t("options.clickToHideDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.click_to_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconEyeOff} label={t("options.hideIcon")} description={t("options.hideIconDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.hide_icon_after_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconPause} label={t("options.sendPause")} description={t("options.sendPauseDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.send_before_hide} />{/snippet}
-    </SettingRow>
-    <SettingRow
-      icon={IconMinimize}
-      label={t("options.minimizeBeforeHide")}
-      description={t("options.minimizeBeforeHideDesc")}
-    >
-      {#snippet control()}<Toggle bind:checked={s.minimize_before_hide} />{/snippet}
-    </SettingRow>
-    <!-- <SettingRow label="显示悬浮窗" description="在桌面显示一个可拖动的悬浮小窗，双击可快速切换隐藏（核心侧功能开发中）。">
-      {#snippet control()}<Toggle bind:checked={s.show_float_window} />{/snippet}
-    </SettingRow> -->
-  </section>
+<SettingsGroup title={t("options.generalCard")}>
+  <SettingsCard icon={IconVolumeOff} label={t("options.muteAfterHide")} description={t("options.muteAfterHideDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={s.mute_after_hide} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconAppWindow} label={t("options.hideCurrent")} description={t("options.hideCurrentDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={s.hide_current} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconMousePointerClick} label={t("options.clickToHide")} description={t("options.clickToHideDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={s.click_to_hide} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconEyeOff} label={t("options.hideIcon")} description={t("options.hideIconDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={s.hide_icon_after_hide} />{/snippet}
+  </SettingsCard>
+  <SettingsCard icon={IconPause} label={t("options.sendPause")} description={t("options.sendPauseDesc")}>
+    {#snippet control()}<ToggleSwitch bind:checked={s.send_before_hide} />{/snippet}
+  </SettingsCard>
+  <SettingsCard
+    icon={IconMinimize}
+    label={t("options.minimizeBeforeHide")}
+    description={t("options.minimizeBeforeHideDesc")}
+  >
+    {#snippet control()}<ToggleSwitch bind:checked={s.minimize_before_hide} />{/snippet}
+  </SettingsCard>
+  <!-- <SettingsCard label="显示悬浮窗" description="在桌面显示一个可拖动的悬浮小窗，双击可快速切换隐藏（核心侧功能开发中）。">
+    {#snippet control()}<ToggleSwitch bind:checked={s.show_float_window} />{/snippet}
+  </SettingsCard> -->
+</SettingsGroup>
 
-  <section class="fcard">
-    <h3>{t("options.startupCard")}</h3>
-    <SettingRow icon={IconPower} label={t("options.autostart")} description={t("options.autostartDesc")}>
-      {#snippet control()}
-        <div class="autostart-ctl">
-          {#if autostartMethodText}
-            <span class="method">{t("options.autostartMethod", { method: autostartMethodText })}</span>
-          {/if}
-          <Toggle bind:checked={app.autostart} onchange={(e) => setAutostart(e.target.checked, s.autostart_admin)} />
-        </div>
-      {/snippet}
-    </SettingRow>
-    <SettingRow
+<SettingsGroup title={t("options.startupCard")}>
+  <SettingsExpander
+    icon={IconPower}
+    label={t("options.autostart")}
+    description={t("options.autostartDesc")}
+    autoExpand={app.autostart}
+  >
+    {#snippet control()}
+      {#if autostartMethodText}
+        <span class="method">{t("options.autostartMethod", { method: autostartMethodText })}</span>
+      {/if}
+      <ToggleSwitch
+        bind:checked={app.autostart}
+        onchange={(e) => setAutostart(e.target.checked, s.autostart_admin)}
+      />
+    {/snippet}
+
+    <SettingsCard
+      variant="sub"
       icon={IconShield}
       label={t("options.autostartAdmin")}
       disabled={autostartOff}
       description={t("options.autostartAdminDesc")}
     >
       {#snippet control()}
-        <Toggle
+        <ToggleSwitch
           bind:checked={s.autostart_admin}
           disabled={autostartOff}
           title={autostartOff ? t("options.needAutostartFirst") : ""}
           onchange={(e) => onAutostartAdminChange(e.target.checked)}
         />
       {/snippet}
-    </SettingRow>
-    <SettingRow
-      icon={IconKeyRound}
-      label={t("options.corePrivilege")}
-      description={t("options.corePrivilegeDesc")}
-    >
-      {#snippet control()}
-        <div class="perm-ctl">
-          <strong>
-            {app.status.running === null
-              ? t("status.detecting")
-              : !app.status.running
-                ? t("status.coreStopped")
-                : t(app.status.elevated ? "options.privilegeAdmin" : "options.privilegeUser")}
-          </strong>
-          <button
-            class="btn"
-            onclick={elevate}
-            disabled={elevating || (app.status.running === true && app.status.elevated)}
-          >
-            {t(app.status.running ? "options.restartAsAdmin" : "options.startAsAdmin")}
-          </button>
-        </div>
-      {/snippet}
-    </SettingRow>
-  </section>
+    </SettingsCard>
+  </SettingsExpander>
 
-  <section class="fcard">
-    <h3>{t("options.languageCard")}</h3>
-    <SettingRow icon={IconLanguages} label={t("options.language")} description={t("options.languageDesc")}>
-      {#snippet control()}
-        <select class="sel" bind:value={s.language}>
-          <option value={LANG_AUTO}>{t("options.languageAuto")}</option>
-          {#each LANGS as tag (tag)}
-            <option value={tag}>{LANG_NAMES[tag]}</option>
-          {/each}
-        </select>
-      {/snippet}
-    </SettingRow>
-  </section>
+  <SettingsCard icon={IconKeyRound} label={t("options.corePrivilege")} description={t("options.corePrivilegeDesc")}>
+    {#snippet control()}
+      <strong>
+        {app.status.running === null
+          ? t("status.detecting")
+          : !app.status.running
+            ? t("status.coreStopped")
+            : t(app.status.elevated ? "options.privilegeAdmin" : "options.privilegeUser")}
+      </strong>
+      <button
+        class="btn"
+        onclick={elevate}
+        disabled={elevating || (app.status.running === true && app.status.elevated)}
+      >
+        {t(app.status.running ? "options.restartAsAdmin" : "options.startAsAdmin")}
+      </button>
+    {/snippet}
+  </SettingsCard>
+</SettingsGroup>
 
-  <section class="fcard">
-    <h3>{t("options.logCard")}</h3>
-    <SettingRow
-      icon={IconCalendarClock}
-      label={t("options.logRetention")}
-      description={t("options.logRetentionDesc")}
-    >
-      {#snippet control()}
-        <select class="sel" bind:value={s.log_retention_days}>
-          <option value={0}>{t("options.logOff")}</option>
-          {#each [3, 7, 14, 30] as days (days)}
-            <option value={days}>{t("options.logDays", { n: days })}</option>
-          {/each}
-        </select>
-      {/snippet}
-    </SettingRow>
-    <SettingRow
-      icon={IconGauge}
-      label={t("options.logLevel")}
-      description={t("options.logLevelDesc")}
-      disabled={logDisabled}
-    >
-      {#snippet control()}
-        <select class="sel" bind:value={s.log_level} disabled={logDisabled}>
-          {#each LOG_LEVELS as level (level.value)}
-            <option value={level.value}>{t(level.label)}</option>
-          {/each}
-        </select>
-      {/snippet}
-    </SettingRow>
-  </section>
+<SettingsGroup title={t("options.languageCard")}>
+  <SettingsCard icon={IconLanguages} label={t("options.language")} description={t("options.languageDesc")}>
+    {#snippet control()}
+      <ComboBox bind:value={s.language} options={langOptions} ariaLabel={t("options.language")} />
+    {/snippet}
+  </SettingsCard>
+</SettingsGroup>
 
-  <section class="fcard">
-    <h3>{t("options.toolsCard")}</h3>
-    <SettingRow
-      icon={IconLifeBuoy}
-      label={t("options.restoreTool")}
-      description={t("options.restoreToolDesc")}
-    >
-      {#snippet control()}
-        <button class="btn" onclick={openRestoreTool}>{t("common.open")}</button>
-      {/snippet}
-    </SettingRow>
-  </section>
-</div>
+<SettingsGroup title={t("options.logCard")}>
+  <SettingsCard icon={IconCalendarClock} label={t("options.logRetention")} description={t("options.logRetentionDesc")}>
+    {#snippet control()}
+      <ComboBox
+        bind:value={s.log_retention_days}
+        options={logRetentionOptions}
+        ariaLabel={t("options.logRetention")}
+      />
+    {/snippet}
+  </SettingsCard>
+  <SettingsCard
+    icon={IconGauge}
+    label={t("options.logLevel")}
+    description={t("options.logLevelDesc")}
+    disabled={logDisabled}
+  >
+    {#snippet control()}
+      <ComboBox
+        bind:value={s.log_level}
+        options={logLevelOptions}
+        disabled={logDisabled}
+        ariaLabel={t("options.logLevel")}
+      />
+    {/snippet}
+  </SettingsCard>
+</SettingsGroup>
+
+<SettingsGroup title={t("options.toolsCard")}>
+  <SettingsCard icon={IconLifeBuoy} label={t("options.restoreTool")} description={t("options.restoreToolDesc")}>
+    {#snippet control()}
+      <button class="btn" onclick={openRestoreTool}>{t("common.open")}</button>
+    {/snippet}
+  </SettingsCard>
+</SettingsGroup>
 
 <style>
-  .perm-ctl {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  .autostart-ctl {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-  .autostart-ctl .method {
+  .method {
     font-size: 12px;
-    color: var(--muted);
+    color: var(--text-2);
     white-space: nowrap;
-  }
-  .sel {
-    padding: 5px 10px;
-    border-radius: 7px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--text);
-    font-size: 13px;
-  }
-  .sel:focus {
-    outline: none;
-    border-color: var(--accent);
   }
 </style>

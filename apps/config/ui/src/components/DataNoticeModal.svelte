@@ -1,7 +1,7 @@
 <script>
   // 便携版写不进程序目录时的提示：设置存到了哪里、如何改回去。
   import IconAlert from "~icons/lucide/triangle-alert";
-  import Modal from "./Modal.svelte";
+  import ContentDialog from "./fluent/ContentDialog.svelte";
   import { app } from "../lib/state.svelte.js";
   import { t } from "../lib/i18n.svelte.js";
 
@@ -9,7 +9,7 @@
 </script>
 
 {#if loc}
-  <Modal title={t("dataNotice.title")} bind:open={app.dataNoticeOpen}>
+  <ContentDialog title={t("dataNotice.title")} bind:open={app.dataNoticeOpen}>
     <div class="notice">
       <h4>
         <IconAlert width="15" height="15" />
@@ -28,7 +28,7 @@
     {#snippet footer()}
       <button class="btn primary" onclick={() => (app.dataNoticeOpen = false)}>{t("dataNotice.gotIt")}</button>
     {/snippet}
-  </Modal>
+  </ContentDialog>
 {/if}
 
 <style>
@@ -56,6 +56,6 @@
     gap: 4px;
     padding-left: 18px;
     list-style: disc;
-    color: var(--muted);
+    color: var(--text-2);
   }
 </style>

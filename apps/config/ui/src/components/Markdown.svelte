@@ -73,7 +73,7 @@
   .md :global(h1),
   .md :global(h2) {
     padding-bottom: 5px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--divider);
   }
   .md :global(ul),
   .md :global(ol) {
@@ -104,16 +104,16 @@
   }
   .md :global(code) {
     padding: 0.15em 0.4em;
-    border-radius: 6px;
-    background: var(--hover);
-    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    border-radius: var(--r-control);
+    background: var(--subtle-hover);
+    font-family: var(--font-mono);
     font-size: 0.9em;
   }
   .md :global(pre) {
     padding: 10px 12px;
-    border-radius: 6px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
+    border-radius: var(--r-control);
+    background: var(--card-2);
+    border: 1px solid var(--stroke);
     overflow-x: auto;
   }
   .md :global(pre code) {
@@ -124,16 +124,16 @@
   }
   .md :global(blockquote) {
     padding-left: 12px;
-    border-left: 3px solid var(--border);
-    color: var(--muted);
+    border-left: 3px solid var(--accent);
+    color: var(--text-2);
   }
   .md :global(hr) {
     height: 1px;
     margin: 14px 0;
     border: 0;
-    background: var(--border);
+    background: var(--divider);
   }
   .md :global(del) {
-    color: var(--muted);
+    color: var(--text-2);
   }
 </style>

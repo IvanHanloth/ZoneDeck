@@ -9,6 +9,8 @@
   import IconEyeOff from "~icons/lucide/eye-off";
   import IconSnowflake from "~icons/lucide/snowflake";
   import IconVolumeOff from "~icons/lucide/volume-off";
+  import CheckBox from "./fluent/CheckBox.svelte";
+  import ComboBox from "./fluent/ComboBox.svelte";
   import { isRegexRule } from "../lib/grouping.js";
   import { t } from "../lib/i18n.svelte.js";
   import { app } from "../lib/state.svelte.js";
@@ -25,6 +27,11 @@
     { field: "ignore_freeze", icon: IconSnowflake, label: "whitelist.ignoreFreeze" },
     { field: "ignore_mute", icon: IconVolumeOff, label: "whitelist.ignoreMute" },
   ];
+
+  const byOptions = $derived([
+    { value: false, label: t("processRules.byPath") },
+    { value: true, label: t("processRules.byName") },
+  ]);
 
   // 三个开关相互独立，互不联动。
   function setMode(rule, field, on) {
@@ -73,14 +80,14 @@
   </div>
 
   <div
-    class="rule-list"
+    class="lv-body"
     role="listbox"
     aria-multiselectable="true"
     aria-label={t("whitelist.aria")}
   >
     <!-- 内置项排在最前，不可编辑、不可删除。 -->
     {#each app.whitelistBuiltins as builtin (builtin.key)}
-      <div class="rule-row builtin">
+      <div class="lv-row rule-row builtin">
         <span class="lock" title={t("whitelist.builtinLocked")}>
           <IconLock width="13" height="13" />
         </span>
@@ -106,12 +113,12 @@
     {/each}
 
     {#if rules.length === 0 && app.whitelistBuiltins.length === 0}
-      <p class="hint empty">{t("common.empty")}</p>
+      <p class="hint lv-empty">{t("common.empty")}</p>
     {/if}
 
     {#each rules as rule, i (i)}
       <div
-        class="rule-row"
+        class="lv-row rule-row"
         class:sel={selected.includes(i)}
         role="option"
         aria-selected={selected.includes(i)}
@@ -119,12 +126,11 @@
         onclick={(e) => onRowClick(e, i)}
         onkeydown={(e) => onRowKey(e, i)}
       >
-        <input
-          type="checkbox"
-          tabindex="-1"
+        <CheckBox
+          small
           checked={selected.includes(i)}
           onchange={() => toggle(i)}
-          aria-label={t("windowRules.selectRule")}
+          ariaLabel={t("windowRules.selectRule")}
         />
         {#if isRegexRule(rule)}
           <span class="regex-tag">
@@ -155,15 +161,13 @@
           </span>
         {/if}
 
-        <select
-          class="by"
+        <ComboBox
+          compact
           bind:value={rule.by_name}
+          options={byOptions}
           title={t("processRules.byTitle")}
-          aria-label={t("processRules.byAria")}
-        >
-          <option value={false}>{t("processRules.byPath")}</option>
-          <option value={true}>{t("processRules.byName")}</option>
-        </select>
+          ariaLabel={t("processRules.byAria")}
+        />
         <div class="modes">
           {#each MODES as mode (mode.field)}
             <label class="mode" class:on={rule[mode.field]} title={t(mode.label)}>
@@ -183,141 +187,26 @@
 </div>
 
 <style>
-  .list-box {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    min-width: 0;
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .list-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
-    flex: none;
-  }
-  .title-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text);
-  }
-  .count {
-    font-weight: 500;
-    font-size: 12px;
-    background: var(--hover);
-    border-radius: 99px;
-    padding: 1px 8px;
-  }
-  .tools {
-    margin-left: auto;
-    display: flex;
-    gap: 6px;
-  }
-  .mini {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: var(--text);
-    border: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .mini:hover:not(:disabled) {
-    background: var(--hover);
-    border-color: var(--accent);
-  }
-  .mini.primary {
-    color: var(--on-accent);
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .mini.primary:hover:not(:disabled) {
-    color: var(--on-accent);
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-  }
-  .mini:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .rule-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 6px;
-  }
-  .empty {
-    text-align: center;
-    padding: 20px 8px;
-  }
-
   .rule-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  .rule-row:hover {
-    background: var(--hover);
-  }
-  .rule-row.sel {
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
-  }
-  .rule-row.sel:hover {
-    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    cursor: default;
   }
   .rule-row:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--focus-outer);
     outline-offset: -2px;
   }
-  .rule-row input[type="checkbox"] {
-    accent-color: var(--accent);
-    flex: none;
-    cursor: pointer;
-  }
   .rule-row.builtin {
-    color: var(--muted);
-    cursor: default;
+    color: var(--text-2);
   }
   .lock {
     display: inline-flex;
     flex: none;
     width: 13px;
-    color: var(--muted);
+    color: var(--text-3);
   }
-  /* 与 .by 下拉同宽的占位，让内置行的开关列对齐 */
+  /* 与匹配方式下拉同宽的占位，让内置行的开关列对齐 */
   .by-placeholder {
     flex: none;
-    width: 56px;
-  }
-  .by {
-    flex: none;
-    width: 56px;
-    padding: 2px 4px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--muted);
-    font-size: 11.5px;
-  }
-  .by:focus {
-    outline: none;
-    border-color: var(--accent);
+    width: 72px;
   }
   .ic {
     width: 16px;
@@ -334,9 +223,10 @@
     flex: none;
     font-weight: 500;
   }
+  /* 路径从右往左省略：末段的文件名比盘符更值钱 */
   .rpath {
     flex: 1;
-    color: var(--muted);
+    color: var(--text-2);
     font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -359,21 +249,25 @@
   .regex-input {
     flex: 1;
     min-width: 0;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-2);
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    border-radius: var(--r-control);
+    background: var(--control);
     color: var(--text);
-    padding: 3px 8px;
-    font-family: ui-monospace, monospace;
+    padding: 4px 8px;
+    font-family: var(--font-mono);
     font-size: 12px;
+    user-select: text;
+    cursor: text;
   }
   .regex-input:focus {
     outline: none;
-    border-color: var(--accent);
+    background: var(--control-focus);
+    border-bottom-color: var(--accent);
   }
   .regex-input.broad {
     border-color: var(--danger);
-    background: color-mix(in srgb, var(--danger) 8%, var(--surface-2));
+    background: color-mix(in srgb, var(--danger) 8%, var(--control));
   }
 
   .modes {
@@ -385,21 +279,24 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 22px;
-    height: 20px;
-    border-radius: 5px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--muted);
-    cursor: pointer;
+    width: 24px;
+    height: 22px;
+    border-radius: var(--r-control);
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    background: var(--control);
+    color: var(--text-2);
+    transition:
+      background var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
   }
   .mode.on {
     color: var(--on-accent);
     background: var(--accent);
-    border-color: var(--accent);
+    border-color: transparent;
   }
   .mode:hover:not(.on) {
-    border-color: var(--accent);
+    background: var(--control-hover);
     color: var(--text);
   }
   /* 勾选态由外层 label 的配色表达 */
@@ -411,15 +308,16 @@
     pointer-events: none;
   }
   .mode:has(input:focus-visible) {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
+    outline: 2px solid var(--focus-outer);
+    outline-offset: 2px;
+    box-shadow: 0 0 0 1px var(--focus-inner);
   }
   /* 内置行的开关是只读展示 */
   .rule-row.builtin .mode {
     cursor: not-allowed;
   }
   .rule-row.builtin .mode:hover:not(.on) {
-    border-color: var(--border);
-    color: var(--muted);
+    background: var(--control);
+    color: var(--text-2);
   }
 </style>
