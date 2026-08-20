@@ -7,9 +7,10 @@ export default {
   "tab.binding": "Windows",
   "tab.whitelist": "Whitelist",
   "tab.hotkeys": "Hotkeys & Mouse",
+  "tab.hide": "Hiding",
   "tab.notify": "Alerts",
   "tab.power": "Power & Memory",
-  "tab.options": "Options",
+  "tab.options": "General",
   "tab.about": "About & Feedback",
 
   "nav.expand": "Expand navigation",
@@ -231,22 +232,22 @@ export default {
   "notify.trayTooltipDesc":
     "Show “ZoneDeck” when hovering over the tray icon; turn this off to show no text for extra discretion.",
 
-  "options.generalCard": "General",
-  "options.muteAfterHide": "Mute after hiding",
-  "options.muteAfterHideDesc":
+  "hide.generalCard": "General",
+  "hide.muteAfterHide": "Mute after hiding",
+  "hide.muteAfterHideDesc":
     "Mute the target process while hidden, and unmute it automatically when restored.",
-  "options.hideCurrent": "Also hide the active window",
-  "options.hideCurrentDesc":
+  "hide.hideCurrent": "Also hide the active window",
+  "hide.hideCurrentDesc":
     "When the hotkey is pressed, also hide the foreground window in addition to the bound windows.",
-  "options.clickToHide": "Toggle hiding by clicking the tray icon",
-  "options.clickToHideDesc": "Left-click the tray icon to hide / show without pressing a hotkey.",
-  "options.hideIcon": "Also hide ZoneDeck's tray icon",
-  "options.hideIconDesc":
+  "hide.clickToHide": "Toggle hiding by clicking the tray icon",
+  "hide.clickToHideDesc": "Left-click the tray icon to hide / show without pressing a hotkey.",
+  "hide.hideIcon": "Also hide ZoneDeck's tray icon",
+  "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "options.sendPause": "Send the pause key before hiding",
-  "options.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
-  "options.minimizeBeforeHide": "Minimise windows before hiding",
-  "options.minimizeBeforeHideDesc":
+  "hide.sendPause": "Send the pause key before hiding",
+  "hide.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "hide.minimizeBeforeHide": "Minimise windows before hiding",
+  "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
   "power.scope": "Scope",

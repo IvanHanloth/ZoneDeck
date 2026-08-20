@@ -12,7 +12,7 @@ The **window recovery tool** finds windows that were hidden by mistake and canno
 
 ![Window recovery tool](/static/recovery-tool.png)
 
-To open it: **Settings window → Options → Tools → Window recovery tool**, or **tray menu → Window Recovery Tool**.
+To open it: **Settings window → General → Tools → Window recovery tool**, or **tray menu → Window Recovery Tool**.
 
 The tool lists every window on the system (including currently invisible ones). Tick the windows you want back and click "Show windows" to make them visible again.
 

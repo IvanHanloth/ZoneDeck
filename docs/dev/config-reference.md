@@ -46,12 +46,12 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 
 | 字段 | 类型 | 默认 | 对应功能 |
 | --- | --- | --- | --- |
-| `mute_after_hide` | bool | `true` | [隐藏后静音](/guide/options#隐藏窗口后静音) |
-| `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/options#隐藏前发送暂停键) |
-| `minimize_before_hide` | bool | `false` | [隐藏前先最小化窗口](/guide/options#隐藏前先最小化窗口) |
-| `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/options#同时隐藏当前活动窗口) |
-| `click_to_hide` | bool | `true` | [单击托盘切换隐藏](/guide/options#单击托盘图标切换隐藏) |
-| `hide_icon_after_hide` | bool | `false` | [同时隐藏 ZoneDeck 托盘图标](/guide/options#同时隐藏-zonedeck-托盘图标) |
+| `mute_after_hide` | bool | `true` | [隐藏后静音](/guide/hiding#隐藏窗口后静音) |
+| `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/hiding#隐藏前发送暂停键) |
+| `minimize_before_hide` | bool | `false` | [隐藏前先最小化窗口](/guide/hiding#隐藏前先最小化窗口) |
+| `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/hiding#同时隐藏当前活动窗口) |
+| `click_to_hide` | bool | `true` | [单击托盘切换隐藏](/guide/hiding#单击托盘图标切换隐藏) |
+| `hide_icon_after_hide` | bool | `false` | [同时隐藏 ZoneDeck 托盘图标](/guide/hiding#同时隐藏-zonedeck-托盘图标) |
 | `tray_badges` | object | 见下 | [图标状态提示](/guide/notifications#图标状态提示) |
 | `tray_show_tooltip` | bool | `true` | [显示图标悬浮名称](/guide/notifications#显示图标悬浮名称) |
 | `freeze_after_hide` | bool | `false` | [进程冻结总开关](/guide/freeze#隐藏窗口时冻结进程) |

@@ -37,15 +37,18 @@ apps/config/ui/
 └── svelte.config.js
 ```
 
-设置界面以标签页组织，对应五个面板组件：
+设置界面以标签页组织，每个标签页对应一个面板组件：
 
 | 标签 | 组件 | 内容 |
 | --- | --- | --- |
 | 窗口绑定 | `BindingPanel` | 窗口列表 + 窗口/进程规则 |
+| 白名单 | `WhitelistPanel` | 程序在隐藏时需要跳过的功能 |
 | 热键与鼠标 | `HotkeysPanel` | 键盘热键、鼠标连击、四角、空闲自动隐藏 |
+| 隐藏设置 | `HidePanel` | 静音/暂停键/托盘图标/最小化 |
+| 能效控制 | `PowerPanel` | 进程冻结与内存占用 |
 | 提示设置 | `NotificationsPanel` | 逐事件通知开关与图标状态角标 |
-| 其他选项 | `OptionsPanel` | 静音/暂停/冻结/权限/日志/工具 |
 | 关于与反馈 | `AboutPanel` | 版本、更新、公告、反馈（可转为 GitHub Issue） |
+| 通用设置 | `OptionsPanel` | 自启/权限/语言/日志/工具 |
 
 ## 无边框自绘窗口
 

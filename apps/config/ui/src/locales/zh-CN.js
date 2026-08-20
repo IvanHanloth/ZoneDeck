@@ -8,9 +8,10 @@ export default {
   "tab.binding": "窗口绑定",
   "tab.whitelist": "白名单",
   "tab.hotkeys": "热键与鼠标",
+  "tab.hide": "隐藏设置",
   "tab.notify": "提示设置",
   "tab.power": "能效控制",
-  "tab.options": "其他选项",
+  "tab.options": "通用设置",
   "tab.about": "关于与反馈",
 
   "nav.expand": "展开导航",
@@ -222,20 +223,20 @@ export default {
   "notify.trayTooltip": "显示图标悬浮名称",
   "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「ZoneDeck」；关闭后不显示任何文字，更隐蔽。",
 
-  "options.generalCard": "常规",
-  "options.muteAfterHide": "隐藏窗口后静音",
-  "options.muteAfterHideDesc": "隐藏时静音目标进程的音频，恢复显示时自动取消静音。",
-  "options.hideCurrent": "同时隐藏当前活动窗口",
-  "options.hideCurrentDesc": "按下热键时，除已绑定窗口外，同时隐藏当前正在使用的前台窗口。",
-  "options.clickToHide": "单击托盘图标切换隐藏",
-  "options.clickToHideDesc": "左键单击托盘图标即可隐藏 / 显示，无需按热键。",
-  "options.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
-  "options.hideIconDesc":
+  "hide.generalCard": "常规",
+  "hide.muteAfterHide": "隐藏窗口后静音",
+  "hide.muteAfterHideDesc": "隐藏时静音目标进程的音频，恢复显示时自动取消静音。",
+  "hide.hideCurrent": "同时隐藏当前活动窗口",
+  "hide.hideCurrentDesc": "按下热键时，除已绑定窗口外，同时隐藏当前正在使用的前台窗口。",
+  "hide.clickToHide": "单击托盘图标切换隐藏",
+  "hide.clickToHideDesc": "左键单击托盘图标即可隐藏 / 显示，无需按热键。",
+  "hide.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
+  "hide.hideIconDesc":
     "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
-  "options.sendPause": "隐藏前发送暂停键",
-  "options.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
-  "options.minimizeBeforeHide": "隐藏前先最小化窗口",
-  "options.minimizeBeforeHideDesc":
+  "hide.sendPause": "隐藏前发送暂停键",
+  "hide.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
+  "hide.minimizeBeforeHide": "隐藏前先最小化窗口",
+  "hide.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",
 
   "power.scope": "作用范围",

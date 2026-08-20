@@ -4,12 +4,6 @@
   import SettingsExpander from "./fluent/SettingsExpander.svelte";
   import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
   import ComboBox from "./fluent/ComboBox.svelte";
-  import IconVolumeOff from "~icons/lucide/volume-off";
-  import IconAppWindow from "~icons/lucide/app-window";
-  import IconMousePointerClick from "~icons/lucide/mouse-pointer-click";
-  import IconEyeOff from "~icons/lucide/eye-off";
-  import IconPause from "~icons/lucide/pause";
-  import IconMinimize from "~icons/lucide/minimize-2";
   import IconPower from "~icons/lucide/power";
   import IconShield from "~icons/lucide/shield";
   import IconKeyRound from "~icons/lucide/key-round";
@@ -75,34 +69,6 @@
   // 「以管理员身份自启」需先开启开机自启。
   const autostartOff = $derived(!app.autostart);
 </script>
-
-<SettingsGroup title={t("options.generalCard")}>
-  <SettingsCard icon={IconVolumeOff} label={t("options.muteAfterHide")} description={t("options.muteAfterHideDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.mute_after_hide} />{/snippet}
-  </SettingsCard>
-  <SettingsCard icon={IconAppWindow} label={t("options.hideCurrent")} description={t("options.hideCurrentDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.hide_current} />{/snippet}
-  </SettingsCard>
-  <SettingsCard icon={IconMousePointerClick} label={t("options.clickToHide")} description={t("options.clickToHideDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.click_to_hide} />{/snippet}
-  </SettingsCard>
-  <SettingsCard icon={IconEyeOff} label={t("options.hideIcon")} description={t("options.hideIconDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.hide_icon_after_hide} />{/snippet}
-  </SettingsCard>
-  <SettingsCard icon={IconPause} label={t("options.sendPause")} description={t("options.sendPauseDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.send_before_hide} />{/snippet}
-  </SettingsCard>
-  <SettingsCard
-    icon={IconMinimize}
-    label={t("options.minimizeBeforeHide")}
-    description={t("options.minimizeBeforeHideDesc")}
-  >
-    {#snippet control()}<ToggleSwitch bind:checked={s.minimize_before_hide} />{/snippet}
-  </SettingsCard>
-  <!-- <SettingsCard label="显示悬浮窗" description="在桌面显示一个可拖动的悬浮小窗，双击可快速切换隐藏（核心侧功能开发中）。">
-    {#snippet control()}<ToggleSwitch bind:checked={s.show_float_window} />{/snippet}
-  </SettingsCard> -->
-</SettingsGroup>
 
 <SettingsGroup title={t("options.startupCard")}>
   <SettingsExpander

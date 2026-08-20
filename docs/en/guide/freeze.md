@@ -29,7 +29,7 @@ Normal freezing may not be thorough enough for complex programs (multi-process a
 Enhanced freezing requires **all** of the following, otherwise the option is greyed out:
 
 1. The "Freeze processes when hiding" master switch is on;
-2. The **core is running as administrator** (see below and [Other options](/en/guide/options));
+2. The **core is running as administrator** (see below and [General settings](/en/guide/options));
 3. The file **`pssuspend64.exe`** exists in the program folder.
 
 ### Getting pssuspend64.exe

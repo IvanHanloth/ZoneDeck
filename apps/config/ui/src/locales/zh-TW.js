@@ -7,9 +7,10 @@ export default {
   "tab.binding": "視窗綁定",
   "tab.whitelist": "白名單",
   "tab.hotkeys": "快速鍵與滑鼠",
+  "tab.hide": "隱藏設定",
   "tab.notify": "提示設定",
   "tab.power": "能效控制",
-  "tab.options": "其他選項",
+  "tab.options": "通用設定",
   "tab.about": "關於與意見回饋",
 
   "nav.expand": "展開導覽",
@@ -221,20 +222,20 @@ export default {
   "notify.trayTooltip": "顯示圖示懸浮名稱",
   "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「ZoneDeck」；關閉後不顯示任何文字，更為隱密。",
 
-  "options.generalCard": "一般",
-  "options.muteAfterHide": "隱藏視窗後靜音",
-  "options.muteAfterHideDesc": "隱藏時將目標程序靜音，復原顯示時自動取消靜音。",
-  "options.hideCurrent": "同時隱藏目前使用中的視窗",
-  "options.hideCurrentDesc": "按下快速鍵時，除已綁定的視窗外，同時隱藏目前正在使用的前景視窗。",
-  "options.clickToHide": "按一下通知區域圖示切換隱藏",
-  "options.clickToHideDesc": "以左鍵按一下通知區域圖示即可隱藏／顯示，不需按快速鍵。",
-  "options.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
-  "options.hideIconDesc":
+  "hide.generalCard": "一般",
+  "hide.muteAfterHide": "隱藏視窗後靜音",
+  "hide.muteAfterHideDesc": "隱藏時將目標程序靜音，復原顯示時自動取消靜音。",
+  "hide.hideCurrent": "同時隱藏目前使用中的視窗",
+  "hide.hideCurrentDesc": "按下快速鍵時，除已綁定的視窗外，同時隱藏目前正在使用的前景視窗。",
+  "hide.clickToHide": "按一下通知區域圖示切換隱藏",
+  "hide.clickToHideDesc": "以左鍵按一下通知區域圖示即可隱藏／顯示，不需按快速鍵。",
+  "hide.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
+  "hide.hideIconDesc":
     "隱藏視窗時連 ZoneDeck 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
-  "options.sendPause": "隱藏前傳送暫停鍵",
-  "options.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
-  "options.minimizeBeforeHide": "隱藏前先最小化視窗",
-  "options.minimizeBeforeHideDesc":
+  "hide.sendPause": "隱藏前傳送暫停鍵",
+  "hide.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
+  "hide.minimizeBeforeHide": "隱藏前先最小化視窗",
+  "hide.minimizeBeforeHideDesc":
     "隱藏前先把視窗最小化，復原時還原成原大小。此功能對降低部分遊戲引擎的背景佔用有效。",
 
   "power.scope": "作用範圍",

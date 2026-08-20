@@ -19,7 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
-use zonedeck_common::ipc::{Command, Response};
+use zonedeck_common::ipc::{Command, PipeClient, Response};
 use zonedeck_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, IgnoreMode, Setting};
 
 use crate::effects::WinEffects;
@@ -624,6 +624,10 @@ impl AgentState {
                 }
                 (Response::Ok, false)
             }
+            Command::OpenSettings => {
+                launch_settings(self, None);
+                (Response::Ok, false)
+            }
             Command::Quit => (Response::Ok, true),
         }
     }
@@ -950,6 +954,23 @@ fn find_config_exe() -> Option<PathBuf> {
         .into_iter()
         .map(|name| dir.join(name))
         .find(|p| p.exists())
+}
+
+/// 把「打开配置界面」转交给已在运行的核心，转交不成就自己拉起配置程序。
+/// 返回两条路是否有一条走通。
+pub fn forward_open_settings() -> bool {
+    if matches!(
+        PipeClient::connect_default()
+            .fast()
+            .send(&Command::OpenSettings),
+        Ok(Response::Ok)
+    ) {
+        return true;
+    }
+    // 管道不通或对方是不认识该命令的旧版核心。配置程序自带单实例，会激活已开的窗口。
+    find_config_exe()
+        .map(|path| std::process::Command::new(&path).spawn().is_ok())
+        .unwrap_or(false)
 }
 
 /// 拉起配置程序；`action` 作为命令行参数传入。

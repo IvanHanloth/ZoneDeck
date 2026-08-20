@@ -103,4 +103,4 @@ With **Enable auto-hide** on, ZoneDeck hides the bound windows automatically onc
 | Screen corners | Nothing to memorise — just flick |
 | Auto-hide on idle | A fallback when you step away and forget to hide |
 
-Once the triggers are set up, you may want to adjust what else happens when hiding (muting, pausing, freezing). See [Other options](/en/guide/options) and [Process freezing](/en/guide/freeze).
+Once the triggers are set up, you may want to adjust what else happens when hiding (muting, pausing, freezing). See [Hiding options](/en/guide/hiding) and [Process freezing](/en/guide/freeze).
