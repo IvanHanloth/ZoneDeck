@@ -89,7 +89,7 @@ Each button is a `MouseButton`: `{ enabled: bool, clicks: 1..=3, modifiers: stri
 | `allow_click_restore` | `true` | Allow restoring by pressing again |
 
 ::: info Defaults for a fresh installation
-A fresh installation enables **a middle-button single click** (`middle.enabled = true`, `clicks = 1`) and leaves the other four off. An old configuration without a `mouse` section reads as **all off**.
+A fresh installation enables **a middle-button double click** (`middle.enabled = true`, `clicks = 2`) and leaves the other four off. An old configuration without a `mouse` section reads as **all off**.
 :::
 
 ### `setting.tray_badges`

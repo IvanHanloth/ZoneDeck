@@ -39,7 +39,7 @@ const mockConfig = {
     show_float_window: false,
     mouse: {
       left: { enabled: false, clicks: 1, modifiers: "" },
-      middle: { enabled: true, clicks: 1, modifiers: "" },
+      middle: { enabled: true, clicks: 2, modifiers: "" },
       right: { enabled: false, clicks: 1, modifiers: "" },
       side1: { enabled: false, clicks: 1, modifiers: "" },
       side2: { enabled: false, clicks: 1, modifiers: "" },

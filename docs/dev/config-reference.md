@@ -91,7 +91,7 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `allow_click_restore` | `true` | 允许再按一次恢复 |
 
 ::: info 全新安装默认
-全新安装默认开启**中键单击**（`middle.enabled = true`，`clicks = 1`），其余四颗关闭。配置文件缺 `mouse` 一节的老配置读进来则**全关**。
+全新安装默认开启**中键双击**（`middle.enabled = true`，`clicks = 2`），其余四颗关闭。配置文件缺 `mouse` 一节的老配置读进来则**全关**。
 :::
 
 ### `setting.tray_badges`

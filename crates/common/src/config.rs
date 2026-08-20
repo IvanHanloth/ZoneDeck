@@ -218,12 +218,13 @@ pub struct MouseSetting {
     pub allow_click_restore: bool,
 }
 
-/// 全新安装的默认：中键单击隐藏，允许再按一次恢复。
+/// 全新安装的默认：中键双击隐藏，允许再按一次恢复。
 impl Default for MouseSetting {
     fn default() -> Self {
         Self {
             middle: MouseButton {
                 enabled: true,
+                clicks: 2,
                 ..MouseButton::default()
             },
             ..Self::all_off()
@@ -889,9 +890,11 @@ mod tests {
     }
 
     #[test]
-    fn fresh_install_enables_middle_button_single_click() {
+    fn fresh_install_enables_middle_button_double_click() {
         let m = Config::default().setting.mouse;
         assert!(m.middle.enabled, "全新安装默认开中键");
+        assert_eq!(m.middle.clicks, 2, "全新安装默认中键双击");
+        assert!(m.middle.modifiers.is_empty());
         assert!(m.allow_click_restore, "默认允许再按一次恢复");
         assert_eq!(m.multi_click_ms, DEFAULT_MULTI_CLICK_MS);
         assert_eq!(DEFAULT_MULTI_CLICK_MS, 350);
@@ -900,7 +903,7 @@ mod tests {
             "其余四颗键默认关闭"
         );
         assert!(
-            m.buttons()
+            [&m.left, &m.right, &m.side1, &m.side2]
                 .iter()
                 .all(|b| b.clicks == 1 && b.modifiers.is_empty())
         );

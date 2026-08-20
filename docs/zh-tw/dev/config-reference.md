@@ -89,7 +89,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `allow_click_restore` | `true` | 允許再按一次復原 |
 
 ::: info 全新安裝預設
-全新安裝預設開啟**中鍵按一下**（`middle.enabled = true`，`clicks = 1`），其餘四顆關閉。設定檔缺 `mouse` 一節的舊設定讀進來則**全關**。
+全新安裝預設開啟**中鍵連按兩下**（`middle.enabled = true`，`clicks = 2`），其餘四顆關閉。設定檔缺 `mouse` 一節的舊設定讀進來則**全關**。
 :::
 
 ### `setting.tray_badges`

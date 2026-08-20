@@ -259,7 +259,16 @@ pub fn tf(msg: Msg, params: &[(&str, &str)]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Mutex, MutexGuard};
+
     use super::*;
+
+    /// `LANG` 是进程级全局状态，改动它的测试须串行，否则会互相打断。
+    static LANG_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock_lang() -> MutexGuard<'static, ()> {
+        LANG_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
 
     /// 全部文案键；新增 Msg 变体后必须同步登记。
     const ALL_MSGS: [Msg; 40] = [
@@ -340,6 +349,7 @@ mod tests {
 
     #[test]
     fn formats_placeholders() {
+        let _guard = lock_lang();
         set_from_pref("zh-CN");
         assert_eq!(
             tf(Msg::ErrFreezePartial, &[("failed", "2"), ("total", "5")]),
@@ -364,6 +374,7 @@ mod tests {
 
     #[test]
     fn explicit_pref_takes_effect() {
+        let _guard = lock_lang();
         set_from_pref("en");
         assert_eq!(lang(), Lang::En);
         assert_eq!(t(Msg::MenuQuit), "Exit");
