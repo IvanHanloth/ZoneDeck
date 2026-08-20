@@ -89,7 +89,7 @@ ZoneDeck ships with two keyboard hotkeys, both customisable under [Hotkeys & mou
 | **Hide / show windows** | `Ctrl + Q` | Press once to hide the bound windows, again to restore them |
 | **Close the core** | `Win + Esc` | Immediately ends the ZoneDeck core process |
 
-A fresh installation also enables **hide on middle mouse button click** by default; you can adjust or disable it in the settings.
+A fresh installation also enables **hide on middle mouse button double click** by default; you can adjust or disable it in the settings.
 
 ## Basic workflow
 

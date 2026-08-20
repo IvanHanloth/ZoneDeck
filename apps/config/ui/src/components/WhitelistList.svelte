@@ -16,6 +16,9 @@
   let { rules = $bindable([]), onadd, onaddregex } = $props();
   let selected = $state([]);
 
+  // 行内的正则输入框、匹配方式下拉与三个模式开关自己处理点击，不参与选中
+  const CONTROLS = "input, select, button, textarea, label, a, [role='group']";
+
   // 三个模式开关。文案键须为字面量，供 scripts/i18n-check.ps1 静态检查。
   const MODES = [
     { field: "ignore_hide", icon: IconEyeOff, label: "whitelist.ignoreHide" },
@@ -26,6 +29,23 @@
   // 三个开关相互独立，互不联动。
   function setMode(rule, field, on) {
     rule[field] = on;
+  }
+
+  function toggle(i) {
+    selected = selected.includes(i) ? selected.filter((x) => x !== i) : [...selected, i];
+  }
+
+  function onRowClick(e, i) {
+    if (e.target.closest(CONTROLS)) return;
+    toggle(i);
+  }
+
+  function onRowKey(e, i) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle(i);
+    }
   }
 
   function remove() {
@@ -52,7 +72,12 @@
     </div>
   </div>
 
-  <div class="rule-list" role="listbox" aria-label={t("whitelist.aria")}>
+  <div
+    class="rule-list"
+    role="listbox"
+    aria-multiselectable="true"
+    aria-label={t("whitelist.aria")}
+  >
     <!-- 内置项排在最前，不可编辑、不可删除。 -->
     {#each app.whitelistBuiltins as builtin (builtin.key)}
       <div class="rule-row builtin">
@@ -85,11 +110,20 @@
     {/if}
 
     {#each rules as rule, i (i)}
-      <div class="rule-row">
+      <div
+        class="rule-row"
+        class:sel={selected.includes(i)}
+        role="option"
+        aria-selected={selected.includes(i)}
+        tabindex="0"
+        onclick={(e) => onRowClick(e, i)}
+        onkeydown={(e) => onRowKey(e, i)}
+      >
         <input
           type="checkbox"
-          bind:group={selected}
-          value={i}
+          tabindex="-1"
+          checked={selected.includes(i)}
+          onchange={() => toggle(i)}
           aria-label={t("windowRules.selectRule")}
         />
         {#if isRegexRule(rule)}
@@ -236,9 +270,20 @@
     gap: 8px;
     padding: 5px 8px;
     border-radius: 6px;
+    cursor: pointer;
   }
   .rule-row:hover {
     background: var(--hover);
+  }
+  .rule-row.sel {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+  }
+  .rule-row.sel:hover {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+  }
+  .rule-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
   }
   .rule-row input[type="checkbox"] {
     accent-color: var(--accent);
@@ -247,6 +292,7 @@
   }
   .rule-row.builtin {
     color: var(--muted);
+    cursor: default;
   }
   .lock {
     display: inline-flex;

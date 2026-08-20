@@ -56,7 +56,7 @@ A hotkey with "don't pass through" enabled is handled by a low-level keyboard ho
 
 Besides the keyboard, mouse buttons can trigger hiding. Five buttons are supported: **left, middle, right, side 1 (forward), side 2 (back)**.
 
-**Hide on middle button click** is enabled by default, together with "restore with the same button".
+**Hide on middle button double click** is enabled by default, together with "restore with the same button".
 
 Each enabled button is configured independently:
 
