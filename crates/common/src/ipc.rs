@@ -36,6 +36,8 @@ pub enum Command {
     AdoptWindows {
         hwnds: Vec<i64>,
     },
+    /// 打开配置界面。重复启动的实例发现核心已在跑时转发过来，由在跑的那个走托盘同一条路径拉起。
+    OpenSettings,
     Quit,
 }
 

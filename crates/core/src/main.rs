@@ -106,8 +106,16 @@ fn main() {
             logging::warn(&format!(
                 "以管理员身份重启失败：等待 {ELEVATED_HANDOVER_WAIT:?} 后前一个实例仍在运行，本次启动退出，核心仍以原权限运行"
             ));
-        } else {
+        } else if args.iter().any(|a| a == "smoke") {
             logging::warn("已有核心实例在运行，本次启动退出");
+        } else {
+            // 重复双击本该毫无反馈，转为打开配置界面，让用户看见核心确实在跑。
+            logging::info("已有核心实例在运行，转为打开配置界面");
+            if !agent::forward_open_settings() {
+                logging::warn(
+                    "已有核心实例在运行，但打开配置界面失败：核心未应答且同目录下拉起配置程序未成功（可能缺失或被安全软件拦截）",
+                );
+            }
         }
         return;
     }

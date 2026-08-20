@@ -7,6 +7,7 @@
   import WhitelistPanel from "./components/WhitelistPanel.svelte";
   import HotkeysPanel from "./components/HotkeysPanel.svelte";
   import PowerPanel from "./components/PowerPanel.svelte";
+  import HidePanel from "./components/HidePanel.svelte";
   import OptionsPanel from "./components/OptionsPanel.svelte";
   import NotificationsPanel from "./components/NotificationsPanel.svelte";
   import AboutPanel from "./components/AboutPanel.svelte";
@@ -21,6 +22,7 @@
   import IconAppWindow from "~icons/lucide/app-window";
   import IconShieldCheck from "~icons/lucide/shield-check";
   import IconKeyboard from "~icons/lucide/keyboard";
+  import IconEyeOff from "~icons/lucide/eye-off";
   import IconBell from "~icons/lucide/bell";
   import IconZap from "~icons/lucide/zap";
   import IconSettings from "~icons/lucide/settings";
@@ -47,10 +49,11 @@
     { id: "binding", labelKey: "tab.binding", icon: IconAppWindow },
     { id: "whitelist", labelKey: "tab.whitelist", icon: IconShieldCheck },
     { id: "hotkeys", labelKey: "tab.hotkeys", icon: IconKeyboard },
-    { id: "notify", labelKey: "tab.notify", icon: IconBell },
+    { id: "hide", labelKey: "tab.hide", icon: IconEyeOff },
     { id: "power", labelKey: "tab.power", icon: IconZap },
-    { id: "options", labelKey: "tab.options", icon: IconSettings },
+    { id: "notify", labelKey: "tab.notify", icon: IconBell },
     { id: "about", labelKey: "tab.about", icon: IconInfo, footer: true },
+    { id: "options", labelKey: "tab.options", icon: IconSettings, footer: true },
   ];
 
   // 双栏页要撑满可用高度，其余页按内容自然增高后滚动。
@@ -168,6 +171,8 @@
             <WhitelistPanel />
           {:else if app.tab === "hotkeys"}
             <HotkeysPanel />
+          {:else if app.tab === "hide"}
+            <HidePanel />
           {:else if app.tab === "power"}
             <PowerPanel />
           {:else if app.tab === "options"}

@@ -43,11 +43,11 @@ ZoneDeck 会监听全局热键、隐藏窗口，这类行为有时会被杀软�
 
 ## 窗口被隐藏后显示不回来了？
 
-使用 [窗口恢复工具](/guide/recovery#窗口恢复工具)（其他选项 → 工具）勾选并恢复。若开启了"同时隐藏 ZoneDeck 托盘图标"，请用你的**恢复热键**恢复。
+使用 [窗口恢复工具](/guide/recovery#窗口恢复工具)（通用设置 → 工具）勾选并恢复。若开启了"同时隐藏 ZoneDeck 托盘图标"，请用你的**恢复热键**恢复。
 
 ## 能隐藏其他程序的托盘图标吗？
 
-ZoneDeck 只能隐藏[自身的托盘图标](/guide/options#同时隐藏-zonedeck-托盘图标)，无法操作其他程序的托盘图标。可使用 Windows 自带的功能手动设置：具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（该链接仅在 Windows 上有效），选择哪些图标显示在任务栏角落。
+ZoneDeck 只能隐藏[自身的托盘图标](/guide/hiding#同时隐藏-zonedeck-托盘图标)，无法操作其他程序的托盘图标。可使用 Windows 自带的功能手动设置：具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（该链接仅在 Windows 上有效），选择哪些图标显示在任务栏角落。
 
 ## 增强冻结的开关是灰的，点不了？
 

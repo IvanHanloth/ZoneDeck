@@ -11,7 +11,7 @@ With startup enabled, the ZoneDeck core **starts in the background automatically
 There are two entry points with identical effect:
 
 1. **Tray menu**: right-click the tray icon → select **"Start with Windows"** to toggle.
-2. **Settings window**: **Options → Startup & permissions → Start with Windows**.
+2. **Settings window**: **General → Startup & permissions → Start with Windows**.
 
 After toggling (unless you disabled the matching notification), a notification reports the new state. Small text beside the switch shows the registration method in use (**scheduled task** or **registry**).
 
@@ -24,7 +24,7 @@ ZoneDeck uses a **two-tier** approach that balances privileges and reliability:
 | **Scheduled task (preferred)** | Registered as a logon-triggered scheduled task; can request **highest privileges** and supports **automatic restart on failure** |
 | **Registry startup** | Used as a fallback when the scheduled task is unavailable |
 
-The small text beside the **Options → Startup & permissions → Start with Windows** switch shows which method is actually in effect, so you can confirm whether the scheduled task registered successfully (it falls back to the registry if not).
+The small text beside the **General → Startup & permissions → Start with Windows** switch shows which method is actually in effect, so you can confirm whether the scheduled task registered successfully (it falls back to the registry if not).
 
 ## About highest-privilege startup
 

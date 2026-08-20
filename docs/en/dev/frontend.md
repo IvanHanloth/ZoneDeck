@@ -42,10 +42,13 @@ The settings window is organised as tabs, one panel component each:
 | Tab | Component | Contents |
 | --- | --- | --- |
 | Windows | `BindingPanel` | Window list + window/process rules |
+| Whitelist | `WhitelistPanel` | Which steps a program skips when hiding |
 | Hotkeys & Mouse | `HotkeysPanel` | Keyboard hotkeys, mouse clicks, corners, auto-hide on idle |
+| Hiding | `HidePanel` | Muting/pause key/tray icon/minimising |
+| Power & Memory | `PowerPanel` | Process freezing and memory usage |
 | Alerts | `NotificationsPanel` | Per-event notification switches and tray icon badges |
-| Options | `OptionsPanel` | Muting/pausing/freezing/privileges/logs/tools |
 | About & Feedback | `AboutPanel` | Version, updates, announcements, feedback (convertible into a GitHub issue) |
+| General | `OptionsPanel` | Startup/privileges/language/logs/tools |
 
 ## A frameless, self-drawn window
 

@@ -43,11 +43,11 @@ Check in order:
 
 ## A window was hidden and won't come back
 
-Use the [window recovery tool](/en/guide/recovery) (Options → Tools) to tick and restore it. If you enabled "Also hide ZoneDeck's tray icon", use your **restore hotkey**.
+Use the [window recovery tool](/en/guide/recovery) (General → Tools) to tick and restore it. If you enabled "Also hide ZoneDeck's tray icon", use your **restore hotkey**.
 
 ## Can ZoneDeck hide other programs' tray icons?
 
-ZoneDeck can only hide [its own tray icon](/en/guide/options); it cannot touch tray icons owned by other programs. Windows provides this itself: for detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the link works only on Windows) and choose which icons appear in the taskbar corner.
+ZoneDeck can only hide [its own tray icon](/en/guide/hiding); it cannot touch tray icons owned by other programs. Windows provides this itself: for detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the link works only on Windows) and choose which icons appear in the taskbar corner.
 
 ## The enhanced freezing switch is greyed out
 

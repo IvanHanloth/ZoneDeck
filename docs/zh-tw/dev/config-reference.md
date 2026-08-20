@@ -46,12 +46,12 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 
 | 欄位 | 型別 | 預設 | 對應功能 |
 | --- | --- | --- | --- |
-| `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/options) |
-| `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/options) |
-| `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/options) |
-| `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/options) |
-| `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/options) |
+| `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/hiding) |
+| `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/hiding) |
+| `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/hiding) |
+| `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/hiding) |
+| `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/hiding) |
+| `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/hiding) |
 | `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |
