@@ -1487,7 +1487,8 @@ mod tests {
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         let dormant = dormant_pids(&targets, &windows);
 
-        let plan = controller.plan_hide(&config.setting, &targets, &dormant, &dormant, &dormant, &[]);
+        let plan =
+            controller.plan_hide(&config.setting, &targets, &dormant, &dormant, &dormant, &[]);
         let planned = controller.planned_snapshot(&plan);
         controller.commit_hide(plan);
         let actual = controller.snapshot();
@@ -2087,7 +2088,11 @@ mod tests {
 
         let snapshot = controller.snapshot();
         assert_eq!(
-            snapshot.efficiency.iter().map(|r| r.pid).collect::<Vec<_>>(),
+            snapshot
+                .efficiency
+                .iter()
+                .map(|r| r.pid)
+                .collect::<Vec<_>>(),
             vec![100]
         );
         assert!(!snapshot.is_empty(), "带效率模式记录的快照不算空");
@@ -2492,7 +2497,8 @@ mod tests {
             "此时只有句柄，resolve_targets 判不出它属于 explorer"
         );
 
-        let plan = controller.plan_hide(&config.setting, &targets, &[], &[], &[], config.whitelist());
+        let plan =
+            controller.plan_hide(&config.setting, &targets, &[], &[], &[], config.whitelist());
         assert_eq!(
             plan.fresh.iter().map(|t| t.restore).collect::<Vec<_>>(),
             vec![Restore::Skip],
@@ -2518,7 +2524,8 @@ mod tests {
         let mut controller = HideController::new(wm, MockEffects::default());
 
         let (targets, _) = resolve_targets(&mut config, &controller.enumerate(), TASKBAR);
-        let plan = controller.plan_hide(&config.setting, &targets, &[], &[], &[], config.whitelist());
+        let plan =
+            controller.plan_hide(&config.setting, &targets, &[], &[], &[], config.whitelist());
         assert_eq!(plan.fresh.len(), 1);
         assert_eq!(plan.fresh[0].restore, Restore::Show);
         controller.commit_hide(plan);

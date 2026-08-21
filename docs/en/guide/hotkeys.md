@@ -24,7 +24,7 @@ There are five customisable global hotkeys:
 | **Hide foreground window** | Disabled | Hides just the currently active window |
 | **Close the core** | `Win + Esc` | Quits the core (restoring every window first) |
 
-Click **Record**, then press the combination you want; it is recognised and filled in automatically.
+Click **Record**, then press the combination you want; it is recognised and filled in automatically. Every key you hold shows up as you press it, and the display settles on whatever combination was captured once you let go.
 
 Click **Clear** to unset the hotkey. Once unset it reads "Disabled", the core no longer registers it, and that function cannot be triggered from the keyboard. The five hotkeys are independent and can be unset separately.
 
@@ -61,7 +61,7 @@ Besides the keyboard, mouse buttons can trigger hiding. Five buttons are support
 Each enabled button is configured independently:
 
 - **Click count**: trigger on a single, double or triple click.
-- **Modifier keys**: optionally require `Ctrl` / `Shift` / `Alt` / `Win` to be held — for example, "double-click the middle button while holding Ctrl". Leave empty to require no modifier.
+- **Modifier keys**: optionally require `Ctrl` / `Shift` / `Alt` / `Win` to be held — for example, "double-click the middle button while holding Ctrl". Leave empty to require no modifier. Click **Record**, hold the combination you want and let go to commit it; as with hotkey recording, ZoneDeck captures the keyboard exclusively meanwhile, so recording `Win` does not open the Start menu.
 
 Two options apply to all five buttons:
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comboFromEvent, keyName, modifiersFromEvent } from "./hotkey.js";
+import { comboFromEvent, isModifierKey, joinCombo, keyName, modifiersFromEvent } from "./hotkey.js";
 
 const ev = (key, mods = {}) => ({
   key,
@@ -71,5 +71,33 @@ describe("comboFromEvent", () => {
 
   it("主键不支持时返回 null", () => {
     expect(comboFromEvent(ev("CapsLock", { ctrlKey: true }))).toBeNull();
+  });
+});
+
+describe("isModifierKey", () => {
+  it("认得四个修饰键", () => {
+    for (const k of ["Control", "Alt", "Shift", "Meta"]) {
+      expect(isModifierKey(ev(k)), k).toBe(true);
+    }
+  });
+
+  it("普通键不算修饰键", () => {
+    expect(isModifierKey(ev("q"))).toBe(false);
+    expect(isModifierKey(ev("CapsLock"))).toBe(false);
+  });
+});
+
+describe("joinCombo", () => {
+  it("两段都在时用加号拼接", () => {
+    expect(joinCombo("Ctrl+Shift", "Q")).toBe("Ctrl+Shift+Q");
+  });
+
+  it("缺主键时只剩修饰键，缺修饰键时只剩主键", () => {
+    expect(joinCombo("Ctrl+Shift", null)).toBe("Ctrl+Shift");
+    expect(joinCombo("", "F5")).toBe("F5");
+  });
+
+  it("两段都为空时是空串", () => {
+    expect(joinCombo("", null)).toBe("");
   });
 });

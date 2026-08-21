@@ -162,8 +162,10 @@ export default {
   "hotkeys.minutes": "分鐘",
 
   "recorder.edit": "變更快速鍵",
-  "recorder.dialogHint": "按下組合鍵以變更此快速鍵。修飾鍵（Ctrl / Alt / Shift / Win）需要與其他按鍵搭配。",
+  "recorder.dialogHint": "按下組合鍵以變更此快速鍵。修飾鍵（Ctrl / Alt / Shift / Win）需要與其他按鍵搭配。錄製期間按鍵由本程式獨佔，不會傳給其他程式。",
   "recorder.waiting": "等待按鍵…",
+  "recorder.unsupportedKey": "此按鍵不能用作快速鍵，請換一個。",
+  "recorder.captureFailed": "未能獨佔鍵盤，錄製期間的按鍵仍可能觸發其他程式。",
   "common.save": "儲存",
   "recorder.disabled": "已關閉",
   "recorder.holdModifiers": "按住輔助按鍵…",

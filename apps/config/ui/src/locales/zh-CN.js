@@ -163,8 +163,10 @@ export default {
   "hotkeys.minutes": "分钟",
 
   "recorder.edit": "更改快捷键",
-  "recorder.dialogHint": "按下组合键以更改此快捷键。修饰键（Ctrl / Alt / Shift / Win）需要与其他键搭配。",
+  "recorder.dialogHint": "按下组合键以更改此快捷键。修饰键（Ctrl / Alt / Shift / Win）需要与其他键搭配。录制期间按键由本程序独占，不会传给其他程序。",
   "recorder.waiting": "等待按键…",
+  "recorder.unsupportedKey": "该按键不能用作快捷键，请换一个。",
+  "recorder.captureFailed": "未能独占键盘，录制期间的按键仍可能触发其他程序。",
   "common.save": "保存",
   "recorder.disabled": "已关闭",
   "recorder.holdModifiers": "按住修饰键…",

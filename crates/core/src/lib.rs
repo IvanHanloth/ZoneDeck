@@ -15,6 +15,7 @@ pub mod idle;
 pub mod input;
 pub mod input_hooks;
 pub mod ipc_server;
+pub mod key_capture;
 pub mod keyboard_hook;
 pub mod logging;
 pub mod mouse_hook;

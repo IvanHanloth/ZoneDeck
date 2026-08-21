@@ -77,6 +77,73 @@ fn key_to_vk(token: &str) -> Option<u16> {
     Some(vk)
 }
 
+/// [`key_to_vk`] 的逆向：虚拟键码 → 热键字符串里的按键名。表外的键返回 None。
+pub fn vk_to_key(vk: u16) -> Option<String> {
+    if (0x30..=0x39).contains(&vk) || (0x41..=0x5A).contains(&vk) {
+        return Some((vk as u8 as char).to_string());
+    }
+    if (0x70..=0x87).contains(&vk) {
+        return Some(format!("F{}", vk - 0x70 + 1));
+    }
+    let name = match vk {
+        0x1B => "Esc",
+        0x20 => "Space",
+        0x0D => "Enter",
+        0x09 => "Tab",
+        0x08 => "Backspace",
+        0x2E => "Delete",
+        0x2D => "Insert",
+        0x24 => "Home",
+        0x23 => "End",
+        0x21 => "PageUp",
+        0x22 => "PageDown",
+        0x26 => "Up",
+        0x28 => "Down",
+        0x25 => "Left",
+        0x27 => "Right",
+        0x14 => "CapsLock",
+        0x90 => "NumLock",
+        0x91 => "ScrollLock",
+        0x2C => "PrintScreen",
+        0x13 => "Pause",
+        0x0C => "Clear",
+        _ => return None,
+    };
+    Some(name.to_string())
+}
+
+/// 修饰键位掩码 → `"Ctrl+Alt+Shift+Win"` 形式；顺序固定，无修饰键时为空串。
+pub fn format_modifiers(modifiers: u32) -> String {
+    let mut parts = Vec::new();
+    if modifiers & MOD_CONTROL != 0 {
+        parts.push("Ctrl");
+    }
+    if modifiers & MOD_ALT != 0 {
+        parts.push("Alt");
+    }
+    if modifiers & MOD_SHIFT != 0 {
+        parts.push("Shift");
+    }
+    if modifiers & MOD_WIN != 0 {
+        parts.push("Win");
+    }
+    parts.join("+")
+}
+
+/// 组装热键字符串；`vk` 为 None 时只输出修饰键（录制过程中的中间态）。
+/// 主键不在支持范围内时同样只输出修饰键。
+pub fn format_hotkey(modifiers: u32, vk: Option<u16>) -> String {
+    let mods = format_modifiers(modifiers);
+    let Some(key) = vk.and_then(vk_to_key) else {
+        return mods;
+    };
+    if mods.is_empty() {
+        key
+    } else {
+        format!("{mods}+{key}")
+    }
+}
+
 /// 热键是否置空；置空表示关闭该热键。
 pub fn is_disabled(s: &str) -> bool {
     s.trim().is_empty()
@@ -227,5 +294,54 @@ mod tests {
             parse_hotkey("Ctrl+Q+W"),
             Err(HotkeyParseError::MultipleKeys)
         );
+    }
+
+    #[test]
+    fn format_modifiers_uses_the_same_order_as_the_recorder() {
+        assert_eq!(format_modifiers(0), "");
+        assert_eq!(format_modifiers(MOD_CONTROL), "Ctrl");
+        assert_eq!(
+            format_modifiers(MOD_WIN | MOD_SHIFT | MOD_ALT | MOD_CONTROL),
+            "Ctrl+Alt+Shift+Win"
+        );
+    }
+
+    #[test]
+    fn format_hotkey_without_a_main_key_yields_modifiers_only() {
+        assert_eq!(format_hotkey(MOD_CONTROL | MOD_SHIFT, None), "Ctrl+Shift");
+        assert_eq!(format_hotkey(0, None), "");
+        // 表外的主键当作还没按到主键。
+        assert_eq!(format_hotkey(MOD_ALT, Some(0x60)), "Alt");
+    }
+
+    #[test]
+    fn format_hotkey_without_modifiers_yields_the_bare_key() {
+        assert_eq!(format_hotkey(0, Some(0x70)), "F1");
+    }
+
+    /// 录制出来的字符串必须能被 `parse_hotkey` 原样解回来，否则配置写进去核心用不了。
+    #[test]
+    fn every_supported_vk_round_trips_through_parse_hotkey() {
+        let modifiers = MOD_CONTROL | MOD_SHIFT;
+        let mut count = 0;
+        for vk in 0..=0xFFu16 {
+            let Some(_) = vk_to_key(vk) else { continue };
+            count += 1;
+            let text = format_hotkey(modifiers, Some(vk));
+            assert_eq!(
+                parse_hotkey(&text),
+                Ok(ParsedHotkey { modifiers, vk }),
+                "{text} 解析结果与录制来源不符"
+            );
+        }
+        // 26 字母 + 10 数字 + 24 功能键 + 21 命名键
+        assert_eq!(count, 81, "支持的按键数量变了，确认改动是有意的");
+    }
+
+    #[test]
+    fn vk_to_key_rejects_keys_outside_the_table() {
+        assert_eq!(vk_to_key(0x60), None, "小键盘 0 暂不支持");
+        assert_eq!(vk_to_key(0xA2), None, "修饰键不是主键");
+        assert_eq!(vk_to_key(0xBA), None, "OEM 分号键随布局变化，不支持");
     }
 }

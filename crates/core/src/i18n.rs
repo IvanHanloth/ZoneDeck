@@ -50,6 +50,7 @@ pub enum Msg {
     ErrUrlSchemeNotAllowed,
     ErrFeedbackEmpty,
     ErrFeedbackContactRequired,
+    ErrKeyCaptureFailed,
 }
 
 impl Msg {
@@ -108,6 +109,7 @@ impl Msg {
             Msg::ErrUrlSchemeNotAllowed => "只允许打开 http/https/mailto 链接",
             Msg::ErrFeedbackEmpty => "请先填写反馈内容",
             Msg::ErrFeedbackContactRequired => "转换为 Issue 需要留下 GitHub 账号",
+            Msg::ErrKeyCaptureFailed => "无法独占键盘，录制期间的按键可能触发其他程序",
         }
     }
 
@@ -163,6 +165,9 @@ impl Msg {
             Msg::ErrFeedbackContactRequired => {
                 "Converting feedback into an issue requires a GitHub account"
             }
+            Msg::ErrKeyCaptureFailed => {
+                "Cannot capture the keyboard exclusively; keys pressed while recording may trigger other programs"
+            }
         }
     }
 
@@ -212,6 +217,7 @@ impl Msg {
             Msg::ErrUrlSchemeNotAllowed => "僅允許開啟 http/https/mailto 連結",
             Msg::ErrFeedbackEmpty => "請先填寫意見回饋內容",
             Msg::ErrFeedbackContactRequired => "轉換為 Issue 需要留下 GitHub 帳號",
+            Msg::ErrKeyCaptureFailed => "無法獨佔鍵盤，錄製期間的按鍵可能觸發其他程式",
         }
     }
 }
@@ -271,7 +277,7 @@ mod tests {
     }
 
     /// 全部文案键；新增 Msg 变体后必须同步登记。
-    const ALL_MSGS: [Msg; 40] = [
+    const ALL_MSGS: [Msg; 41] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -312,6 +318,7 @@ mod tests {
         Msg::ErrUrlSchemeNotAllowed,
         Msg::ErrFeedbackEmpty,
         Msg::ErrFeedbackContactRequired,
+        Msg::ErrKeyCaptureFailed,
     ];
 
     /// 逐条校验三种语言均非空且互不相同。
