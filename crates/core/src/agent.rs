@@ -360,16 +360,25 @@ impl AgentState {
     }
 
     /// 意图先行：先落盘计划后的快照，再隐藏窗口。
-    /// `dormant` 为 [`dormant_pids`] 的结果，静音直接用它，冻结用它展开后的结果。
+    /// `dormant` 为 [`dormant_pids`] 的结果，静音直接用它，
+    /// 冻结与效率模式各用它按自己的作用范围展开后的结果。
     fn hide_with_plan(
         &mut self,
         targets: &[crate::hide::Target],
         freeze_set: &[u32],
+        efficiency_set: &[u32],
         dormant: &[u32],
     ) -> HidePlan {
         let setting = self.config.setting.clone();
         let whitelist = self.config.whitelist().to_vec();
-        let plan = self.hide_with_plan_using(&setting, targets, freeze_set, dormant, &whitelist);
+        let plan = self.hide_with_plan_using(
+            &setting,
+            targets,
+            freeze_set,
+            efficiency_set,
+            dormant,
+            &whitelist,
+        );
         if self.config.notifications.on_hide && !plan.fresh.is_empty() {
             self.balloon(Msg::HiddenTitle, Msg::HiddenBody);
         }
@@ -382,12 +391,18 @@ impl AgentState {
         setting: &Setting,
         targets: &[crate::hide::Target],
         freeze_set: &[u32],
+        efficiency_set: &[u32],
         mute_set: &[u32],
         whitelist: &[zonedeck_common::WhitelistRule],
     ) -> HidePlan {
-        let plan = self
-            .controller
-            .plan_hide(setting, targets, freeze_set, mute_set, whitelist);
+        let plan = self.controller.plan_hide(
+            setting,
+            targets,
+            freeze_set,
+            efficiency_set,
+            mute_set,
+            whitelist,
+        );
         let planned = self.controller.planned_snapshot(&plan);
         self.persist_snapshot(&planned);
         self.controller.commit_hide(plan.clone());
@@ -395,11 +410,14 @@ impl AgentState {
         plan
     }
 
-    /// 按作用范围展开候选 PID，再过白名单，得到要施加冻结 / 清空工作集的集合。
+    /// 按作用范围展开候选 PID，再过白名单，得到要施加能效控制的集合。
     /// 顺序不可颠倒：ZoneDeck 自己往往是展开后才出现在集合里的。
-    fn scoped_pids(&self, roots: Vec<u32>) -> Vec<u32> {
+    ///
+    /// `scope` 由调用方给出——冻结与效率模式各有各的范围设置。白名单共用
+    /// [`IgnoreMode::Freeze`]：两者都是「别动这个进程的性能」。
+    fn scoped_pids(&self, roots: Vec<u32>, scope: &str) -> Vec<u32> {
         let names = crate::freeze::process_names();
-        let pids = match self.config.setting.power_scope.as_str() {
+        let pids = match scope {
             zonedeck_common::POWER_SCOPE_TREE => {
                 expand_descendants(&roots, &crate::freeze::process_tree())
             }
@@ -424,13 +442,29 @@ impl AgentState {
         pids
     }
 
+    /// 冻结与效率模式各自的目标集合；两者范围设置独立，名单可以不重合。
+    fn power_targets(&self, dormant: &[u32]) -> (Vec<u32>, Vec<u32>) {
+        let setting = &self.config.setting;
+        let freeze = if setting.freeze_after_hide {
+            self.scoped_pids(dormant.to_vec(), &setting.power_scope)
+        } else {
+            Vec::new()
+        };
+        let efficiency = if setting.efficiency_after_hide {
+            self.scoped_pids(dormant.to_vec(), &setting.efficiency_scope)
+        } else {
+            Vec::new()
+        };
+        (freeze, efficiency)
+    }
+
     fn apply_hide(&mut self, trigger: Trigger) {
         let windows = self.controller.enumerate();
         let foreground = self.controller.foreground();
         let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
         let dormant = dormant_pids(&targets, &windows);
-        let freeze_set = self.scoped_pids(dormant.clone());
-        let plan = self.hide_with_plan(&targets, &freeze_set, &dormant);
+        let (freeze_set, efficiency_set) = self.power_targets(&dormant);
+        let plan = self.hide_with_plan(&targets, &freeze_set, &efficiency_set, &dormant);
         log_hide(trigger, &self.config, &outcomes, &plan);
     }
 
@@ -446,8 +480,8 @@ impl AgentState {
 
         let targets = [target];
         let dormant = dormant_pids(&targets, &windows);
-        let freeze_set = self.scoped_pids(dormant.clone());
-        let plan = self.hide_with_plan(&targets, &freeze_set, &dormant);
+        let (freeze_set, efficiency_set) = self.power_targets(&dormant);
+        let plan = self.hide_with_plan(&targets, &freeze_set, &efficiency_set, &dormant);
         if let Some(t) = plan.fresh.first() {
             logging::debug(&format!("{trigger}触发隐藏前台窗口: {}", t.describe()));
         }
@@ -618,7 +652,7 @@ impl AgentState {
                 setting.freeze_after_hide = false;
                 setting.send_before_hide = false;
                 setting.minimize_before_hide = false;
-                let plan = self.hide_with_plan_using(&setting, &targets, &[], &[], &[]);
+                let plan = self.hide_with_plan_using(&setting, &targets, &[], &[], &[], &[]);
                 if !plan.fresh.is_empty() {
                     logging::debug(&format!("窗口恢复工具隐藏 {} 个窗口", plan.fresh.len()));
                 }

@@ -56,7 +56,9 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [增強凍結](/zh-tw/guide/freeze) |
-| `power_scope` | string | `"self"` | [作用範圍](/zh-tw/guide/freeze)：`self`（僅目標程序）｜`tree`（及所有子程序）｜`image`（同映像名稱的所有實例）；同時決定凍結與降低記憶體佔用的涵蓋面，未知取值歸一為 `self` |
+| `power_scope` | string | `"self"` | [凍結及記憶體控制範圍](/zh-tw/guide/freeze)：`self`（僅目標程序）｜`tree`（及所有子程序）｜`image`（同映像名稱的所有實例）；決定凍結與降低記憶體佔用的涵蓋面，未知取值歸一為 `self` |
+| `efficiency_after_hide` | bool | `false` | [效率模式](/zh-tw/guide/freeze)：隱藏後把程序降為 EcoQoS + 低優先權，與凍結相互獨立 |
+| `efficiency_scope` | string | `"self"` | [效率模式範圍](/zh-tw/guide/freeze)，取值同 `power_scope`，與凍結的範圍互不影響 |
 | `trim_memory_after_freeze` | bool | `false` | [降低記憶體佔用](/zh-tw/guide/freeze)（僅對被凍結的程序生效） |
 | `show_float_window` | bool | `false` | 浮動視窗（開發中） |
 | `mouse` | object | 見下 | [滑鼠按鍵隱藏](/zh-tw/guide/hotkeys) |

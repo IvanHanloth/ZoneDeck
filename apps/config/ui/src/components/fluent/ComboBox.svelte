@@ -206,6 +206,14 @@
   .opt.sel {
     background: var(--subtle-hover);
   }
+  /* 同 NavView：选中项被指到时要看得出来 */
+  .opt.sel.active {
+    background: var(--subtle-selected-hover);
+  }
+  .opt.sel:active {
+    background: var(--subtle-pressed);
+    color: var(--text-2);
+  }
   .opt-label {
     overflow: hidden;
     text-overflow: ellipsis;

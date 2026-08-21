@@ -266,6 +266,8 @@ pub struct HidePlan {
     pub mute: Vec<ProcRecord>,
     /// 本次新增的冻结进程。
     pub freeze: Vec<ProcRecord>,
+    /// 本次新增的效率模式进程。与冻结相互独立，两份名单可以不重合。
+    pub efficiency: Vec<ProcRecord>,
     /// 是否发送媒体暂停键。
     pub send_pause: bool,
     /// 本轮冻结方式；首轮跟随设置，之后沿用。
@@ -310,6 +312,7 @@ pub struct HideController<W: WindowManager, E: Effects> {
     hidden: Vec<Target>,
     frozen: Vec<ProcRecord>,
     muted: Vec<ProcRecord>,
+    efficiency: Vec<ProcRecord>,
     used_enhanced: bool,
 }
 
@@ -321,6 +324,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             hidden: Vec::new(),
             frozen: Vec::new(),
             muted: Vec::new(),
+            efficiency: Vec::new(),
             used_enhanced: false,
         }
     }
@@ -386,6 +390,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         setting: &Setting,
         targets: &[Target],
         freeze_pids: &[u32],
+        efficiency_pids: &[u32],
         mute_pids: &[u32],
         whitelist: &[WhitelistRule],
     ) -> HidePlan {
@@ -462,6 +467,18 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             }
         }
 
+        let mut efficiency: Vec<ProcRecord> = Vec::new();
+        if setting.efficiency_after_hide {
+            for pid in efficiency_pids {
+                if *pid != 0
+                    && !self.efficiency.iter().any(|r| r.pid == *pid)
+                    && !efficiency.iter().any(|r| r.pid == *pid)
+                {
+                    efficiency.push(self.proc_record(*pid));
+                }
+            }
+        }
+
         HidePlan {
             // 全是「不改动可见性」的目标时什么都没发生，别把用户正在看的视频停掉。
             send_pause: setting.send_before_hide
@@ -476,6 +493,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             fresh,
             mute,
             freeze,
+            efficiency,
         }
     }
 
@@ -504,6 +522,13 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
         self.muted.sort_unstable_by_key(|r| r.pid);
 
+        // 排在冻结之前：冻结会把进程整个停下，之后再调 EcoQoS 没有意义。
+        for r in &plan.efficiency {
+            self.effects.set_efficiency(r.pid);
+            self.efficiency.push(*r);
+        }
+        self.efficiency.sort_unstable_by_key(|r| r.pid);
+
         self.used_enhanced = plan.enhanced;
         // 冻结前必须等屏幕画完，否则被冻结的窗口会留下残影。整批只等一次。
         if !plan.freeze.is_empty() {
@@ -523,10 +548,11 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     }
 
     /// plan + commit 的便捷封装，不带白名单；供测试与不需要白名单的调用方使用。
-    /// 静音门槛退化为「目标自己的 PID」。
-    pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], freeze_pids: &[u32]) {
+    /// 静音门槛退化为「目标自己的 PID」，`power_pids` 同时用作冻结与效率模式的
+    /// 候选集，实际施加哪一种由 `setting` 的两个开关决定。
+    pub fn apply_hide(&mut self, setting: &Setting, targets: &[Target], power_pids: &[u32]) {
         let mute_pids: Vec<u32> = targets.iter().map(|t| t.pid).collect();
-        let plan = self.plan_hide(setting, targets, freeze_pids, &mute_pids, &[]);
+        let plan = self.plan_hide(setting, targets, power_pids, power_pids, &mute_pids, &[]);
         self.commit_hide(plan);
     }
 
@@ -591,6 +617,14 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         for r in &muted {
             if self.proc_alive(r) {
                 self.effects.mute(r.pid, false);
+            }
+        }
+
+        // 排在解冻之后：先让进程跑起来，再把它的调度待遇还回去。
+        let efficiency = std::mem::take(&mut self.efficiency);
+        for r in &efficiency {
+            if self.proc_alive(r) {
+                self.effects.clear_efficiency(r.pid);
             }
         }
         outcome
@@ -669,6 +703,18 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
         self.muted = keep;
 
+        let (restore_eco, keep): (Vec<ProcRecord>, Vec<ProcRecord>) = self
+            .efficiency
+            .iter()
+            .copied()
+            .partition(|r| pids.contains(&r.pid));
+        for r in &restore_eco {
+            if self.proc_alive(r) {
+                self.effects.clear_efficiency(r.pid);
+            }
+        }
+        self.efficiency = keep;
+
         show.len()
     }
 
@@ -700,6 +746,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             hidden: self.hidden.clone(),
             frozen: self.frozen.clone(),
             muted: self.muted.clone(),
+            efficiency: self.efficiency.clone(),
             enhanced: self.used_enhanced,
             ..Default::default()
         }
@@ -711,6 +758,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         snapshot.hidden.extend(plan.fresh.iter().cloned());
         snapshot.frozen.extend(plan.freeze.iter().copied());
         snapshot.muted.extend(plan.mute.iter().copied());
+        snapshot.efficiency.extend(plan.efficiency.iter().copied());
         snapshot.enhanced = plan.enhanced;
         snapshot
     }
@@ -720,6 +768,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.hidden = snapshot.hidden;
         self.frozen = snapshot.frozen;
         self.muted = snapshot.muted;
+        self.efficiency = snapshot.efficiency;
         self.used_enhanced = snapshot.enhanced;
         self.show()
     }
@@ -768,6 +817,7 @@ mod tests {
         let plan = controller.plan_hide(
             &config.setting,
             &targets,
+            &dormant,
             &dormant,
             &dormant,
             config.whitelist(),
@@ -1147,6 +1197,8 @@ mod tests {
         suspends: RefCell<Vec<u32>>,
         resumes: RefCell<Vec<u32>>,
         trims: RefCell<Vec<u32>>,
+        eco_on: RefCell<Vec<u32>>,
+        eco_off: RefCell<Vec<u32>>,
         pauses: RefCell<u32>,
         settles: RefCell<u32>,
         /// 冻结相关动作的调用顺序。
@@ -1171,6 +1223,14 @@ mod tests {
         fn trim_working_set(&self, pid: u32) {
             self.trims.borrow_mut().push(pid);
             self.order.borrow_mut().push(format!("trim:{pid}"));
+        }
+        fn set_efficiency(&self, pid: u32) {
+            self.eco_on.borrow_mut().push(pid);
+            self.order.borrow_mut().push(format!("eco_on:{pid}"));
+        }
+        fn clear_efficiency(&self, pid: u32) {
+            self.eco_off.borrow_mut().push(pid);
+            self.order.borrow_mut().push(format!("eco_off:{pid}"));
         }
         fn send_pause(&self) {
             *self.pauses.borrow_mut() += 1;
@@ -1427,7 +1487,7 @@ mod tests {
         let (targets, _) = resolve_targets(&mut config, &windows, 0);
         let dormant = dormant_pids(&targets, &windows);
 
-        let plan = controller.plan_hide(&config.setting, &targets, &dormant, &dormant, &[]);
+        let plan = controller.plan_hide(&config.setting, &targets, &dormant, &dormant, &dormant, &[]);
         let planned = controller.planned_snapshot(&plan);
         controller.commit_hide(plan);
         let actual = controller.snapshot();
@@ -1943,6 +2003,102 @@ mod tests {
         assert!(controller.wm.is_visible(10));
     }
 
+    // ---- 效率模式 ----------------------------------------------------------
+
+    /// 效率模式独立于冻结：不开冻结也照样施加，恢复时撤销。
+    #[test]
+    fn efficiency_applies_without_freezing_and_is_cleared_on_show() {
+        let setting = Setting {
+            hide_current: false,
+            freeze_after_hide: false,
+            efficiency_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win_pid("A", 10, "a.exe", 100, "C:\\a.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[100]);
+
+        assert_eq!(*controller.effects.eco_on.borrow(), vec![100]);
+        assert!(
+            controller.effects.suspends.borrow().is_empty(),
+            "没开冻结就不该冻结"
+        );
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.eco_off.borrow(),
+            vec![100],
+            "恢复时应撤销效率模式"
+        );
+    }
+
+    /// 冻结与效率模式同开时，效率模式排在冻结之前 ——
+    /// 进程一旦被挂起，再去调 EcoQoS 就没有意义了。
+    #[test]
+    fn efficiency_is_applied_before_freezing() {
+        let setting = Setting {
+            hide_current: false,
+            freeze_after_hide: true,
+            efficiency_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win_pid("A", 10, "a.exe", 100, "C:\\a.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[100]);
+
+        assert_eq!(
+            *controller.effects.order.borrow(),
+            vec!["eco_on:100", "suspend:100"],
+        );
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.order.borrow(),
+            vec!["eco_on:100", "suspend:100", "resume:100", "eco_off:100"],
+            "恢复时先解冻再还调度待遇"
+        );
+    }
+
+    #[test]
+    fn efficiency_is_skipped_when_the_option_is_off() {
+        let setting = Setting {
+            hide_current: false,
+            efficiency_after_hide: false,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win_pid("A", 10, "a.exe", 100, "C:\\a.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[100]);
+
+        assert!(controller.effects.eco_on.borrow().is_empty());
+    }
+
+    /// 快照要带上效率模式记录，否则崩溃重启后这些进程会一直留在低优先级。
+    #[test]
+    fn efficiency_survives_the_recovery_snapshot() {
+        let setting = Setting {
+            hide_current: false,
+            efficiency_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(vec![win_pid("A", 10, "a.exe", 100, "C:\\a.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[100]);
+
+        let snapshot = controller.snapshot();
+        assert_eq!(
+            snapshot.efficiency.iter().map(|r| r.pid).collect::<Vec<_>>(),
+            vec![100]
+        );
+        assert!(!snapshot.is_empty(), "带效率模式记录的快照不算空");
+
+        // 换一个控制器从快照恢复，应当把效率模式撤掉。
+        let wm = MockWm::new(vec![win_pid("A", 10, "a.exe", 100, "C:\\a.exe")], 0);
+        let mut fresh = HideController::new(wm, MockEffects::default());
+        fresh.restore_from(snapshot);
+        assert_eq!(*fresh.effects.eco_off.borrow(), vec![100]);
+    }
+
     // ---- 降低内存占用 ------------------------------------------------------
 
     #[test]
@@ -2336,7 +2492,7 @@ mod tests {
             "此时只有句柄，resolve_targets 判不出它属于 explorer"
         );
 
-        let plan = controller.plan_hide(&config.setting, &targets, &[], &[], config.whitelist());
+        let plan = controller.plan_hide(&config.setting, &targets, &[], &[], &[], config.whitelist());
         assert_eq!(
             plan.fresh.iter().map(|t| t.restore).collect::<Vec<_>>(),
             vec![Restore::Skip],
@@ -2362,7 +2518,7 @@ mod tests {
         let mut controller = HideController::new(wm, MockEffects::default());
 
         let (targets, _) = resolve_targets(&mut config, &controller.enumerate(), TASKBAR);
-        let plan = controller.plan_hide(&config.setting, &targets, &[], &[], config.whitelist());
+        let plan = controller.plan_hide(&config.setting, &targets, &[], &[], &[], config.whitelist());
         assert_eq!(plan.fresh.len(), 1);
         assert_eq!(plan.fresh[0].restore, Restore::Show);
         controller.commit_hide(plan);
@@ -2382,7 +2538,7 @@ mod tests {
         wm.add_unlisted(TASKBAR, 15172, "C:\\Windows\\explorer.exe");
         let mut controller = HideController::new(wm, MockEffects::default());
 
-        let plan = controller.plan_hide(&setting, &[Target::bare(TASKBAR, 0)], &[], &[], &[]);
+        let plan = controller.plan_hide(&setting, &[Target::bare(TASKBAR, 0)], &[], &[], &[], &[]);
         assert_eq!(plan.fresh.len(), 1, "空白名单不拦任何窗口");
         assert_eq!(plan.fresh[0].restore, Restore::Show);
     }
@@ -2406,7 +2562,7 @@ mod tests {
 
         // 只有 100 过了门槛。
         let targets = [Target::bare(10, 100), Target::bare(20, 200)];
-        let plan = controller.plan_hide(&setting, &targets, &[], &[100], &[]);
+        let plan = controller.plan_hide(&setting, &targets, &[], &[], &[100], &[]);
         controller.commit_hide(plan);
 
         assert_eq!(controller.hidden_count(), 2, "两个窗口都照常隐藏");

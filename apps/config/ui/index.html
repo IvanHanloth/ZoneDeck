@@ -5,13 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" href="/logo.svg" type="image/svg+xml" />
     <title>ZoneDeck</title>
-
-    <!--
-      底色默认就铺：backdrop class 由 main.js 异步写入，落地前的那几帧没有它，
-      不铺会直接透出桌面。Mica 可用时再转回透明，交给 DWM 画。
-      配色在这里重抄一份而不是引用 app.css —— app.css 是打包产物，加载得更晚。
-      CSP 放行内联样式但不放行内联脚本，所以这里只能是纯 CSS。
-    -->
     <style>
       html,
       body {

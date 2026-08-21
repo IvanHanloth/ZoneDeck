@@ -33,8 +33,7 @@
     padding: 10px 16px;
     border-radius: var(--r-overlay);
     border: 1px solid var(--stroke);
-    background: color-mix(in srgb, var(--tint) 12%, var(--card));
-    backdrop-filter: blur(60px) saturate(125%);
+    background: color-mix(in srgb, var(--tint) 12%, var(--flyout-solid));
     box-shadow: var(--shadow-flyout);
     color: var(--text);
     font-size: 13px;

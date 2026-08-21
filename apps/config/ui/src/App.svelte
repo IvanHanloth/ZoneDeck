@@ -157,33 +157,37 @@
     />
 
     <main class="content">
-      <h1 class="type-subtitle page-title" class:wide={fill}>
-        <PageIcon width="22" height="22" />
-        {pageTitle}
-      </h1>
-      <div class="page-body" class:fill>
-        <div class="page-inner">
-          {#if !app.config}
-            <p class="hint loading">{t("app.loadingConfig")}</p>
-          {:else if app.tab === "binding"}
-            <BindingPanel />
-          {:else if app.tab === "whitelist"}
-            <WhitelistPanel />
-          {:else if app.tab === "hotkeys"}
-            <HotkeysPanel />
-          {:else if app.tab === "hide"}
-            <HidePanel />
-          {:else if app.tab === "power"}
-            <PowerPanel />
-          {:else if app.tab === "options"}
-            <OptionsPanel />
-          {:else if app.tab === "notify"}
-            <NotificationsPanel />
-          {:else}
-            <AboutPanel />
-          {/if}
+      <!-- key 到 tab 上：换页时这一整块重建，进场动画随之重播，
+           滚动容器也一并新建，新页面自然从顶部开始看。 -->
+      {#key app.tab}
+        <h1 class="type-subtitle page-title" class:wide={fill}>
+          <PageIcon width="22" height="22" />
+          {pageTitle}
+        </h1>
+        <div class="page-body" class:fill>
+          <div class="page-inner">
+            {#if !app.config}
+              <p class="hint loading">{t("app.loadingConfig")}</p>
+            {:else if app.tab === "binding"}
+              <BindingPanel />
+            {:else if app.tab === "whitelist"}
+              <WhitelistPanel />
+            {:else if app.tab === "hotkeys"}
+              <HotkeysPanel />
+            {:else if app.tab === "hide"}
+              <HidePanel />
+            {:else if app.tab === "power"}
+              <PowerPanel />
+            {:else if app.tab === "options"}
+              <OptionsPanel />
+            {:else if app.tab === "notify"}
+              <NotificationsPanel />
+            {:else}
+              <AboutPanel />
+            {/if}
+          </div>
         </div>
-      </div>
+      {/key}
     </main>
   </div>
 
@@ -270,5 +274,29 @@
   .loading {
     text-align: center;
     padding: 48px 0;
+  }
+
+  /* 换页进场：整块内容从下方浮上来并淡入，同 Win11 设置的页面切换。
+     标题与正文同时起步，读起来是一整页换上来，而不是两块各自动。
+
+     位移刻意走 relative + top，不用 translate：任何非 none 的 transform／translate
+     都会让元素变成 position:fixed 后代的包含块，页内的下拉、录制弹窗、Issue 弹窗
+     就会以这里为基准定位而错位（fill-mode 留下的 translate:0 同样算数）。 */
+  .page-title,
+  .page-inner {
+    position: relative;
+    animation: page-enter var(--dur-slow) var(--ease-standard) both;
+  }
+  @keyframes page-enter {
+    from {
+      opacity: 0;
+      top: 24px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .page-title,
+    .page-inner {
+      animation: none;
+    }
   }
 </style>

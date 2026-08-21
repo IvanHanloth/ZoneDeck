@@ -122,6 +122,15 @@ export async function refreshPssuspend() {
   }
 }
 
+/** 打开程序目录，即 pssuspend64.exe 该放的位置。 */
+export async function openProgramDir() {
+  try {
+    await invoke("open_program_dir");
+  } catch (err) {
+    toast(t("state.openDirFailed", { err }), true);
+  }
+}
+
 /** 切到「关于与反馈」分页。 */
 export function openAboutTab() {
   app.tab = "about";

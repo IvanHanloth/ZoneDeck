@@ -4,12 +4,14 @@
   import SettingsExpander from "./fluent/SettingsExpander.svelte";
   import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
   import ComboBox from "./fluent/ComboBox.svelte";
-  import InfoBar from "./fluent/InfoBar.svelte";
   import IconCrosshair from "~icons/lucide/crosshair";
   import IconSnowflake from "~icons/lucide/snowflake";
   import IconZap from "~icons/lucide/zap";
+  import IconLeaf from "~icons/lucide/leaf";
+  import IconFileSearch from "~icons/lucide/file-search";
   import IconMemoryStick from "~icons/lucide/memory-stick";
-  import { app, refreshPssuspend, toast } from "../lib/state.svelte.js";
+  import IconDownload from "~icons/lucide/download";
+  import { app, openProgramDir, refreshPssuspend, toast } from "../lib/state.svelte.js";
   import { openExternal } from "../lib/verhub.js";
   import { t } from "../lib/i18n.svelte.js";
 
@@ -24,6 +26,8 @@
     SCOPES.map((sc) => ({ value: sc.value, label: t(sc.label) })),
   );
 
+  const PSTOOLS_URL = "https://download.sysinternals.com/files/PSTools.zip";
+
   async function openLink(url) {
     try {
       await openExternal(url);
@@ -32,9 +36,12 @@
     }
   }
 
-  // 未开启「隐藏窗口时冻结进程」时，本页其余选项一律置灰禁用 ——
-  // 清空工作集只对停摆的进程有意义，作用范围也就无从谈起。
+  // 未开启「隐藏窗口时冻结进程」时，冻结相关选项一律置灰 ——
+  // 清空工作集只对停摆的进程有意义，冻结的作用范围也就无从谈起。
   const freezeOff = $derived(!s.freeze_after_hide);
+  const efficiencyOff = $derived(!s.efficiency_after_hide);
+  // 两套能效手段都没开，作用范围整组没有可调的东西。
+  const scopeOff = $derived(freezeOff && efficiencyOff);
 
   // 增强冻结的前置条件；任一不满足即置灰。
   const enhancedBlocked = $derived.by(() => {
@@ -49,7 +56,64 @@
   // 主开关一开就把子项摊开，省得用户再点一次才看见。
   // 展开态由 SettingsExpander 的 autoExpand 负责联动，这里只存状态。
   let expanded = $state(false);
+  let scopeExpanded = $state(false);
 </script>
+
+<SettingsGroup title={t("power.efficiencyCard")}>
+  <SettingsCard
+    icon={IconLeaf}
+    label={t("power.efficiencyAfterHide")}
+    description={t("power.efficiencyAfterHideDesc")}
+  >
+    {#snippet control()}<ToggleSwitch bind:checked={s.efficiency_after_hide} />{/snippet}
+  </SettingsCard>
+</SettingsGroup>
+
+<SettingsGroup title={t("power.scopeCard")}>
+  <SettingsExpander
+    bind:open={scopeExpanded}
+    icon={IconCrosshair}
+    label={t("power.scope")}
+    disabled={scopeOff}
+    description={t("power.scopeDesc")}
+  >
+    <SettingsCard
+      variant="sub"
+      icon={IconSnowflake}
+      label={t("power.scopeFreeze")}
+      disabled={freezeOff}
+      description={t("power.scopeFreezeDesc")}
+    >
+      {#snippet control()}
+        <ComboBox
+          bind:value={s.power_scope}
+          options={scopeOptions}
+          disabled={freezeOff}
+          title={freezeOff ? t("power.needFreezeFirst") : ""}
+          ariaLabel={t("power.scopeFreeze")}
+        />
+      {/snippet}
+    </SettingsCard>
+
+    <SettingsCard
+      variant="sub"
+      icon={IconLeaf}
+      label={t("power.scopeEfficiency")}
+      disabled={efficiencyOff}
+      description={t("power.scopeEfficiencyDesc")}
+    >
+      {#snippet control()}
+        <ComboBox
+          bind:value={s.efficiency_scope}
+          options={scopeOptions}
+          disabled={efficiencyOff}
+          title={efficiencyOff ? t("power.needEfficiencyFirst") : ""}
+          ariaLabel={t("power.scopeEfficiency")}
+        />
+      {/snippet}
+    </SettingsCard>
+  </SettingsExpander>
+</SettingsGroup>
 
 <SettingsGroup title={t("power.freezeCard")}>
   <SettingsExpander
@@ -85,36 +149,32 @@
 
     <SettingsCard
       variant="sub"
-      icon={IconCrosshair}
-      label={t("power.scope")}
+      icon={IconFileSearch}
+      label={t("power.pssuspend")}
       disabled={freezeOff}
-      description={t("power.scopeDesc")}
+      description={t("power.pssuspendDesc")}
     >
       {#snippet control()}
-        <ComboBox
-          bind:value={s.power_scope}
-          options={scopeOptions}
-          disabled={freezeOff}
-          title={freezeOff ? t("power.needFreezeFirst") : ""}
-          ariaLabel={t("power.scope")}
-        />
+        <strong class:missing={!app.pssuspend}>
+          {t(app.pssuspend ? "power.pssuspendFound" : "power.pssuspendMissing")}
+        </strong>
+        <!-- 已就位就没什么可下载、可重测的了，只留一个「去看看」的入口 -->
+        {#if !app.pssuspend}
+          <button class="btn" onclick={() => openLink(PSTOOLS_URL)} disabled={freezeOff}>
+            <IconDownload width="14" height="14" />
+            {t("power.downloadPstools")}
+          </button>
+        {/if}
+        <button class="btn" onclick={openProgramDir} disabled={freezeOff}>
+          {t("power.openProgramDir")}
+        </button>
+        {#if !app.pssuspend}
+          <button class="btn" onclick={refreshPssuspend} disabled={freezeOff}>
+            {t("power.recheck")}
+          </button>
+        {/if}
       {/snippet}
     </SettingsCard>
-
-    <div class="sub-note">
-      <InfoBar disabled={freezeOff}>
-        {t("power.freezeNoteBefore")}
-        <button
-          class="link"
-          onclick={() => openLink("https://download.sysinternals.com/files/PSTools.zip")}
-          disabled={freezeOff}>PSTools</button
-        >
-        {t("power.freezeNoteAfter")}
-        <button class="link" onclick={refreshPssuspend} disabled={freezeOff}>
-          {t("power.recheck")}
-        </button>
-      </InfoBar>
-    </div>
   </SettingsExpander>
 </SettingsGroup>
 
@@ -136,21 +196,8 @@
 </SettingsGroup>
 
 <style>
-  .sub-note {
-    padding: 12px 16px 16px 20px;
-    border-top: 1px solid var(--divider);
-  }
-  .link {
-    color: var(--accent);
-    font: inherit;
-    padding: 0;
-  }
-  .link:hover {
-    text-decoration: underline;
-  }
-  .link:disabled {
-    color: var(--text-disabled);
-    cursor: not-allowed;
-    text-decoration: none;
+  /* 未检测到时用警告色，一眼能看出增强冻结还差这一步 */
+  .missing {
+    color: var(--warn);
   }
 </style>

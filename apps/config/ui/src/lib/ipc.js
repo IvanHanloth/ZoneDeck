@@ -35,6 +35,8 @@ const mockConfig = {
     freeze_after_hide: false,
     enhanced_freeze: false,
     power_scope: "self",
+    efficiency_after_hide: false,
+    efficiency_scope: "self",
     trim_memory_after_freeze: false,
     show_float_window: false,
     mouse: {
@@ -175,6 +177,7 @@ function mockInvoke(cmd, args) {
     case "show_windows":
     case "show_all_windows":
     case "open_log_dir":
+    case "open_program_dir":
       return null;
     case "app_info":
       return {

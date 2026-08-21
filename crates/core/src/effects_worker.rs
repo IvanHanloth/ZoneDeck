@@ -14,6 +14,8 @@ enum Task {
     Suspend { pid: u32, enhanced: bool },
     Resume { pid: u32, enhanced: bool },
     TrimWorkingSet { pid: u32 },
+    SetEfficiency { pid: u32 },
+    ClearEfficiency { pid: u32 },
     SendPause,
     Quit,
 }
@@ -28,6 +30,8 @@ impl Task {
             Task::Suspend { pid, enhanced } => format!("冻结 (pid={pid}, 增强={enhanced})"),
             Task::Resume { pid, enhanced } => format!("解冻 (pid={pid}, 增强={enhanced})"),
             Task::TrimWorkingSet { pid } => format!("清空工作集 (pid={pid})"),
+            Task::SetEfficiency { pid } => format!("开启效率模式 (pid={pid})"),
+            Task::ClearEfficiency { pid } => format!("撤销效率模式 (pid={pid})"),
             Task::SendPause => "发送媒体暂停键".to_string(),
             Task::Quit => "结束副作用线程".to_string(),
         }
@@ -54,6 +58,8 @@ impl EffectsWorker {
                         Task::Suspend { pid, enhanced } => inner.suspend(pid, enhanced),
                         Task::Resume { pid, enhanced } => inner.resume(pid, enhanced),
                         Task::TrimWorkingSet { pid } => inner.trim_working_set(pid),
+                        Task::SetEfficiency { pid } => inner.set_efficiency(pid),
+                        Task::ClearEfficiency { pid } => inner.clear_efficiency(pid),
                         Task::SendPause => inner.send_pause(),
                         Task::Quit => break,
                     }
@@ -126,6 +132,12 @@ impl Effects for AsyncEffects {
     fn trim_working_set(&self, pid: u32) {
         self.send(Task::TrimWorkingSet { pid });
     }
+    fn set_efficiency(&self, pid: u32) {
+        self.send(Task::SetEfficiency { pid });
+    }
+    fn clear_efficiency(&self, pid: u32) {
+        self.send(Task::ClearEfficiency { pid });
+    }
     fn send_pause(&self) {
         self.send(Task::SendPause);
     }
@@ -161,6 +173,12 @@ mod tests {
         fn trim_working_set(&self, pid: u32) {
             self.calls.lock().unwrap().push(format!("trim:{pid}"));
         }
+        fn set_efficiency(&self, pid: u32) {
+            self.calls.lock().unwrap().push(format!("eco_on:{pid}"));
+        }
+        fn clear_efficiency(&self, pid: u32) {
+            self.calls.lock().unwrap().push(format!("eco_off:{pid}"));
+        }
         fn send_pause(&self) {
             self.calls.lock().unwrap().push("pause".into());
         }
@@ -175,10 +193,12 @@ mod tests {
         // 暂停键先于冻结、静置紧挨冻结前、清空工作集排在冻结之后。
         effects.send_pause();
         effects.mute(100, true);
+        effects.set_efficiency(100);
         effects.settle_before_freeze();
         effects.suspend(100, false);
         effects.trim_working_set(100);
         effects.resume(100, false);
+        effects.clear_efficiency(100);
 
         worker.shutdown(Duration::from_secs(5));
 
@@ -187,10 +207,12 @@ mod tests {
             vec![
                 "pause",
                 "mute:100:true",
+                "eco_on:100",
                 "settle",
                 "suspend:100",
                 "trim:100",
-                "resume:100"
+                "resume:100",
+                "eco_off:100"
             ],
             "任务应按入队顺序全部执行完毕（shutdown 排干队列）"
         );
