@@ -1217,7 +1217,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                     if idle::should_auto_hide(
                         idle_ms,
                         state.config.setting.auto_hide_time,
-                        state.controller.is_hidden(),
+                        state.controller.tracks_any(),
                     ) {
                         state.apply_hide(Trigger::Idle);
                     }

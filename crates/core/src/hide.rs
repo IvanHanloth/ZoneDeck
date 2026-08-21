@@ -329,7 +329,18 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
     }
 
+    /// 是否处于隐藏状态：至少藏起了一个窗口，或有进程被冻结 / 静音 / 降到效率模式。
+    /// 带 [`Restore::Skip`] 的记录本程序没动过它的可见性，只为记账留着，不算数。
     pub fn is_hidden(&self) -> bool {
+        self.hidden.iter().any(|t| t.restore != Restore::Skip)
+            || !self.frozen.is_empty()
+            || !self.muted.is_empty()
+            || !self.efficiency.is_empty()
+    }
+
+    /// 是否还留着隐藏记录（含 [`Restore::Skip`]）。判断这一轮隐藏跑过没有用它，
+    /// 别用 [`Self::is_hidden`]——什么都没藏成的那一轮同样不该再跑第二遍。
+    pub fn tracks_any(&self) -> bool {
         !self.hidden.is_empty()
     }
 
@@ -1669,6 +1680,7 @@ mod tests {
     fn forget_window_removes_record_and_update_title_syncs_it() {
         let setting = Setting {
             hide_current: false,
+            mute_after_hide: false,
             ..Setting::default()
         };
         let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
@@ -1851,6 +1863,60 @@ mod tests {
             vec![(500, true), (600, true), (500, false), (600, false)],
             "两个进程都该取消静音"
         );
+    }
+
+    /// 一个窗口都没藏成、也没施加副作用：这一轮什么都没发生，不算隐藏状态。
+    #[test]
+    fn a_round_that_touched_nothing_is_not_a_hidden_state() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: false,
+            ..Setting::default()
+        };
+        // 窗口是目标程序自己藏起来的，本程序没动过它。
+        let wm = MockWm::new(
+            vec![win_pid("音乐", 10, "music.exe", 500, "C:\\music.exe")],
+            0,
+        );
+        wm.hide(10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(&setting, &[Target::bare(10, 500)], &[]);
+        assert_eq!(
+            controller.snapshot().hidden[0].restore,
+            Restore::Skip,
+            "前提：这条记录不改动可见性"
+        );
+        assert!(!controller.is_hidden(), "什么都没动就不该显示成隐藏状态");
+        assert!(
+            controller.tracks_any(),
+            "记录照常入集，这一轮不该被自动隐藏再跑一遍"
+        );
+    }
+
+    /// 窗口本来就藏着、只施加了副作用：仍算隐藏状态，否则用户无从把进程放出来。
+    #[test]
+    fn effects_alone_still_count_as_a_hidden_state() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("音乐", 10, "music.exe", 500, "C:\\music.exe")],
+            0,
+        );
+        wm.hide(10);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        controller.apply_hide(&setting, &[Target::bare(10, 500)], &[500]);
+        assert_eq!(controller.snapshot().hidden[0].restore, Restore::Skip);
+        assert_eq!(*controller.effects.suspends.borrow(), vec![500]);
+        assert!(controller.is_hidden(), "进程还冻着，就得让用户能恢复");
+
+        controller.show();
+        assert!(!controller.is_hidden(), "副作用撤销后回到未隐藏状态");
     }
 
     /// 可见窗口一个不剩的进程同样该被冻结。
@@ -2458,6 +2524,39 @@ mod tests {
         assert!(
             dormant_pids(&targets, &windows).is_empty(),
             "窗口还开着，冻结与静音都不该沾它"
+        );
+    }
+
+    /// 目标全被「忽略隐藏」挡下：跑完一轮桌面纹丝不动，不该显示成隐藏状态。
+    #[test]
+    fn a_round_blocked_entirely_by_the_whitelist_is_not_a_hidden_state() {
+        let mut config = Config {
+            whitelist: Some(vec![allow("explorer.exe", IgnoreMode::Hide)]),
+            ..Default::default()
+        };
+        config.setting.hide_current = true;
+        config.setting.mute_after_hide = true;
+        config.setting.freeze_after_hide = true;
+
+        let wm = MockWm::new(
+            vec![win_pid(
+                "资源管理器",
+                10,
+                "explorer.exe",
+                500,
+                "C:\\Windows\\explorer.exe",
+            )],
+            10,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        assert!(controller.wm.is_visible(10), "窗口必须还在桌面上");
+        assert!(controller.effects.suspends.borrow().is_empty());
+        assert!(controller.effects.mutes.borrow().is_empty());
+        assert!(
+            !controller.is_hidden(),
+            "桌面纹丝不动，托盘不该显示成隐藏状态"
         );
     }
 

@@ -16,8 +16,10 @@ pub fn idle_millis() -> Option<u32> {
     }
 }
 
-pub fn should_auto_hide(idle_ms: u32, threshold_minutes: u32, currently_hidden: bool) -> bool {
-    !currently_hidden
+/// 空闲是否已到自动隐藏的点。`has_records` 传「控制器里还留着隐藏记录吗」，
+/// 而不是「是否处于隐藏状态」——什么都没藏成的那一轮也不该每个滴答重跑一次。
+pub fn should_auto_hide(idle_ms: u32, threshold_minutes: u32, has_records: bool) -> bool {
+    !has_records
         && threshold_minutes > 0
         && u64::from(idle_ms) >= u64::from(threshold_minutes) * 60_000
 }
@@ -39,10 +41,10 @@ mod tests {
     }
 
     #[test]
-    fn should_auto_hide_skips_when_already_hidden() {
+    fn should_auto_hide_skips_when_records_already_exist() {
         assert!(
             !should_auto_hide(10 * 60_000, 5, true),
-            "已隐藏时不应重复隐藏"
+            "这一轮已经跑过，不应重复隐藏"
         );
     }
 
