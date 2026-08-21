@@ -169,8 +169,10 @@ export default {
   "hotkeys.minutes": "min",
 
   "recorder.edit": "Change shortcut",
-  "recorder.dialogHint": "Press a key combination to change this shortcut. Modifiers (Ctrl / Alt / Shift / Win) need to be paired with another key.",
+  "recorder.dialogHint": "Press a key combination to change this shortcut. Modifiers (Ctrl / Alt / Shift / Win) need to be paired with another key. While recording, keys are captured exclusively and are not passed on to other programs.",
   "recorder.waiting": "Waiting for a key…",
+  "recorder.unsupportedKey": "That key cannot be used in a shortcut. Try another one.",
+  "recorder.captureFailed": "The keyboard could not be captured exclusively; keys pressed while recording may still trigger other programs.",
   "common.save": "Save",
   "recorder.disabled": "Disabled",
   "recorder.holdModifiers": "Hold the modifier keys…",

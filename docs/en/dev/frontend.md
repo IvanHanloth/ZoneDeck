@@ -26,6 +26,7 @@ apps/config/ui/
 │       ├── state.svelte.js  Global state ($state) + actions
 │       ├── ipc.js           Calling Tauri commands / listening for events
 │       ├── hotkey.js        Hotkey parsing/formatting (with hotkey.test.js)
+│       ├── capture.js       Exclusive keyboard capture while recording (backend hook, DOM fallback)
 │       ├── pointer.js       Mouse click / interval constants (with pointer.test.js)
 │       ├── grouping.js      Adding, removing and filtering window/process rules (with grouping.test.js)
 │       ├── theme.js         Theme switching (with theme.test.js)

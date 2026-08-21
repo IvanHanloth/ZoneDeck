@@ -26,6 +26,7 @@ apps/config/ui/
 │       ├── state.svelte.js  全域狀態（$state）+ 各類動作
 │       ├── ipc.js           呼叫 Tauri 命令／監聽事件
 │       ├── hotkey.js        快速鍵解析/格式化（配 hotkey.test.js）
+│       ├── capture.js       錄製期獨佔鍵盤（後端攔截，失敗回落 DOM 事件）
 │       ├── pointer.js       滑鼠連按/連按時間常數（配 pointer.test.js）
 │       ├── grouping.js      視窗/程序規則的增刪與篩選（配 grouping.test.js）
 │       ├── theme.js         佈景主題切換（配 theme.test.js）
