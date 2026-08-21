@@ -135,6 +135,7 @@ fn agent_discards_snapshot_from_a_previous_boot() {
         hidden: vec![Target::bare(hwnd, std::process::id())],
         frozen: vec![],
         muted: vec![],
+        efficiency: vec![],
         enhanced: false,
     };
     std::fs::write(&recovery_path, serde_json::to_string(&stale).unwrap()).unwrap();

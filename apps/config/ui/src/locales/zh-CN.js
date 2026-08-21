@@ -239,9 +239,19 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",
 
+  "power.efficiencyCard": "效率模式",
+  "power.efficiencyAfterHide": "隐藏窗口时启用效率模式",
+  "power.efficiencyAfterHideDesc":
+    "隐藏后把进程降为效率模式：继续运行，但改用能效核心与较低频率，降低耗电与发热。与冻结相互独立，可单独使用，适合不能被停掉的后台程序。Windows 11 上效果最佳。",
+
+  "power.scopeCard": "作用范围",
   "power.scope": "作用范围",
   "power.scopeDesc":
-    "决定冻结和降低内存覆盖到哪些进程。范围越大效果越彻底，也越可能影响到其他的后台任务。",
+    "分别决定冻结与效率模式覆盖到哪些进程。范围越大效果越彻底，也越可能影响到其他的后台任务。",
+  "power.scopeFreeze": "冻结及内存控制范围",
+  "power.scopeFreezeDesc": "冻结进程与降低内存占用共用这一范围。",
+  "power.scopeEfficiency": "效率模式范围",
+  "power.scopeEfficiencyDesc": "效率模式单独使用这一范围，与冻结互不影响。",
   "power.scopeSelf": "仅目标进程",
   "power.scopeTree": "目标进程及所有子进程",
   "power.scopeImage": "同一程序的所有实例",
@@ -253,7 +263,14 @@ export default {
   "power.enhancedFreezeDesc":
     "改用 pssuspend64.exe 冻结。需在程序目录放置该文件，且核心以管理员身份运行。可能会带来一定的隐藏 / 恢复延迟。",
   "power.enhancedFreezeBlocked": "当前不可用：{reasons}。",
+  "power.pssuspend": "pssuspend64.exe",
+  "power.pssuspendDesc": "增强冻结所需的组件，需自行下载并放入程序目录。",
+  "power.pssuspendFound": "已就位",
+  "power.pssuspendMissing": "未找到",
+  "power.openProgramDir": "打开程序目录",
+  "power.downloadPstools": "下载 PSTools",
   "power.needFreezeFirst": "需先开启「隐藏窗口时冻结进程」",
+  "power.needEfficiencyFirst": "需先开启「隐藏窗口时启用效率模式」",
   "power.blockedCoreStopped": "核心未运行",
   "power.blockedNeedAdmin": "核心需以管理员身份运行",
   "power.blockedNoPssuspend": "程序目录缺少 pssuspend64.exe",
@@ -261,8 +278,6 @@ export default {
   "power.trimMemory": "降低内存占用（Beta）",
   "power.trimMemoryDesc":
     "冻结后换出程序的内存，降低其内存占用。此功能要求进程先被冻结。可能会带来一定的恢复延迟",
-  "power.freezeNoteBefore": "增强冻结需下载",
-  "power.freezeNoteAfter": "并将 pssuspend64.exe 放入程序目录，且核心以管理员身份运行。",
   "power.recheck": "重新检测",
 
   "options.startupCard": "启动与权限",
@@ -411,6 +426,7 @@ export default {
   "state.pssuspendFound": "已检测到 pssuspend64.exe",
   "state.pssuspendMissing": "未检测到 pssuspend64.exe",
   "state.detectFailed": "检测失败：{err}",
+  "state.openDirFailed": "打开程序目录失败：{err}",
   "state.partialLoadFailed": "部分数据加载失败：{reason}",
   "state.saveFailed": "保存配置失败，你的改动可能没有写入磁盘。",
   "state.configFallback": "配置文件解析失败，已恢复默认配置；原文件的备份情况见详细信息。",

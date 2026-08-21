@@ -11,6 +11,8 @@
   --layer: rgba(255, 255, 255, 0.5);
   --card: rgba(255, 255, 255, 0.7);
   --card-2: rgba(249, 249, 249, 0.5);
+  /* 实色弹层，供不需要透出下层的弹出内容使用 */
+  --flyout-solid: #f9f9f9;
   --control: rgba(255, 255, 255, 0.7);
   --control-hover: rgba(249, 249, 249, 0.5);
   --control-pressed: rgba(249, 249, 249, 0.3);
@@ -32,6 +34,8 @@
   /* 无底色控件（导航项、图标按钮）的 hover / pressed */
   --subtle-hover: rgba(0, 0, 0, 0.0373);
   --subtle-pressed: rgba(0, 0, 0, 0.0241);
+  /* 选中项再被 hover：选中态本身已占用 subtle-hover，得再深一档才看得出反馈 */
+  --subtle-selected-hover: rgba(0, 0, 0, 0.0955);
 
   /* 强调色 */
   --accent: #047857;
@@ -68,6 +72,7 @@
   --layer: rgba(58, 58, 58, 0.3);
   --card: rgba(255, 255, 255, 0.0512);
   --card-2: rgba(255, 255, 255, 0.0326);
+  --flyout-solid: #2c2c2c;
   --control: rgba(255, 255, 255, 0.0605);
   --control-hover: rgba(255, 255, 255, 0.0837);
   --control-pressed: rgba(255, 255, 255, 0.0326);
@@ -86,6 +91,7 @@
 
   --subtle-hover: rgba(255, 255, 255, 0.0605);
   --subtle-pressed: rgba(255, 255, 255, 0.0419);
+  --subtle-selected-hover: rgba(255, 255, 255, 0.1046);
 
   --accent: #34d399;
   --accent-hover: #6ee7b7;
@@ -446,6 +452,15 @@ button {
   color: var(--on-accent);
   border-color: transparent;
 }
+/* 特异性要压过 .mini:hover:not(:disabled)，否则一悬停就把 accent 底盖成灰的，
+   激活态和悬停反馈一起丢失。同 .mini.primary 的处理。 */
+.mini.active:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.mini.active:active:not(:disabled) {
+  background: var(--accent-pressed);
+  color: var(--on-accent);
+}
 
 /* 列表行：hover 浮出，选中态带 Win11 的 accent 竖条 */
 .lv-row {
@@ -466,6 +481,13 @@ button {
 }
 .lv-row.sel {
   background: var(--subtle-hover);
+}
+/* 选中行再被指到时要看得出来：选中底色已占用 subtle-hover */
+.lv-row.sel:hover {
+  background: var(--subtle-selected-hover);
+}
+.lv-row.sel:active {
+  background: var(--subtle-pressed);
 }
 .lv-row.sel::before {
   content: "";

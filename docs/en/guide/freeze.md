@@ -6,7 +6,7 @@ title: Process freezing
 
 **Process freezing** enhances window hiding: the matching process is suspended along with the window, so it stops consuming CPU (pausing background video decoding, game rendering, and so on). It is resumed automatically when the windows are restored.
 
-The related settings live in the **Power & Memory** tab of the settings window.
+The related settings live in the **Power & Memory** tab of the settings window, which also holds [efficiency mode](#efficiency-mode) — a way to save power without stopping the process.
 
 ::: warning Freezing is an advanced feature
 Freezing stops the target process entirely, so its background work (downloads, incoming messages) is paused too. Enable it only once you understand the impact.
@@ -41,9 +41,33 @@ Enhanced freezing requires **all** of the following, otherwise the option is gre
 
 Enhanced freezing invokes an external program, so it likewise adds some delay when hiding and restoring.
 
+## Efficiency mode
+
+**Efficiency mode** is the other route besides freezing: instead of stopping the process, ZoneDeck drops it into Windows' efficiency mode — it keeps running, but on efficiency cores at a lower clock and a lower scheduling priority, cutting power draw and heat. This is exactly what the "Efficiency mode" marker in Task Manager does.
+
+It is **independent of freezing**, with its own switch and its own scope. Enable either one, or both.
+
+| | Freezing | Efficiency mode |
+| --- | --- | --- |
+| Process state | Fully suspended, no longer executing | Keeps running, just slower |
+| Background work (downloads, messages) | Paused too | Carries on |
+| Suits | Programs that can stop entirely | Background programs that must not be stopped |
+| Needs administrator | ❌ | ❌ |
+| Extra files | Enhanced freezing needs pssuspend64.exe | None |
+
+- **Off** by default. Once on, it is applied on every hide and lifted automatically when the windows are restored.
+- Works on the current user's processes without administrator rights, and depends on no external tool.
+- Only processes at **normal priority** get their priority lowered. If a process set its own high or low priority, ZoneDeck applies the efficiency scheduling but leaves that priority alone.
+- **Works best on Windows 11.** Windows 10 accepts it too, but only throttles execution speed — there is no full EcoQoS scheduling.
+
 ## Scope
 
-**Scope** decides how many processes freezing and [reducing memory usage](#reduce-memory-usage) reach — both share one scope, so there is nothing to set separately. By default it covers only the process the matched window belongs to.
+**Scope** decides how many processes power control reaches; by default it covers only the process the matched window belongs to. Freezing and efficiency mode each have **their own independent scope setting**:
+
+- **Freezing & memory scope** — shared by process freezing and [reducing memory usage](#reduce-memory-usage);
+- **Efficiency mode scope** — used by efficiency mode alone, independent of freezing.
+
+Both offer the same values:
 
 | Value | Covers | Suits |
 | --- | --- | --- |
@@ -67,7 +91,7 @@ That is why ZoneDeck's core and settings app are **built into** the [whitelist](
 
 ## Excluding specific programs
 
-To keep a program running, add it to the [whitelist](/en/guide/whitelist) and tick "Skip freezing" — no need to turn off the master switch.
+To keep a program running, add it to the [whitelist](/en/guide/whitelist) and tick "Skip freezing" — no need to turn off the master switch. That same tick also makes it **skip efficiency mode**: both share this one whitelist.
 
 ## Reduce memory usage
 
@@ -78,7 +102,7 @@ This option is still in beta. It **may lengthen the time restoring takes in exch
 :::
 
 - **Off** by default, and requires "Freeze processes when hiding" to be on — otherwise the option is greyed out.
-- Applies only to processes that were **actually frozen**, over the same scope freezing uses (see [Scope](#scope)). A running process pulls its pages straight back in, so emptying its working set achieves nothing.
+- Applies only to processes that were **actually frozen**, sharing the "Freezing & memory scope" with freezing (see [Scope](#scope)). A running process pulls its pages straight back in, so emptying its working set achieves nothing.
 - Part of the saving is on paper only: the evicted pages go to the system's standby list first, and Windows would have reclaimed them anyway once memory got tight. This option just pays that cost up front.
 
 ### Why freezing alone does not lower memory
@@ -92,13 +116,14 @@ Windows only reclaims physical memory in two situations: the memory manager trim
 | Feature | Needs administrator | Needs pssuspend64.exe |
 | --- | :---: | :---: |
 | Freeze processes when hiding | ❌ | ❌ |
+| Enable efficiency mode | ❌ | ❌ |
 | Use enhanced freezing | ✅ | ✅ |
 | Scope | Depends on the freezing method used | Depends on the freezing method used |
 | Reduce memory usage | ❌ | ❌ |
 
 ## Crash safety
 
-ZoneDeck records which processes are currently frozen in `recovery.json`. Even if the core exits abnormally, the previously suspended processes are **resumed automatically** on the next start.
+ZoneDeck records which processes are currently frozen, and which ones have efficiency mode applied, in `recovery.json`. Even if the core exits abnormally, the previously suspended processes are **resumed automatically** on the next start and efficiency mode is lifted along with them.
 
 See [Window recovery & crash self-healing](/en/guide/recovery) for how to resume frozen processes manually.
 

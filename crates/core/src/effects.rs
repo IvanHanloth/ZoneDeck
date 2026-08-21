@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use crate::{audio, freeze, input, log_warn, logging};
+use crate::{audio, efficiency, freeze, input, log_warn, logging};
 
 /// 隐藏 / 恢复的副作用（静音、冻结、暂停键）。
 /// 实现可以是异步的，调用方只能依赖调用顺序与执行顺序一致（FIFO）。
@@ -15,6 +15,10 @@ pub trait Effects {
     /// 清空进程工作集，压低其内存占用；只对已挂起的进程有意义，须排在
     /// [`Effects::suspend`] 之后。
     fn trim_working_set(&self, pid: u32);
+    /// 把进程降到效率模式（EcoQoS + 低优先级），进程继续运行但只吃能效核心。
+    fn set_efficiency(&self, pid: u32);
+    /// 撤销效率模式。无状态，重复调用无副作用。
+    fn clear_efficiency(&self, pid: u32);
     /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。
     fn send_pause(&self);
 }
@@ -108,6 +112,21 @@ impl Effects for WinEffects {
         // 没有音视频在播放时不发键。
         if audio::is_audio_playing() {
             input::send_media_pause();
+        }
+    }
+
+    fn set_efficiency(&self, pid: u32) {
+        match efficiency::enable(pid) {
+            Ok(()) => logging::debug(&format!("已开启效率模式 (pid={pid})")),
+            // 不升级为 error：拿不到 PROCESS_SET_INFORMATION 是可预期的。
+            Err(e) => log_warn!("开启效率模式失败，该进程的能耗不会下降 (pid={pid}): {e}"),
+        }
+    }
+
+    fn clear_efficiency(&self, pid: u32) {
+        match efficiency::disable(pid) {
+            Ok(()) => logging::debug(&format!("已撤销效率模式 (pid={pid})")),
+            Err(e) => log_warn!("撤销效率模式失败 (pid={pid}): {e}"),
         }
     }
 }

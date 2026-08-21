@@ -250,9 +250,19 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
+  "power.efficiencyCard": "Efficiency mode",
+  "power.efficiencyAfterHide": "Enable efficiency mode when hiding",
+  "power.efficiencyAfterHideDesc":
+    "Drop the process into efficiency mode once hidden: it keeps running, but on efficiency cores at a lower clock, cutting power draw and heat. Independent of freezing and usable on its own — suited to background programs that must not be stopped. Works best on Windows 11.",
+
+  "power.scopeCard": "Scope",
   "power.scope": "Scope",
   "power.scopeDesc":
-    "Decides which processes freezing and memory reduction reach. A wider scope is more thorough, and more likely to affect other background work.",
+    "Decides which processes freezing and efficiency mode each reach. A wider scope is more thorough, and more likely to affect other background work.",
+  "power.scopeFreeze": "Freezing & memory scope",
+  "power.scopeFreezeDesc": "Shared by process freezing and memory reduction.",
+  "power.scopeEfficiency": "Efficiency mode scope",
+  "power.scopeEfficiencyDesc": "Used by efficiency mode alone, independent of freezing.",
   "power.scopeSelf": "Target process only",
   "power.scopeTree": "Target process and all its children",
   "power.scopeImage": "All instances of the same program",
@@ -264,7 +274,15 @@ export default {
   "power.enhancedFreezeDesc":
     "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator. May add some delay when hiding and restoring.",
   "power.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
+  "power.pssuspend": "pssuspend64.exe",
+  "power.pssuspendDesc":
+    "The component enhanced freezing needs. Download it yourself and drop it into the program folder.",
+  "power.pssuspendFound": "In place",
+  "power.pssuspendMissing": "Not found",
+  "power.openProgramDir": "Open program folder",
+  "power.downloadPstools": "Download PSTools",
   "power.needFreezeFirst": "Enable “Freeze processes when hiding” first",
+  "power.needEfficiencyFirst": "Enable “Enable efficiency mode when hiding” first",
   "power.blockedCoreStopped": "the core is not running",
   "power.blockedNeedAdmin": "the core must run as administrator",
   "power.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
@@ -272,9 +290,6 @@ export default {
   "power.trimMemory": "Reduce memory usage (beta)",
   "power.trimMemoryDesc":
     "Page out a program's memory after freezing it, lowering its memory usage. Requires the process to be frozen first. May add some delay when restoring.",
-  "power.freezeNoteBefore": "Enhanced freezing requires downloading",
-  "power.freezeNoteAfter":
-    "and placing pssuspend64.exe in the program folder, with the core running as administrator.",
   "power.recheck": "Check again",
 
   "options.startupCard": "Startup & permissions",
@@ -429,6 +444,7 @@ export default {
   "state.pssuspendFound": "pssuspend64.exe detected",
   "state.pssuspendMissing": "pssuspend64.exe not found",
   "state.detectFailed": "Detection failed: {err}",
+  "state.openDirFailed": "Could not open the program folder: {err}",
   "state.partialLoadFailed": "Some data failed to load: {reason}",
   "state.saveFailed": "Could not save the configuration — your changes may not have been written to disk.",
   "state.configFallback": "The configuration file failed to parse; default settings have been restored. See the details for what happened to the original file.",

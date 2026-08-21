@@ -109,8 +109,8 @@
     padding: 4px;
     border-radius: var(--r-overlay);
     border: 1px solid var(--stroke);
-    background: var(--card);
-    backdrop-filter: blur(60px) saturate(125%);
+    /* 实心底：弹层内容后面不该透出正文 */
+    background: var(--flyout-solid);
     box-shadow: var(--shadow-flyout);
     animation: flyout-in var(--dur-normal) var(--ease-standard);
     transform-origin: top center;

@@ -238,9 +238,19 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "隱藏前先把視窗最小化，復原時還原成原大小。此功能對降低部分遊戲引擎的背景佔用有效。",
 
+  "power.efficiencyCard": "效率模式",
+  "power.efficiencyAfterHide": "隱藏視窗時啟用效率模式",
+  "power.efficiencyAfterHideDesc":
+    "隱藏後把程序降為效率模式：繼續執行，但改用能效核心與較低頻率，降低耗電與發熱。與凍結相互獨立，可單獨使用，適合不能被停掉的背景程式。Windows 11 上效果最佳。",
+
+  "power.scopeCard": "作用範圍",
   "power.scope": "作用範圍",
   "power.scopeDesc":
-    "決定凍結和降低記憶體涵蓋到哪些程序。範圍越大效果越徹底，也越可能影響到其他的背景工作。",
+    "分別決定凍結與效率模式涵蓋到哪些程序。範圍越大效果越徹底，也越可能影響到其他的背景工作。",
+  "power.scopeFreeze": "凍結及記憶體控制範圍",
+  "power.scopeFreezeDesc": "凍結程序與降低記憶體佔用共用這一範圍。",
+  "power.scopeEfficiency": "效率模式範圍",
+  "power.scopeEfficiencyDesc": "效率模式單獨使用這一範圍，與凍結互不影響。",
   "power.scopeSelf": "僅目標程序",
   "power.scopeTree": "目標程序及所有子程序",
   "power.scopeImage": "同一程式的所有實例",
@@ -252,7 +262,14 @@ export default {
   "power.enhancedFreezeDesc":
     "改用 pssuspend64.exe 凍結。需在程式資料夾放置該檔案，且核心以系統管理員身分執行。可能造成一定的隱藏／復原延遲。",
   "power.enhancedFreezeBlocked": "目前無法使用：{reasons}。",
+  "power.pssuspend": "pssuspend64.exe",
+  "power.pssuspendDesc": "增強凍結所需的元件，需自行下載並放入程式資料夾。",
+  "power.pssuspendFound": "已就位",
+  "power.pssuspendMissing": "未找到",
+  "power.openProgramDir": "開啟程式資料夾",
+  "power.downloadPstools": "下載 PSTools",
   "power.needFreezeFirst": "需先開啟「隱藏視窗時凍結程序」",
+  "power.needEfficiencyFirst": "需先開啟「隱藏視窗時啟用效率模式」",
   "power.blockedCoreStopped": "核心未執行",
   "power.blockedNeedAdmin": "核心需以系統管理員身分執行",
   "power.blockedNoPssuspend": "程式資料夾缺少 pssuspend64.exe",
@@ -260,8 +277,6 @@ export default {
   "power.trimMemory": "降低記憶體佔用（Beta）",
   "power.trimMemoryDesc":
     "凍結後換出程式的記憶體，降低其記憶體佔用。此功能要求程序先被凍結。可能會造成一定的復原延遲。",
-  "power.freezeNoteBefore": "增強凍結需下載",
-  "power.freezeNoteAfter": "並將 pssuspend64.exe 放入程式資料夾，且核心以系統管理員身分執行。",
   "power.recheck": "重新偵測",
 
   "options.startupCard": "啟動與權限",
@@ -412,6 +427,7 @@ export default {
   "state.pssuspendFound": "已偵測到 pssuspend64.exe",
   "state.pssuspendMissing": "未偵測到 pssuspend64.exe",
   "state.detectFailed": "偵測失敗：{err}",
+  "state.openDirFailed": "開啟程式資料夾失敗：{err}",
   "state.partialLoadFailed": "部分資料載入失敗：{reason}",
   "state.saveFailed": "儲存設定失敗，您的變更可能沒有寫入磁碟。",
   "state.configFallback": "設定檔解析失敗，已恢復預設設定；原檔案的備份情況見詳細資訊。",

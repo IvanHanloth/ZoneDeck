@@ -372,10 +372,18 @@ pub struct Setting {
     pub freeze_after_hide: bool,
     #[serde(default)]
     pub enhanced_freeze: bool,
-    /// 能效控制的作用范围（[`POWER_SCOPE_SELF`] 等），同时决定冻结与清空工作集
-    /// 覆盖到哪些进程。缺省为空串，由 [`Setting::normalize`] 填上。
+    /// 冻结与清空工作集的作用范围（[`POWER_SCOPE_SELF`] 等），决定它们覆盖到哪些
+    /// 进程。效率模式另有 [`Setting::efficiency_scope`]。
+    /// 缺省为空串，由 [`Setting::normalize`] 填上。
     #[serde(default)]
     pub power_scope: String,
+    /// 隐藏窗口时把进程降到效率模式（EcoQoS + 低优先级）。进程继续运行，
+    /// 只是改用能效核心、低频。与冻结相互独立，可单开也可并用。
+    #[serde(default)]
+    pub efficiency_after_hide: bool,
+    /// 效率模式的作用范围，取值同 [`Setting::power_scope`]。
+    #[serde(default)]
+    pub efficiency_scope: String,
     /// 仅用于反序列化迁移，迁移后清零、不再写回文件。
     #[serde(default, skip_serializing)]
     pub freeze_whole_tree: bool,
@@ -439,6 +447,8 @@ impl Default for Setting {
             freeze_after_hide: false,
             enhanced_freeze: false,
             power_scope: POWER_SCOPE_SELF.to_string(),
+            efficiency_after_hide: false,
+            efficiency_scope: POWER_SCOPE_SELF.to_string(),
             freeze_whole_tree: false,
             trim_memory_after_freeze: false,
             show_float_window: false,
@@ -484,6 +494,7 @@ impl Setting {
         }
         self.freeze_whole_tree = false;
         self.power_scope = normalize_power_scope(&self.power_scope);
+        self.efficiency_scope = normalize_power_scope(&self.efficiency_scope);
         self.tray_badges.normalize();
         self.mouse.normalize();
         self.language = crate::i18n::normalize_pref(&self.language);

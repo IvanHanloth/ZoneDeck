@@ -124,6 +124,14 @@
   .item.sel {
     background: var(--subtle-hover);
   }
+  /* 选中项的 hover / 按下反馈要压过选中底色，否则指到哪一项看不出来 */
+  .item.sel:hover {
+    background: var(--subtle-selected-hover);
+  }
+  .item.sel:active {
+    background: var(--subtle-pressed);
+    color: var(--text-2);
+  }
 
   /* 选中指示条：从中心纵向长出 */
   .pill {

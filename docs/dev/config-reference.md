@@ -56,7 +56,9 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `tray_show_tooltip` | bool | `true` | [显示图标悬浮名称](/guide/notifications#显示图标悬浮名称) |
 | `freeze_after_hide` | bool | `false` | [进程冻结总开关](/guide/freeze#隐藏窗口时冻结进程) |
 | `enhanced_freeze` | bool | `false` | [增强冻结](/guide/freeze#使用增强冻结) |
-| `power_scope` | string | `"self"` | [作用范围](/guide/freeze#作用范围)：`self`（仅目标进程）｜`tree`（及所有子进程）｜`image`（同映像名的所有实例）；同时决定冻结与降低内存占用的覆盖面，未知取值归一为 `self` |
+| `power_scope` | string | `"self"` | [冻结及内存控制范围](/guide/freeze#作用范围)：`self`（仅目标进程）｜`tree`（及所有子进程）｜`image`（同映像名的所有实例）；决定冻结与降低内存占用的覆盖面，未知取值归一为 `self` |
+| `efficiency_after_hide` | bool | `false` | [效率模式](/guide/freeze#效率模式)：隐藏后把进程降为 EcoQoS + 低优先级，与冻结相互独立 |
+| `efficiency_scope` | string | `"self"` | [效率模式范围](/guide/freeze#作用范围)，取值同 `power_scope`，与冻结的范围互不影响 |
 | `trim_memory_after_freeze` | bool | `false` | [降低内存占用](/guide/freeze#降低内存占用)（仅对被冻结的进程生效） |
 | `show_float_window` | bool | `false` | 悬浮窗（开发中） |
 | `mouse` | object | 见下 | [鼠标按键隐藏](/guide/hotkeys#鼠标按键隐藏) |

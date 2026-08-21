@@ -56,7 +56,9 @@ The settings window reads and writes the configuration automatically. This page 
 | `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [Enhanced freezing](/en/guide/freeze) |
-| `power_scope` | string | `"self"` | [Scope](/en/guide/freeze): `self` (target process only) ｜ `tree` (and all its children) ｜ `image` (all instances of the same image name); governs both freezing and memory trimming, unknown values normalise to `self` |
+| `power_scope` | string | `"self"` | [Freezing & memory scope](/en/guide/freeze): `self` (target process only) ｜ `tree` (and all its children) ｜ `image` (all instances of the same image name); governs freezing and memory trimming, unknown values normalise to `self` |
+| `efficiency_after_hide` | bool | `false` | [Efficiency mode](/en/guide/freeze): drop hidden processes to EcoQoS + low priority; independent of freezing |
+| `efficiency_scope` | string | `"self"` | [Efficiency mode scope](/en/guide/freeze), same values as `power_scope`, independent of the freezing scope |
 | `trim_memory_after_freeze` | bool | `false` | [Reduce memory usage](/en/guide/freeze) (frozen processes only) |
 | `show_float_window` | bool | `false` | Floating window (in development) |
 | `mouse` | object | See below | [Hiding with mouse buttons](/en/guide/hotkeys) |

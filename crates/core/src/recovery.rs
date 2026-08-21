@@ -45,13 +45,19 @@ pub struct Snapshot {
     pub hidden: Vec<Target>,
     pub frozen: Vec<ProcRecord>,
     pub muted: Vec<ProcRecord>,
+    /// 被降到效率模式的进程；旧快照没有这一项，缺省为空。
+    #[serde(default)]
+    pub efficiency: Vec<ProcRecord>,
     pub enhanced: bool,
 }
 
 impl Snapshot {
     /// 没有任何需要恢复的内容。
     pub fn is_empty(&self) -> bool {
-        self.hidden.is_empty() && self.frozen.is_empty() && self.muted.is_empty()
+        self.hidden.is_empty()
+            && self.frozen.is_empty()
+            && self.muted.is_empty()
+            && self.efficiency.is_empty()
     }
 
     /// 快照是否可用于恢复：格式为当前版本，且写入时与现在处于同一次开机。

@@ -475,6 +475,12 @@ async fn open_log_dir() -> Result<(), String> {
     .await
 }
 
+/// 打开程序所在目录；pssuspend64.exe 需放在这里，增强冻结才可用。
+#[tauri::command]
+async fn open_program_dir() -> Result<(), String> {
+    blocking(|| zonedeck_core::shell::open(&exe_dir().to_string_lossy())).await
+}
+
 /// 数据目录及其由来；界面据 `kind` 判断是否要提示写不进程序目录。
 #[tauri::command]
 fn data_location() -> DataLocation {
@@ -669,6 +675,7 @@ pub fn run() {
             restart_core,
             quit_core,
             open_log_dir,
+            open_program_dir,
             set_hotkeys_enabled,
             pssuspend_available,
             regex_breadth,
