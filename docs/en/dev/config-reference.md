@@ -36,11 +36,18 @@ The settings window reads and writes the configuration automatically. This page 
 | `hide_only_hotkey` | `""` | [Hide windows only](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
 | `show_only_hotkey` | `""` | [Show windows only](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
 | `hide_foreground_hotkey` | `""` | [Hide foreground window](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
-| `hide_intercept` | `false` | [Don't pass the hide hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
-| `close_intercept` | `false` | [Don't pass the close hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
+| `hide_hook` | `false` | [Trigger the hide hotkey through the low-level keyboard hook](/en/guide/hotkeys#the-keyboard-hook-and-keeping-keys-from-other-apps) |
+| `close_hook` | `false` | Trigger the close hotkey through the low-level keyboard hook |
+| `hide_only_hook` | `false` | Trigger the hide-only hotkey through the low-level keyboard hook |
+| `show_only_hook` | `false` | Trigger the show-only hotkey through the low-level keyboard hook |
+| `hide_foreground_hook` | `false` | Trigger the hide-foreground hotkey through the low-level keyboard hook |
+| `hide_intercept` | `false` | [Don't pass the hide hotkey through](/en/guide/hotkeys#the-keyboard-hook-and-keeping-keys-from-other-apps); when true, `hide_hook` is forced true as well |
+| `close_intercept` | `false` | Don't pass the close hotkey through |
 | `hide_only_intercept` | `false` | Don't pass the hide-only hotkey through |
 | `show_only_intercept` | `false` | Don't pass the show-only hotkey through |
 | `hide_foreground_intercept` | `false` | Don't pass the hide-foreground hotkey through |
+
+Hotkey strings support [richer combinations](/en/guide/hotkeys#richer-combinations): several main keys joined with `+` (up to four, e.g. `"Q+W"`), or modifiers alone for a modifier-only hotkey (e.g. `"Ctrl+Shift"`). Only the keyboard hook can carry those two kinds, so the core routes them through it even when the matching `*_hook` is off. Punctuation keys are stored by key position (`OEM_1`, `OEM_PLUS` and so on) and do not shift with the keyboard layout.
 
 ## `setting`
 

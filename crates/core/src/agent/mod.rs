@@ -192,38 +192,55 @@ struct AgentState {
     hotkeys_armed: bool,
 }
 
+/// 一条待装进键盘钩子的热键。
+struct HookedHotkey {
+    id: i32,
+    /// 日志里的中文名。
+    label: &'static str,
+    /// 配置里的原始组合字符串，只用于日志。
+    raw: String,
+    hotkey: ParsedHotkey,
+    /// 「不传递」开关。
+    swallow: bool,
+}
+
 impl AgentState {
     fn register_hotkeys(&mut self, hwnd: HWND) {
-        let mut intercepts: Vec<(i32, &'static str, String, ParsedHotkey)> = Vec::new();
-        for (id, label, raw, intercept) in [
+        let mut hooked: Vec<HookedHotkey> = Vec::new();
+        for (id, label, raw, want_hook, swallow) in [
             (
                 HK_HIDE,
                 "隐藏",
                 &self.config.hotkey.hide_hotkey,
+                self.config.hotkey.hide_hook,
                 self.config.hotkey.hide_intercept,
             ),
             (
                 HK_CLOSE,
                 "关闭",
                 &self.config.hotkey.close_hotkey,
+                self.config.hotkey.close_hook,
                 self.config.hotkey.close_intercept,
             ),
             (
                 HK_HIDE_ONLY,
                 "仅隐藏",
                 &self.config.hotkey.hide_only_hotkey,
+                self.config.hotkey.hide_only_hook,
                 self.config.hotkey.hide_only_intercept,
             ),
             (
                 HK_SHOW_ONLY,
                 "仅显示",
                 &self.config.hotkey.show_only_hotkey,
+                self.config.hotkey.show_only_hook,
                 self.config.hotkey.show_only_intercept,
             ),
             (
                 HK_HIDE_FOREGROUND,
                 "隐藏前台窗口",
                 &self.config.hotkey.hide_foreground_hotkey,
+                self.config.hotkey.hide_foreground_hook,
                 self.config.hotkey.hide_foreground_intercept,
             ),
         ] {
@@ -232,46 +249,72 @@ impl AgentState {
                 continue;
             }
             match parse_hotkey(raw) {
-                Ok(hk) if intercept => intercepts.push((id, label, raw.clone(), hk)),
-                Ok(hk) => unsafe {
-                    match register(hwnd, id, &hk) {
-                        Ok(()) => logging::debug(&format!("{label}热键已注册: {raw}")),
-                        Err(e) => log_warn!("{}", hotkey_failure_message(label, raw, &e)),
+                // 纯修饰键与多主键组合 RegisterHotKey 表达不了，只能走钩子。
+                Ok(hk) if want_hook || hk.requires_hook() => hooked.push(HookedHotkey {
+                    id,
+                    label,
+                    raw: raw.clone(),
+                    hotkey: hk,
+                    swallow,
+                }),
+                Ok(hk) => {
+                    let Some(vk) = hk.single() else { continue };
+                    unsafe {
+                        match register(hwnd, id, hk.modifiers, vk) {
+                            Ok(()) => logging::debug(&format!("{label}热键已注册: {raw}")),
+                            Err(e) => log_warn!("{}", hotkey_failure_message(label, raw, &e)),
+                        }
                     }
-                },
+                }
                 Err(e) => log_warn!("{label}热键解析失败，该热键不生效: {raw} — {e}"),
             }
         }
-        self.arm_intercepts(hwnd, intercepts);
+        self.arm_hook_hotkeys(hwnd, hooked);
     }
 
-    /// 把开启「不传递」的热键装载进键盘钩子；安装失败时回退 `RegisterHotKey`。
-    fn arm_intercepts(
-        &mut self,
-        hwnd: HWND,
-        intercepts: Vec<(i32, &'static str, String, ParsedHotkey)>,
-    ) {
-        if intercepts.is_empty() {
+    /// 把走钩子的热键装载进键盘钩子；安装失败时能回退的回退 `RegisterHotKey`。
+    fn arm_hook_hotkeys(&mut self, hwnd: HWND, hooked: Vec<HookedHotkey>) {
+        if hooked.is_empty() {
             keyboard_hook::set_hotkeys(&[]);
             self.set_keyboard_hook(false);
             return;
         }
-        let parsed: Vec<(i32, ParsedHotkey)> =
-            intercepts.iter().map(|(id, _, _, hk)| (*id, *hk)).collect();
-        keyboard_hook::set_hotkeys(&parsed);
+        let specs: Vec<(i32, ParsedHotkey, bool)> = hooked
+            .iter()
+            .map(|h| (h.id, h.hotkey.clone(), h.swallow))
+            .collect();
+        keyboard_hook::set_hotkeys(&specs);
         if self.set_keyboard_hook(true) {
-            for (_, label, raw, _) in &intercepts {
-                logging::debug(&format!("{label}热键已由键盘钩子拦截（不传递）: {raw}"));
+            for h in &hooked {
+                let pass = if h.swallow {
+                    "不传递"
+                } else {
+                    "照常传递"
+                };
+                logging::debug(&format!(
+                    "{}热键已由键盘钩子承载（{pass}）: {}",
+                    h.label, h.raw
+                ));
             }
             return;
         }
         keyboard_hook::set_hotkeys(&[]);
-        log_warn!("键盘钩子安装失败，「不传递」不生效，相关热键回退为普通注册");
-        for (id, label, raw, hk) in &intercepts {
+        log_warn!("键盘钩子安装失败，「不传递」不生效");
+        for h in &hooked {
+            let Some(vk) = h.hotkey.single() else {
+                log_warn!(
+                    "{}热键的组合只有键盘钩子承载得了，钩子装不上，该热键本次不生效: {}",
+                    h.label,
+                    h.raw
+                );
+                continue;
+            };
             unsafe {
-                match register(hwnd, *id, hk) {
-                    Ok(()) => logging::debug(&format!("{label}热键已注册: {raw}")),
-                    Err(e) => log_warn!("{}", hotkey_failure_message(label, raw, &e)),
+                match register(hwnd, h.id, h.hotkey.modifiers, vk) {
+                    Ok(()) => {
+                        logging::debug(&format!("{}热键已回退为普通注册: {}", h.label, h.raw))
+                    }
+                    Err(e) => log_warn!("{}", hotkey_failure_message(h.label, &h.raw, &e)),
                 }
             }
         }
@@ -600,13 +643,13 @@ impl AgentState {
 }
 
 /// 注册一个系统热键。`MOD_NOREPEAT` 让长按只触发一次。
-unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> windows::core::Result<()> {
+unsafe fn register(hwnd: HWND, id: i32, modifiers: u32, vk: u16) -> windows::core::Result<()> {
     unsafe {
         RegisterHotKey(
             Some(hwnd),
             id,
-            HOT_KEY_MODIFIERS(hk.modifiers | MOD_NOREPEAT),
-            hk.vk as u32,
+            HOT_KEY_MODIFIERS(modifiers | MOD_NOREPEAT),
+            vk as u32,
         )
     }
 }
@@ -1188,14 +1231,10 @@ mod tests {
             .expect("创建测试窗口失败");
 
             // F24 + 三修饰键，避免与真实热键冲突。
-            let hk = ParsedHotkey {
-                modifiers: crate::hotkey::MOD_CONTROL
-                    | crate::hotkey::MOD_ALT
-                    | crate::hotkey::MOD_SHIFT,
-                vk: 0x87,
-            };
-            register(hwnd, HK_HIDE, &hk).expect("首次注册应成功");
-            let e = register(hwnd, HK_CLOSE, &hk).expect_err("重复注册同一组合应失败");
+            let modifiers =
+                crate::hotkey::MOD_CONTROL | crate::hotkey::MOD_ALT | crate::hotkey::MOD_SHIFT;
+            register(hwnd, HK_HIDE, modifiers, 0x87).expect("首次注册应成功");
+            let e = register(hwnd, HK_CLOSE, modifiers, 0x87).expect_err("重复注册同一组合应失败");
 
             assert!(
                 hotkey_failure_message("隐藏", "Ctrl+Alt+Shift+F24", &e)

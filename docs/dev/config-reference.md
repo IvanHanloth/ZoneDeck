@@ -36,11 +36,18 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `hide_only_hotkey` | `""` | [仅隐藏窗口](/guide/hotkeys#单向热键与隐藏前台窗口)，置空为关闭 |
 | `show_only_hotkey` | `""` | [仅显示窗口](/guide/hotkeys#单向热键与隐藏前台窗口)，置空为关闭 |
 | `hide_foreground_hotkey` | `""` | [隐藏前台窗口](/guide/hotkeys#单向热键与隐藏前台窗口)，置空为关闭 |
-| `hide_intercept` | `false` | [隐藏热键不传递](/guide/hotkeys#热键不传递)（键盘钩子拦截） |
-| `close_intercept` | `false` | [关闭热键不传递](/guide/hotkeys#热键不传递)（键盘钩子拦截） |
+| `hide_hook` | `false` | [隐藏热键改用低级键盘钩子触发](/guide/hotkeys#低级键盘钩子与不传递) |
+| `close_hook` | `false` | 关闭热键改用低级键盘钩子触发 |
+| `hide_only_hook` | `false` | 仅隐藏热键改用低级键盘钩子触发 |
+| `show_only_hook` | `false` | 仅显示热键改用低级键盘钩子触发 |
+| `hide_foreground_hook` | `false` | 隐藏前台窗口热键改用低级键盘钩子触发 |
+| `hide_intercept` | `false` | [隐藏热键不传递](/guide/hotkeys#低级键盘钩子与不传递)；为真时 `hide_hook` 也会被置真 |
+| `close_intercept` | `false` | 关闭热键不传递 |
 | `hide_only_intercept` | `false` | 仅隐藏热键不传递 |
 | `show_only_intercept` | `false` | 仅显示热键不传递 |
 | `hide_foreground_intercept` | `false` | 隐藏前台窗口热键不传递 |
+
+热键字符串支持 [更丰富的组合](/guide/hotkeys#更丰富的组合)：多个主键用 `+` 相连（最多四个，如 `"Q+W"`），只有修饰键则是纯修饰键热键（如 `"Ctrl+Shift"`）。这两类只有键盘钩子承载得了，配置里对应的 `*_hook` 未开时核心也会自动走钩子。符号键存按键位置名（`OEM_1`、`OEM_PLUS` 等），不随键盘布局变化。
 
 ## `setting`
 

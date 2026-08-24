@@ -2,7 +2,7 @@
   import { t } from "../lib/i18n.svelte.js";
   // 只录制修饰键（主键是鼠标按钮本身）；录制期独占键盘。
   import { onDestroy } from "svelte";
-  import { startCapture } from "../lib/capture.js";
+  import { startCapture, isBareEscape } from "../lib/capture.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
 
   let { value = $bindable(""), compact = false } = $props();
@@ -19,7 +19,7 @@
   const size = (mods) => (mods ? mods.split("+").length : 0);
 
   function onState(s) {
-    if (s.down && s.key === "Esc" && !s.modifiers) return stop();
+    if (isBareEscape(s)) return stop();
     live = s.modifiers;
     if (size(s.modifiers) >= size(best)) best = s.modifiers;
     // 全部松开即定稿。

@@ -28,12 +28,14 @@ use windows::core::{PCWSTR, w};
 use crate::hotkey::{MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN};
 
 /// 一次按键的按下或抬起。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyEvent {
     pub vk: u16,
     pub down: bool,
     /// 该事件发生后按住的修饰键位掩码。
     pub modifiers: u32,
+    /// 该事件发生后按住的非修饰键，按按下先后排列。
+    pub keys: Vec<u16>,
 }
 
 // 每个物理修饰键一位，左右分开记，松开一侧不会误清整个修饰位。
@@ -77,6 +79,38 @@ fn modifier_bit(vk: u16) -> Option<u16> {
 /// 该虚拟键码是不是修饰键；界面据此区分「只按着修饰键」与「按了不支持的键」。
 pub fn is_modifier(vk: u16) -> bool {
     modifier_bit(vk).is_some()
+}
+
+/// 布局相关的主键在当前键盘布局下显示的字符，键为热键字符串里的位置名。
+/// OEM 符号键与小键盘的字面含义随布局变化，配置存位置名、只有显示走这张表；
+/// 取不到名字或与位置名一致的不进表，界面回落显示位置名。
+pub fn layout_key_labels() -> std::collections::HashMap<String, String> {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetKeyNameTextW, MAPVK_VK_TO_VSC, MapVirtualKeyW,
+    };
+
+    let oem = (0xBAu16..=0xC0).chain(0xDB..=0xDF).chain([0xE2]);
+    let mut map = std::collections::HashMap::new();
+    for vk in oem.chain(0x60..=0x6F) {
+        let Some(name) = crate::hotkey::vk_to_key(vk) else {
+            continue;
+        };
+        let scan = unsafe { MapVirtualKeyW(u32::from(vk), MAPVK_VK_TO_VSC) };
+        if scan == 0 {
+            continue;
+        }
+        let mut buf = [0u16; 64];
+        // 扫描码放在 lparam 的 16..24 位，与 WM_KEYDOWN 的编码一致。
+        let len = unsafe { GetKeyNameTextW((scan << 16) as i32, &mut buf) };
+        if len <= 0 {
+            continue;
+        }
+        let label = String::from_utf16_lossy(&buf[..len as usize]);
+        if !label.is_empty() && label != name {
+            map.insert(name, label);
+        }
+    }
+    map
 }
 
 /// 按住的修饰键。钩子吞掉按键后 `GetAsyncKeyState` 的更新时机有歧义，
@@ -139,14 +173,61 @@ impl ModifierTracker {
 
 type KeyHandler = Box<dyn Fn(KeyEvent) + Send>;
 
+/// 当前按住的非修饰键，按按下先后排列。录制多主键组合时用来给出整组主键。
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct HeldKeys {
+    keys: Vec<u16>,
+}
+
+impl HeldKeys {
+    /// 记下一次按键，返回此刻按住的非修饰键。超过热键能容纳的主键数后不再收。
+    pub fn apply(&mut self, vk: u16, down: bool) -> &[u16] {
+        if is_modifier(vk) {
+            return &self.keys;
+        }
+        if down {
+            if !self.keys.contains(&vk) && self.keys.len() < crate::hotkey::MAX_KEYS {
+                self.keys.push(vk);
+            }
+        } else {
+            self.keys.retain(|k| *k != vk);
+        }
+        &self.keys
+    }
+}
+
 struct Capture {
     tracker: ModifierTracker,
+    held: HeldKeys,
     on_key: KeyHandler,
 }
 
 static CAPTURE: Mutex<Option<Capture>> = Mutex::new(None);
 /// 本进程 PID，缓存下来供钩子里的前台判定用。
 static OWN_PID: AtomicU32 = AtomicU32::new(0);
+/// 钩子被调用的次数。为 0 说明钩子没装上、已被系统摘掉，或被别的程序的钩子截在前面。
+static SEEN: AtomicU32 = AtomicU32::new(0);
+/// 因本进程不在前台而放行的次数。只有它在涨说明钩子是活的，卡在前台判定上。
+static PASSED_BACKGROUND: AtomicU32 = AtomicU32::new(0);
+
+/// 上一轮录制的诊断计数：`(钩子收到的按键数, 因非前台放行的次数)`。
+/// 录制没反应时据此区分「钩子没被调用」与「钩子活着但判定本进程不在前台」。
+pub fn capture_stats() -> (u32, u32) {
+    (SEEN.load(Relaxed), PASSED_BACKGROUND.load(Relaxed))
+}
+
+/// 前台窗口所属进程的 PID；取不到时为 0。
+pub fn foreground_pid() -> u32 {
+    unsafe {
+        let hwnd = GetForegroundWindow();
+        if hwnd.is_invalid() {
+            return 0;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        pid
+    }
+}
 
 /// 前台窗口是否属于本进程。录制界面一失焦就停止吞键，避免键盘被锁死。
 fn foreground_is_ours() -> bool {
@@ -166,26 +247,33 @@ fn foreground_is_ours() -> bool {
 }
 
 unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
-    if ncode == 0 && foreground_is_ours() {
-        let down = match wparam.0 as u32 {
-            WM_KEYDOWN | WM_SYSKEYDOWN => Some(true),
-            WM_KEYUP | WM_SYSKEYUP => Some(false),
-            _ => None,
-        };
-        if let Some(down) = down {
-            let vk = unsafe { (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode as u16 };
-            // 回调只往通道里塞一条就返回：低级钩子超过 LowLevelHooksTimeout
-            // （默认 300ms）事件会被系统丢弃。
-            if let Ok(mut guard) = CAPTURE.lock()
-                && let Some(capture) = guard.as_mut()
-            {
-                let modifiers = capture.tracker.apply(vk, down);
-                (capture.on_key)(KeyEvent {
-                    vk,
-                    down,
-                    modifiers,
-                });
-                return LRESULT(1);
+    if ncode == 0 {
+        SEEN.fetch_add(1, Relaxed);
+        if !foreground_is_ours() {
+            PASSED_BACKGROUND.fetch_add(1, Relaxed);
+        } else {
+            let down = match wparam.0 as u32 {
+                WM_KEYDOWN | WM_SYSKEYDOWN => Some(true),
+                WM_KEYUP | WM_SYSKEYUP => Some(false),
+                _ => None,
+            };
+            if let Some(down) = down {
+                let vk = unsafe { (*(lparam.0 as *const KBDLLHOOKSTRUCT)).vkCode as u16 };
+                // 回调只往通道里塞一条就返回：低级钩子超过 LowLevelHooksTimeout
+                // （默认 300ms）事件会被系统丢弃。
+                if let Ok(mut guard) = CAPTURE.lock()
+                    && let Some(capture) = guard.as_mut()
+                {
+                    let modifiers = capture.tracker.apply(vk, down);
+                    let keys = capture.held.apply(vk, down).to_vec();
+                    (capture.on_key)(KeyEvent {
+                        vk,
+                        down,
+                        modifiers,
+                        keys,
+                    });
+                    return LRESULT(1);
+                }
             }
         }
     }
@@ -256,12 +344,15 @@ impl KeyCapture {
     /// 同一时刻只应有一个 `KeyCapture` 存活。
     pub fn start(on_key: impl Fn(KeyEvent) + Send + 'static) -> Option<KeyCapture> {
         OWN_PID.store(unsafe { GetCurrentProcessId() }, Relaxed);
+        SEEN.store(0, Relaxed);
+        PASSED_BACKGROUND.store(0, Relaxed);
         let mut tracker = ModifierTracker::default();
         tracker.seed_from_keyboard();
         match CAPTURE.lock() {
             Ok(mut guard) => {
                 *guard = Some(Capture {
                     tracker,
+                    held: HeldKeys::default(),
                     on_key: Box::new(on_key),
                 });
             }
@@ -442,6 +533,30 @@ mod tests {
         let mut t = ModifierTracker::default();
         assert_eq!(t.apply(VK_LCONTROL, false), 0);
         assert_eq!(t.apply(VK_LCONTROL, true), MOD_CONTROL);
+    }
+
+    #[test]
+    fn held_keys_track_press_order_and_ignore_modifiers() {
+        let mut h = HeldKeys::default();
+        assert_eq!(h.apply(VK_LCONTROL, true), &[] as &[u16], "修饰键不算主键");
+        assert_eq!(h.apply(0x57, true), &[0x57]);
+        assert_eq!(h.apply(VK_Q, true), &[0x57, VK_Q], "按按下先后排列");
+        assert_eq!(h.apply(VK_Q, true), &[0x57, VK_Q], "长按重复不重复记录");
+        assert_eq!(h.apply(0x57, false), &[VK_Q]);
+        assert_eq!(h.apply(VK_Q, false), &[] as &[u16]);
+    }
+
+    #[test]
+    fn held_keys_stop_at_the_hotkey_main_key_limit() {
+        let mut h = HeldKeys::default();
+        for vk in 0x41..=0x41 + crate::hotkey::MAX_KEYS as u16 {
+            h.apply(vk, true);
+        }
+        assert_eq!(
+            h.apply(0x5A, true).len(),
+            crate::hotkey::MAX_KEYS,
+            "超出热键容量的主键不再收，免得录出解析不了的组合"
+        );
     }
 
     /// 低级钩子只能装在跑消息泵的线程上，装得上即说明钩子落到了专职线程。

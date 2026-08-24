@@ -36,11 +36,18 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `hide_only_hotkey` | `""` | [僅隱藏視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
 | `show_only_hotkey` | `""` | [僅顯示視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
 | `hide_foreground_hotkey` | `""` | [隱藏前景視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
-| `hide_intercept` | `false` | [隱藏快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
-| `close_intercept` | `false` | [關閉快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
+| `hide_hook` | `false` | [隱藏快速鍵改用低階鍵盤掛鉤觸發](/zh-tw/guide/hotkeys#低階鍵盤掛鉤與不傳遞) |
+| `close_hook` | `false` | 關閉快速鍵改用低階鍵盤掛鉤觸發 |
+| `hide_only_hook` | `false` | 僅隱藏快速鍵改用低階鍵盤掛鉤觸發 |
+| `show_only_hook` | `false` | 僅顯示快速鍵改用低階鍵盤掛鉤觸發 |
+| `hide_foreground_hook` | `false` | 隱藏前景視窗快速鍵改用低階鍵盤掛鉤觸發 |
+| `hide_intercept` | `false` | [隱藏快速鍵不傳遞](/zh-tw/guide/hotkeys#低階鍵盤掛鉤與不傳遞)；為真時 `hide_hook` 也會被設為真 |
+| `close_intercept` | `false` | 關閉快速鍵不傳遞 |
 | `hide_only_intercept` | `false` | 僅隱藏快速鍵不傳遞 |
 | `show_only_intercept` | `false` | 僅顯示快速鍵不傳遞 |
 | `hide_foreground_intercept` | `false` | 隱藏前景視窗快速鍵不傳遞 |
+
+快速鍵字串支援 [更豐富的組合](/zh-tw/guide/hotkeys#更豐富的組合)：多個主鍵以 `+` 相連（最多四個，如 `"Q+W"`），只有修飾鍵則是純修飾鍵快速鍵（如 `"Ctrl+Shift"`）。這兩類只有鍵盤掛鉤承載得了，設定裡對應的 `*_hook` 未開時核心也會自動走掛鉤。標點鍵存按鍵位置名（`OEM_1`、`OEM_PLUS` 等），不隨鍵盤配置變化。
 
 ## `setting`
 

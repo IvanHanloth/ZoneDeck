@@ -48,7 +48,7 @@ ZoneDeck v3 采用 **核心 + 配置分离** 的**双进程架构**，两者通�
 | 能力 | 使用的 API | 说明 |
 | --- | --- | --- |
 | 全局热键 | `RegisterHotKey` | 最规范、完善的触发方式 |
-| 热键不传递 | `WH_KEYBOARD_LL` | 仅在有热键开启「不传递」时才安装 |
+| 热键走钩子 | `WH_KEYBOARD_LL` | 仅在有热键开启「低级键盘钩子」、或用了纯修饰键 / 多主键组合时才安装 |
 | 鼠标 / 四角 | `WH_MOUSE_LL` | 仅在启用鼠标 / 四角时才安装 |
 | 空闲检测 | `GetLastInputInfo` | 无需常驻监听键盘 |
 
@@ -88,7 +88,7 @@ ZoneDeck/
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增强冻结
 │           input_hooks.rs 输入钩子专职线程（承载两个低级钩子，优先级 above normal）
 │           mouse_hook.rs WH_MOUSE_LL（中键/侧键/四角）
-│           keyboard_hook.rs WH_KEYBOARD_LL（「不传递」热键拦截）
+│           keyboard_hook.rs WH_KEYBOARD_LL（走钩子的热键：可选吞键、纯修饰键、多主键）
 │           idle.rs       GetLastInputInfo 空闲 + 自动隐藏判定
 │           win_event.rs  SetWinEventHook 窗口事件追踪（销毁/显示/改标题 → 实时维护记录）
 │           tray.rs       Shell_NotifyIcon 托盘 + 气泡
@@ -170,7 +170,7 @@ Tauri 按 `tauri.conf.json` 里的 identifier 把 WebView2 用户数据放在 `%
 
 `WH_MOUSE_LL` / `WH_KEYBOARD_LL` 的回调由**安装线程的消息泵**派发，且系统的输入线程要等钩子链返回才继续投递事件。若与 agent 同线程，枚举窗口、写恢复文件、处理全系统窗口事件这类操作会直接拖慢全局鼠标与键盘输入，单次超过 `LowLevelHooksTimeout`（默认 300ms）时系统还会丢弃该事件。
 
-故 `input_hooks.rs` 单起一条只跑消息泵的线程承载这两个钩子，线程优先级提到 above normal，回调里只做纯内存判定与 `PostMessageW`（鼠标移动这条最热的路径上不加锁，采样存在原子里）。agent 线程通过一个仅消息窗口向它同步下发装卸请求，并据返回值决定是否回退（键盘钩子装不上时「不传递」热键退化为 `RegisterHotKey`）。
+故 `input_hooks.rs` 单起一条只跑消息泵的线程承载这两个钩子，线程优先级提到 above normal，回调里只做纯内存判定与 `PostMessageW`（鼠标移动这条最热的路径上不加锁，采样存在原子里）。agent 线程通过一个仅消息窗口向它同步下发装卸请求，并据返回值决定是否回退（键盘钩子装不上时，走钩子的热键退化为 `RegisterHotKey`，`RegisterHotKey` 表达不了的组合则本次不生效）。
 
 agent 线程本身**不**提优先级：它干的是枚举 / 冻结 / 落盘这类重活，抬高只会从前台程序手里抢 CPU。
 

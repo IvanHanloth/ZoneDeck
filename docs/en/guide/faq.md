@@ -38,7 +38,7 @@ Check in order:
 
 1. **Is the core running?** Look at the tray icon or the status bar at the bottom of the settings window.
 2. **Have you bound any windows?** With nothing bound and "Also hide the active window" off, there may be no target to hide. See [Binding windows & processes](/en/guide/binding).
-3. **Is the hotkey taken?** Try a different combination, or turn on [don't pass through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) for it — the keyboard hook it switches to is not affected by hotkey-occupancy conflicts. See [Hotkey settings](/en/guide/hotkeys).
+3. **Is the hotkey taken?** Try a different combination, or turn on the [low-level keyboard hook](/en/guide/hotkeys#the-keyboard-hook-and-keeping-keys-from-other-apps) for it — the hook it switches to is not affected by hotkey-occupancy conflicts. See [Hotkey settings](/en/guide/hotkeys).
 4. **Are you on the "Hotkeys & Mouse" page?** That page pauses monitoring temporarily; it resumes when you leave.
 
 ## A window was hidden and won't come back
