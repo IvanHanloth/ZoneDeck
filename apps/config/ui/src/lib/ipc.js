@@ -17,6 +17,11 @@ const mockConfig = {
     hide_only_hotkey: "",
     show_only_hotkey: "",
     hide_foreground_hotkey: "",
+    hide_hook: false,
+    close_hook: false,
+    hide_only_hook: false,
+    show_only_hook: false,
+    hide_foreground_hook: false,
     hide_intercept: false,
     close_intercept: false,
     hide_only_intercept: false,
@@ -148,6 +153,9 @@ function mockInvoke(cmd, args) {
       return true;
     case "pssuspend_available":
       return false;
+    // 预览环境拿不到键盘布局，界面回落显示位置名。
+    case "key_labels":
+      return {};
     case "whitelist_builtins":
       return [
         { key: "core", names: ["ZoneDeck.exe", "core.exe"] },

@@ -42,15 +42,31 @@ Hiding is **cumulative**: no matter how a window was hidden, it goes into the sa
 **Hide foreground window** targets the ordinary top-level window that currently has focus. If focus is elsewhere — on the desktop or on certain tool windows — the press does nothing and says so in the log.
 :::
 
-### Keeping hotkeys from other apps
+### The keyboard hook and keeping keys from other apps
 
-Each hotkey has its own **don't pass through** switch (off by default), at the right end of that hotkey's row. When enabled, both the key press and release of the triggering combination never reach the foreground app, so games or chat input boxes won't receive the keys.
+Expand any hotkey and you'll find two independent switches, both off by default:
+
+- **Low-level keyboard hook**: trigger this hotkey through a low-level keyboard hook (`WH_KEYBOARD_LL`) instead of registering it with the system. It is therefore immune to combinations another program has already taken, and it is what makes the richer combinations below possible.
+- **Don't pass through**: neither the press nor the release of the triggering combination reaches the foreground app, so games or chat input boxes won't receive the keys. Only the hook can do this, so the switch above has to be on first.
+
+The switches are independent per hotkey. Older versions had a single "don't pass through" switch that meant both things at once; upgrading turns it into both switches enabled, so behaviour is unchanged.
 
 ::: info About global hotkeys
-By default ZoneDeck registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one.
+By default ZoneDeck registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one, or turn on the low-level keyboard hook for that hotkey.
 
-A hotkey with "don't pass through" enabled is handled by a low-level keyboard hook (`WH_KEYBOARD_LL`) instead of `RegisterHotKey`, so it is not affected by hotkey-occupancy conflicts. If installing the hook fails, the hotkey falls back to normal registration: it still works, but the keys can no longer be withheld from other apps. A few programs that read Raw Input directly bypass keyboard hooks and may still observe the keys.
+If installing the hook fails, combinations that `RegisterHotKey` can express fall back to normal registration: they still work, but the keys can no longer be withheld from other apps. Modifier-only and multi-key combinations have no fallback and do not take effect for that run; the log records it. A few programs that read Raw Input directly bypass keyboard hooks and may still observe the keys.
 :::
+
+### Richer combinations
+
+`RegisterHotKey` only accepts "modifiers plus one main key". With the **low-level keyboard hook** on, you can also record:
+
+- **Several main keys at once**: `Q + W`, for instance — up to four main keys, all of which must be held down to fire. With "don't pass through" on, every main key of the combination is swallowed while the modifiers match, even if the combination is never completed.
+- **Modifiers only**: `Ctrl + Shift`, for instance. So that it doesn't get in the way of ordinary shortcuts like `Ctrl+Shift+S`, it fires only once **every modifier has been released and no other key was pressed in between**. The modifiers have long since reached the foreground app by then, so "don't pass through" does not apply to these combinations and is greyed out.
+
+When you record either kind, saving turns on the **low-level keyboard hook** for that hotkey automatically — it is the only way to carry them.
+
+The numeric keypad, the punctuation keys (semicolon, equals, comma, minus, period, slash, backquote, brackets, backslash, quote) and the volume and playback keys work in both modes, with no need for the hook. What a punctuation key types depends on the keyboard layout, so the config file stores the **key position** (`OEM_1`, `OEM_PLUS` and so on) while the interface shows the character it produces on your current layout.
 
 ## Hiding with mouse buttons
 

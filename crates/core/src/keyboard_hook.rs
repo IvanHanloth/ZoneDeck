@@ -1,7 +1,8 @@
-//! 低级键盘钩子：承载开启「不传递」的热键。
+//! 低级键盘钩子：承载所有开启「低级键盘钩子」的热键。
 //!
-//! `RegisterHotKey` 会吞掉主键，但修饰键的按下 / 抬起仍会到达前台程序，故改用
-//! `WH_KEYBOARD_LL`：命中时吞掉主键的按下与抬起，再把触发转发给代理窗口。
+//! `RegisterHotKey` 只收「修饰键 + 单个主键」，且吞不掉修饰键的按下 / 抬起。
+//! 改用 `WH_KEYBOARD_LL` 后既能表达纯修饰键与多主键组合，也能按热键各自的
+//! 「不传递」开关决定要不要吞掉按键，再把触发转发给代理窗口。
 //! 直接读取 Raw Input 的程序不经过本钩子。
 
 use std::sync::Mutex;
@@ -16,86 +17,159 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::PCWSTR;
 
 use crate::hotkey::ParsedHotkey;
-use crate::modifiers::{self, current_modifiers};
+use crate::modifiers::{self, current_modifiers, is_modifier};
 
 /// 拦截热键命中时发给代理窗口的消息；`wparam` 为热键 id（与 `WM_HOTKEY` 一致）。
 pub const WM_KEY_TRIGGER: u32 = WM_APP + 5;
 
 static HWND_RAW: AtomicIsize = AtomicIsize::new(0);
-static HOTKEYS: Mutex<Vec<InterceptState>> = Mutex::new(Vec::new());
+static HOTKEYS: Mutex<Vec<HookHotkey>> = Mutex::new(Vec::new());
 
-/// 一条开启「不传递」的热键与它的按住状态。
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct InterceptState {
+/// 一条由钩子承载的热键与它的运行态。
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct HookHotkey {
     id: i32,
-    vk: u16,
     modifiers: u32,
-    /// 主键当前被按住：后续的重复按下与抬起也须吞掉。
-    held: bool,
+    /// 主键；为空表示纯修饰键热键。
+    keys: Vec<u16>,
+    /// 命中时吞掉按键，不传给前台程序。
+    swallow: bool,
+    /// 第 i 位：`keys[i]` 当前被按住。
+    held: u8,
+    /// 第 i 位：`keys[i]` 的按下被吞掉了，抬起也须吞掉。
+    eaten: u8,
+    /// 本轮已触发，松开全部主键前不再重复触发。
+    fired: bool,
+    /// 纯修饰键：修饰键已按齐。
+    armed: bool,
+    /// 纯修饰键：本轮按过别的键或多按了修饰键，作废。
+    poisoned: bool,
 }
 
 /// 钩子对一条键盘事件的处置。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Decision {
-    /// 与拦截热键无关，放行给下一个钩子。
+    /// 与热键无关，放行给下一个钩子。
     Pass,
-    /// 属于已按住的拦截热键（重复按下 / 抬起），吞掉但不再触发。
+    /// 属于某条热键但不触发（重复按下 / 抬起），吞掉。
     Swallow,
-    /// 命中热键：吞掉并向代理窗口转发该 id。
-    Fire(i32),
+    /// 命中热键：向代理窗口转发该 id；`swallow` 决定是否同时吞掉本次按键。
+    Fire { id: i32, swallow: bool },
 }
 
-/// 纯逻辑判定，`pressed` 为当前按下的修饰键位掩码。
-/// 与 `RegisterHotKey` 对齐：修饰键须完全吻合，长按重复触发只算一次。
-fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [InterceptState]) -> Decision {
+impl HookHotkey {
+    fn new(id: i32, hk: &ParsedHotkey, swallow: bool) -> Self {
+        Self {
+            id,
+            modifiers: hk.modifiers,
+            keys: hk.keys.clone(),
+            swallow,
+            held: 0,
+            eaten: 0,
+            fired: false,
+            armed: false,
+            poisoned: false,
+        }
+    }
+
+    /// 推进带主键的热键，返回 `(是否触发, 是否吞掉本次按键)`。
+    /// 与 `RegisterHotKey` 对齐：修饰键须完全吻合，长按重复触发只算一次。
+    fn step_keys(&mut self, down: bool, vk: u16, pressed: u32) -> (bool, bool) {
+        let Some(i) = self.keys.iter().position(|k| *k == vk) else {
+            return (false, false);
+        };
+        let bit = 1u8 << i;
+
+        if !down {
+            self.held &= !bit;
+            let swallow = self.eaten & bit != 0;
+            self.eaten &= !bit;
+            if self.held == 0 {
+                self.fired = false;
+            }
+            return (false, swallow);
+        }
+
+        let all = (1u8 << self.keys.len()) - 1;
+        let matched = pressed == self.modifiers;
+        self.held |= bit;
+        let fired = matched && self.held == all && !self.fired;
+        if fired {
+            self.fired = true;
+        }
+        // 修饰键吻合时的成员键、以及本轮触发后的后续按下，都算这条热键的按键。
+        let swallow = self.swallow && (matched || self.fired);
+        if swallow {
+            self.eaten |= bit;
+        }
+        (fired, swallow)
+    }
+
+    /// 推进纯修饰键热键，返回是否触发。修饰键早已传给前台，故从不吞键。
+    /// 按齐后不立即触发，等全部修饰键松开、且期间没按过别的键。
+    fn step_modifiers_only(&mut self, down: bool, modifier: bool, pressed: u32) -> bool {
+        if down {
+            if !modifier {
+                // 按住修饰键期间敲了主键，说明这是别的快捷键，本轮作废。
+                self.poisoned |= pressed != 0;
+            } else if pressed == self.modifiers {
+                self.armed = true;
+            } else if pressed & !self.modifiers != 0 {
+                self.poisoned = true;
+            }
+            return false;
+        }
+        if !modifier || pressed != 0 {
+            return false;
+        }
+        let fired = self.armed && !self.poisoned;
+        self.armed = false;
+        self.poisoned = false;
+        fired
+    }
+}
+
+/// 纯逻辑判定，`pressed` 为本次事件之后按下的修饰键位掩码。
+fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [HookHotkey]) -> Decision {
     let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
     let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
-
-    if up {
-        // 按下已被吞掉时抬起也须吞掉。
-        let mut was_held = false;
-        for st in states.iter_mut().filter(|s| s.vk == vk) {
-            was_held |= st.held;
-            st.held = false;
-        }
-        return if was_held {
-            Decision::Swallow
-        } else {
-            Decision::Pass
-        };
-    }
-    if !down {
+    if !down && !up {
         return Decision::Pass;
     }
+    let modifier = is_modifier(vk);
 
-    let mut any_held = false;
-    for st in states.iter_mut().filter(|s| s.vk == vk) {
-        if st.held {
-            any_held = true;
-        } else if pressed == st.modifiers {
-            st.held = true;
-            return Decision::Fire(st.id);
+    // 每条热键都要推进状态，命中与吞键的结论再合并。
+    let mut fired: Option<i32> = None;
+    let mut swallow = false;
+    for st in states.iter_mut() {
+        if st.keys.is_empty() {
+            if st.step_modifiers_only(down, modifier, pressed) {
+                fired.get_or_insert(st.id);
+            }
+        } else {
+            let (hit, eat) = st.step_keys(down, vk, pressed);
+            swallow |= eat;
+            if hit {
+                fired.get_or_insert(st.id);
+            }
         }
     }
-    if any_held {
-        Decision::Swallow
-    } else {
-        Decision::Pass
+
+    match fired {
+        Some(id) => Decision::Fire { id, swallow },
+        None if swallow => Decision::Swallow,
+        None => Decision::Pass,
     }
 }
 
-/// 设置当前需要拦截的热键集合（覆盖式，清空按住状态）。
-pub fn set_hotkeys(list: &[(i32, ParsedHotkey)]) {
+/// 设置当前由钩子承载的热键集合（覆盖式，清空运行态）。
+/// 每项为 `(热键 id, 组合, 是否吞掉按键)`。
+pub fn set_hotkeys(list: &[(i32, ParsedHotkey, bool)]) {
     modifiers::resync();
     if let Ok(mut hotkeys) = HOTKEYS.lock() {
         *hotkeys = list
             .iter()
-            .map(|(id, hk)| InterceptState {
-                id: *id,
-                vk: hk.vk,
-                modifiers: hk.modifiers,
-                held: false,
-            })
+            .map(|(id, hk, swallow)| HookHotkey::new(*id, hk, *swallow))
             .collect();
     }
 }
@@ -131,9 +205,11 @@ unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) 
             match decision {
                 Decision::Pass => {}
                 Decision::Swallow => return LRESULT(1),
-                Decision::Fire(id) => {
+                Decision::Fire { id, swallow } => {
                     post(id);
-                    return LRESULT(1);
+                    if swallow {
+                        return LRESULT(1);
+                    }
                 }
             }
         }
@@ -173,40 +249,44 @@ impl Drop for KeyboardHook {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::hotkey::{MOD_CONTROL, MOD_SHIFT, MOD_WIN};
+    use crate::hotkey::{MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN};
 
     const VK_Q: u16 = 0x51;
+    const VK_W: u16 = 0x57;
+    const VK_S: u16 = 0x53;
     const VK_ESC: u16 = 0x1B;
+    const VK_LCONTROL: u16 = 0xA2;
+    const VK_LSHIFT: u16 = 0xA0;
+    const VK_LMENU: u16 = 0xA4;
 
-    /// Ctrl+Q 隐藏（id=1）、Win+Esc 关闭（id=2）。
-    fn states() -> Vec<InterceptState> {
+    fn hotkey(id: i32, modifiers: u32, keys: &[u16], swallow: bool) -> HookHotkey {
+        HookHotkey::new(
+            id,
+            &ParsedHotkey {
+                modifiers,
+                keys: keys.to_vec(),
+            },
+            swallow,
+        )
+    }
+
+    fn fire(id: i32) -> Decision {
+        Decision::Fire { id, swallow: true }
+    }
+
+    /// Ctrl+Q 隐藏（id=1）、Win+Esc 关闭（id=2），两条都吞键。
+    fn states() -> Vec<HookHotkey> {
         vec![
-            InterceptState {
-                id: 1,
-                vk: VK_Q,
-                modifiers: MOD_CONTROL,
-                held: false,
-            },
-            InterceptState {
-                id: 2,
-                vk: VK_ESC,
-                modifiers: MOD_WIN,
-                held: false,
-            },
+            hotkey(1, MOD_CONTROL, &[VK_Q], true),
+            hotkey(2, MOD_WIN, &[VK_ESC], true),
         ]
     }
 
     #[test]
     fn matching_combo_fires_and_swallows() {
         let mut s = states();
-        assert_eq!(
-            decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
-            Decision::Fire(1)
-        );
-        assert_eq!(
-            decide(WM_KEYDOWN, VK_ESC, MOD_WIN, &mut s),
-            Decision::Fire(2)
-        );
+        assert_eq!(decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s), fire(1));
+        assert_eq!(decide(WM_KEYDOWN, VK_ESC, MOD_WIN, &mut s), fire(2));
     }
 
     #[test]
@@ -237,10 +317,7 @@ mod tests {
     #[test]
     fn holding_the_key_fires_only_once_but_keeps_swallowing() {
         let mut s = states();
-        assert_eq!(
-            decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
-            Decision::Fire(1)
-        );
+        assert_eq!(decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s), fire(1));
         // 长按产生的重复按下：吞掉但不重复触发。
         assert_eq!(
             decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
@@ -255,10 +332,7 @@ mod tests {
     #[test]
     fn keyup_after_fire_is_swallowed_then_state_resets() {
         let mut s = states();
-        assert_eq!(
-            decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
-            Decision::Fire(1)
-        );
+        assert_eq!(decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s), fire(1));
         assert_eq!(
             decide(WM_KEYUP, VK_Q, MOD_CONTROL, &mut s),
             Decision::Swallow,
@@ -271,7 +345,7 @@ mod tests {
         );
         assert_eq!(
             decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
-            Decision::Fire(1),
+            fire(1),
             "松开后再按可再次触发"
         );
     }
@@ -279,10 +353,7 @@ mod tests {
     #[test]
     fn held_key_is_swallowed_even_if_modifiers_released_early() {
         let mut s = states();
-        assert_eq!(
-            decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
-            Decision::Fire(1)
-        );
+        assert_eq!(decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s), fire(1));
         // 先松 Ctrl 再长按 Q，按下仍被吞掉直到 Q 抬起。
         assert_eq!(decide(WM_KEYDOWN, VK_Q, 0, &mut s), Decision::Swallow);
         assert_eq!(decide(WM_KEYUP, VK_Q, 0, &mut s), Decision::Swallow);
@@ -292,19 +363,200 @@ mod tests {
     #[test]
     fn syskey_messages_are_recognised() {
         // Alt 组合键走 WM_SYSKEYDOWN / WM_SYSKEYUP。
-        let mut s = vec![InterceptState {
-            id: 1,
-            vk: VK_Q,
-            modifiers: crate::hotkey::MOD_ALT,
-            held: false,
-        }];
+        let mut s = vec![hotkey(1, MOD_ALT, &[VK_Q], true)];
+        assert_eq!(decide(WM_SYSKEYDOWN, VK_Q, MOD_ALT, &mut s), fire(1));
         assert_eq!(
-            decide(WM_SYSKEYDOWN, VK_Q, crate::hotkey::MOD_ALT, &mut s),
-            Decision::Fire(1)
+            decide(WM_SYSKEYUP, VK_Q, MOD_ALT, &mut s),
+            Decision::Swallow
+        );
+    }
+
+    #[test]
+    fn a_hotkey_without_swallow_fires_but_lets_the_key_through() {
+        let mut s = vec![hotkey(1, MOD_CONTROL, &[VK_Q], false)];
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_Q, MOD_CONTROL, &mut s),
+            Decision::Fire {
+                id: 1,
+                swallow: false
+            }
         );
         assert_eq!(
-            decide(WM_SYSKEYUP, VK_Q, crate::hotkey::MOD_ALT, &mut s),
-            Decision::Swallow
+            decide(WM_KEYUP, VK_Q, MOD_CONTROL, &mut s),
+            Decision::Pass,
+            "没吞按下，抬起也不该吞"
+        );
+    }
+
+    #[test]
+    fn multi_key_combo_fires_only_once_all_keys_are_down() {
+        let mut s = vec![hotkey(1, 0, &[VK_Q, VK_W], true)];
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_Q, 0, &mut s),
+            Decision::Swallow,
+            "组合未按齐，不触发；吞键开着故先吞掉"
+        );
+        assert_eq!(decide(WM_KEYDOWN, VK_W, 0, &mut s), fire(1));
+    }
+
+    #[test]
+    fn multi_key_combo_needs_its_modifiers_too() {
+        let mut s = vec![hotkey(1, MOD_CONTROL, &[VK_Q, VK_W], true)];
+        assert_eq!(decide(WM_KEYDOWN, VK_Q, 0, &mut s), Decision::Pass);
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_W, 0, &mut s),
+            Decision::Pass,
+            "缺 Ctrl 不算命中"
+        );
+    }
+
+    #[test]
+    fn multi_key_combo_refires_after_releasing_every_key() {
+        let mut s = vec![hotkey(1, 0, &[VK_Q, VK_W], false)];
+        decide(WM_KEYDOWN, VK_Q, 0, &mut s);
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_W, 0, &mut s),
+            Decision::Fire {
+                id: 1,
+                swallow: false
+            }
+        );
+        decide(WM_KEYUP, VK_W, 0, &mut s);
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_W, 0, &mut s),
+            Decision::Pass,
+            "Q 仍按着，本轮已触发过，不重复触发"
+        );
+        decide(WM_KEYUP, VK_W, 0, &mut s);
+        decide(WM_KEYUP, VK_Q, 0, &mut s);
+        decide(WM_KEYDOWN, VK_Q, 0, &mut s);
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_W, 0, &mut s),
+            Decision::Fire {
+                id: 1,
+                swallow: false
+            },
+            "全部松开后可再次触发"
+        );
+    }
+
+    /// 纯修饰键热键 Ctrl+Shift。修饰键从不吞掉。
+    fn modifiers_only() -> Vec<HookHotkey> {
+        vec![hotkey(1, MOD_CONTROL | MOD_SHIFT, &[], true)]
+    }
+
+    #[test]
+    fn modifier_only_hotkey_fires_on_full_release() {
+        let mut s = modifiers_only();
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s),
+            Decision::Pass
+        );
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_LSHIFT, MOD_CONTROL | MOD_SHIFT, &mut s),
+            Decision::Pass,
+            "按齐时先不触发"
+        );
+        assert_eq!(
+            decide(WM_KEYUP, VK_LSHIFT, MOD_CONTROL, &mut s),
+            Decision::Pass
+        );
+        assert_eq!(
+            decide(WM_KEYUP, VK_LCONTROL, 0, &mut s),
+            Decision::Fire {
+                id: 1,
+                swallow: false
+            },
+            "全松开才触发，且不吞修饰键"
+        );
+    }
+
+    #[test]
+    fn modifier_only_hotkey_is_cancelled_by_another_key() {
+        let mut s = modifiers_only();
+        decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s);
+        decide(WM_KEYDOWN, VK_LSHIFT, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYDOWN, VK_S, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYUP, VK_S, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYUP, VK_LSHIFT, MOD_CONTROL, &mut s);
+        assert_eq!(
+            decide(WM_KEYUP, VK_LCONTROL, 0, &mut s),
+            Decision::Pass,
+            "Ctrl+Shift+S 是别的快捷键，不该触发"
+        );
+    }
+
+    #[test]
+    fn modifier_only_hotkey_is_cancelled_by_an_extra_modifier() {
+        let mut s = modifiers_only();
+        decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s);
+        decide(WM_KEYDOWN, VK_LSHIFT, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(
+            WM_SYSKEYDOWN,
+            VK_LMENU,
+            MOD_CONTROL | MOD_SHIFT | MOD_ALT,
+            &mut s,
+        );
+        decide(WM_SYSKEYUP, VK_LMENU, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYUP, VK_LSHIFT, MOD_CONTROL, &mut s);
+        assert_eq!(decide(WM_KEYUP, VK_LCONTROL, 0, &mut s), Decision::Pass);
+    }
+
+    #[test]
+    fn modifier_only_hotkey_recovers_after_a_cancelled_round() {
+        let mut s = modifiers_only();
+        decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s);
+        decide(WM_KEYDOWN, VK_S, MOD_CONTROL, &mut s);
+        decide(WM_KEYUP, VK_S, MOD_CONTROL, &mut s);
+        decide(WM_KEYUP, VK_LCONTROL, 0, &mut s);
+        // 上一轮作废不该拖累下一轮。
+        decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s);
+        decide(WM_KEYDOWN, VK_LSHIFT, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYUP, VK_LSHIFT, MOD_CONTROL, &mut s);
+        assert_eq!(
+            decide(WM_KEYUP, VK_LCONTROL, 0, &mut s),
+            Decision::Fire {
+                id: 1,
+                swallow: false
+            }
+        );
+    }
+
+    #[test]
+    fn typing_without_modifiers_does_not_poison_the_next_round() {
+        let mut s = modifiers_only();
+        decide(WM_KEYDOWN, VK_S, 0, &mut s);
+        decide(WM_KEYUP, VK_S, 0, &mut s);
+        decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s);
+        decide(WM_KEYDOWN, VK_LSHIFT, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYUP, VK_LSHIFT, MOD_CONTROL, &mut s);
+        assert_eq!(
+            decide(WM_KEYUP, VK_LCONTROL, 0, &mut s),
+            Decision::Fire {
+                id: 1,
+                swallow: false
+            }
+        );
+    }
+
+    #[test]
+    fn a_main_key_hotkey_and_a_modifier_only_hotkey_coexist() {
+        let mut s = vec![
+            hotkey(1, MOD_CONTROL | MOD_SHIFT, &[], false),
+            hotkey(2, MOD_CONTROL | MOD_SHIFT, &[VK_Q], true),
+        ];
+        decide(WM_KEYDOWN, VK_LCONTROL, MOD_CONTROL, &mut s);
+        decide(WM_KEYDOWN, VK_LSHIFT, MOD_CONTROL | MOD_SHIFT, &mut s);
+        assert_eq!(
+            decide(WM_KEYDOWN, VK_Q, MOD_CONTROL | MOD_SHIFT, &mut s),
+            fire(2)
+        );
+        decide(WM_KEYUP, VK_Q, MOD_CONTROL | MOD_SHIFT, &mut s);
+        decide(WM_KEYUP, VK_LSHIFT, MOD_CONTROL, &mut s);
+        assert_eq!(
+            decide(WM_KEYUP, VK_LCONTROL, 0, &mut s),
+            Decision::Pass,
+            "敲过主键，纯修饰键那条本轮作废"
         );
     }
 
@@ -314,14 +566,16 @@ mod tests {
             7,
             ParsedHotkey {
                 modifiers: MOD_CONTROL,
-                vk: VK_Q,
+                keys: vec![VK_Q],
             },
+            true,
         )]);
         {
             let hotkeys = HOTKEYS.lock().unwrap();
             assert_eq!(hotkeys.len(), 1);
             assert_eq!(hotkeys[0].id, 7);
-            assert!(!hotkeys[0].held);
+            assert!(hotkeys[0].swallow);
+            assert_eq!(hotkeys[0].held, 0);
         }
         set_hotkeys(&[]);
         assert!(HOTKEYS.lock().unwrap().is_empty());

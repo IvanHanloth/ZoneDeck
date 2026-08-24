@@ -52,6 +52,11 @@ fn bit_of(vk: u16) -> Option<u32> {
     })
 }
 
+/// 该虚拟键码是不是修饰键。
+pub fn is_modifier(vk: u16) -> bool {
+    bit_of(vk).is_some()
+}
+
 /// 把具体键位集折算成 [`crate::hotkey`] 的修饰键掩码。
 fn mask_of(tracked: u32) -> u32 {
     let has = |group: u32| tracked & group != 0;

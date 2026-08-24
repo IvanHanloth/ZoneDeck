@@ -48,7 +48,7 @@ The core **cannot** be a Session 0 Windows service, or it could not enumerate an
 | Capability | API used | Notes |
 | --- | --- | --- |
 | Global hotkeys | `RegisterHotKey` | The most standard and complete trigger mechanism |
-| Hotkey interception | `WH_KEYBOARD_LL` | Installed only when a hotkey has "don't pass through" enabled |
+| Hooked hotkeys | `WH_KEYBOARD_LL` | Installed only when a hotkey enables the low-level keyboard hook, or uses a modifier-only / multi-key combination |
 | Mouse / corners | `WH_MOUSE_LL` | Installed only when mouse or corner triggers are enabled |
 | Idle detection | `GetLastInputInfo` | No need to monitor the keyboard continuously |
 
@@ -88,7 +88,7 @@ ZoneDeck/
 │           freeze.rs     NtSuspend/Resume + pssuspend64 enhanced freezing
 │           input_hooks.rs Dedicated input-hook thread (owns both low-level hooks, above-normal priority)
 │           mouse_hook.rs WH_MOUSE_LL (middle/side buttons, corners)
-│           keyboard_hook.rs WH_KEYBOARD_LL ("don't pass through" hotkey interception)
+│           keyboard_hook.rs WH_KEYBOARD_LL (hooked hotkeys: optional swallow, modifier-only, multi-key)
 │           idle.rs       GetLastInputInfo idle detection + auto-hide decision
 │           win_event.rs  SetWinEventHook window-event tracking (destroy/show/title change → live record upkeep)
 │           tray.rs       Shell_NotifyIcon tray + balloons
@@ -171,7 +171,7 @@ Message-loop state lives in a `RefCell`: the modal loops of the tray / floating-
 
 `WH_MOUSE_LL` / `WH_KEYBOARD_LL` callbacks are dispatched by the **installing thread's message pump**, and the system's input thread waits for the hook chain to return before delivering the event onward. Sharing a thread with the agent means enumerating windows, writing the recovery file, or handling system-wide window events would directly slow down global mouse and keyboard input; a single callback exceeding `LowLevelHooksTimeout` (300ms by default) also makes the system drop that event.
 
-`input_hooks.rs` therefore runs a dedicated thread that does nothing but pump messages for these two hooks, at above-normal priority. The callbacks only perform in-memory checks and `PostMessageW` (the hottest path, mouse movement, takes no lock — samples live in atomics). The agent thread issues install/uninstall requests synchronously through a message-only window and uses the return value to decide whether to fall back (when the keyboard hook cannot be installed, "do not pass through" hotkeys degrade to `RegisterHotKey`).
+`input_hooks.rs` therefore runs a dedicated thread that does nothing but pump messages for these two hooks, at above-normal priority. The callbacks only perform in-memory checks and `PostMessageW` (the hottest path, mouse movement, takes no lock — samples live in atomics). The agent thread issues install/uninstall requests synchronously through a message-only window and uses the return value to decide whether to fall back (when the keyboard hook cannot be installed, hooked hotkeys degrade to `RegisterHotKey`, and combinations `RegisterHotKey` cannot express do not take effect for that run).
 
 The agent thread's own priority is **not** raised: it does the heavy work — enumeration, freezing, persistence — and raising it would only steal CPU from foreground programs.
 

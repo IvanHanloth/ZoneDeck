@@ -439,26 +439,44 @@ struct CaptureState(Mutex<Option<KeyCapture>>);
 struct KeyCapturePayload {
     /// 当前按住的修饰键，形如 `"Ctrl+Shift"`；没有按住则为空串。
     modifiers: String,
-    /// 当前按住的主键名；只按着修饰键或主键已抬起时为 null。
-    key: Option<String>,
+    /// 当前按住的主键名，按按下先后排列；只按着修饰键时为空数组。
+    keys: Vec<String>,
     down: bool,
-    /// 按了热键表里没有的键（如小键盘、OEM 符号键）。
+    /// 按了热键表里没有的键。
     unsupported: bool,
 }
 
 fn capture_payload(ev: &KeyEvent) -> KeyCapturePayload {
-    // 抬起时不报主键，界面据此知道主键已松开。
-    let key = if ev.down {
-        zonedeck_core::hotkey::vk_to_key(ev.vk)
-    } else {
-        None
-    };
     KeyCapturePayload {
         modifiers: zonedeck_core::hotkey::format_modifiers(ev.modifiers),
-        unsupported: ev.down && key.is_none() && !zonedeck_core::key_capture::is_modifier(ev.vk),
-        key,
+        keys: ev
+            .keys
+            .iter()
+            .filter_map(|vk| zonedeck_core::hotkey::vk_to_key(*vk))
+            .collect(),
+        unsupported: ev.down
+            && zonedeck_core::hotkey::vk_to_key(ev.vk).is_none()
+            && !zonedeck_core::key_capture::is_modifier(ev.vk),
         down: ev.down,
     }
+}
+
+/// 扩展主键在当前键盘布局下的实际字符，供界面显示；配置里存的仍是位置名。
+#[tauri::command]
+fn key_labels() -> std::collections::HashMap<String, String> {
+    zonedeck_core::key_capture::layout_key_labels()
+}
+
+/// 与核心共用日志目录与等级设置。日志器每条记录单独开关文件追加，
+/// 两个进程同时写同一份日志是安全的。
+fn init_logging() {
+    let config = Config::load(&config_path()).unwrap_or_default();
+    zonedeck_core::logging::init(
+        log_dir(),
+        config.setting.log_retention_days,
+        zonedeck_core::logging::Level::from_config(&config.setting.log_level),
+    );
+    zonedeck_core::logging::install_panic_hook();
 }
 
 /// 开始独占键盘录制。期间所有按键都被吞掉，不会漏给任何其他程序；
@@ -479,7 +497,10 @@ fn start_key_capture(app: AppHandle, state: State<CaptureState>) -> Result<(), S
     let capture = KeyCapture::start(move |ev| {
         let _ = tx.send(ev);
     })
-    .ok_or_else(|| i18n::t(Msg::ErrKeyCaptureFailed).to_string())?;
+    .ok_or_else(|| {
+        zonedeck_core::logging::error("安装键盘录制钩子失败，录制无法独占键盘");
+        i18n::t(Msg::ErrKeyCaptureFailed).to_string()
+    })?;
 
     std::thread::spawn(move || {
         // 通道随录制结束而关闭，循环随之退出。
@@ -502,9 +523,35 @@ fn start_key_capture(app: AppHandle, state: State<CaptureState>) -> Result<(), S
 /// 结束录制，把键盘还给系统。返回此前是否确实在录。幂等。
 #[tauri::command]
 fn stop_key_capture(state: State<CaptureState>) -> bool {
-    match state.0.lock() {
+    let stopped = match state.0.lock() {
         Ok(mut slot) => slot.take().is_some(),
         Err(mut poisoned) => poisoned.get_mut().take().is_some(),
+    };
+    if stopped {
+        report_capture_health();
+    }
+    stopped
+}
+
+/// 录制结束后回看钩子的工作情况，把「录制没反应」的原因写进日志。
+/// 界面上表现一样，底下的原因却完全不同，不记下来只能靠猜。
+fn report_capture_health() {
+    let (seen, background) = zonedeck_core::key_capture::capture_stats();
+    if seen == 0 {
+        zonedeck_core::logging::warn(
+            "本次录制期间键盘钩子一次都没被调用：钩子可能没真正装上、已被系统摘除，\
+             或被其他程序（输入法 / 安全软件 / 按键映射工具）装在更前面的钩子截住了",
+        );
+    } else if background == seen {
+        zonedeck_core::logging::warn(&format!(
+            "本次录制期间键盘钩子收到 {seen} 次按键，但每次都判定本程序不在前台，按键全部放行；\
+             录制因此收不到任何按键（前台窗口 PID={}）",
+            zonedeck_core::key_capture::foreground_pid()
+        ));
+    } else {
+        zonedeck_core::logging::debug(&format!(
+            "本次录制期间键盘钩子收到 {seen} 次按键，其中 {background} 次因本程序不在前台而放行"
+        ));
     }
 }
 
@@ -734,6 +781,7 @@ fn backdrop_kind() -> &'static str {
 }
 
 pub fn run() {
+    init_logging();
     tauri::Builder::default()
         // 单实例：重复启动时激活已有窗口。必须是注册的第一个插件。
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
@@ -782,6 +830,7 @@ pub fn run() {
             set_hotkeys_enabled,
             start_key_capture,
             stop_key_capture,
+            key_labels,
             pssuspend_available,
             regex_breadth,
             whitelist_builtins,
@@ -809,49 +858,68 @@ mod tests {
     use zonedeck_core::key_capture::KeyEvent;
 
     const VK_Q: u16 = 0x51;
+    const VK_W: u16 = 0x57;
     const VK_LCONTROL: u16 = 0xA2;
     const VK_NUMPAD0: u16 = 0x60;
+    const VK_SLEEP: u16 = 0x5F;
 
-    fn ev(vk: u16, down: bool, modifiers: u32) -> KeyEvent {
+    fn ev(vk: u16, down: bool, modifiers: u32, keys: &[u16]) -> KeyEvent {
         KeyEvent {
             vk,
             down,
             modifiers,
+            keys: keys.to_vec(),
         }
     }
 
     #[test]
     fn only_modifiers_held_reports_no_main_key() {
-        let p = capture_payload(&ev(VK_LCONTROL, true, MOD_CONTROL));
+        let p = capture_payload(&ev(VK_LCONTROL, true, MOD_CONTROL, &[]));
         assert_eq!(p.modifiers, "Ctrl");
-        assert_eq!(p.key, None);
+        assert!(p.keys.is_empty());
         assert!(!p.unsupported, "修饰键本身不算不支持的按键");
     }
 
     #[test]
     fn a_supported_main_key_reports_the_whole_combo() {
-        let p = capture_payload(&ev(VK_Q, true, MOD_CONTROL | MOD_SHIFT));
+        let p = capture_payload(&ev(VK_Q, true, MOD_CONTROL | MOD_SHIFT, &[VK_Q]));
         assert_eq!(p.modifiers, "Ctrl+Shift");
-        assert_eq!(p.key.as_deref(), Some("Q"));
+        assert_eq!(p.keys, vec!["Q"]);
+        assert!(!p.unsupported);
+    }
+
+    #[test]
+    fn several_keys_held_at_once_all_show_up() {
+        let p = capture_payload(&ev(VK_W, true, 0, &[VK_Q, VK_W]));
+        assert_eq!(p.keys, vec!["Q", "W"], "按按下先后排列");
+    }
+
+    #[test]
+    fn numpad_and_oem_keys_are_supported_now() {
+        let p = capture_payload(&ev(VK_NUMPAD0, true, 0, &[VK_NUMPAD0]));
+        assert_eq!(p.keys, vec!["Numpad0"]);
+        assert!(!p.unsupported);
+        let p = capture_payload(&ev(0xBA, true, MOD_CONTROL, &[0xBA]));
+        assert_eq!(p.keys, vec!["OEM_1"], "配置里存位置名");
         assert!(!p.unsupported);
     }
 
     #[test]
     fn a_key_outside_the_hotkey_table_is_flagged_unsupported() {
-        let p = capture_payload(&ev(VK_NUMPAD0, true, 0));
-        assert_eq!(p.key, None);
+        let p = capture_payload(&ev(VK_SLEEP, true, 0, &[VK_SLEEP]));
+        assert!(p.keys.is_empty());
         assert!(p.unsupported, "界面据此提示换一个键");
     }
 
     #[test]
-    fn releasing_a_key_clears_the_main_key_and_never_flags_unsupported() {
-        let p = capture_payload(&ev(VK_Q, false, MOD_CONTROL));
+    fn releasing_a_key_clears_it_and_never_flags_unsupported() {
+        let p = capture_payload(&ev(VK_Q, false, MOD_CONTROL, &[]));
         assert_eq!(p.modifiers, "Ctrl", "抬起主键后修饰键还按着");
-        assert_eq!(p.key, None, "抬起时不报主键，界面据此知道松手了");
+        assert!(p.keys.is_empty(), "抬起后主键从按住集合里消失");
         assert!(!p.down);
         assert!(!p.unsupported);
         // 不支持的键抬起同样不该再刷提示。
-        assert!(!capture_payload(&ev(VK_NUMPAD0, false, 0)).unsupported);
+        assert!(!capture_payload(&ev(VK_SLEEP, false, 0, &[])).unsupported);
     }
 
     #[test]

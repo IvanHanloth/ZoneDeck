@@ -132,10 +132,25 @@ pub struct Hotkey {
     /// 只隐藏当前前台窗口的热键，可连续触发逐个隐藏；默认置空（关闭）。
     #[serde(default)]
     pub hide_foreground_hotkey: String,
-    /// 隐藏热键是否不传递给其他程序（核心改用键盘钩子拦截）。
+    /// 隐藏热键是否改用低级键盘钩子触发（而不是 `RegisterHotKey`）。
+    #[serde(default)]
+    pub hide_hook: bool,
+    /// 关闭热键是否改用低级键盘钩子触发。
+    #[serde(default)]
+    pub close_hook: bool,
+    /// 仅隐藏热键是否改用低级键盘钩子触发。
+    #[serde(default)]
+    pub hide_only_hook: bool,
+    /// 仅显示热键是否改用低级键盘钩子触发。
+    #[serde(default)]
+    pub show_only_hook: bool,
+    /// 隐藏前台窗口热键是否改用低级键盘钩子触发。
+    #[serde(default)]
+    pub hide_foreground_hook: bool,
+    /// 隐藏热键是否不传递给其他程序（需要键盘钩子）。
     #[serde(default)]
     pub hide_intercept: bool,
-    /// 关闭热键是否不传递给其他程序（核心改用键盘钩子拦截）。
+    /// 关闭热键是否不传递给其他程序（需要键盘钩子）。
     #[serde(default)]
     pub close_intercept: bool,
     /// 仅隐藏热键是否不传递给其他程序。
@@ -157,11 +172,35 @@ impl Default for Hotkey {
             hide_only_hotkey: String::new(),
             show_only_hotkey: String::new(),
             hide_foreground_hotkey: String::new(),
+            hide_hook: false,
+            close_hook: false,
+            hide_only_hook: false,
+            show_only_hook: false,
+            hide_foreground_hook: false,
             hide_intercept: false,
             close_intercept: false,
             hide_only_intercept: false,
             show_only_intercept: false,
             hide_foreground_intercept: false,
+        }
+    }
+}
+
+impl Hotkey {
+    /// 「不传递」只有键盘钩子做得到，故它蕴含「走钩子」。这一条同时完成旧配置的迁移：
+    /// 旧版只有 `*_intercept`，语义是「走钩子且吞键」，归一后两个开关都为真。幂等。
+    pub fn normalize(&mut self) {
+        for (hook, intercept) in [
+            (&mut self.hide_hook, self.hide_intercept),
+            (&mut self.close_hook, self.close_intercept),
+            (&mut self.hide_only_hook, self.hide_only_intercept),
+            (&mut self.show_only_hook, self.show_only_intercept),
+            (
+                &mut self.hide_foreground_hook,
+                self.hide_foreground_intercept,
+            ),
+        ] {
+            *hook |= intercept;
         }
     }
 }
@@ -700,6 +739,7 @@ impl Config {
         if self.whitelist.is_none() {
             self.whitelist = Some(default_whitelist());
         }
+        self.hotkey.normalize();
         self.setting.normalize();
     }
 
@@ -908,8 +948,12 @@ mod tests {
         .unwrap();
         assert!(!c.hotkey.hide_intercept, "旧配置无此字段应默认关闭");
         assert!(!c.hotkey.close_intercept);
+        assert!(!c.hotkey.hide_hook, "钩子开关同样默认关闭");
+        assert!(!c.hotkey.close_hook);
         assert!(!Hotkey::default().hide_intercept, "全新配置也默认关闭");
         assert!(!Hotkey::default().close_intercept);
+        assert!(!Hotkey::default().hide_hook);
+        assert!(!Hotkey::default().close_hook);
     }
 
     #[test]
@@ -957,6 +1001,44 @@ mod tests {
         let back = Config::from_json(&c.to_json().unwrap()).unwrap();
         assert!(back.hotkey.hide_intercept, "写回后应保留");
         assert!(!back.hotkey.close_intercept);
+    }
+
+    #[test]
+    fn legacy_intercept_flag_migrates_to_the_hook_switch() {
+        let c = Config::from_json(
+            r#"{"hotkey": {"hide_intercept": true, "hide_foreground_intercept": true}}"#,
+        )
+        .unwrap();
+        assert!(c.hotkey.hide_hook, "旧版「不传递」本来就是走钩子且吞键");
+        assert!(c.hotkey.hide_intercept);
+        assert!(c.hotkey.hide_foreground_hook);
+        assert!(!c.hotkey.close_hook, "没开的热键不受影响");
+        assert!(!c.hotkey.close_intercept);
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(back.hotkey, c.hotkey, "迁移幂等");
+    }
+
+    #[test]
+    fn the_hook_switch_works_without_swallowing() {
+        let c = Config::from_json(r#"{"hotkey": {"hide_hook": true}}"#).unwrap();
+        assert!(c.hotkey.hide_hook);
+        assert!(!c.hotkey.hide_intercept, "走钩子不代表要吞掉按键");
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert!(back.hotkey.hide_hook, "写回后应保留");
+        assert!(!back.hotkey.hide_intercept);
+    }
+
+    #[test]
+    fn swallowing_always_implies_hooking() {
+        let mut h = Hotkey {
+            show_only_intercept: true,
+            ..Hotkey::default()
+        };
+        h.normalize();
+        assert!(h.show_only_hook, "「不传递」只有键盘钩子做得到");
+        assert!(!h.hide_hook, "其余热键不受影响");
     }
 
     #[test]

@@ -48,7 +48,7 @@ ZoneDeck v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 | 能力 | 使用的 API | 說明 |
 | --- | --- | --- |
 | 全域快速鍵 | `RegisterHotKey` | 最規範、完善的觸發方式 |
-| 快速鍵不傳遞 | `WH_KEYBOARD_LL` | 僅在有快速鍵開啟「不傳遞」時才安裝 |
+| 快速鍵走掛鉤 | `WH_KEYBOARD_LL` | 僅在有快速鍵開啟「低階鍵盤掛鉤」、或用了純修飾鍵／多主鍵組合時才安裝 |
 | 滑鼠／四角 | `WH_MOUSE_LL` | 僅在啟用滑鼠／四角時才安裝 |
 | 閒置偵測 | `GetLastInputInfo` | 不需常駐監聽鍵盤 |
 
@@ -88,7 +88,7 @@ ZoneDeck/
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增強凍結
 │           input_hooks.rs 輸入掛鉤專職執行緒（承載兩個低階掛鉤，優先權 above normal）
 │           mouse_hook.rs WH_MOUSE_LL（中鍵/側鍵/四角）
-│           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
+│           keyboard_hook.rs WH_KEYBOARD_LL（走掛鉤的快速鍵：可選吞鍵、純修飾鍵、多主鍵）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
 │           tray.rs       Shell_NotifyIcon 通知區域 + 通知
 │           ipc_server.rs 具名管道伺服端（建立失敗退避重試，不結束）
@@ -169,7 +169,7 @@ Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在
 
 `WH_MOUSE_LL`／`WH_KEYBOARD_LL` 的回呼由**安裝執行緒的訊息幫浦**派送，且系統的輸入執行緒要等掛鉤鏈返回才繼續投遞事件。若與 agent 同執行緒，列舉視窗、寫入復原檔案、處理全系統視窗事件這類操作會直接拖慢全域滑鼠與鍵盤輸入，單次超過 `LowLevelHooksTimeout`（預設 300ms）時系統還會丟棄該事件。
 
-故 `input_hooks.rs` 單獨啟動一條只跑訊息幫浦的執行緒承載這兩個掛鉤，執行緒優先權提到 above normal，回呼裡只做純記憶體判定與 `PostMessageW`（滑鼠移動這條最熱的路徑上不加鎖，取樣存在不可分割變數裡）。agent 執行緒透過一個僅訊息視窗向它同步下達裝卸請求，並依返回值決定是否回退（鍵盤掛鉤裝不上時「不傳遞」快速鍵退化為 `RegisterHotKey`）。
+故 `input_hooks.rs` 單獨啟動一條只跑訊息幫浦的執行緒承載這兩個掛鉤，執行緒優先權提到 above normal，回呼裡只做純記憶體判定與 `PostMessageW`（滑鼠移動這條最熱的路徑上不加鎖，取樣存在不可分割變數裡）。agent 執行緒透過一個僅訊息視窗向它同步下達裝卸請求，並依返回值決定是否回退（鍵盤掛鉤裝不上時，走掛鉤的快速鍵退化為 `RegisterHotKey`，`RegisterHotKey` 表達不了的組合則本次不生效）。
 
 agent 執行緒本身**不**提優先權：它做的是列舉／凍結／寫入磁碟這類重活，抬高只會從前景程式手裡搶 CPU。
 

@@ -76,41 +76,36 @@
       icon={IconRepeat}
       label={t("hotkeys.hideShow")}
       bind:value={app.config.hotkey.hide_hotkey}
+      bind:hook={app.config.hotkey.hide_hook}
       bind:intercept={app.config.hotkey.hide_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconEyeOff}
       label={t("hotkeys.hideOnly")}
       bind:value={app.config.hotkey.hide_only_hotkey}
+      bind:hook={app.config.hotkey.hide_only_hook}
       bind:intercept={app.config.hotkey.hide_only_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconEye}
       label={t("hotkeys.showOnly")}
       bind:value={app.config.hotkey.show_only_hotkey}
+      bind:hook={app.config.hotkey.show_only_hook}
       bind:intercept={app.config.hotkey.show_only_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconAppWindow}
       label={t("hotkeys.hideForeground")}
       bind:value={app.config.hotkey.hide_foreground_hotkey}
+      bind:hook={app.config.hotkey.hide_foreground_hook}
       bind:intercept={app.config.hotkey.hide_foreground_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconPower}
       label={t("hotkeys.closeApp")}
       bind:value={app.config.hotkey.close_hotkey}
+      bind:hook={app.config.hotkey.close_hook}
       bind:intercept={app.config.hotkey.close_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
   </SettingsGroup>
 
