@@ -3,7 +3,7 @@
   let { title = "", children } = $props();
 </script>
 
-<section class="group">
+<section class="group" data-group={title || null}>
   {#if title}<h3 class="type-body-strong">{title}</h3>{/if}
   <div class="stack">{@render children?.()}</div>
 </section>

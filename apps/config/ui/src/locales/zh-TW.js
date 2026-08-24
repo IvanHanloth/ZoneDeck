@@ -8,7 +8,6 @@ export default {
   "tab.whitelist": "白名單",
   "tab.hotkeys": "快速鍵與滑鼠",
   "tab.hide": "隱藏設定",
-  "tab.notify": "提示設定",
   "tab.power": "能效控制",
   "tab.options": "通用設定",
   "tab.about": "關於與意見回饋",
@@ -29,6 +28,10 @@ export default {
   "common.collapse": "收合",
   "common.unknownProcess": "（未知程序）",
   "common.noTitleWindow": "無標題視窗",
+
+  "search.placeholder": "尋找設定",
+  "search.noResults": "找不到符合的設定",
+  "search.resultsAria": "搜尋結果",
 
   "titlebar.minimize": "最小化",
   "titlebar.maximize": "最大化",

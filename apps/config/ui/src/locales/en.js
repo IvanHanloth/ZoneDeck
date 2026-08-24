@@ -8,7 +8,6 @@ export default {
   "tab.whitelist": "Whitelist",
   "tab.hotkeys": "Hotkeys & Mouse",
   "tab.hide": "Hiding",
-  "tab.notify": "Alerts",
   "tab.power": "Power & Memory",
   "tab.options": "General",
   "tab.about": "About & Feedback",
@@ -29,6 +28,10 @@ export default {
   "common.collapse": "Collapse",
   "common.unknownProcess": "(unknown process)",
   "common.noTitleWindow": "Untitled window",
+
+  "search.placeholder": "Find a setting",
+  "search.noResults": "No matching settings",
+  "search.resultsAria": "Search results",
 
   "titlebar.minimize": "Minimize",
   "titlebar.maximize": "Maximize",

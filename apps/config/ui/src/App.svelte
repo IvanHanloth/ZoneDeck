@@ -9,7 +9,6 @@
   import PowerPanel from "./components/PowerPanel.svelte";
   import HidePanel from "./components/HidePanel.svelte";
   import OptionsPanel from "./components/OptionsPanel.svelte";
-  import NotificationsPanel from "./components/NotificationsPanel.svelte";
   import AboutPanel from "./components/AboutPanel.svelte";
   import StatusBar from "./components/StatusBar.svelte";
   import RestoreWindowsModal from "./components/RestoreWindowsModal.svelte";
@@ -23,7 +22,6 @@
   import IconShieldCheck from "~icons/lucide/shield-check";
   import IconKeyboard from "~icons/lucide/keyboard";
   import IconEyeOff from "~icons/lucide/eye-off";
-  import IconBell from "~icons/lucide/bell";
   import IconZap from "~icons/lucide/zap";
   import IconSettings from "~icons/lucide/settings";
   import IconInfo from "~icons/lucide/info";
@@ -51,7 +49,6 @@
     { id: "hotkeys", labelKey: "tab.hotkeys", icon: IconKeyboard },
     { id: "hide", labelKey: "tab.hide", icon: IconEyeOff },
     { id: "power", labelKey: "tab.power", icon: IconZap },
-    { id: "notify", labelKey: "tab.notify", icon: IconBell },
     { id: "about", labelKey: "tab.about", icon: IconInfo, footer: true },
     { id: "options", labelKey: "tab.options", icon: IconSettings, footer: true },
   ];
@@ -157,13 +154,14 @@
     />
 
     <main class="content">
-      <!-- key 到 tab 上：换页时这一整块重建，进场动画随之重播，
+      <!-- 标题不进 key 块：同 Win11 设置，换页时标题直接切换，不跟正文动画。 -->
+      <h1 class="type-subtitle page-title" class:wide={fill}>
+        <PageIcon width="22" height="22" />
+        {pageTitle}
+      </h1>
+      <!-- key 到 tab 上：换页时正文整块重建，进场动画随之重播，
            滚动容器也一并新建，新页面自然从顶部开始看。 -->
       {#key app.tab}
-        <h1 class="type-subtitle page-title" class:wide={fill}>
-          <PageIcon width="22" height="22" />
-          {pageTitle}
-        </h1>
         <div class="page-body" class:fill>
           <div class="page-inner">
             {#if !app.config}
@@ -180,8 +178,6 @@
               <PowerPanel />
             {:else if app.tab === "options"}
               <OptionsPanel />
-            {:else if app.tab === "notify"}
-              <NotificationsPanel />
             {:else}
               <AboutPanel />
             {/if}
@@ -275,25 +271,36 @@
     padding: 48px 0;
   }
 
-  /* 换页进场：整块内容从下方浮上来并淡入，同 Win11 设置的页面切换。
-     标题与正文同时起步，读起来是一整页换上来，而不是两块各自动。
+  /* 换页进场：正文整块从下往上滑出来，全程不透明，没有渐显；标题不动。
 
      位移刻意走 relative + top，不用 translate：任何非 none 的 transform／translate
      都会让元素变成 position:fixed 后代的包含块，页内的下拉、录制弹窗、Issue 弹窗
-     就会以这里为基准定位而错位（fill-mode 留下的 translate:0 同样算数）。 */
-  .page-title,
+     就会以这里为基准定位而错位（fill-mode 留下的 translate:0 同样算数）。
+
+     page-appear 只用来在开场那段空档里藏住内容，step-start 让它在延迟结束的一瞬
+     整块显形。这里换成任何有时长的 opacity 过渡都会变回渐显。
+
+     top: 0 不能省：关键帧只给了 from，隐式的 to 取元素自身的值，不写就是 auto，
+     而长度与 auto 之间没法插值，浏览器会退化成在中点硬翻一次——那样根本没有
+     滑动。起始距离同理必须写成字面量，关键帧里的 var() 也插值不了。 */
   .page-inner {
     position: relative;
-    animation: page-enter var(--dur-slow) var(--ease-standard) both;
+    top: 0;
+    animation:
+      page-slide var(--dur-page) var(--ease-out) var(--delay-page) both,
+      page-appear var(--dur-page) step-start var(--delay-page) both;
   }
-  @keyframes page-enter {
+  @keyframes page-slide {
+    from {
+      top: 36px;
+    }
+  }
+  @keyframes page-appear {
     from {
       opacity: 0;
-      top: 24px;
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .page-title,
     .page-inner {
       animation: none;
     }

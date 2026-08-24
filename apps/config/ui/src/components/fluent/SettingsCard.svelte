@@ -12,7 +12,8 @@
   } = $props();
 </script>
 
-<div class="card {variant}" class:disabled>
+<!-- data-setting 供顶部搜索定位到具体某一项，标题即锚点，无需逐个登记 id -->
+<div class="card {variant}" class:disabled data-setting={label}>
   <div class="main">
     {#if Icon}
       <span class="icon" style:color={iconColor || null} aria-hidden="true">

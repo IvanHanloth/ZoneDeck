@@ -4,21 +4,22 @@
 //! 由 [`crate::input_hooks`] 的专职线程安装。
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicI32, AtomicIsize, AtomicU32, AtomicU64, Ordering::Relaxed};
+use std::sync::atomic::{AtomicIsize, AtomicU32, AtomicU64, Ordering::Relaxed};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, GetSystemMetrics, HHOOK, MSLLHOOKSTRUCT, PostMessageW, SM_CXSCREEN,
-    SM_CYSCREEN, SetWindowsHookExW, UnhookWindowsHookEx, WH_MOUSE_LL, WM_APP, WM_LBUTTONDOWN,
-    WM_MBUTTONDOWN, WM_MOUSEMOVE, WM_RBUTTONDOWN, WM_XBUTTONDOWN,
+    CallNextHookEx, HHOOK, MSLLHOOKSTRUCT, PostMessageW, SetWindowsHookExW, UnhookWindowsHookEx,
+    WH_MOUSE_LL, WM_APP, WM_LBUTTONDOWN, WM_MBUTTONDOWN, WM_MOUSEMOVE, WM_RBUTTONDOWN,
+    WM_XBUTTONDOWN,
 };
 use windows::core::PCWSTR;
 use zonedeck_common::{MouseButton as MouseButtonCfg, Setting};
 
 use crate::hotkey::parse_modifiers;
 use crate::modifiers::current_modifiers;
+use crate::monitor::ScreenRect;
 
 pub const WM_MOUSE_TRIGGER: u32 = WM_APP + 3;
 pub const TRIGGER_BUTTON: usize = 0;
@@ -49,8 +50,6 @@ const BTN_COUNT: usize = 5;
 
 static HWND_RAW: AtomicIsize = AtomicIsize::new(0);
 static CORNER_FLAGS: AtomicU32 = AtomicU32::new(0);
-static SCREEN_W: AtomicI32 = AtomicI32::new(0);
-static SCREEN_H: AtomicI32 = AtomicI32::new(0);
 static LAST_CORNER: AtomicU64 = AtomicU64::new(0);
 /// 上一个鼠标位置与时刻，用来估算甩入角落的速度；时刻为 0 表示尚无采样。
 static LAST_MOVE_POS: AtomicU64 = AtomicU64::new(0);
@@ -221,12 +220,22 @@ fn button_index(msg: u32, mouse_data: u32) -> Option<usize> {
     }
 }
 
-fn corner_hit(x: i32, y: i32, w: i32, h: i32, flags: u32) -> bool {
+/// 光标是否落在所在显示器的某个被启用的角上。
+///
+/// `screen` 必须是**光标所在那块显示器**的矩形，不能是主显示器的宽高：钩子给的
+/// 坐标是虚拟屏幕坐标，主屏左边的副屏上 x 恒为负，拿主屏宽高判会把副屏整条
+/// 上下边缘都当成「左上 / 左下角」。
+fn corner_hit(x: i32, y: i32, screen: ScreenRect, flags: u32) -> bool {
+    // 落在这块显示器之外不算它的角：显示器非矩形排列时，光标可能停在两块之间的
+    // 空隙里，而 `MONITOR_DEFAULTTONEAREST` 仍会给出最近的一块。
+    if x < screen.left || x >= screen.right || y < screen.top || y >= screen.bottom {
+        return false;
+    }
     let t = CORNER_THRESHOLD;
-    let left = x <= t;
-    let right = x >= w - t;
-    let top = y <= t;
-    let bottom = y >= h - t;
+    let left = x <= screen.left + t;
+    let right = x >= screen.right - t;
+    let top = y <= screen.top + t;
+    let bottom = y >= screen.bottom - t;
     (top && left && flags & F_TL != 0)
         || (top && right && flags & F_TR != 0)
         || (bottom && left && flags & F_BL != 0)
@@ -262,8 +271,11 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
         if now.wrapping_sub(LAST_CORNER.load(Relaxed)) < CORNER_COOLDOWN_MS {
             return;
         }
-        let (w, h) = (SCREEN_W.load(Relaxed), SCREEN_H.load(Relaxed));
-        if !corner_hit(sample.x, sample.y, w, h, flags) {
+        // 按光标所在的那块显示器判角；查不到就当没命中，别拿主屏尺寸硬套。
+        let Some(screen) = crate::monitor::at_point(sample.x, sample.y).map(|m| m.bounds) else {
+            return;
+        };
+        if !corner_hit(sample.x, sample.y, screen, flags) {
             return;
         }
         if flags & F_FAST != 0 && !previous.is_some_and(|p| is_fast_move(p, sample)) {
@@ -321,8 +333,6 @@ impl MouseHook {
         // 上一轮的采样已过时。
         LAST_MOVE_MS.store(0, Relaxed);
         unsafe {
-            SCREEN_W.store(GetSystemMetrics(SM_CXSCREEN), Relaxed);
-            SCREEN_H.store(GetSystemMetrics(SM_CYSCREEN), Relaxed);
             let hinstance = GetModuleHandleW(PCWSTR::null()).ok()?;
             let handle =
                 SetWindowsHookExW(WH_MOUSE_LL, Some(hook_proc), Some(hinstance.into()), 0).ok()?;
@@ -499,19 +509,175 @@ mod tests {
         );
     }
 
+    /// 主显示器：虚拟屏幕坐标原点在它的左上角。
+    const PRIMARY: ScreenRect = ScreenRect {
+        left: 0,
+        top: 0,
+        right: 1920,
+        bottom: 1080,
+    };
+
+    /// 摆在主显示器**左边**的副屏，x 坐标整段为负——正是旧实现失手的地方。
+    const LEFT_OF_PRIMARY: ScreenRect = ScreenRect {
+        left: -1920,
+        top: 0,
+        right: 0,
+        bottom: 1080,
+    };
+
+    /// 摆在主显示器右边的副屏。
+    const RIGHT_OF_PRIMARY: ScreenRect = ScreenRect {
+        left: 1920,
+        top: 0,
+        right: 3840,
+        bottom: 1080,
+    };
+
     #[test]
     fn corner_hit_detects_each_enabled_corner() {
-        let (w, h) = (1920, 1080);
-        assert!(corner_hit(0, 0, w, h, F_TL));
-        assert!(corner_hit(1919, 0, w, h, F_TR));
-        assert!(corner_hit(0, 1079, w, h, F_BL));
-        assert!(corner_hit(1919, 1079, w, h, F_BR));
+        assert!(corner_hit(0, 0, PRIMARY, F_TL));
+        assert!(corner_hit(1919, 0, PRIMARY, F_TR));
+        assert!(corner_hit(0, 1079, PRIMARY, F_BL));
+        assert!(corner_hit(1919, 1079, PRIMARY, F_BR));
     }
 
     #[test]
     fn corner_hit_ignores_disabled_corners_and_center() {
-        let (w, h) = (1920, 1080);
-        assert!(!corner_hit(0, 0, w, h, F_TR), "左上角未启用时不触发");
-        assert!(!corner_hit(960, 540, w, h, CORNER_MASK), "屏幕中心不触发");
+        assert!(!corner_hit(0, 0, PRIMARY, F_TR), "左上角未启用时不触发");
+        assert!(
+            !corner_hit(960, 540, PRIMARY, CORNER_MASK),
+            "屏幕中心不触发"
+        );
+    }
+
+    // ---- 多显示器 ----------------------------------------------------------
+    // 钩子给的是虚拟屏幕坐标：主屏左边的副屏 x 恒为负，右边的副屏 x 恒大于主屏宽度。
+    // 判定必须按「光标所在的那块显示器」来，拿主屏宽高硬套会把副屏整条边缘都当成角。
+
+    #[test]
+    fn a_monitor_left_of_primary_has_its_corners_at_negative_coordinates() {
+        assert!(corner_hit(-1920, 0, LEFT_OF_PRIMARY, F_TL), "副屏左上角");
+        assert!(corner_hit(-1, 0, LEFT_OF_PRIMARY, F_TR), "副屏右上角");
+        assert!(corner_hit(-1920, 1079, LEFT_OF_PRIMARY, F_BL), "副屏左下角");
+        assert!(corner_hit(-1, 1079, LEFT_OF_PRIMARY, F_BR), "副屏右下角");
+    }
+
+    #[test]
+    fn the_top_edge_of_a_left_monitor_is_not_one_long_corner() {
+        // 旧实现里 `x <= 10` 对整块左副屏恒真，沿上边缘走一趟就会不停误触发。
+        for x in [-1500, -1000, -600, -200, -50] {
+            assert!(
+                !corner_hit(x, 0, LEFT_OF_PRIMARY, CORNER_MASK),
+                "上边缘中段 x={x} 不该算角落"
+            );
+            assert!(
+                !corner_hit(x, 1079, LEFT_OF_PRIMARY, CORNER_MASK),
+                "下边缘中段 x={x} 不该算角落"
+            );
+        }
+    }
+
+    #[test]
+    fn the_edge_of_a_right_monitor_is_not_one_long_corner() {
+        // 对称的另一半：旧实现里右副屏 `x >= 主屏宽-10` 恒真。
+        for x in [2000, 2600, 3200, 3800] {
+            assert!(
+                !corner_hit(x, 0, RIGHT_OF_PRIMARY, CORNER_MASK),
+                "上边缘中段 x={x} 不该算角落"
+            );
+        }
+        assert!(corner_hit(3839, 0, RIGHT_OF_PRIMARY, F_TR), "真正的右上角");
+    }
+
+    #[test]
+    fn the_seam_between_two_monitors_only_counts_for_the_side_it_belongs_to() {
+        // 主屏左边界 x=0 与左副屏右边界 x=-1 紧贴；各自只在自己的矩形里算角。
+        assert!(corner_hit(0, 0, PRIMARY, F_TL), "x=0 是主屏的左上角");
+        assert!(
+            !corner_hit(0, 0, LEFT_OF_PRIMARY, CORNER_MASK),
+            "x=0 已经出了左副屏的范围，不是它的角"
+        );
+    }
+
+    #[test]
+    fn monitors_of_different_sizes_each_use_their_own_bounds() {
+        // 副屏分辨率与主屏不同是常态，阈值须相对各自的边界。
+        let small = ScreenRect {
+            left: 1920,
+            top: 0,
+            right: 3200,
+            bottom: 720,
+        };
+        assert!(corner_hit(3199, 719, small, F_BR), "小屏自己的右下角");
+        assert!(
+            !corner_hit(1919, 1079, small, CORNER_MASK),
+            "主屏的右下角坐标不该命中小屏"
+        );
+    }
+
+    #[test]
+    fn a_monitor_above_primary_has_negative_y() {
+        let above = ScreenRect {
+            left: 0,
+            top: -1080,
+            right: 1920,
+            bottom: 0,
+        };
+        assert!(corner_hit(0, -1080, above, F_TL), "上方副屏的左上角");
+        assert!(
+            !corner_hit(960, -1080, above, CORNER_MASK),
+            "上边缘中段不该算角落"
+        );
+    }
+
+    #[test]
+    fn the_threshold_is_a_small_band_not_half_the_screen() {
+        // 边界内 CORNER_THRESHOLD 像素算命中，再往里就不算。
+        assert!(corner_hit(CORNER_THRESHOLD, 0, PRIMARY, F_TL));
+        assert!(!corner_hit(CORNER_THRESHOLD + 1, 0, PRIMARY, F_TL));
+    }
+
+    #[test]
+    fn single_monitor_hit_zones_are_unchanged_by_the_multi_monitor_fix() {
+        // 主显示器的 left/top 都是 0，改用显示器矩形后判定必须与旧的
+        // 「x <= t / x >= 宽度 - t」逐像素等价——这次改的是多显示器，
+        // 不该顺带挪动单显示器下的角落热区。
+        let t = CORNER_THRESHOLD;
+        let (w, h) = (PRIMARY.right, PRIMARY.bottom);
+        for x in [0, 1, t - 1, t, t + 1, w - t - 1, w - t, w - 1] {
+            for y in [0, t, t + 1, h - t - 1, h - t, h - 1] {
+                let old = {
+                    let left = x <= t;
+                    let right = x >= w - t;
+                    let top = y <= t;
+                    let bottom = y >= h - t;
+                    // 四项展开是旧实现的原样，留着好逐项对照，不做等价化简。
+                    #[allow(clippy::nonminimal_bool)]
+                    {
+                        (top && left) || (top && right) || (bottom && left) || (bottom && right)
+                    }
+                };
+                assert_eq!(
+                    corner_hit(x, y, PRIMARY, CORNER_MASK),
+                    old,
+                    "({x}, {y}) 的判定与旧实现不一致"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn a_point_outside_the_monitor_is_never_a_corner_of_it() {
+        // 显示器非矩形排列时光标可能停在空隙里，而查询是「取最近的一块」，
+        // 点并不在其中；此时不能把它当成那块的角。
+        let gap_point = (-5, 2000);
+        assert!(
+            !corner_hit(gap_point.0, gap_point.1, PRIMARY, CORNER_MASK),
+            "主屏之外的点不是主屏的角"
+        );
+        assert!(
+            !corner_hit(gap_point.0, gap_point.1, LEFT_OF_PRIMARY, CORNER_MASK),
+            "左副屏之外的点不是它的角"
+        );
     }
 }

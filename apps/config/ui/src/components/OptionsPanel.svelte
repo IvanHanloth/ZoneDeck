@@ -2,6 +2,7 @@
   import SettingsGroup from "./fluent/SettingsGroup.svelte";
   import SettingsCard from "./fluent/SettingsCard.svelte";
   import SettingsExpander from "./fluent/SettingsExpander.svelte";
+  import NotificationsPanel from "./NotificationsPanel.svelte";
   import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
   import ComboBox from "./fluent/ComboBox.svelte";
   import IconPower from "~icons/lucide/power";
@@ -132,6 +133,8 @@
     {/snippet}
   </SettingsCard>
 </SettingsGroup>
+
+<NotificationsPanel />
 
 <SettingsGroup title={t("options.logCard")}>
   <SettingsCard icon={IconCalendarClock} label={t("options.logRetention")} description={t("options.logRetentionDesc")}>
