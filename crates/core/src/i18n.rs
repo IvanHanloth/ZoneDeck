@@ -269,7 +269,7 @@ mod tests {
 
     use super::*;
 
-    /// `LANG` 是进程级全局状态，改动它的测试须串行，否则会互相打断。
+    /// `LANG` 是进程级全局状态，改动它的测试须串行。
     static LANG_LOCK: Mutex<()> = Mutex::new(());
 
     fn lock_lang() -> MutexGuard<'static, ()> {

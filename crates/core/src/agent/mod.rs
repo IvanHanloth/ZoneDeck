@@ -460,7 +460,7 @@ impl AgentState {
     /// 按作用范围展开候选 PID，再过白名单，得到要施加能效控制的集合。
     /// 顺序不可颠倒：ZoneDeck 自己往往是展开后才出现在集合里的。
     ///
-    /// `scope` 由调用方给出——冻结与效率模式各有各的范围设置。白名单共用
+    /// `scope` 由调用方给出，冻结与效率模式各有各的范围设置。白名单共用
     /// [`IgnoreMode::Freeze`]：两者都是「别动这个进程的性能」。
     /// `snapshot` 由调用方取一次传进来。
     fn scoped_pids(
@@ -477,7 +477,7 @@ impl AgentState {
         };
 
         let whitelist = self.config.whitelist();
-        // 完整路径要逐 PID OpenProcess，没有按路径的条目就不必付这笔开销。
+        // 完整路径要逐 PID OpenProcess，没有按路径的条目就不查。
         let paths = if zonedeck_common::whitelist_needs_paths(whitelist, IgnoreMode::Freeze) {
             pids.iter()
                 .map(|&pid| (pid, crate::platform::win32::process_path(pid)))

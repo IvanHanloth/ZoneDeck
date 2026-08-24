@@ -52,7 +52,7 @@ fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [InterceptState]) -> Dec
     let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
 
     if up {
-        // 按下已被吞掉时抬起也须吞掉，否则前台会收到无配对的抬起事件。
+        // 按下已被吞掉时抬起也须吞掉。
         let mut was_held = false;
         for st in states.iter_mut().filter(|s| s.vk == vk) {
             was_held |= st.held;

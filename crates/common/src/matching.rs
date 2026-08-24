@@ -178,8 +178,7 @@ pub struct BuiltinGuard {
     pub names: &'static [&'static str],
 }
 
-/// 永不冻结的自有进程：冻住自己会让热键失效、已隐藏的窗口再也回不来。
-/// 不可由用户关闭，由 [`is_ignored`] 内部兜底。
+/// 永不冻结的自有进程；不可由用户关闭，由 [`is_ignored`] 内部兜底。
 pub const BUILTIN_FREEZE_GUARDS: [BuiltinGuard; 2] = [
     BuiltinGuard {
         key: "core",
@@ -191,7 +190,7 @@ pub const BUILTIN_FREEZE_GUARDS: [BuiltinGuard; 2] = [
     },
 ];
 
-/// 映像名是否属于内置强制忽略冻结项。Windows 文件名大小写不敏感，故忽略大小写。
+/// 映像名是否属于内置强制忽略冻结项；不区分大小写。
 pub fn is_builtin_freeze_guarded(process: &str) -> bool {
     BUILTIN_FREEZE_GUARDS
         .iter()

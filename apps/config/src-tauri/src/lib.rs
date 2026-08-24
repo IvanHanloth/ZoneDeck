@@ -719,7 +719,7 @@ fn parse_build(desc: &str) -> u32 {
 }
 
 /// 窗口背景材质。Mica 由 DWM 绘制，只有 Win11 22000+ 有；
-/// Tauri 的 `apply_effects` 会吞掉失败，所以这里自己判版本。
+/// 自行判断系统版本，不依赖 Tauri 的 `apply_effects`（它会吞掉失败）。
 /// 界面据此决定 body 留透明（让 Mica 透上来）还是自己铺一层不透明底色。
 #[tauri::command]
 fn backdrop_kind() -> &'static str {

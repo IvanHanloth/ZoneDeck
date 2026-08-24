@@ -19,9 +19,8 @@
   // 一个实例的模式不会中途改变，初始化时定一次即可。
   const multi = group !== undefined;
 
-  // 多选不能用 bind:group —— 它按组件实例分组，每个 CheckBox 只看得见自己那一个
-  // input，勾第二个时会把数组整个覆盖成只剩它，表现成单选。这里自己增删，
-  // 数组始终由父组件持有，勾选态回读 group 即可。
+  // 多选不用 bind:group（它按组件实例分组，会把数组覆盖成单选），
+  // 改为自己增删；数组始终由父组件持有，勾选态回读 group。
   function onMultiChange(e) {
     group = e.currentTarget.checked
       ? [...group, value]
@@ -114,7 +113,7 @@
       background var(--dur-fast) var(--ease-standard),
       border-color var(--dur-fast) var(--ease-standard);
   }
-  /* color: inherit 锁住勾的颜色，外部的 `.xx svg {}` 才染不到它 ——
+  /* color: inherit 锁住勾的颜色，不受外部 `.xx svg {}` 影响；
      勾靠 .box 的 color 在 transparent / --on-accent 之间切换 */
   .box svg {
     width: 12px;

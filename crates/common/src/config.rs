@@ -602,8 +602,7 @@ impl Default for Config {
     }
 }
 
-/// 全新配置预置的白名单：文件资源管理器就是桌面与任务栏本身，隐藏或冻结它会让
-/// 外壳失效。这是普通条目，用户可以删掉。
+/// 全新配置预置的白名单：文件资源管理器（即桌面与任务栏）。这是普通条目，用户可以删掉。
 /// ZoneDeck 自身的强制保护见 [`crate::matching::BUILTIN_FREEZE_GUARDS`]。
 fn default_whitelist() -> Vec<WhitelistRule> {
     vec![WhitelistRule {

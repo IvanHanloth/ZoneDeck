@@ -15,8 +15,7 @@ const LEGACY_MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
 /// 提权重启时等待前一个实例退出的上限。
 const ELEVATED_HANDOVER_WAIT: Duration = Duration::from_secs(4);
 
-/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用：初始化日志要定位数据目录，
-/// 而定位会触发迁移。语言跟随系统。
+/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用，语言跟随系统。
 fn warn_legacy_core_running() {
     use windows::Win32::UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK, MessageBoxW};
     use windows::core::PCWSTR;

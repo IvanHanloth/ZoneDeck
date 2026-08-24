@@ -412,8 +412,7 @@
     align-self: flex-start;
     cursor: help;
   }
-  /* 只染这一个帮助图标 —— 早先写成 `.fb-issue :global(svg)`，
-     把 CheckBox 内部的勾也一起染成了灰色，未选中时勾就露了出来 */
+  /* 只染这一个帮助图标，不用 `:global(svg)`（会波及 CheckBox 内部的勾） */
   .fb-issue .help {
     display: inline-flex;
     flex: none;

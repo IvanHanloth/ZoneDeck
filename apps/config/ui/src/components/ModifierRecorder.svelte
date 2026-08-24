@@ -1,7 +1,6 @@
 <script>
   import { t } from "../lib/i18n.svelte.js";
-  // 只录制修饰键（主键是鼠标按钮本身）；录制期独占键盘，
-  // 否则录 Win 时一松手就弹出开始菜单。
+  // 只录制修饰键（主键是鼠标按钮本身）；录制期独占键盘。
   import { onDestroy } from "svelte";
   import { startCapture } from "../lib/capture.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";

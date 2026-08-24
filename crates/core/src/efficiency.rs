@@ -67,9 +67,8 @@ unsafe fn set_eco(
 
 /// 开启效率模式。
 ///
-/// 只有原本是普通优先级的进程才降到 Idle —— 进程自己设过高／低优先级，
-/// 说明它对调度有诉求，压下去可能坏事，那就只给 EcoQoS。
-/// 正因为只动普通优先级这一档，还原目标恒为普通，[`disable`] 不必记账。
+/// 只有原本是普通优先级的进程才降到 Idle，其余只给 EcoQoS。
+/// 只动普通优先级这一档，还原目标恒为普通，[`disable`] 不必记账。
 pub fn enable(pid: u32) -> Result<(), EfficiencyError> {
     unsafe {
         let handle = open(pid)?;
@@ -84,8 +83,7 @@ pub fn enable(pid: u32) -> Result<(), EfficiencyError> {
 
 /// 关闭效率模式，并把 [`enable`] 压下去的优先级抬回普通。
 ///
-/// 只在当前确实是 Idle 时才抬 —— 期间进程自己改过优先级就不越俎代庖。
-/// 无状态，因此崩溃重启后的恢复流程可以直接调用。
+/// 只在当前确实是 Idle 时才抬。无状态，崩溃重启后的恢复流程可以直接调用。
 pub fn disable(pid: u32) -> Result<(), EfficiencyError> {
     unsafe {
         let handle = open(pid)?;

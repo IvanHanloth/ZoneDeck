@@ -27,7 +27,7 @@ pub unsafe fn append_menu_item(
 ///
 /// `build` 负责往菜单里塞条目（用 [`append_menu_item`]），菜单的创建、定位与销毁
 /// 由本函数统一处理。选中项通过 `WM_COMMAND` 投递给 `hwnd`。
-/// 弹出前须 `SetForegroundWindow`，否则点击菜单外部时菜单不会消失。
+/// 弹出前须 `SetForegroundWindow`。
 pub fn show_popup_menu(
     hwnd: windows::Win32::Foundation::HWND,
     flags: windows::Win32::UI::WindowsAndMessaging::TRACK_POPUP_MENU_FLAGS,

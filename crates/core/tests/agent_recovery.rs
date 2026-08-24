@@ -66,7 +66,7 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
         .unwrap();
 
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
-    // 测试窗口属于本进程，pid 须如实填写，否则恢复侧的身份校验会拦下它。
+    // 测试窗口属于本进程，pid 须如实填写以通过恢复侧的身份校验。
     recovery::save(
         &recovery_path,
         &Snapshot {

@@ -230,7 +230,7 @@ pub fn forward_open_settings() -> bool {
     ) {
         return true;
     }
-    // 管道不通或对方是不认识该命令的旧版核心。配置程序自带单实例，会激活已开的窗口。
+    // 管道不通或对方是不认识该命令的旧版核心；配置程序自带单实例。
     find_config_exe()
         .map(|path| std::process::Command::new(&path).spawn().is_ok())
         .unwrap_or(false)

@@ -4,7 +4,6 @@
 //! - **便携版**用 exe 同目录；写不进去时退回 `%APPDATA%\ZoneDeck`。
 //!
 //! 靠程序目录里有没有 [`INSTALLED_MARKER`] 或卸载程序 `unins*.exe` 来分辨。
-//! 判断依据是文件而非进程权限，核心与配置程序因此必然得出同一结果。
 
 use std::path::{Path, PathBuf};
 
@@ -52,8 +51,7 @@ pub fn user_data_dir() -> PathBuf {
     }
 }
 
-/// 程序目录里有没有安装痕迹：[`INSTALLED_MARKER`] 或卸载程序 `unins*.exe`。
-/// 后者序号随重复安装递增，故按前缀匹配。
+/// 程序目录里有没有安装痕迹：[`INSTALLED_MARKER`] 或卸载程序 `unins*.exe`（按前缀匹配）。
 pub fn is_installed(program_dir: &Path) -> bool {
     if program_dir.join(INSTALLED_MARKER).exists() {
         return true;
@@ -114,7 +112,6 @@ pub fn resolve_data_dir(
         DataDirKind::PortableFallback
     };
     if std::fs::create_dir_all(user_dir).is_err() {
-        // 用户目录也建不出来时无处可去。
         return located(program_dir.to_path_buf(), kind);
     }
     migrate_config(program_dir, user_dir);
@@ -152,9 +149,7 @@ pub fn locate() -> DataDir {
     let program_dir = exe_dir();
     let installed = is_installed(&program_dir);
     let user_dir = user_data_dir();
-    // 用户目录本次不一定被选中，但旧数据只要还在就顺手迁走。
     migrate_legacy_user_dir(&user_dir);
-    // 安装版结果一样是用户目录，不必再往程序目录里试写。
     let portable_writable = !installed && dir_writable(&program_dir);
     resolve_data_dir(&program_dir, &user_dir, installed, portable_writable)
 }

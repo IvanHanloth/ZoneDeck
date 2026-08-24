@@ -17,7 +17,7 @@ pub fn idle_millis() -> Option<u32> {
 }
 
 /// 空闲是否已到自动隐藏的点。`has_records` 传「控制器里还留着隐藏记录吗」，
-/// 而不是「是否处于隐藏状态」——什么都没藏成的那一轮也不该每个滴答重跑一次。
+/// 而不是「是否处于隐藏状态」。
 pub fn should_auto_hide(idle_ms: u32, threshold_minutes: u32, has_records: bool) -> bool {
     !has_records
         && threshold_minutes > 0

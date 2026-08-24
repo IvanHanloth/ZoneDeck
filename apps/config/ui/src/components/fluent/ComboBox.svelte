@@ -123,8 +123,7 @@
 </Flyout>
 
 <style>
-  /* Fluent 的下拉在一页里应当齐宽，不跟着选项文字长短伸缩 ——
-     200px 兜得住现有最长的一条（「存在隐藏中的窗口」），再长才会撑开 */
+  /* 下拉在一页里齐宽，不跟着选项文字长短伸缩；超过 200px 才撑开 */
   .trigger {
     display: inline-flex;
     align-items: center;

@@ -124,7 +124,7 @@
   .item.sel {
     background: var(--subtle-hover);
   }
-  /* 选中项的 hover / 按下反馈要压过选中底色，否则指到哪一项看不出来 */
+  /* 选中项的 hover / 按下反馈要压过选中底色 */
   .item.sel:hover {
     background: var(--subtle-selected-hover);
   }

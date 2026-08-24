@@ -130,7 +130,6 @@ fn a_bad_numeric_field_keeps_user_rules_recoverable_from_backup() {
 
 #[test]
 fn a_new_corruption_replaces_the_stale_backup() {
-    // 旧备份对应的配置早已被默认值取代，新损坏文件里才是最新的用户数据，
     // rename 直接顶替旧备份。
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("config.json");

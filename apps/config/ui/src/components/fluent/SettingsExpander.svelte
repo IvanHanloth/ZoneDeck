@@ -16,9 +16,8 @@
     disabled = false,
   } = $props();
 
-  // 主开关一开，把它管着的子设置露出来；关掉时不自动收起 ——
-  // 子项会置灰留在原地，用户才看得见是什么把它们锁住了。
-  // prevAuto 首轮是 undefined，所以初始就为 true 时不会强行展开。
+  // 主开关一开，把它管着的子设置露出来；关掉时不自动收起，子项置灰留在原地。
+  // prevAuto 首轮是 undefined，初始就为 true 时不会强行展开。
   let prevAuto;
   $effect(() => {
     const on = autoExpand;

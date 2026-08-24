@@ -162,7 +162,7 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if !exe.exists() {
         return Err(FreezeError::PssuspendMissing);
     }
-    // `-accepteula` 必不可少，否则未接受 EULA 时会弹对话框阻塞。旗标须排在 PID 之前。
+    // `-accepteula` 必不可少，且旗标须排在 PID 之前。
     let output = std::process::Command::new(exe)
         .arg("-accepteula")
         .arg("-nobanner")
@@ -234,7 +234,7 @@ mod tests {
 
     #[test]
     fn open_failure_reports_system_error_code() {
-        // 错误须带系统错误码，才能分辨「权限不足」与「进程已退出」。
+        // 错误须带系统错误码，以分辨「权限不足」与「进程已退出」。
         let Err(e) = suspend_process(0xFFFF_FFF0) else {
             panic!("无效 PID 应失败");
         };

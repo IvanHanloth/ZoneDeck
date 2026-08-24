@@ -1,8 +1,7 @@
 //! 输入钩子专职线程：`WH_MOUSE_LL` 与 `WH_KEYBOARD_LL` 都挂在这条线程上。
 //!
 //! 低级钩子的回调由安装线程的消息泵派发，系统要等钩子链返回才继续投递事件，
-//! 故不与代理窗口共用线程——那边的重活会卡住全局输入，超过
-//! `LowLevelHooksTimeout`（默认 300ms）时事件还会被丢弃。
+//! 故不与代理窗口共用线程。
 
 use std::sync::atomic::{AtomicIsize, Ordering::Relaxed};
 use std::sync::mpsc::channel;
