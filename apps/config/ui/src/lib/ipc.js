@@ -122,7 +122,7 @@ let mockAutostart = false;
 function mockInvoke(cmd, args) {
   switch (cmd) {
     case "load_config":
-      return { config: structuredClone(mockConfig), fallback: null };
+      return { config: structuredClone(mockConfig), fallback: null, schema_note: null };
     case "list_windows":
       return structuredClone(mockWindows);
     case "window_icons":

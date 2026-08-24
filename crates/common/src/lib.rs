@@ -6,8 +6,8 @@ pub mod model;
 pub mod paths;
 
 pub use config::{
-    Config, ConfigError, Hotkey, MouseButton, MouseSetting, Notifications, POWER_SCOPE_IMAGE,
-    POWER_SCOPE_SELF, POWER_SCOPE_TREE, POWER_SCOPES, Setting, Verhub,
+    Config, ConfigError, Hotkey, LoadNote, MouseButton, MouseSetting, Notifications,
+    POWER_SCOPE_IMAGE, POWER_SCOPE_SELF, POWER_SCOPE_TREE, POWER_SCOPES, Setting, Verhub,
 };
 pub use i18n::{LANG_AUTO, Lang};
 pub use ipc::{Command, Response};

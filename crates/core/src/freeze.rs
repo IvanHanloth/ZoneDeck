@@ -93,46 +93,26 @@ pub fn pssuspend_available(exe_dir: &Path) -> bool {
     exe_dir.join(PSSUSPEND_EXE).exists()
 }
 
-/// 枚举系统全部进程，返回 `(pid, 父 pid)` 列表；快照打不开时返回空表。
-pub fn process_tree() -> Vec<(u32, u32)> {
-    use windows::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
-        TH32CS_SNAPPROCESS,
-    };
-
-    let mut edges = Vec::new();
-    unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
-            return edges;
-        };
-        let mut entry = PROCESSENTRY32W {
-            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
-            ..Default::default()
-        };
-        if Process32FirstW(snapshot, &mut entry).is_ok() {
-            loop {
-                edges.push((entry.th32ProcessID, entry.th32ParentProcessID));
-                if Process32NextW(snapshot, &mut entry).is_err() {
-                    break;
-                }
-            }
-        }
-        let _ = CloseHandle(snapshot);
-    }
-    edges
+/// 一次系统进程快照的全部产出。
+#[derive(Debug, Default, Clone)]
+pub struct ProcessSnapshot {
+    /// `pid → 映像名`。
+    pub names: std::collections::HashMap<u32, String>,
+    /// `(pid, 父 pid)` 列表。
+    pub edges: Vec<(u32, u32)>,
 }
 
-/// 枚举系统全部进程，返回 `pid → 映像名` 的映射；快照打不开时返回空表。
-pub fn process_names() -> std::collections::HashMap<u32, String> {
+/// 枚举系统全部进程；快照打不开时返回空结果。
+pub fn process_snapshot() -> ProcessSnapshot {
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
         TH32CS_SNAPPROCESS,
     };
 
-    let mut names = std::collections::HashMap::new();
+    let mut result = ProcessSnapshot::default();
     unsafe {
         let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
-            return names;
+            return result;
         };
         let mut entry = PROCESSENTRY32W {
             dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
@@ -145,8 +125,13 @@ pub fn process_names() -> std::collections::HashMap<u32, String> {
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(entry.szExeFile.len());
-                let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
-                names.insert(entry.th32ProcessID, name);
+                result.names.insert(
+                    entry.th32ProcessID,
+                    String::from_utf16_lossy(&entry.szExeFile[..end]),
+                );
+                result
+                    .edges
+                    .push((entry.th32ProcessID, entry.th32ParentProcessID));
                 if Process32NextW(snapshot, &mut entry).is_err() {
                     break;
                 }
@@ -154,7 +139,19 @@ pub fn process_names() -> std::collections::HashMap<u32, String> {
         }
         let _ = CloseHandle(snapshot);
     }
-    names
+    result
+}
+
+/// 枚举系统全部进程，返回 `(pid, 父 pid)` 列表；快照打不开时返回空表。
+/// 两样都要时改用 [`process_snapshot`]。
+pub fn process_tree() -> Vec<(u32, u32)> {
+    process_snapshot().edges
+}
+
+/// 枚举系统全部进程，返回 `pid → 映像名` 的映射；快照打不开时返回空表。
+/// 两样都要时改用 [`process_snapshot`]。
+pub fn process_names() -> std::collections::HashMap<u32, String> {
+    process_snapshot().names
 }
 
 fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
@@ -165,7 +162,7 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if !exe.exists() {
         return Err(FreezeError::PssuspendMissing);
     }
-    // `-accepteula` 必不可少，否则未接受 EULA 时会弹对话框阻塞。旗标须排在 PID 之前。
+    // `-accepteula` 必不可少，且旗标须排在 PID 之前。
     let output = std::process::Command::new(exe)
         .arg("-accepteula")
         .arg("-nobanner")
@@ -237,7 +234,7 @@ mod tests {
 
     #[test]
     fn open_failure_reports_system_error_code() {
-        // 错误须带系统错误码，才能分辨「权限不足」与「进程已退出」。
+        // 错误须带系统错误码，以分辨「权限不足」与「进程已退出」。
         let Err(e) = suspend_process(0xFFFF_FFF0) else {
             panic!("无效 PID 应失败");
         };

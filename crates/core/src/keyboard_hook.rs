@@ -16,7 +16,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::PCWSTR;
 
 use crate::hotkey::ParsedHotkey;
-use crate::util::pressed_modifiers;
+use crate::modifiers::{self, current_modifiers};
 
 /// 拦截热键命中时发给代理窗口的消息；`wparam` 为热键 id（与 `WM_HOTKEY` 一致）。
 pub const WM_KEY_TRIGGER: u32 = WM_APP + 5;
@@ -52,7 +52,7 @@ fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [InterceptState]) -> Dec
     let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
 
     if up {
-        // 按下已被吞掉时抬起也须吞掉，否则前台会收到无配对的抬起事件。
+        // 按下已被吞掉时抬起也须吞掉。
         let mut was_held = false;
         for st in states.iter_mut().filter(|s| s.vk == vk) {
             was_held |= st.held;
@@ -86,6 +86,7 @@ fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [InterceptState]) -> Dec
 
 /// 设置当前需要拦截的热键集合（覆盖式，清空按住状态）。
 pub fn set_hotkeys(list: &[(i32, ParsedHotkey)]) {
+    modifiers::resync();
     if let Ok(mut hotkeys) = HOTKEYS.lock() {
         *hotkeys = list
             .iter()
@@ -113,12 +114,19 @@ fn post(id: i32) {
 unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if ncode == 0 {
         let data = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
-        // 注入的按键不参与判定，避免反馈回路。
+        let msg = wparam.0 as u32;
+        // 修饰键状态按事件跟踪；注入的按键同样计入。
+        if matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN) {
+            modifiers::note_key(data.vkCode as u16, true);
+        } else if matches!(msg, WM_KEYUP | WM_SYSKEYUP) {
+            modifiers::note_key(data.vkCode as u16, false);
+        }
+        // 注入的按键不参与热键判定，避免反馈回路。
         if data.flags.0 & LLKHF_INJECTED.0 == 0 {
-            let pressed = pressed_modifiers();
+            let pressed = current_modifiers();
             let decision = HOTKEYS
                 .lock()
-                .map(|mut states| decide(wparam.0 as u32, data.vkCode as u16, pressed, &mut states))
+                .map(|mut states| decide(msg, data.vkCode as u16, pressed, &mut states))
                 .unwrap_or(Decision::Pass);
             match decision {
                 Decision::Pass => {}
@@ -146,6 +154,7 @@ impl KeyboardHook {
             let handle =
                 SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook_proc), Some(hinstance.into()), 0)
                     .ok()?;
+            modifiers::begin_tracking();
             Some(KeyboardHook { handle })
         }
     }
@@ -156,6 +165,7 @@ impl Drop for KeyboardHook {
         unsafe {
             let _ = UnhookWindowsHookEx(self.handle);
         }
+        modifiers::end_tracking();
         HWND_RAW.store(0, Relaxed);
     }
 }

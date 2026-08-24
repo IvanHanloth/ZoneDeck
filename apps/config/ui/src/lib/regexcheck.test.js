@@ -74,7 +74,7 @@ describe("createBreadthGuard", () => {
     expect(broad).toEqual([]);
   });
 
-  // 检查本身失败不该拦住保存——用户的改动比这条提示重要。
+  // 检查本身失败不该拦住保存。
   it("后端出错时视为无可疑项", async () => {
     const guard = createBreadthGuard(vi.fn().mockRejectedValue(new Error("断了")));
     expect(await guard.inspect(config())).toEqual({ broad: [], toWarn: [] });

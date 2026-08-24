@@ -1,7 +1,6 @@
 // 录制期独占键盘：优先走后端的低级键盘钩子，浏览器预览与装钩子失败时回落到 DOM 事件。
 //
-// 回落路径只能靠 preventDefault，拦不住其他进程的全局热键——这一点必须让用户知道，
-// 故失败时会调用 onDegraded。
+// 回落路径只能靠 preventDefault，拦不住其他进程的全局热键，故失败时会调用 onDegraded。
 
 import { IN_TAURI, invoke, onAppEvent } from "./ipc.js";
 import { isModifierKey, keyName, modifiersFromEvent } from "./hotkey.js";
@@ -17,9 +16,8 @@ function stateFromEvent(event, down) {
 }
 
 function domFallback(onState) {
-  // 用 stopImmediatePropagation：录制期间按键事件归录制器独占，
-  // 否则 ContentDialog 挂在 window 上的 Esc 处理器会抢在前头把对话框关掉，
-  // Win+Esc 这种合法组合就录不进去。
+  // 用 stopImmediatePropagation 让录制期间的按键事件归录制器独占，
+  // 不被 ContentDialog 挂在 window 上的 Esc 处理器抢走。
   const swallow = (e, down) => {
     e.preventDefault();
     e.stopImmediatePropagation();

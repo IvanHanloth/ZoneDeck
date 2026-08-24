@@ -192,9 +192,9 @@ function Test-RustMsgRegistration {
 
 # ---- 6. catalog 内部一致性：复用既有 vitest 用例 ------------------------------
 function Test-CatalogWithVitest {
-    npm --prefix $ui test -- src/lib/i18n.test.js 2>&1 | Out-String | Write-Verbose
+    pnpm --dir $ui test -- src/lib/i18n.test.js 2>&1 | Out-String | Write-Verbose
     if ($LASTEXITCODE -ne 0) {
-        Add-Problem "catalog 单测未通过，请运行：npm --prefix apps/config/ui test -- src/lib/i18n.test.js"
+        Add-Problem "catalog 单测未通过，请运行：pnpm --dir apps/config/ui test -- src/lib/i18n.test.js"
     }
 }
 

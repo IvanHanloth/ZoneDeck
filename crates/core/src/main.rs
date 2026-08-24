@@ -15,8 +15,7 @@ const LEGACY_MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
 /// 提权重启时等待前一个实例退出的上限。
 const ELEVATED_HANDOVER_WAIT: Duration = Duration::from_secs(4);
 
-/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用：初始化日志要定位数据目录，
-/// 而定位会触发迁移。语言跟随系统。
+/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用，语言跟随系统。
 fn warn_legacy_core_running() {
     use windows::Win32::UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK, MessageBoxW};
     use windows::core::PCWSTR;
@@ -54,16 +53,10 @@ fn main() {
     let data_dir = located.dir.clone();
     let config_path = data_dir.join(paths::CONFIG_FILE_NAME);
 
-    // 日志与 panic 钩子最先就位；保留天数与输出等级取自配置。
-    let (retention_days, log_level) = zonedeck_common::Config::load(&config_path)
-        .map(|c| (c.setting.log_retention_days, c.setting.log_level))
-        .unwrap_or_else(|_| {
-            (
-                zonedeck_common::config::DEFAULT_LOG_RETENTION_DAYS,
-                zonedeck_common::config::DEFAULT_LOG_LEVEL.to_string(),
-            )
-        });
-    let log_level = logging::Level::from_config(&log_level);
+    // 配置只解析一次：这里取日志参数，随后原样交给 agent::run。
+    let startup = agent::StartupConfig::load(&config_path);
+    let retention_days = startup.config.setting.log_retention_days;
+    let log_level = logging::Level::from_config(&startup.config.setting.log_level);
     logging::init(
         data_dir.join(logging::LOG_DIR_NAME),
         retention_days,
@@ -121,6 +114,7 @@ fn main() {
     }
 
     let mut options = AgentOptions::standard(config_path);
+    options.preloaded = Some(startup);
     if args.iter().any(|a| a == "smoke") {
         let ms = args
             .iter()

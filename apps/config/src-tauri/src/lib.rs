@@ -96,13 +96,25 @@ struct LoadedConfig {
     config: Config,
     /// 解析失败回退默认值时的原因（含备份去向）；正常加载为 `None`。
     fallback: Option<String>,
+    /// 配置来自更高 schema 版本时的说明（含留底去向）；配置本身照常生效。
+    schema_note: Option<String>,
 }
 
 #[tauri::command]
 fn load_config() -> Result<LoadedConfig, String> {
-    let (config, fallback) = Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
+    use zonedeck_common::LoadNote;
+    let (config, note) = Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
     i18n::set_from_pref(&config.setting.language);
-    Ok(LoadedConfig { config, fallback })
+    let (fallback, schema_note) = match note {
+        None => (None, None),
+        Some(LoadNote::Corrupt(s)) => (Some(s), None),
+        Some(LoadNote::NewerSchema(s)) => (None, Some(s)),
+    };
+    Ok(LoadedConfig {
+        config,
+        fallback,
+        schema_note,
+    })
 }
 
 /// 入参用 JSON 值而非 `Config`：经 [`Config::from_value`] 剥离 `null` 后再反序列化，
@@ -590,10 +602,10 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接；仅放行 http/https/mailto。
+/// 用系统默认浏览器打开外部链接；仅放行 https/mailto。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("http://") && !url.starts_with("mailto:") {
+    if !url.starts_with("https://") && !url.starts_with("mailto:") {
         return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
     blocking(move || zonedeck_core::shell::open(&url)).await
@@ -707,7 +719,7 @@ fn parse_build(desc: &str) -> u32 {
 }
 
 /// 窗口背景材质。Mica 由 DWM 绘制，只有 Win11 22000+ 有；
-/// Tauri 的 `apply_effects` 会吞掉失败，所以这里自己判版本。
+/// 自行判断系统版本，不依赖 Tauri 的 `apply_effects`（它会吞掉失败）。
 /// 界面据此决定 body 留透明（让 Mica 透上来）还是自己铺一层不透明底色。
 #[tauri::command]
 fn backdrop_kind() -> &'static str {

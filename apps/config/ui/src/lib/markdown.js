@@ -16,10 +16,10 @@ const PLACEHOLDER = new RegExp(`${SENTINEL}(\\d+)${SENTINEL}`, "g");
 
 const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ESCAPE[c]);
 
-/** 只放行 http(s) 与 mailto，其余按纯文本处理。 */
+/** 只放行 https 与 mailto，其余按纯文本处理；与后端 `open_external` 的白名单一致。 */
 function safeUrl(raw) {
   const url = raw.trim();
-  return /^(?:https?:\/\/|mailto:)/i.test(url) ? url : null;
+  return /^(?:https:\/\/|mailto:)/i.test(url) ? url : null;
 }
 
 const startsBlock = (line) =>
@@ -38,8 +38,8 @@ function inline(text) {
   s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, dest) => anchor(dest, alt, hold) ?? m);
   s = s.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (m, label, dest) => anchor(dest, label, hold) ?? m);
 
-  // 裸链接；前面必须是行首 / 空白 / 左括号。
-  s = s.replace(/(^|[\s(])(https?:\/\/\S+)/g, (_, pre, raw) => {
+  // 裸链接；前面必须是行首 / 空白 / 左括号。协议白名单同 safeUrl。
+  s = s.replace(/(^|[\s(])(https:\/\/\S+)/g, (_, pre, raw) => {
     const trailing = raw.match(/[.,;:!?)]+$/)?.[0] ?? "";
     const url = raw.slice(0, raw.length - trailing.length);
     return pre + hold(`<a href="${url}">`) + url + hold("</a>") + trailing;

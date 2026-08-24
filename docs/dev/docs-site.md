@@ -56,7 +56,7 @@ docs/
 文档相关的脚本在根 `package.json` 中：
 
 ```bash
-# 安装依赖（使用 pnpm；也可用 npm）
+# 安装依赖
 pnpm install
 
 # 本地开发预览（热重载）

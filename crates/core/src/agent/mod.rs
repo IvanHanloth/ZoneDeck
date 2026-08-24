@@ -1,33 +1,46 @@
+//! 核心的代理窗口：热键、鼠标、IPC 与托盘的唯一收口。
+//!
+//! 本模块持有运行时状态 [`AgentState`] 与消息循环；IPC 命令的执行、托盘菜单、
+//! 日志文案格式化各自分在下面的子模块里。
+
+mod commands;
+mod log_fmt;
+mod menu;
+
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
-use windows::Win32::Foundation::{ERROR_HOTKEY_ALREADY_REGISTERED, HWND, LPARAM, LRESULT, WPARAM};
+use log_fmt::{hotkey_failure_message, log_hide, log_show};
+use menu::{show_tray_menu, toggle_auto_hide, toggle_autostart};
+
+pub use commands::forward_open_settings;
+use commands::{find_config_exe, launch_settings};
+
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CW_USEDEFAULT, ChangeWindowMessageFilterEx, CreatePopupMenu, CreateWindowExW,
-    DefWindowProcW, DestroyMenu, DestroyWindow, DispatchMessageW, EVENT_OBJECT_DESTROY,
-    EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW, GWLP_USERDATA, GetCursorPos, GetMessageW,
-    GetWindowLongPtrW, KillTimer, MF_CHECKED, MF_SEPARATOR, MF_STRING, MSG, MSGFLT_ALLOW,
-    PostMessageW, PostQuitMessage, RegisterClassW, SetForegroundWindow, SetTimer,
-    SetWindowLongPtrW, TPM_BOTTOMALIGN, TPM_LEFTALIGN, TrackPopupMenu, TranslateMessage,
+    CW_USEDEFAULT, ChangeWindowMessageFilterEx, CreateWindowExW, DefWindowProcW, DestroyWindow,
+    DispatchMessageW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW,
+    GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, KillTimer, MSG, MSGFLT_ALLOW, PostMessageW,
+    PostQuitMessage, RegisterClassW, SetTimer, SetWindowLongPtrW, TranslateMessage,
     WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP,
     WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
-use zonedeck_common::ipc::{Command, PipeClient, Response};
-use zonedeck_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, IgnoreMode, Setting};
+use zonedeck_common::ipc::{Command, Response};
+use zonedeck_common::{APP_NAME, ARG_ABOUT, ARG_RESTORE, Config, IgnoreMode, Setting, WindowInfo};
 
 use crate::effects::WinEffects;
 use crate::effects_worker::{AsyncEffects, EffectsWorker};
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
 use crate::hide::{
-    HideController, HidePlan, RuleOutcome, ShowOutcome, dormant_pids, expand_descendants,
-    expand_same_image, filter_freeze_whitelist, foreground_target, resolve_targets,
+    HideController, HidePlan, Target, dormant_pids, expand_descendants, expand_same_image,
+    filter_freeze_whitelist, foreground_target, resolve_targets,
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
@@ -37,7 +50,6 @@ use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::tray::TrayIcon;
 use crate::tray_badge::TrayIconSet;
-use crate::util::append_menu_item;
 use crate::win_event::{WM_APP_WINEVENT, WinEventHook};
 use crate::{idle, ipc_server, log_error, log_warn, logging, recovery};
 
@@ -103,11 +115,45 @@ impl std::fmt::Display for Trigger {
     }
 }
 
+/// 调用方预先加载好的启动配置；加载说明待日志就绪后由 [`run`] 记录。
+pub struct StartupConfig {
+    pub config: Config,
+    /// [`Config::load_reporting`] 的说明；日志就绪后才记录。
+    pub note: Option<zonedeck_common::LoadNote>,
+    /// 读取失败（不是解析失败）的原因；此时 `config` 是默认值。
+    pub read_error: Option<String>,
+    /// 配置文件本来就不存在（首次启动）。
+    pub missing: bool,
+}
+
+impl StartupConfig {
+    pub fn load(path: &Path) -> Self {
+        // load_reporting 在文件缺失时也返回默认值，故须先按文件是否存在判断。
+        let missing = !path.exists();
+        match Config::load_reporting(path) {
+            Ok((config, note)) => Self {
+                config,
+                note,
+                read_error: None,
+                missing,
+            },
+            Err(e) => Self {
+                config: Config::default(),
+                note: None,
+                read_error: Some(e.to_string()),
+                missing,
+            },
+        }
+    }
+}
+
 pub struct AgentOptions {
     pub config_path: PathBuf,
     pub pipe_name: String,
     pub enable_tray: bool,
     pub auto_quit_ms: Option<u32>,
+    /// 已加载好的配置；`None` 时由 [`run`] 自行加载。见 [`StartupConfig`]。
+    pub preloaded: Option<StartupConfig>,
 }
 
 impl AgentOptions {
@@ -117,6 +163,7 @@ impl AgentOptions {
             pipe_name: zonedeck_common::ipc::PIPE_NAME.to_string(),
             enable_tray: true,
             auto_quit_ms: None,
+            preloaded: None,
         }
     }
 }
@@ -413,20 +460,24 @@ impl AgentState {
     /// 按作用范围展开候选 PID，再过白名单，得到要施加能效控制的集合。
     /// 顺序不可颠倒：ZoneDeck 自己往往是展开后才出现在集合里的。
     ///
-    /// `scope` 由调用方给出——冻结与效率模式各有各的范围设置。白名单共用
+    /// `scope` 由调用方给出，冻结与效率模式各有各的范围设置。白名单共用
     /// [`IgnoreMode::Freeze`]：两者都是「别动这个进程的性能」。
-    fn scoped_pids(&self, roots: Vec<u32>, scope: &str) -> Vec<u32> {
-        let names = crate::freeze::process_names();
+    /// `snapshot` 由调用方取一次传进来。
+    fn scoped_pids(
+        &self,
+        roots: Vec<u32>,
+        scope: &str,
+        snapshot: &crate::freeze::ProcessSnapshot,
+    ) -> Vec<u32> {
+        let names = &snapshot.names;
         let pids = match scope {
-            zonedeck_common::POWER_SCOPE_TREE => {
-                expand_descendants(&roots, &crate::freeze::process_tree())
-            }
-            zonedeck_common::POWER_SCOPE_IMAGE => expand_same_image(&roots, &names),
+            zonedeck_common::POWER_SCOPE_TREE => expand_descendants(&roots, &snapshot.edges),
+            zonedeck_common::POWER_SCOPE_IMAGE => expand_same_image(&roots, names),
             _ => roots,
         };
 
         let whitelist = self.config.whitelist();
-        // 完整路径要逐 PID OpenProcess，没有按路径的条目就不必付这笔开销。
+        // 完整路径要逐 PID OpenProcess，没有按路径的条目就不查。
         let paths = if zonedeck_common::whitelist_needs_paths(whitelist, IgnoreMode::Freeze) {
             pids.iter()
                 .map(|&pid| (pid, crate::platform::win32::process_path(pid)))
@@ -435,39 +486,43 @@ impl AgentState {
             std::collections::HashMap::new()
         };
 
-        let mut pids = filter_freeze_whitelist(pids, &names, &paths, whitelist);
+        let mut pids = filter_freeze_whitelist(pids, names, &paths, whitelist);
         // 无论映像名叫什么，都不能把自己冻死。
         let self_pid = std::process::id();
         pids.retain(|pid| *pid != self_pid);
         pids
     }
 
-    /// 冻结与效率模式各自的目标集合；两者范围设置独立，名单可以不重合。
+    /// 冻结与效率模式各自的目标集合；两者范围设置独立，共用一次进程快照。
     fn power_targets(&self, dormant: &[u32]) -> (Vec<u32>, Vec<u32>) {
         let setting = &self.config.setting;
+        if !setting.freeze_after_hide && !setting.efficiency_after_hide {
+            return (Vec::new(), Vec::new());
+        }
+        let snapshot = crate::freeze::process_snapshot();
         let freeze = if setting.freeze_after_hide {
-            self.scoped_pids(dormant.to_vec(), &setting.power_scope)
+            self.scoped_pids(dormant.to_vec(), &setting.power_scope, &snapshot)
         } else {
             Vec::new()
         };
         let efficiency = if setting.efficiency_after_hide {
-            self.scoped_pids(dormant.to_vec(), &setting.efficiency_scope)
+            self.scoped_pids(dormant.to_vec(), &setting.efficiency_scope, &snapshot)
         } else {
             Vec::new()
         };
         (freeze, efficiency)
     }
 
+    /// 按规则隐藏：枚举 → 解析规则 → 展开能效目标 → 执行并记日志。
     fn apply_hide(&mut self, trigger: Trigger) {
         let windows = self.controller.enumerate();
         let foreground = self.controller.foreground();
         let (targets, outcomes) = resolve_targets(&mut self.config, &windows, foreground);
-        let dormant = dormant_pids(&targets, &windows);
-        let (freeze_set, efficiency_set) = self.power_targets(&dormant);
-        let plan = self.hide_with_plan(&targets, &freeze_set, &efficiency_set, &dormant);
+        let plan = self.hide_targets(&targets, &windows);
         log_hide(trigger, &self.config, &outcomes, &plan);
     }
 
+    /// 只隐藏当前前台窗口，可连续触发逐个隐藏。
     fn apply_hide_foreground(&mut self, trigger: Trigger) {
         let windows = self.controller.enumerate();
         let foreground = self.controller.foreground();
@@ -478,13 +533,17 @@ impl AgentState {
             return;
         };
 
-        let targets = [target];
-        let dormant = dormant_pids(&targets, &windows);
-        let (freeze_set, efficiency_set) = self.power_targets(&dormant);
-        let plan = self.hide_with_plan(&targets, &freeze_set, &efficiency_set, &dormant);
+        let plan = self.hide_targets(&[target], &windows);
         if let Some(t) = plan.fresh.first() {
             logging::debug(&format!("{trigger}触发隐藏前台窗口: {}", t.describe()));
         }
+    }
+
+    /// 隐藏一组已选定的目标：展开冻结 / 效率模式的作用范围，再交给控制器执行。
+    fn hide_targets(&mut self, targets: &[Target], windows: &[WindowInfo]) -> HidePlan {
+        let dormant = dormant_pids(targets, windows);
+        let (freeze_set, efficiency_set) = self.power_targets(&dormant);
+        self.hide_with_plan(targets, &freeze_set, &efficiency_set, &dormant)
     }
 
     /// 处理窗口事件：销毁 / 被外部恢复显示的窗口移出隐藏记录，标题变化同步进
@@ -538,223 +597,9 @@ impl AgentState {
             self.apply_hide(trigger);
         }
     }
-
-    fn execute(&mut self, hwnd: HWND, cmd: Command) -> (Response, bool) {
-        match cmd {
-            Command::ReloadConfig => match Config::load_reporting(&self.config_path) {
-                Ok((config, fallback)) => {
-                    if let Some(reason) = fallback {
-                        log_error!(
-                            "重载时配置解析失败，已按默认配置生效: {} — {reason}",
-                            self.config_path.display()
-                        );
-                    }
-                    if self.hotkeys_armed {
-                        self.unregister_hotkeys(hwnd);
-                        self.hotkeys_armed = false;
-                    }
-                    self.config = config;
-                    i18n::set_from_pref(&self.config.setting.language);
-                    logging::set_level(logging::Level::from_config(&self.config.setting.log_level));
-                    self.sync_monitoring(hwnd);
-                    logging::debug("配置已重新加载，热键、鼠标监控与日志等级均已对齐");
-                    (Response::Ok, false)
-                }
-                Err(e) => {
-                    log_error!(
-                        "重新加载配置失败，本次改动未生效，核心仍在用上一次加载的配置: {} — {e}",
-                        self.config_path.display()
-                    );
-                    (
-                        Response::Error {
-                            message: i18n::tf(Msg::ErrReloadConfig, &[("err", &e.to_string())]),
-                        },
-                        false,
-                    )
-                }
-            },
-            Command::GetState => (
-                Response::State {
-                    hidden: self.controller.is_hidden(),
-                },
-                false,
-            ),
-            Command::GetElevation => (
-                Response::Elevated {
-                    elevated: crate::elevation::is_elevated(),
-                },
-                false,
-            ),
-            Command::GetStatus => (
-                Response::Status {
-                    hidden: self.controller.is_hidden(),
-                    elevated: crate::elevation::is_elevated(),
-                    monitoring: self.monitoring,
-                    auto_hide_enabled: self.config.setting.auto_hide_enabled,
-                },
-                false,
-            ),
-            Command::Hide => {
-                self.apply_hide(Trigger::Ipc);
-                (Response::Ok, false)
-            }
-            Command::Show => {
-                self.apply_show(Trigger::Ipc);
-                (Response::Ok, false)
-            }
-            Command::Toggle => {
-                self.apply_toggle(Trigger::Ipc);
-                (Response::Ok, false)
-            }
-            Command::SetAutostart { enabled, admin } => (set_autostart(enabled, admin), false),
-            // 停用有状态，期间的 ReloadConfig 不会复活它；由看门狗定时器超时恢复。
-            Command::SetHotkeys { enabled } => {
-                let changed = self.monitoring != enabled;
-                self.monitoring = enabled;
-                self.sync_monitoring(hwnd);
-                unsafe {
-                    let _ = KillTimer(Some(hwnd), SUSPEND_GUARD_TIMER_ID);
-                    if !enabled {
-                        SetTimer(
-                            Some(hwnd),
-                            SUSPEND_GUARD_TIMER_ID,
-                            zonedeck_common::ipc::SUSPEND_TIMEOUT_MS,
-                            None,
-                        );
-                    }
-                }
-                if changed {
-                    logging::debug(if enabled {
-                        "已恢复热键与鼠标监控"
-                    } else {
-                        "配置中：已临时停用热键与鼠标监控"
-                    });
-                }
-                (Response::Ok, false)
-            }
-            Command::ReleaseWindows { hwnds } => {
-                let released = self.controller.release_windows(&hwnds);
-                if released > 0 {
-                    logging::debug(&format!("窗口恢复工具释放 {released} 个窗口"));
-                    self.persist_recovery();
-                    self.sync_tray();
-                }
-                (Response::Ok, false)
-            }
-            Command::AdoptWindows { hwnds } => {
-                let targets: Vec<crate::hide::Target> = hwnds
-                    .iter()
-                    .map(|&h| crate::hide::Target::bare(h, 0))
-                    .collect();
-                // 恢复工具的手动隐藏不施加副作用，仅隐藏并纳入记录。
-                let mut setting = self.config.setting.clone();
-                setting.mute_after_hide = false;
-                setting.freeze_after_hide = false;
-                setting.send_before_hide = false;
-                setting.minimize_before_hide = false;
-                let plan = self.hide_with_plan_using(&setting, &targets, &[], &[], &[], &[]);
-                if !plan.fresh.is_empty() {
-                    logging::debug(&format!("窗口恢复工具隐藏 {} 个窗口", plan.fresh.len()));
-                }
-                (Response::Ok, false)
-            }
-            Command::OpenSettings => {
-                launch_settings(self, None);
-                (Response::Ok, false)
-            }
-            Command::Quit => (Response::Ok, true),
-        }
-    }
 }
 
-/// 日志中指代一条窗口规则的写法：序号 + 进程名，不含标题。
-fn rule_label(index: usize, rule: &zonedeck_common::WindowRule) -> String {
-    let kind = if rule.is_regex() { "正则" } else { "精确" };
-    let process = if rule.process.is_empty() {
-        "未知进程"
-    } else {
-        &rule.process
-    };
-    format!("{kind}窗口规则 #{}（{process}）", index + 1)
-}
-
-/// 摘要式记录本次隐藏：明细记 debug，规则未匹配到窗口记 warn。
-fn log_hide(trigger: Trigger, config: &Config, outcomes: &[RuleOutcome], plan: &HidePlan) {
-    for (index, (rule, outcome)) in config.window_rules.iter().zip(outcomes).enumerate() {
-        match outcome {
-            RuleOutcome::Reacquired => logging::debug(&format!(
-                "{} 的句柄已失效（目标程序重启过），已重新匹配并更新规则",
-                rule_label(index, rule)
-            )),
-            RuleOutcome::Missing => logging::warn(&format!(
-                "{} 未匹配到任何窗口（可能已关闭或标题已变），本次不隐藏它",
-                rule_label(index, rule)
-            )),
-            _ => {}
-        }
-    }
-    if plan.fresh.is_empty() {
-        logging::debug(&format!("{trigger}触发隐藏：没有新的目标窗口"));
-        return;
-    }
-    logging::debug(&format!(
-        "{trigger}触发隐藏 {} 个窗口: {}",
-        plan.fresh.len(),
-        summarize(plan.fresh.iter().map(|t| t.describe()))
-    ));
-    let untouched = plan
-        .fresh
-        .iter()
-        .filter(|t| t.restore == crate::platform::Restore::Skip)
-        .count();
-    if untouched > 0 {
-        logging::debug(&format!(
-            "其中 {untouched} 个窗口隐藏前就不可见，本次不改动它们的显示状态，恢复时也不会弹出"
-        ));
-    }
-    if !plan.freeze.is_empty() {
-        logging::debug(&format!(
-            "冻结 {} 个进程（增强={}，清空工作集={}）: {}",
-            plan.freeze.len(),
-            plan.enhanced,
-            plan.trim,
-            summarize(plan.freeze.iter().map(|r| r.pid.to_string()))
-        ));
-    }
-}
-
-/// 记录恢复结果：有记录未能找回时记 warn，否则记 debug。
-fn log_show(trigger: Trigger, outcome: ShowOutcome) {
-    let skipped = if outcome.skipped > 0 {
-        format!("；{} 条记录隐藏前就不可见，未予显示", outcome.skipped)
-    } else {
-        String::new()
-    };
-    let lost = outcome.stale.saturating_sub(outcome.refound);
-    if lost > 0 {
-        logging::warn(&format!(
-            "{trigger}触发恢复：显示 {} 个窗口；{} 条记录的句柄已失效，其中 {} 个已按进程与标题找回，{lost} 个未能找回{skipped}",
-            outcome.shown, outcome.stale, outcome.refound
-        ));
-    } else {
-        logging::debug(&format!(
-            "{trigger}触发恢复显示 {} 个窗口{skipped}",
-            outcome.shown
-        ));
-    }
-}
-
-/// 拼接清单，最多列出前 8 项，其余以「等 N 项」收尾。
-fn summarize(items: impl Iterator<Item = String>) -> String {
-    const MAX: usize = 8;
-    let all: Vec<String> = items.collect();
-    if all.len() <= MAX {
-        all.join("、")
-    } else {
-        format!("{}、等 {} 项", all[..MAX].join("、"), all.len())
-    }
-}
-
+/// 注册一个系统热键。`MOD_NOREPEAT` 让长按只触发一次。
 unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> windows::core::Result<()> {
     unsafe {
         RegisterHotKey(
@@ -766,125 +611,6 @@ unsafe fn register(hwnd: HWND, id: i32, hk: &ParsedHotkey) -> windows::core::Res
     }
 }
 
-/// 热键注册失败的日志文案；只在错误码为 1409 时断言被占用。
-fn hotkey_failure_message(label: &str, raw: &str, e: &windows::core::Error) -> String {
-    if e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult() {
-        format!("{label}热键注册失败，已被其他程序占用，该热键不生效: {raw}")
-    } else {
-        format!(
-            "{label}热键注册失败，该热键不生效: {raw} — {}",
-            crate::util::win_err(e)
-        )
-    }
-}
-
-/// 开机自启注册方式的日志写法。
-fn autostart_method_name(method: crate::autostart::Method) -> &'static str {
-    match method {
-        crate::autostart::Method::TaskScheduler => "计划任务",
-        crate::autostart::Method::Registry => "注册表启动项",
-    }
-}
-
-fn set_autostart(enabled: bool, admin: bool) -> Response {
-    let auto = match crate::autostart::Autostart::standard() {
-        Ok(a) => a,
-        Err(e) => {
-            log_warn!("设置开机自启失败，无法确定核心程序路径，自启状态未改变: {e}");
-            return Response::Error {
-                message: e.to_string(),
-            };
-        }
-    };
-    if enabled {
-        match auto.enable(admin) {
-            Ok(method) => {
-                logging::debug(&format!(
-                    "已开启开机自启，方式为{}（管理员权限={admin}）",
-                    autostart_method_name(method)
-                ));
-                Response::Ok
-            }
-            Err(e) => {
-                log_warn!(
-                    "开启开机自启失败，开机后核心不会自动运行（管理员权限={admin}，任务名 {}）: {e}",
-                    crate::autostart::TASK_NAME
-                );
-                Response::Error {
-                    message: e.to_string(),
-                }
-            }
-        }
-    } else {
-        auto.disable();
-        logging::debug("已关闭开机自启");
-        Response::Ok
-    }
-}
-
-/// 托盘菜单切换自动隐藏：翻转配置并落盘，与在设置界面切换等效。
-fn toggle_auto_hide(state: &mut AgentState, hwnd: HWND) {
-    let enabled = !state.config.setting.auto_hide_enabled;
-    state.config.setting.auto_hide_enabled = enabled;
-    logging::debug(if enabled {
-        "托盘菜单：已启用自动隐藏"
-    } else {
-        "托盘菜单：已暂停自动隐藏"
-    });
-    if let Err(e) = state.config.save(&state.config_path) {
-        log_warn!("自动隐藏开关写入配置失败，核心重启后将丢失本次切换: {e}");
-    }
-    state.refresh_runtime(hwnd);
-}
-
-fn toggle_autostart(state: &AgentState) {
-    let auto = match crate::autostart::Autostart::standard() {
-        Ok(auto) => auto,
-        Err(e) => {
-            log_warn!("托盘菜单切换开机自启失败，无法确定核心程序路径，自启状态未改变: {e}");
-            return;
-        }
-    };
-    let admin = state.config.setting.autostart_admin;
-    let (title, message) = if auto.status().is_some() {
-        auto.disable();
-        logging::debug("托盘菜单：已关闭开机自启");
-        (Msg::AutostartOffTitle, Msg::AutostartOffBody)
-    } else {
-        match auto.enable(admin) {
-            Ok(method) => {
-                logging::debug(&format!(
-                    "托盘菜单：已开启开机自启，方式为{}（管理员权限={admin}）",
-                    autostart_method_name(method)
-                ));
-                match method {
-                    crate::autostart::Method::TaskScheduler if admin => {
-                        (Msg::AutostartOnTitle, Msg::AutostartOnTaskAdmin)
-                    }
-                    crate::autostart::Method::TaskScheduler => {
-                        (Msg::AutostartOnTitle, Msg::AutostartOnTaskUser)
-                    }
-                    crate::autostart::Method::Registry => {
-                        (Msg::AutostartOnTitle, Msg::AutostartOnRegistry)
-                    }
-                }
-            }
-            Err(e) => {
-                log_warn!(
-                    "托盘菜单开启开机自启失败，开机后核心不会自动运行（管理员权限={admin}，任务名 {}）: {e}",
-                    crate::autostart::TASK_NAME
-                );
-                (Msg::AutostartFailTitle, Msg::AutostartFailBody)
-            }
-        }
-    };
-    if state.config.notifications.on_autostart
-        && let Some(tray) = &state.tray
-    {
-        tray.balloon(i18n::t(title), i18n::t(message));
-    }
-}
-
 /// 代理窗口 `GWLP_USERDATA` 里存放的状态单元。菜单模态循环会重入 `wndproc`，
 /// 用 `RefCell` 让重入时借用失败、事件被安全丢弃。
 fn state_cell<'a>(hwnd: HWND) -> Option<&'a RefCell<AgentState>> {
@@ -893,149 +619,6 @@ fn state_cell<'a>(hwnd: HWND) -> Option<&'a RefCell<AgentState>> {
         ptr.as_ref()
     }
 }
-
-fn show_tray_menu(hwnd: HWND, hidden: bool, auto_hide_on: bool) -> bool {
-    let autostart_on = crate::autostart::Autostart::standard()
-        .map(|a| a.status().is_some())
-        .unwrap_or(false);
-    unsafe {
-        let Ok(menu) = CreatePopupMenu() else {
-            return false;
-        };
-        let toggle_label = if hidden {
-            Msg::MenuShowWindows
-        } else {
-            Msg::MenuHideWindows
-        };
-        let checked = |on: bool| {
-            if on {
-                MF_STRING | MF_CHECKED
-            } else {
-                MF_STRING
-            }
-        };
-        append_menu_item(menu, MF_STRING, MENU_SETTINGS, Msg::MenuSettings);
-        append_menu_item(menu, MF_STRING, MENU_TOGGLE, toggle_label);
-        append_menu_item(menu, MF_STRING, MENU_RESTORE, Msg::MenuRestoreTool);
-        append_menu_item(
-            menu,
-            checked(auto_hide_on),
-            MENU_AUTO_HIDE,
-            Msg::MenuAutoHide,
-        );
-        append_menu_item(
-            menu,
-            checked(autostart_on),
-            MENU_AUTOSTART,
-            Msg::MenuAutostart,
-        );
-        append_menu_item(menu, MF_STRING, MENU_ABOUT, Msg::MenuAbout);
-        let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
-        append_menu_item(menu, MF_STRING, MENU_QUIT, Msg::MenuQuit);
-
-        let mut pt = windows::Win32::Foundation::POINT::default();
-        let _ = GetCursorPos(&mut pt);
-        let _ = SetForegroundWindow(hwnd);
-        let shown = TrackPopupMenu(
-            menu,
-            TPM_LEFTALIGN | TPM_BOTTOMALIGN,
-            pt.x,
-            pt.y,
-            None,
-            hwnd,
-            None,
-        )
-        .as_bool();
-        let _ = DestroyMenu(menu);
-        shown
-    }
-}
-
-/// 两个路径是否指向同一个可执行文件（Windows 路径大小写不敏感）。
-fn same_exe(path: &str, exe: &Path) -> bool {
-    exe.to_str()
-        .is_some_and(|e| !path.is_empty() && path.eq_ignore_ascii_case(e))
-}
-
-/// 把配置程序自己的窗口从「被隐藏」状态里放出来，再拉起设置。
-fn release_config_windows(state: &mut AgentState, exe: &Path) {
-    let windows = state.controller.enumerate();
-    let mut pids: Vec<u32> = windows
-        .iter()
-        .filter(|w| same_exe(&w.path, exe))
-        .map(|w| w.pid)
-        .filter(|pid| *pid != 0)
-        .collect();
-    pids.sort_unstable();
-    pids.dedup();
-
-    let released = state.controller.release_pids(&pids);
-    if released > 0 {
-        logging::debug(&format!(
-            "配置窗口此前被 ZoneDeck 隐藏，已先释放 {released} 个窗口再拉起设置"
-        ));
-        state.persist_recovery();
-        state.sync_tray();
-    }
-}
-
-/// 定位同目录下的配置程序：生产名 config.exe，开发名 zonedeck-config.exe。
-fn find_config_exe() -> Option<PathBuf> {
-    let dir = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(PathBuf::from))?;
-    ["config.exe", "zonedeck-config.exe"]
-        .into_iter()
-        .map(|name| dir.join(name))
-        .find(|p| p.exists())
-}
-
-/// 把「打开配置界面」转交给已在运行的核心，转交不成就自己拉起配置程序。
-/// 返回两条路是否有一条走通。
-pub fn forward_open_settings() -> bool {
-    if matches!(
-        PipeClient::connect_default()
-            .fast()
-            .send(&Command::OpenSettings),
-        Ok(Response::Ok)
-    ) {
-        return true;
-    }
-    // 管道不通或对方是不认识该命令的旧版核心。配置程序自带单实例，会激活已开的窗口。
-    find_config_exe()
-        .map(|path| std::process::Command::new(&path).spawn().is_ok())
-        .unwrap_or(false)
-}
-
-/// 拉起配置程序；`action` 作为命令行参数传入。
-fn launch_settings(state: &mut AgentState, action: Option<&str>) {
-    let Some(path) = find_config_exe() else {
-        log_warn!(
-            "核心所在目录下找不到配置程序（config.exe / zonedeck-config.exe），无法打开设置界面"
-        );
-        if let Some(tray) = &state.tray {
-            tray.balloon(
-                i18n::t(Msg::ConfigExeMissingTitle),
-                i18n::t(Msg::ConfigExeMissingBody),
-            );
-        }
-        return;
-    };
-
-    release_config_windows(state, &path);
-
-    let mut cmd = std::process::Command::new(&path);
-    if let Some(arg) = action {
-        cmd.arg(arg);
-    }
-    if let Err(e) = cmd.spawn() {
-        log_warn!(
-            "启动配置程序失败，设置界面未打开（可能被安全软件拦截）: {} — {e}",
-            path.display()
-        );
-    }
-}
-
 /// 退出核心。`reason` 写进会话结束标记。
 fn quit(state: &mut AgentState, hwnd: HWND, reason: &str) {
     let outcome = state.controller.show();
@@ -1265,23 +848,30 @@ fn create_agent_window() -> windows::core::Result<HWND> {
     }
 }
 
-/// 加载配置；损坏或读取失败都回退默认配置，并按 error 记录路径与原因。
-fn load_config_logging_fallback(path: &Path) -> Config {
-    const FALLBACK: &str = "已按默认配置启动，原有热键与规则本次不生效";
-    match Config::load_reporting(path) {
-        Ok((config, None)) => config,
-        Ok((config, Some(parse_error))) => {
-            log_error!(
-                "配置文件解析失败，{FALLBACK}: {} — {parse_error}",
-                path.display()
-            );
-            config
-        }
-        Err(e) => {
-            log_error!("配置文件读取失败，{FALLBACK}: {} — {e}", path.display());
-            Config::default()
+/// 记录 [`Config::load_reporting`] 的说明。解析失败是错误（本次运行的规则全部不生效），
+/// schema 偏高只是警告（配置照常生效，只是新版设置项会在下次保存时丢失）。
+fn log_load_note(path: &Path, note: Option<&zonedeck_common::LoadNote>, when: &str) {
+    match note {
+        None => {}
+        Some(zonedeck_common::LoadNote::Corrupt(reason)) => log_error!(
+            "{when}时配置解析失败，已按默认配置生效，原有热键与规则不生效: {} — {reason}",
+            path.display()
+        ),
+        Some(zonedeck_common::LoadNote::NewerSchema(reason)) => {
+            log_warn!("{when}配置: {} — {reason}", path.display())
         }
     }
+}
+
+/// 把启动加载的说明写进日志。须在日志系统就绪之后调用。
+fn log_startup_load(path: &Path, loaded: &StartupConfig) {
+    if let Some(e) = &loaded.read_error {
+        log_error!(
+            "配置文件读取失败，已按默认配置启动，原有热键与规则本次不生效: {} — {e}",
+            path.display()
+        );
+    }
+    log_load_note(path, loaded.note.as_ref(), "启动");
 }
 
 /// 启动时是否该拉起配置程序：首次启动，或程序版本与上次运行的不一致。
@@ -1290,10 +880,14 @@ fn should_open_settings(config_missing: bool, recorded: &str, current: &str) -> 
     config_missing || recorded != current
 }
 
-pub fn run(options: AgentOptions) {
-    // load() 在文件缺失时也返回默认值，故须先按文件是否存在判断。
-    let config_missing = !options.config_path.exists();
-    let mut config = load_config_logging_fallback(&options.config_path);
+pub fn run(mut options: AgentOptions) {
+    let loaded = options
+        .preloaded
+        .take()
+        .unwrap_or_else(|| StartupConfig::load(&options.config_path));
+    log_startup_load(&options.config_path, &loaded);
+    let config_missing = loaded.missing;
+    let mut config = loaded.config;
     i18n::set_from_pref(&config.setting.language);
 
     // 品牌改名迁移：把旧名称的自启注册迁到新名称。冒烟测试不碰系统级注册。
@@ -1333,7 +927,6 @@ pub fn run(options: AgentOptions) {
         };
         logging::info(&reason);
         // 记录当前版本并落盘，避免下次启动重复弹出。
-        config.version = zonedeck_common::APP_CONFIG_VERSION.to_string();
         config.app_version = zonedeck_common::APP_VERSION.to_string();
         if let Err(e) = config.save(&options.config_path) {
             log_warn!(
@@ -1565,7 +1158,9 @@ mod tests {
 
     #[test]
     fn hotkey_occupied_is_named_explicitly() {
-        let e = windows::core::Error::from_hresult(ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult());
+        let e = windows::core::Error::from_hresult(
+            windows::Win32::Foundation::ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult(),
+        );
         assert_eq!(
             hotkey_failure_message("隐藏", "Ctrl+Q", &e),
             "隐藏热键注册失败，已被其他程序占用，该热键不生效: Ctrl+Q"
@@ -1612,25 +1207,6 @@ mod tests {
             let _ = UnregisterHotKey(Some(hwnd), HK_HIDE);
             let _ = DestroyWindow(hwnd);
         }
-    }
-
-    #[test]
-    fn rule_label_names_the_process_and_never_the_window_title() {
-        let mut rule = zonedeck_common::WindowRule::from_window(&zonedeck_common::WindowInfo::new(
-            "与某人的聊天",
-            10,
-            "WeChat.exe",
-            2001,
-            "C:\\WeChat.exe",
-        ));
-        let label = rule_label(0, &rule);
-        assert_eq!(label, "精确窗口规则 #1（WeChat.exe）");
-        assert!(!label.contains("与某人的聊天"), "标题属隐私，不得进日志");
-
-        rule.regex = Some("机密.*".to_string());
-        let label = rule_label(2, &rule);
-        assert_eq!(label, "正则窗口规则 #3（WeChat.exe）");
-        assert!(!label.contains("机密"), "正则本体也可能含标题片段，不写出");
     }
 
     #[test]

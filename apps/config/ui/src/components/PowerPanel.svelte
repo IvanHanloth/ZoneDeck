@@ -36,8 +36,7 @@
     }
   }
 
-  // 未开启「隐藏窗口时冻结进程」时，冻结相关选项一律置灰 ——
-  // 清空工作集只对停摆的进程有意义，冻结的作用范围也就无从谈起。
+  // 未开启「隐藏窗口时冻结进程」时，冻结相关选项一律置灰。
   const freezeOff = $derived(!s.freeze_after_hide);
   const efficiencyOff = $derived(!s.efficiency_after_hide);
   // 两套能效手段都没开，作用范围整组没有可调的东西。
@@ -53,7 +52,7 @@
   });
   const enhancedDisabled = $derived(enhancedBlocked.length > 0);
 
-  // 主开关一开就把子项摊开，省得用户再点一次才看见。
+  // 主开关一开就把子项摊开。
   // 展开态由 SettingsExpander 的 autoExpand 负责联动，这里只存状态。
   let expanded = $state(false);
   let scopeExpanded = $state(false);

@@ -432,6 +432,8 @@ export default {
   "state.partialLoadFailed": "部分数据加载失败：{reason}",
   "state.saveFailed": "保存配置失败，你的改动可能没有写入磁盘。",
   "state.configFallback": "配置文件解析失败，已恢复默认配置；原文件的备份情况见详细信息。",
+  "state.configSchemaNewer":
+    "配置文件来自更高版本的 ZoneDeck，本版本不认识的设置项会在下次保存时丢失；留底文件见详细信息。",
   "state.elevationCancelled": "已取消提权",
   "state.coreStartingAdmin": "核心正在以管理员身份启动…",
   "state.coreStarting": "核心正在启动…",

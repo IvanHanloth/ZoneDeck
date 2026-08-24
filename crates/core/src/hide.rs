@@ -124,8 +124,8 @@ pub fn resolve_targets(
 
     let mut seen = HashSet::new();
     result.retain(|t| seen.insert(t.hwnd));
-    // 「忽略隐藏」只打 Skip 标记、不移除：冻结与静音仍要能算到它。
-    // 只带句柄的目标身份未知，由 `plan_hide` 补查路径后再判一次。
+    // 「忽略隐藏」只打 Skip 标记、不移除。只带句柄的目标身份未知，
+    // 由 `plan_hide` 补查路径后再判一次。
     for t in &mut result {
         if is_ignored(
             config.whitelist(),
@@ -153,7 +153,7 @@ pub fn foreground_target(windows: &[WindowInfo], foreground: i64) -> Option<Targ
 /// 隐藏这一轮之后不会再有窗口留在桌面上的进程 PID 集合，冻结与静音共用这道门槛。
 /// 仅当某进程的全部可见窗口都会被本程序藏起来（或它压根没有可见窗口）时才纳入。
 pub fn dormant_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
-    // 只算会被本程序藏起来的窗口：「忽略隐藏」命中的窗口仍留在桌面上。
+    // 只算会被本程序藏起来的窗口。
     let hidden: HashSet<i64> = targets
         .iter()
         .filter(|t| t.restore != Restore::Skip)
@@ -168,7 +168,7 @@ pub fn dormant_pids(targets: &[Target], windows: &[WindowInfo]) -> Vec<u32> {
     pids.dedup();
 
     pids.retain(|pid| {
-        // all() 对空集恒为真：可见窗口一个不剩的进程（如已缩到托盘的）同样纳入。
+        // all() 对空集恒为真，可见窗口一个不剩的进程同样纳入。
         windows
             .iter()
             .filter(|w| w.pid == *pid && w.visible)
@@ -339,7 +339,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     }
 
     /// 是否还留着隐藏记录（含 [`Restore::Skip`]）。判断这一轮隐藏跑过没有用它，
-    /// 别用 [`Self::is_hidden`]——什么都没藏成的那一轮同样不该再跑第二遍。
+    /// 而非 [`Self::is_hidden`]。
     pub fn tracks_any(&self) -> bool {
         !self.hidden.is_empty()
     }
@@ -394,8 +394,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// [`filter_freeze_whitelist`]）；`mute_pids` 是未经展开的 [`dormant_pids`] 结果。
     /// 隐藏与静音的白名单过滤在此处完成，每个目标的 [`Restore`] 也在这里定下。
     ///
-    /// 隐藏是累加的，`show` 时一并恢复。已在隐藏 / 静音 / 冻结集内的目标会被跳过
-    /// ——挂起是计数式的，重复施加会让解冻次数对不上。
+    /// 隐藏是累加的，`show` 时一并恢复。已在隐藏 / 静音 / 冻结集内的目标会被跳过。
     pub fn plan_hide(
         &mut self,
         setting: &Setting,
@@ -423,8 +422,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                     continue;
                 }
             }
-            // 任务栏与桌面带 WS_EX_TOOLWINDOW，不在枚举结果里，白名单要认得出
-            // 它们就得先补上路径。
+            // 任务栏与桌面带 WS_EX_TOOLWINDOW，不在枚举结果里，须先补上路径。
             if t.process_path.is_empty() && !whitelist.is_empty() {
                 t.process_path = self.wm.process_path(t.pid);
             }
@@ -491,7 +489,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
 
         HidePlan {
-            // 全是「不改动可见性」的目标时什么都没发生，别把用户正在看的视频停掉。
+            // 全是「不改动可见性」的目标时不发暂停键。
             send_pause: setting.send_before_hide
                 && (fresh.iter().any(|t| t.restore != Restore::Skip) || !freeze.is_empty()),
             // 解冻方式必须与冻结时一致。
@@ -511,13 +509,13 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 执行计划：同步隐藏窗口（必要时先 `SW_SHOWMINNOACTIVE` 再 `SW_HIDE`），
     /// 副作用经 [`Effects`] 施加。生产实现为异步队列，入队顺序即执行顺序。
     pub fn commit_hide(&mut self, plan: HidePlan) {
-        // 暂停键排在最前：冻结后的进程收不到按键。
+        // 暂停键须排在冻结之前。
         if plan.send_pause {
             self.effects.send_pause();
         }
 
         for t in &plan.fresh {
-            // 本程序没让它可见，也就不该让它不可见。
+            // 本程序没改过它的可见性，恢复时也不改。
             if t.restore == Restore::Skip {
                 continue;
             }
@@ -533,7 +531,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
         self.muted.sort_unstable_by_key(|r| r.pid);
 
-        // 排在冻结之前：冻结会把进程整个停下，之后再调 EcoQoS 没有意义。
+        // 效率模式须排在冻结之前。
         for r in &plan.efficiency {
             self.effects.set_efficiency(r.pid);
             self.efficiency.push(*r);
@@ -541,13 +539,13 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.efficiency.sort_unstable_by_key(|r| r.pid);
 
         self.used_enhanced = plan.enhanced;
-        // 冻结前必须等屏幕画完，否则被冻结的窗口会留下残影。整批只等一次。
+        // 冻结前须等屏幕画完，整批只等一次。
         if !plan.freeze.is_empty() {
             self.effects.settle_before_freeze();
         }
         for r in &plan.freeze {
             self.effects.suspend(r.pid, plan.enhanced);
-            // 必须排在挂起之后：还在跑的进程会立刻把页读回来。
+            // 清空工作集须排在挂起之后。
             if plan.trim {
                 self.effects.trim_working_set(r.pid);
             }
@@ -677,7 +675,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             return 0;
         }
 
-        // 先解冻，否则窗口显示出来仍是卡死的。
+        // 显示窗口前须先解冻。
         let (thaw, keep): (Vec<ProcRecord>, Vec<ProcRecord>) = self
             .frozen
             .iter()
@@ -1895,7 +1893,7 @@ mod tests {
         );
     }
 
-    /// 窗口本来就藏着、只施加了副作用：仍算隐藏状态，否则用户无从把进程放出来。
+    /// 窗口本来就藏着、只施加了副作用：仍算隐藏状态。
     #[test]
     fn effects_alone_still_count_as_a_hidden_state() {
         let setting = Setting {
@@ -2099,8 +2097,7 @@ mod tests {
         );
     }
 
-    /// 冻结与效率模式同开时，效率模式排在冻结之前 ——
-    /// 进程一旦被挂起，再去调 EcoQoS 就没有意义了。
+    /// 冻结与效率模式同开时，效率模式排在冻结之前。
     #[test]
     fn efficiency_is_applied_before_freezing() {
         let setting = Setting {
@@ -2140,7 +2137,7 @@ mod tests {
         assert!(controller.effects.eco_on.borrow().is_empty());
     }
 
-    /// 快照要带上效率模式记录，否则崩溃重启后这些进程会一直留在低优先级。
+    /// 快照要带上效率模式记录。
     #[test]
     fn efficiency_survives_the_recovery_snapshot() {
         let setting = Setting {

@@ -13,7 +13,7 @@ ZoneDeck 覆盖了从纯逻辑单元测试到系统级集成测试的多层测�
 cargo test --workspace
 
 # 前端单元测试
-npm --prefix apps/config/ui test
+pnpm --dir apps/config/ui test
 ```
 
 ::: warning 核心并行测试可能因 COM 崩溃

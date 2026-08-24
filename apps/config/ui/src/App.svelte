@@ -230,8 +230,7 @@
     display: flex;
     flex-direction: column;
   }
-  /* 标题固定，只有下方内容滚动 —— 也让双栏页拿得到确定的可用高度。
-     左右留白要算上 page-body 的滚动条槽，标题才和卡片左缘对得齐。 */
+  /* 标题固定，只有下方内容滚动。左右留白算上 page-body 的滚动条槽，与卡片左缘对齐。 */
   .page-title {
     --gutter: calc(var(--content-pad) + var(--scrollbar-w));
     flex: none;

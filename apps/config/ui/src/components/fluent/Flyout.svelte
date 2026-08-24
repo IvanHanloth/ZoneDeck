@@ -58,7 +58,7 @@
     open = false;
   }
 
-  // 点在触发器上时不关：交给触发器自己 toggle，否则会关了又立刻开。
+  // 点在触发器上时不关，交给触发器自己 toggle。
   function onPointerDown(e) {
     if (!open) return;
     if (el?.contains(e.target) || anchor?.contains(e.target)) return;

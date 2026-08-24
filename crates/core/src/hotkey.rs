@@ -319,7 +319,7 @@ mod tests {
         assert_eq!(format_hotkey(0, Some(0x70)), "F1");
     }
 
-    /// 录制出来的字符串必须能被 `parse_hotkey` 原样解回来，否则配置写进去核心用不了。
+    /// 录制出来的字符串必须能被 `parse_hotkey` 原样解回来。
     #[test]
     fn every_supported_vk_round_trips_through_parse_hotkey() {
         let modifiers = MOD_CONTROL | MOD_SHIFT;

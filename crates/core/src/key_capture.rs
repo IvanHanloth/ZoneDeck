@@ -1,9 +1,7 @@
 //! 录制期独占键盘：装 `WH_KEYBOARD_LL` 把所有按键吞掉，只转成事件送给调用方。
 //!
-//! 录制界面若走 WebView 的 DOM 事件，`preventDefault` 只能取消浏览器默认行为，
-//! 挡不住别的进程——`RegisterHotKey` 的全局热键、别人装的低级钩子、以及
-//! Win+R / Alt+Tab 这类 shell 热键，都在按键送达 WebView 之前就被处理掉了。
-//! 独占键盘是唯一能让录制不外溢的办法。
+//! 独占键盘是让录制不外溢的唯一办法：WebView 的 `preventDefault` 挡不住
+//! `RegisterHotKey` 的全局热键、别人装的低级钩子与 Win+R / Alt+Tab 这类 shell 热键。
 //!
 //! Win+L 与 Ctrl+Alt+Del 由 winlogon 在钩子层之下处理，拦不住；
 //! 直接读取 Raw Input 的程序也不经过本钩子。
@@ -254,8 +252,8 @@ pub struct KeyCapture {
 impl KeyCapture {
     /// 起专职线程装钩子；`on_key` 在钩子线程上调用，必须够快（只投递，别干活）。
     ///
-    /// 低级钩子的回调由安装线程的消息泵派发，故不能挂在调用方线程上——
-    /// 那边的重活会卡住全局输入。同一时刻只应有一个 `KeyCapture` 存活。
+    /// 低级钩子的回调由安装线程的消息泵派发，故不能挂在调用方线程上。
+    /// 同一时刻只应有一个 `KeyCapture` 存活。
     pub fn start(on_key: impl Fn(KeyEvent) + Send + 'static) -> Option<KeyCapture> {
         OWN_PID.store(unsafe { GetCurrentProcessId() }, Relaxed);
         let mut tracker = ModifierTracker::default();
@@ -467,7 +465,7 @@ mod tests {
         assert!(CAPTURE.lock().unwrap().is_none(), "析构后不该再留着回调");
     }
 
-    /// 吞键的硬性兜底：本进程不在前台时一律放行，否则用户的键盘会被锁死。
+    /// 吞键的硬性兜底：本进程不在前台时一律放行。
     /// 测试进程没有窗口，前台窗口必然属于别人。
     #[test]
     fn keys_pass_through_when_we_are_not_the_foreground_process() {

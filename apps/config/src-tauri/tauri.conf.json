@@ -4,7 +4,7 @@
   "identifier": "cn.hanloth.zonedeck.config",
   "build": {
     "frontendDist": "../dist",
-    "beforeBuildCommand": "npm --prefix ui run build"
+    "beforeBuildCommand": "pnpm --dir ui run build"
   },
   "app": {
     "withGlobalTauri": false,

@@ -553,9 +553,11 @@ pub struct Config {
     /// 上次运行过的程序版本（[`crate::APP_VERSION`]）；与之不符即「更新后首次启动」。
     #[serde(default)]
     pub app_version: String,
-    #[serde(default)]
+    /// 已废弃：仅为读得进旧文件而保留，[`Config::normalize`] 清空、不再写出。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<i64>,
-    #[serde(default)]
+    /// 已废弃，同 [`Config::history`]。
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub frozen_pids: Vec<u32>,
     #[serde(default)]
     pub hotkey: Hotkey,
@@ -600,8 +602,7 @@ impl Default for Config {
     }
 }
 
-/// 全新配置预置的白名单：文件资源管理器就是桌面与任务栏本身，隐藏或冻结它会让
-/// 外壳失效。这是普通条目，用户可以删掉。
+/// 全新配置预置的白名单：文件资源管理器（即桌面与任务栏）。这是普通条目，用户可以删掉。
 /// ZoneDeck 自身的强制保护见 [`crate::matching::BUILTIN_FREEZE_GUARDS`]。
 fn default_whitelist() -> Vec<WhitelistRule> {
     vec![WhitelistRule {
@@ -613,6 +614,24 @@ fn default_whitelist() -> Vec<WhitelistRule> {
         ignore_freeze: true,
         ignore_mute: false,
     }]
+}
+
+/// [`Config::load_reporting`] 需要让用户知道的加载异常。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoadNote {
+    /// 解析失败，已回退默认配置；原文件改名为 `*.bad` 备份。
+    Corrupt(String),
+    /// 配置来自更高的 schema 版本，已复制留底；配置本身照常生效。
+    NewerSchema(String),
+}
+
+impl LoadNote {
+    /// 供日志与界面展示的说明文本。
+    pub fn message(&self) -> &str {
+        match self {
+            LoadNote::Corrupt(s) | LoadNote::NewerSchema(s) => s,
+        }
+    }
 }
 
 impl Config {
@@ -643,14 +662,21 @@ impl Config {
         }
     }
 
-    /// 同 [`Config::load`]，但额外报告「文件存在却解析失败、已回退默认值」的情况。
-    /// 解析失败的原文件改名为同目录 `*.bad` 备份，去向包含在报告里。
-    /// 返回 `(配置, 回退原因)`；解析成功或文件不存在时第二项为 `None`。
-    pub fn load_reporting(path: &Path) -> Result<(Self, Option<String>), ConfigError> {
+    /// 同 [`Config::load`]，但额外报告加载异常：解析失败已回退默认值（原文件改名为
+    /// 同目录 `*.bad` 备份），或配置来自更高的 schema 版本（原文件复制一份留底）。
+    /// 返回 `(配置, 说明)`；一切正常时第二项为 `None`。
+    pub fn load_reporting(path: &Path) -> Result<(Self, Option<LoadNote>), ConfigError> {
         match std::fs::read_to_string(path) {
             Ok(s) => match Self::from_json(&s) {
-                Ok(config) => Ok((config, None)),
-                Err(e) => Ok((Config::default(), Some(quarantine_corrupt(path, &e)))),
+                Ok(config) => {
+                    let note = is_newer_schema(&config.version)
+                        .then(|| LoadNote::NewerSchema(backup_newer_schema(path, &config.version)));
+                    Ok((config, note))
+                }
+                Err(e) => Ok((
+                    Config::default(),
+                    Some(LoadNote::Corrupt(quarantine_corrupt(path, &e))),
+                )),
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok((Config::default(), None)),
             Err(e) => Err(ConfigError::io(path, e)),
@@ -667,6 +693,9 @@ impl Config {
                 .collect();
         }
         self.hide_binding.clear();
+        // 废弃字段不再写出。
+        self.history.clear();
+        self.frozen_pids.clear();
         // 缺这一节的配置播种默认白名单；`[]` 是用户清空的结果，不再播种。
         if self.whitelist.is_none() {
             self.whitelist = Some(default_whitelist());
@@ -680,8 +709,15 @@ impl Config {
     }
 
     /// 写入配置：先写同目录临时文件再原子替换。
+    /// `version` 一律以当前 [`APP_CONFIG_VERSION`] 写出。
     pub fn save(&self, path: &Path) -> Result<(), ConfigError> {
-        let json = self.to_json()?;
+        let json = if self.version == APP_CONFIG_VERSION {
+            self.to_json()?
+        } else {
+            let mut current = self.clone();
+            current.version = APP_CONFIG_VERSION.to_string();
+            current.to_json()?
+        };
         if let Some(parent) = path.parent()
             && !parent.as_os_str().is_empty()
         {
@@ -693,6 +729,77 @@ impl Config {
             let _ = std::fs::remove_file(&tmp);
             ConfigError::io(path, e)
         })
+    }
+}
+
+/// 把 `v?X.Y.Z.W` 形式的 schema 版本解析为可比较的数段；无法解析时返回 `None`。
+fn parse_schema_version(value: &str) -> Option<Vec<u64>> {
+    let body = value.trim().trim_start_matches(['v', 'V']);
+    if body.is_empty() {
+        return None;
+    }
+    body.split('.').map(|p| p.parse::<u64>().ok()).collect()
+}
+
+/// 文件里的 schema 版本是否高于本程序支持的版本；任一方解析失败都返回 false。
+/// 比较时短的一方按 0 补齐。
+fn is_newer_schema(file_version: &str) -> bool {
+    let (Some(file), Some(app)) = (
+        parse_schema_version(file_version),
+        parse_schema_version(APP_CONFIG_VERSION),
+    ) else {
+        return false;
+    };
+    let len = file.len().max(app.len());
+    for i in 0..len {
+        let a = file.get(i).copied().unwrap_or(0);
+        let b = app.get(i).copied().unwrap_or(0);
+        if a != b {
+            return a > b;
+        }
+    }
+    false
+}
+
+/// 备份文件名里可安全使用的版本串：只留 `[A-Za-z0-9._-]` 并限长。
+fn sanitize_version_for_filename(value: &str) -> String {
+    let cleaned: String = value
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(32)
+        .collect();
+    if cleaned.is_empty() {
+        "unknown".to_string()
+    } else {
+        cleaned
+    }
+}
+
+/// 把来自更高 schema 版本的配置复制一份留底，返回供调用方记日志的说明。
+/// 复制而非改名：原文件随后仍要正常使用。
+fn backup_newer_schema(path: &Path, file_version: &str) -> String {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(format!(
+        ".{}.bak",
+        sanitize_version_for_filename(file_version)
+    ));
+    let backup = path.with_file_name(name);
+    match std::fs::copy(path, &backup) {
+        Ok(_) => format!(
+            "配置来自更高的 schema 版本（{file_version} > {APP_CONFIG_VERSION}），\
+             本程序不认识的设置项会在下次保存时丢失，已留底为 {}",
+            backup.display()
+        ),
+        Err(e) => format!(
+            "配置来自更高的 schema 版本（{file_version} > {APP_CONFIG_VERSION}），\
+             本程序不认识的设置项会在下次保存时丢失，且留底失败: {e}"
+        ),
     }
 }
 
@@ -779,8 +886,10 @@ mod tests {
     fn parses_full_v21_config_and_migrates_binding() {
         let c = Config::from_json(sample_json()).unwrap();
         assert_eq!(c.version, "v2.1.0.0");
-        assert_eq!(c.history, vec![111, 222]);
-        assert_eq!(c.frozen_pids, vec![4321]);
+        assert!(
+            c.history.is_empty() && c.frozen_pids.is_empty(),
+            "废弃字段读得进但归一时清空，陈旧的 hwnd / PID 不再写回"
+        );
         assert_eq!(c.hotkey.hide_hotkey, "Ctrl+Shift+H");
         assert!(!c.setting.mute_after_hide);
         assert_eq!(c.setting.auto_hide_time, 15);
@@ -1074,9 +1183,12 @@ mod tests {
     /// 数组里的 `null` 元素直接丢弃，其余元素保留。
     #[test]
     fn null_array_elements_are_dropped() {
-        let c = Config::from_json(r#"{"history": [1, null, 2], "frozen_pids": [null]}"#).unwrap();
-        assert_eq!(c.history, vec![1, 2]);
-        assert!(c.frozen_pids.is_empty());
+        let c = Config::from_json(
+            r#"{"process_rules": [null, {"path": "C:\\a.exe"}, null, {"path": "C:\\b.exe"}]}"#,
+        )
+        .unwrap();
+        let paths: Vec<&str> = c.process_rules.iter().map(|r| r.path.as_str()).collect();
+        assert_eq!(paths, vec!["C:\\a.exe", "C:\\b.exe"]);
     }
 
     #[test]
