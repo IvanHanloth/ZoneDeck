@@ -10,13 +10,12 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 use windows::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CS_DBLCLKS, CreatePopupMenu, CreateWindowExW, DI_NORMAL, DefWindowProcW,
-    DestroyMenu, DestroyWindow, DrawIconEx, GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON,
-    HWND_TOPMOST, IDC_ARROW, LWA_COLORKEY, LoadCursorW, MF_SEPARATOR, MF_STRING, PostMessageW,
-    RegisterClassW, SPI_GETWORKAREA, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOSIZE,
-    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, SetForegroundWindow, SetLayeredWindowAttributes,
-    SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW, TPM_LEFTALIGN,
-    TPM_RIGHTBUTTON, TrackPopupMenu, WM_APP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
+    AppendMenuW, CS_DBLCLKS, CreateWindowExW, DI_NORMAL, DefWindowProcW, DestroyWindow, DrawIconEx,
+    GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON, HWND_TOPMOST, IDC_ARROW, LWA_COLORKEY,
+    LoadCursorW, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterClassW, SPI_GETWORKAREA,
+    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOSIZE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW,
+    TPM_LEFTALIGN, TPM_RIGHTBUTTON, WM_APP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
     WM_MOUSEMOVE, WM_NCDESTROY, WM_PAINT, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
     WS_EX_TOPMOST, WS_POPUP,
 };
@@ -289,30 +288,11 @@ unsafe extern "system" fn float_wndproc(
 
 /// 悬浮窗右键菜单：设置 / 退出；以代理窗口为宿主。
 pub(crate) fn show_float_menu(agent_hwnd: HWND, id_settings: usize, id_quit: usize) -> bool {
-    unsafe {
-        let Ok(menu) = CreatePopupMenu() else {
-            return false;
-        };
+    crate::util::show_popup_menu(agent_hwnd, TPM_LEFTALIGN | TPM_RIGHTBUTTON, |menu| unsafe {
         crate::util::append_menu_item(menu, MF_STRING, id_settings, crate::i18n::Msg::MenuSettings);
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, PCWSTR::null());
         crate::util::append_menu_item(menu, MF_STRING, id_quit, crate::i18n::Msg::MenuQuit);
-
-        let mut pt = POINT::default();
-        let _ = GetCursorPos(&mut pt);
-        let _ = SetForegroundWindow(agent_hwnd);
-        let shown = TrackPopupMenu(
-            menu,
-            TPM_LEFTALIGN | TPM_RIGHTBUTTON,
-            pt.x,
-            pt.y,
-            None,
-            agent_hwnd,
-            None,
-        )
-        .as_bool();
-        let _ = DestroyMenu(menu);
-        shown
-    }
+    })
 }
 
 #[cfg(test)]

@@ -22,12 +22,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: apps/config/ui/package-lock.json
+          cache: pnpm
+          cache-dependency-path: apps/config/ui/pnpm-lock.yaml
 
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
@@ -43,7 +46,7 @@ jobs:
         run: ./scripts/version.ps1 check
 
       # ---- 文案：引用的键是否存在、有无死键、Msg 是否登记进 ALL_MSGS ----
-      # catalog 内部的键集 / 占位符由下面的 npm test 覆盖，这里跳过免得跑两遍。
+      # catalog 内部的键集 / 占位符由下面的前端单测覆盖，这里跳过免得跑两遍。
       - name: i18n consistency check
         shell: pwsh
         run: ./scripts/i18n-check.ps1 -SkipVitest
@@ -51,9 +54,9 @@ jobs:
       # ---- 前端：依赖 / 单元测试 / 构建 ----
       - name: Frontend install, test & build
         run: |
-          npm --prefix apps/config/ui ci
-          npm --prefix apps/config/ui test
-          npm --prefix apps/config/ui run build
+          pnpm --dir apps/config/ui install --frozen-lockfile
+          pnpm --dir apps/config/ui test
+          pnpm --dir apps/config/ui run build
 
       # ---- Rust：格式 / 静态检查 / 测试----
       - name: Format check

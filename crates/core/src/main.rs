@@ -54,16 +54,10 @@ fn main() {
     let data_dir = located.dir.clone();
     let config_path = data_dir.join(paths::CONFIG_FILE_NAME);
 
-    // 日志与 panic 钩子最先就位；保留天数与输出等级取自配置。
-    let (retention_days, log_level) = zonedeck_common::Config::load(&config_path)
-        .map(|c| (c.setting.log_retention_days, c.setting.log_level))
-        .unwrap_or_else(|_| {
-            (
-                zonedeck_common::config::DEFAULT_LOG_RETENTION_DAYS,
-                zonedeck_common::config::DEFAULT_LOG_LEVEL.to_string(),
-            )
-        });
-    let log_level = logging::Level::from_config(&log_level);
+    // 配置只解析一次：这里取日志参数，随后原样交给 agent::run。
+    let startup = agent::StartupConfig::load(&config_path);
+    let retention_days = startup.config.setting.log_retention_days;
+    let log_level = logging::Level::from_config(&startup.config.setting.log_level);
     logging::init(
         data_dir.join(logging::LOG_DIR_NAME),
         retention_days,
@@ -121,6 +115,7 @@ fn main() {
     }
 
     let mut options = AgentOptions::standard(config_path);
+    options.preloaded = Some(startup);
     if args.iter().any(|a| a == "smoke") {
         let ms = args
             .iter()

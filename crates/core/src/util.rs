@@ -23,28 +23,33 @@ pub unsafe fn append_menu_item(
     }
 }
 
-/// 当前按下的修饰键位掩码（[`crate::hotkey::MOD_CONTROL`] 等的组合）。
-pub fn pressed_modifiers() -> u32 {
-    use crate::hotkey::{MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN};
-    use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetAsyncKeyState, VK_CONTROL, VK_LWIN, VK_MENU, VK_RWIN, VK_SHIFT,
+/// 在光标处弹出一个右键菜单，返回是否成功弹出。
+///
+/// `build` 负责往菜单里塞条目（用 [`append_menu_item`]），菜单的创建、定位与销毁
+/// 由本函数统一处理。选中项通过 `WM_COMMAND` 投递给 `hwnd`。
+/// 弹出前须 `SetForegroundWindow`，否则点击菜单外部时菜单不会消失。
+pub fn show_popup_menu(
+    hwnd: windows::Win32::Foundation::HWND,
+    flags: windows::Win32::UI::WindowsAndMessaging::TRACK_POPUP_MENU_FLAGS,
+    build: impl FnOnce(windows::Win32::UI::WindowsAndMessaging::HMENU),
+) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreatePopupMenu, DestroyMenu, GetCursorPos, SetForegroundWindow, TrackPopupMenu,
     };
 
-    let down = |vk: u16| unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 };
-    let mut m = 0;
-    if down(VK_CONTROL.0) {
-        m |= MOD_CONTROL;
+    unsafe {
+        let Ok(menu) = CreatePopupMenu() else {
+            return false;
+        };
+        build(menu);
+
+        let mut pt = windows::Win32::Foundation::POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        let _ = SetForegroundWindow(hwnd);
+        let shown = TrackPopupMenu(menu, flags, pt.x, pt.y, None, hwnd, None).as_bool();
+        let _ = DestroyMenu(menu);
+        shown
     }
-    if down(VK_MENU.0) {
-        m |= MOD_ALT;
-    }
-    if down(VK_SHIFT.0) {
-        m |= MOD_SHIFT;
-    }
-    if down(VK_LWIN.0) || down(VK_RWIN.0) {
-        m |= MOD_WIN;
-    }
-    m
 }
 
 /// 把 Win32/COM 错误格式化为「系统消息 (0x错误码)」。

@@ -20,7 +20,7 @@ v3 版本是一次彻底的重构，核心技术选型如下：
 | 配置界面后端 | **Tauri 2**（Rust） |
 | 配置界面前端 | **Svelte 5 + Vite** |
 | 进程间通信 | **命名管道**（一行一条 JSON） |
-| 工程组织 | **Cargo workspace** + npm 前端子工程 |
+| 工程组织 | **Cargo workspace** + pnpm 前端子工程 |
 | 打包 | PowerShell 脚本 + Inno Setup |
 | CI/CD | GitHub Actions |
 

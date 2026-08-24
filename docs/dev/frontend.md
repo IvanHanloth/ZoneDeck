@@ -114,8 +114,8 @@ Verhub 返回的内容不可信。`renderMarkdown()` 先整体转义 `& < > "` �
 
 最终产物中，前端在**编译期被内嵌**进 `zonedeck-config.exe`，静态运行，**不需要任何本地服务器**。
 
-- 开发前端 UI：`npm run dev` 在浏览器里预览（mock 数据、热重载）。
-- 验证 Tauri 集成：`npm run build` 后 `cargo run -p zonedeck-config`。
+- 开发前端 UI：`pnpm run dev` 在浏览器里预览（mock 数据、热重载）。
+- 验证 Tauri 集成：`pnpm run build` 后 `cargo run -p zonedeck-config`。
 
 ## 与核心的联动示例
 

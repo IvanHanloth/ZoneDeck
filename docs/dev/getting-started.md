@@ -17,7 +17,7 @@ title: 本地运行
 | **pssuspend64.exe** | *可选*，测试增强冻结时需要 | [Microsoft PSTools](https://download.sysinternals.com/files/PSTools.zip) |
 
 ::: tip 配置界面不依赖 dev server
-前端在编译期被**内嵌**进 `zonedeck-config.exe`，最终产物静态运行。开发前端时用 `npm run dev` 在浏览器里预览（mock 数据、热重载），改完 `npm run build` 后用 `cargo run -p zonedeck-config` 验证 Tauri 集成。
+前端在编译期被**内嵌**进 `zonedeck-config.exe`，最终产物静态运行。开发前端时用 `pnpm run dev` 在浏览器里预览（mock 数据、热重载），改完 `pnpm run build` 后用 `cargo run -p zonedeck-config` 验证 Tauri 集成。
 :::
 
 ## 克隆项目
@@ -45,23 +45,23 @@ cargo run -p zonedeck-core -- smoke 3000
 
 ```bash
 # 首次：安装前端依赖
-npm --prefix apps/config/ui install
+pnpm --dir apps/config/ui install
 
 # 前端构建（产物输出到 apps/config/dist，供 Tauri 内嵌）
-npm --prefix apps/config/ui run build
+pnpm --dir apps/config/ui run build
 
 # 前端单元测试（vitest）
-npm --prefix apps/config/ui test
+pnpm --dir apps/config/ui test
 
 # 浏览器预览（mock 数据、热重载）
-npm --prefix apps/config/ui run dev
+pnpm --dir apps/config/ui run dev
 ```
 
 ### 配置界面（zonedeck-config，Tauri）
 
 ```bash
 # 运行配置界面（需先构建前端）
-npm --prefix apps/config/ui run build && cargo run -p zonedeck-config
+pnpm --dir apps/config/ui run build && cargo run -p zonedeck-config
 ```
 
 ### 质量检查与测试
@@ -99,11 +99,11 @@ powershell -File scripts/package.ps1 -Installer
 | --- | --- |
 | 运行核心 | `cargo run -p zonedeck-core` |
 | 核心冒烟自测 | `cargo run -p zonedeck-core -- smoke 3000` |
-| 前端装依赖 | `npm --prefix apps/config/ui install` |
-| 前端构建 | `npm --prefix apps/config/ui run build` |
-| 前端测试 | `npm --prefix apps/config/ui test` |
-| 前端浏览器预览 | `npm --prefix apps/config/ui run dev` |
-| 运行配置界面 | `npm --prefix apps/config/ui run build && cargo run -p zonedeck-config` |
+| 前端装依赖 | `pnpm --dir apps/config/ui install` |
+| 前端构建 | `pnpm --dir apps/config/ui run build` |
+| 前端测试 | `pnpm --dir apps/config/ui test` |
+| 前端浏览器预览 | `pnpm --dir apps/config/ui run dev` |
+| 运行配置界面 | `pnpm --dir apps/config/ui run build && cargo run -p zonedeck-config` |
 | 生产编译 | `cargo build --release` |
 | 全部 Rust 测试 | `cargo test --workspace` |
 | Clippy | `cargo clippy --workspace --all-targets -- -D warnings` |

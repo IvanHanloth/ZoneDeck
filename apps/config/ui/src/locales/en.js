@@ -450,6 +450,8 @@ export default {
   "state.partialLoadFailed": "Some data failed to load: {reason}",
   "state.saveFailed": "Could not save the configuration — your changes may not have been written to disk.",
   "state.configFallback": "The configuration file failed to parse; default settings have been restored. See the details for what happened to the original file.",
+  "state.configSchemaNewer":
+    "The configuration file comes from a newer version of ZoneDeck. Settings this version does not recognise will be lost the next time it is saved. See the details for where the backup was kept.",
   "state.elevationCancelled": "Elevation cancelled",
   "state.coreStartingAdmin": "The core is starting as administrator…",
   "state.coreStarting": "The core is starting…",

@@ -42,12 +42,18 @@ export function openExternal(url) {
   return invoke("open_external", { url });
 }
 
-/** 版本的下载地址：优先 Windows 链接，其次首个链接，最后回退 download_url。 */
+/**
+ * 版本的下载地址：优先 Windows 链接，其次首个链接，最后回退 download_url。
+ * 只接受 https；全部不合格时返回空串。
+ */
 export function downloadUrl(version) {
   if (!version) return "";
-  const links = version.download_links || [];
+  const isHttps = (u) => typeof u === "string" && /^https:\/\//i.test(u.trim());
+  const links = (version.download_links || []).filter((l) => isHttps(l?.url));
   const win = links.find((l) => l.platform === "windows");
-  return (win || links[0])?.url || version.download_url || "";
+  const picked = (win || links[0])?.url;
+  if (picked) return picked;
+  return isHttps(version.download_url) ? version.download_url : "";
 }
 
 /** 格式化时间戳（秒或毫秒）为本地日期。 */

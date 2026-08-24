@@ -2,12 +2,44 @@
 //!
 //! 窗口规则（细）按句柄 + 标题锁定单个窗口，句柄失效时按「标题 + 进程路径」追溯；
 //! 进程规则（粗）按可执行文件路径隐藏该程序的所有窗口；白名单反向声明某个程序在
-//! 哪些模式下应被跳过。均为纯函数。
+//! 哪些模式下应被跳过。除内部的正则编译缓存外均为纯函数。
+
+use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock};
 
 use regex::Regex;
 
 use crate::NO_TITLE;
 use crate::model::{ProcessRule, WhitelistRule, WindowInfo, WindowRule};
+
+/// 已编译正则的缓存，避免每次匹配都重新编译。
+static REGEX_CACHE: LazyLock<RwLock<HashMap<String, Regex>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// 缓存条目上限，超过即整体清空重建。
+const REGEX_CACHE_LIMIT: usize = 512;
+
+/// 编译并缓存一条正则；编译失败返回 `None` 且不占用缓存位。
+fn cached_regex(pattern: &str) -> Option<Regex> {
+    if let Ok(cache) = REGEX_CACHE.read()
+        && let Some(re) = cache.get(pattern)
+    {
+        return Some(re.clone());
+    }
+    let re = Regex::new(pattern).ok()?;
+    if let Ok(mut cache) = REGEX_CACHE.write() {
+        if cache.len() >= REGEX_CACHE_LIMIT {
+            cache.clear();
+        }
+        cache.insert(pattern.to_string(), re.clone());
+    }
+    Some(re)
+}
+
+/// 比较路径 / 映像名；Windows 上两者都大小写不敏感。
+fn path_eq(a: &str, b: &str) -> bool {
+    a.eq_ignore_ascii_case(b)
+}
 
 /// 一条窗口规则针对当前存活窗口的解析结果。
 #[derive(Debug, PartialEq, Eq)]
@@ -22,9 +54,9 @@ pub enum WindowResolution<'a> {
     Regex(Vec<&'a WindowInfo>),
 }
 
-/// 校验正则是否可编译。
+/// 校验正则是否可编译，并把编译结果预热进缓存。
 pub fn regex_is_valid(pattern: &str) -> bool {
-    Regex::new(pattern).is_ok()
+    cached_regex(pattern).is_some()
 }
 
 /// 标题是否可用于追溯（非空且非「无标题窗口」占位符）。
@@ -46,9 +78,9 @@ pub fn in_scope(w: &WindowInfo, include_untitled: bool, include_background: bool
 /// 规则的「位置」是否与窗口一致：优先按路径，路径为空时退回进程名。
 fn location_matches(rule: &WindowRule, w: &WindowInfo) -> bool {
     if !rule.path.is_empty() {
-        w.path == rule.path
+        path_eq(&w.path, &rule.path)
     } else {
-        !rule.process.is_empty() && w.process == rule.process
+        !rule.process.is_empty() && path_eq(&w.process, &rule.process)
     }
 }
 
@@ -58,7 +90,7 @@ pub fn resolve_window_rule<'a>(
     windows: &'a [WindowInfo],
 ) -> WindowResolution<'a> {
     if let Some(pattern) = &rule.regex {
-        let Ok(re) = Regex::new(pattern) else {
+        let Some(re) = cached_regex(pattern) else {
             return WindowResolution::Regex(Vec::new());
         };
         return WindowResolution::Regex(
@@ -73,7 +105,7 @@ pub fn resolve_window_rule<'a>(
     // 精确规则：先按句柄命中，并校验位置一致。
     if rule.hwnd != 0
         && let Some(w) = windows.iter().find(|w| w.hwnd == rule.hwnd)
-        && (rule.path.is_empty() || w.path == rule.path)
+        && (rule.path.is_empty() || path_eq(&w.path, &rule.path))
     {
         return WindowResolution::Live(w);
     }
@@ -108,9 +140,9 @@ pub fn match_process_rule<'a>(
         .filter(|w| in_scope(w, rule.include_untitled, rule.include_background));
 
     match &rule.regex {
-        Some(pattern) => match Regex::new(pattern) {
-            Ok(re) => candidates.filter(|w| re.is_match(&subject(w))).collect(),
-            Err(_) => Vec::new(),
+        Some(pattern) => match cached_regex(pattern) {
+            Some(re) => candidates.filter(|w| re.is_match(&subject(w))).collect(),
+            None => Vec::new(),
         },
         None => {
             let want = if rule.by_name {
@@ -121,7 +153,7 @@ pub fn match_process_rule<'a>(
             if want.is_empty() {
                 return Vec::new();
             }
-            candidates.filter(|w| &subject(w) == want).collect()
+            candidates.filter(|w| path_eq(&subject(w), want)).collect()
         }
     }
 }
@@ -174,15 +206,14 @@ fn whitelist_rule_matches(rule: &WhitelistRule, path: &str, process: &str) -> bo
         return false;
     }
     match &rule.regex {
-        Some(pattern) => Regex::new(pattern).is_ok_and(|re| re.is_match(subject)),
+        Some(pattern) => cached_regex(pattern).is_some_and(|re| re.is_match(subject)),
         None => {
             let want = if rule.by_name {
                 &rule.process
             } else {
                 &rule.path
             };
-            // Windows 上文件名与路径都大小写不敏感。
-            !want.is_empty() && want.eq_ignore_ascii_case(subject)
+            !want.is_empty() && path_eq(want, subject)
         }
     }
 }
@@ -272,8 +303,8 @@ impl Rng {
 }
 
 /// [`BREADTH_SAMPLES`] 条伪随机样本串：约三成为 Windows 路径形状，其余是
-/// 长度 1–40 的自由文本。
-pub fn breadth_samples() -> Vec<String> {
+/// 长度 1–40 的自由文本。种子固定，只生成一次。
+static BREADTH_SAMPLES_CACHE: LazyLock<Vec<String>> = LazyLock::new(|| {
     let mut rng = Rng(BREADTH_SEED);
     (0..BREADTH_SAMPLES)
         .map(|i| {
@@ -287,11 +318,16 @@ pub fn breadth_samples() -> Vec<String> {
             }
         })
         .collect()
+});
+
+/// 见 [`BREADTH_SAMPLES_CACHE`]。
+pub fn breadth_samples() -> &'static [String] {
+    &BREADTH_SAMPLES_CACHE
 }
 
 /// 一条正则命中 [`breadth_samples`] 的条数；正则编译失败时返回 `None`。
 pub fn regex_breadth(pattern: &str) -> Option<usize> {
-    let re = Regex::new(pattern).ok()?;
+    let re = cached_regex(pattern)?;
     Some(breadth_samples().iter().filter(|s| re.is_match(s)).count())
 }
 
@@ -408,6 +444,86 @@ mod tests {
             match_process_rule(&rule, &windows).is_empty(),
             "空路径规则不应命中任何窗口"
         );
+    }
+
+    #[test]
+    fn process_rule_exact_match_ignores_case() {
+        let rule = ProcessRule::from_window(&win("窗口", 1, "Game.exe", 1, "C:\\Games\\Game.exe"));
+        let windows = vec![win("窗口", 1, "GAME.EXE", 1, "c:\\games\\GAME.EXE")];
+        assert_eq!(
+            match_process_rule(&rule, &windows).len(),
+            1,
+            "盘符与文件名的大小写差异不应让规则失配"
+        );
+    }
+
+    #[test]
+    fn process_rule_by_name_match_ignores_case() {
+        let mut rule = ProcessRule::from_window(&win("窗口", 1, "Game.exe", 1, "C:\\Game.exe"));
+        rule.by_name = true;
+        let windows = vec![win("窗口", 1, "GAME.EXE", 1, "D:\\别处\\GAME.EXE")];
+        assert_eq!(match_process_rule(&rule, &windows).len(), 1);
+    }
+
+    #[test]
+    fn window_rule_live_check_ignores_path_case() {
+        let rule = WindowRule::from_window(&win("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe"));
+        let windows = vec![win("微信", 10, "WECHAT.EXE", 100, "c:\\WECHAT.EXE")];
+        match resolve_window_rule(&rule, &windows) {
+            WindowResolution::Live(w) => assert_eq!(w.hwnd, 10),
+            other => panic!("大小写差异不应让句柄校验失败，实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn window_rule_reacquire_ignores_path_case() {
+        let rule = WindowRule::from_window(&win("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe"));
+        let windows = vec![win("微信", 99, "WECHAT.EXE", 300, "c:\\WECHAT.EXE")];
+        match resolve_window_rule(&rule, &windows) {
+            WindowResolution::Reacquired(w) => assert_eq!(w.hwnd, 99),
+            other => panic!("大小写差异不应让追溯失败，实际 {other:?}"),
+        }
+    }
+
+    #[test]
+    fn window_rule_reacquire_by_process_name_ignores_case() {
+        let mut rule =
+            WindowRule::from_window(&win("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe"));
+        rule.path = String::new();
+        let windows = vec![win("微信", 99, "WECHAT.EXE", 300, "C:\\WeChat.exe")];
+        assert!(
+            matches!(
+                resolve_window_rule(&rule, &windows),
+                WindowResolution::Reacquired(_)
+            ),
+            "进程名的大小写差异不应让追溯失败"
+        );
+    }
+
+    #[test]
+    fn regex_results_are_stable_across_repeated_calls() {
+        let mut rule = ProcessRule::from_window(&win("窗口", 1, "a.exe", 1, "C:\\a.exe"));
+        rule.regex = Some("^C:\\\\a\\.exe$".to_string());
+        let windows = vec![
+            win("窗口", 1, "a.exe", 1, "C:\\a.exe"),
+            win("别的", 2, "b.exe", 2, "C:\\b.exe"),
+        ];
+        let first = match_process_rule(&rule, &windows).len();
+        assert_eq!(first, 1);
+        for _ in 0..3 {
+            assert_eq!(
+                match_process_rule(&rule, &windows).len(),
+                first,
+                "缓存命中不得改变匹配结果"
+            );
+        }
+    }
+
+    #[test]
+    fn invalid_regex_stays_invalid_across_calls() {
+        assert!(!regex_is_valid("(unclosed"));
+        assert!(!regex_is_valid("(unclosed"));
+        assert_eq!(regex_breadth("(unclosed"), None);
     }
 
     #[test]

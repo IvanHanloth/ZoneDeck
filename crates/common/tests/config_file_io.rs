@@ -88,8 +88,9 @@ fn a_corrupt_file_is_backed_up_before_falling_back() {
 
     let msg = parse_error.unwrap();
     assert!(
-        msg.contains("config.json.bad"),
-        "备份去向必须出现在报告里，日志才能指引用户找回: {msg}"
+        msg.message().contains("config.json.bad"),
+        "备份去向必须出现在报告里，日志才能指引用户找回: {}",
+        msg.message()
     );
 }
 
@@ -162,8 +163,9 @@ fn a_failed_backup_still_falls_back_and_reports() {
     assert!(path.exists(), "备份失败时原文件留在原地");
     let msg = parse_error.unwrap();
     assert!(
-        msg.contains("备份原文件失败"),
-        "报告须注明备份未成功、数据仍有被覆盖的风险: {msg}"
+        msg.message().contains("备份原文件失败"),
+        "报告须注明备份未成功、数据仍有被覆盖的风险: {}",
+        msg.message()
     );
 }
 
@@ -256,4 +258,126 @@ fn written_file_is_readable_by_a_generic_json_parser() {
     assert!(value.get("window_rules").is_some());
     assert!(value.get("process_rules").is_some());
     assert!(value.get("notifications").is_some());
+}
+
+// ---- schema 降级保护 --------------------------------------------------------
+
+#[test]
+fn a_config_from_a_newer_schema_is_backed_up_but_still_loads() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(
+        &path,
+        r#"{"version": "v9.9.9.9", "hotkey": {"hide_hotkey": "Ctrl+Shift+B"}, "未来字段": 1}"#,
+    )
+    .unwrap();
+
+    let (loaded, note) = Config::load_reporting(&path).unwrap();
+    assert_eq!(
+        loaded.hotkey.hide_hotkey, "Ctrl+Shift+B",
+        "更高版本的配置照常生效，认得的字段一个不少"
+    );
+
+    let backup = dir.path().join("config.json.v9.9.9.9.bak");
+    assert!(backup.exists(), "必须留底，否则新版设置项无从找回");
+    assert!(
+        std::fs::read_to_string(&backup)
+            .unwrap()
+            .contains("未来字段"),
+        "留底须是原文件的完整内容，含本版本不认识的字段"
+    );
+    assert!(path.exists(), "留底是复制而非改名，原文件仍要正常使用");
+
+    match note {
+        Some(zonedeck_common::LoadNote::NewerSchema(msg)) => assert!(
+            msg.contains("config.json.v9.9.9.9.bak"),
+            "留底去向必须出现在报告里: {msg}"
+        ),
+        other => panic!("应报告 NewerSchema，实际 {other:?}"),
+    }
+}
+
+#[test]
+fn a_config_from_the_same_or_older_schema_is_not_backed_up() {
+    let dir = tempfile::tempdir().unwrap();
+    for version in ["v3.0.0.0", "v2.1.0.0", "v1.0.0.0"] {
+        let path = dir.path().join(format!("{version}.json"));
+        std::fs::write(&path, format!(r#"{{"version": "{version}"}}"#)).unwrap();
+
+        let (_, note) = Config::load_reporting(&path).unwrap();
+        assert_eq!(note, None, "{version} 不高于当前 schema，不该留底");
+    }
+}
+
+#[test]
+fn an_unparseable_version_string_is_never_treated_as_newer() {
+    let dir = tempfile::tempdir().unwrap();
+    for version in ["", "latest", "v3.0.0.0-rc1", "9.9.9.9.9.x", "vvv"] {
+        let path = dir.path().join("config.json");
+        std::fs::write(&path, format!(r#"{{"version": "{version}"}}"#)).unwrap();
+
+        let (_, note) = Config::load_reporting(&path).unwrap();
+        assert_eq!(
+            note, None,
+            "无法解析的版本号 {version:?} 不该被当作更高版本"
+        );
+    }
+}
+
+#[test]
+fn a_hostile_version_string_cannot_escape_the_config_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let sub = dir.path().join("data");
+    std::fs::create_dir(&sub).unwrap();
+    let path = sub.join("config.json");
+    std::fs::write(&path, r#"{"version": "9.9.9.9/../../../evil"}"#).unwrap();
+
+    let (_, note) = Config::load_reporting(&path).unwrap();
+
+    assert_eq!(note, None);
+    let escaped: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name())
+        .filter(|n| n != "data")
+        .collect();
+    assert!(
+        escaped.is_empty(),
+        "不得在配置目录之外写出任何文件: {escaped:?}"
+    );
+}
+
+#[test]
+fn saving_always_stamps_the_current_schema_version() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(&path, r#"{"version": "v2.1.0.0"}"#).unwrap();
+
+    let (loaded, _) = Config::load_reporting(&path).unwrap();
+    assert_eq!(loaded.version, "v2.1.0.0", "加载时保留文件里的原值");
+
+    loaded.save(&path).unwrap();
+    let raw = std::fs::read_to_string(&path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert_eq!(
+        value.get("version").and_then(|v| v.as_str()),
+        Some(zonedeck_common::APP_CONFIG_VERSION),
+        "保存后版本号必须是当前程序的 schema 版本"
+    );
+}
+
+#[test]
+fn deprecated_runtime_fields_are_read_but_never_written_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("config.json");
+    std::fs::write(&path, r#"{"history": [111, 222], "frozen_pids": [4321]}"#).unwrap();
+
+    let (loaded, _) = Config::load_reporting(&path).unwrap();
+    assert!(loaded.history.is_empty() && loaded.frozen_pids.is_empty());
+
+    loaded.save(&path).unwrap();
+    let raw = std::fs::read_to_string(&path).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&raw).unwrap();
+    assert!(value.get("history").is_none(), "废弃字段不该再写出");
+    assert!(value.get("frozen_pids").is_none(), "废弃字段不该再写出");
 }

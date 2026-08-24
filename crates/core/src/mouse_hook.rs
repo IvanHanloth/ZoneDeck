@@ -18,7 +18,7 @@ use windows::core::PCWSTR;
 use zonedeck_common::{MouseButton as MouseButtonCfg, Setting};
 
 use crate::hotkey::parse_modifiers;
-use crate::util::pressed_modifiers;
+use crate::modifiers::current_modifiers;
 
 pub const WM_MOUSE_TRIGGER: u32 = WM_APP + 3;
 pub const TRIGGER_BUTTON: usize = 0;
@@ -286,7 +286,7 @@ fn handle_event(msg: u32, data: &MSLLHOOKSTRUCT) {
         return;
     }
     // 要求修饰键时必须完全吻合。
-    if state.modifiers != 0 && pressed_modifiers() != state.modifiers {
+    if state.modifiers != 0 && current_modifiers() != state.modifiers {
         state.count = 0;
         return;
     }

@@ -156,6 +156,8 @@ export async function loadAll() {
       setLangPref(loaded.config?.setting?.language);
       // 配置损坏已回退默认值，原因与备份去向必须让用户看到。
       if (loaded.fallback) reportError(t("state.configFallback"), loaded.fallback);
+      // 配置来自更高版本：本次照常生效，但保存后新版设置项会丢。
+      if (loaded.schema_note) reportError(t("state.configSchemaNewer"), loaded.schema_note);
       return refreshWindows();
     }),
     refreshAutostart(),
