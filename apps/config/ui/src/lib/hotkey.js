@@ -32,6 +32,17 @@ export function keyName(event) {
   return KEY_MAP[k] || null;
 }
 
+/** 该键盘事件按的是不是修饰键本身。 */
+export function isModifierKey(event) {
+  return MODIFIER_KEYS.has(event.key);
+}
+
+/** 拼接修饰键与主键；两者都可为空。 */
+export function joinCombo(modifiers, key) {
+  if (!key) return modifiers || "";
+  return modifiers ? `${modifiers}+${key}` : key;
+}
+
 /** 事件当下按住的修饰键组合；无修饰键返回空串。 */
 export function modifiersFromEvent(event) {
   const parts = [];

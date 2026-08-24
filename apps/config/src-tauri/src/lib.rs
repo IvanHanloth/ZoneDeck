@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::Serialize;
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 use zonedeck_common::Config;
 use zonedeck_common::ipc::{Command, PipeClient, Response};
 use zonedeck_common::model::WindowInfo;
 use zonedeck_core::i18n::{self, Msg};
+use zonedeck_core::key_capture::{KeyCapture, KeyEvent};
 
 mod verhub;
 
@@ -417,6 +418,84 @@ async fn set_hotkeys_enabled(enabled: bool) -> Result<bool, String> {
     .await
 }
 
+/// 录制期对键盘的独占；Tauri 托管，程序退出时随之析构，钩子自动卸掉。
+#[derive(Default)]
+struct CaptureState(Mutex<Option<KeyCapture>>);
+
+/// 一次录制状态快照，推给界面渲染。
+#[derive(Serialize, Clone, PartialEq)]
+struct KeyCapturePayload {
+    /// 当前按住的修饰键，形如 `"Ctrl+Shift"`；没有按住则为空串。
+    modifiers: String,
+    /// 当前按住的主键名；只按着修饰键或主键已抬起时为 null。
+    key: Option<String>,
+    down: bool,
+    /// 按了热键表里没有的键（如小键盘、OEM 符号键）。
+    unsupported: bool,
+}
+
+fn capture_payload(ev: &KeyEvent) -> KeyCapturePayload {
+    // 抬起时不报主键，界面据此知道主键已松开。
+    let key = if ev.down {
+        zonedeck_core::hotkey::vk_to_key(ev.vk)
+    } else {
+        None
+    };
+    KeyCapturePayload {
+        modifiers: zonedeck_core::hotkey::format_modifiers(ev.modifiers),
+        unsupported: ev.down && key.is_none() && !zonedeck_core::key_capture::is_modifier(ev.vk),
+        key,
+        down: ev.down,
+    }
+}
+
+/// 开始独占键盘录制。期间所有按键都被吞掉，不会漏给任何其他程序；
+/// 每次按下 / 抬起以 `key-capture` 事件推给界面。幂等。
+#[tauri::command]
+fn start_key_capture(app: AppHandle, state: State<CaptureState>) -> Result<(), String> {
+    let mut slot = state
+        .0
+        .lock()
+        .map_err(|_| i18n::t(Msg::ErrKeyCaptureFailed).to_string())?;
+    if slot.is_some() {
+        return Ok(());
+    }
+
+    let (tx, rx) = std::sync::mpsc::channel::<KeyEvent>();
+    // 钩子回调只往通道里塞一条就返回：低级钩子超时（默认 300ms）后事件会被系统丢弃，
+    // 序列化与推送都放到排空线程上做。
+    let capture = KeyCapture::start(move |ev| {
+        let _ = tx.send(ev);
+    })
+    .ok_or_else(|| i18n::t(Msg::ErrKeyCaptureFailed).to_string())?;
+
+    std::thread::spawn(move || {
+        // 通道随录制结束而关闭，循环随之退出。
+        let mut last: Option<KeyCapturePayload> = None;
+        for ev in rx {
+            let payload = capture_payload(&ev);
+            // 长按的自动重复会刷出一串相同快照，吃掉。
+            if last.as_ref() == Some(&payload) {
+                continue;
+            }
+            let _ = app.emit("key-capture", &payload);
+            last = Some(payload);
+        }
+    });
+
+    *slot = Some(capture);
+    Ok(())
+}
+
+/// 结束录制，把键盘还给系统。返回此前是否确实在录。幂等。
+#[tauri::command]
+fn stop_key_capture(state: State<CaptureState>) -> bool {
+    match state.0.lock() {
+        Ok(mut slot) => slot.take().is_some(),
+        Err(mut poisoned) => poisoned.get_mut().take().is_some(),
+    }
+}
+
 /// 增强冻结是否可用：需要 exe 同目录存在 pssuspend64.exe。
 #[tauri::command]
 async fn pssuspend_available() -> bool {
@@ -658,6 +737,18 @@ pub fn run() {
                 let _ = app.emit("open-about", ());
             }
         }))
+        .manage(CaptureState::default())
+        // 失焦时结束录制：钩子本身已在非前台时放行按键，这里只是让界面同步复位。
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::Focused(false) = event {
+                let app = window.app_handle();
+                if let Some(state) = app.try_state::<CaptureState>()
+                    && stop_key_capture(state)
+                {
+                    let _ = app.emit("key-capture-stopped", ());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             load_config,
             save_config,
@@ -677,6 +768,8 @@ pub fn run() {
             open_log_dir,
             open_program_dir,
             set_hotkeys_enabled,
+            start_key_capture,
+            stop_key_capture,
             pssuspend_available,
             regex_breadth,
             whitelist_builtins,
@@ -699,7 +792,55 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_build;
+    use super::{capture_payload, parse_build};
+    use zonedeck_core::hotkey::{MOD_CONTROL, MOD_SHIFT};
+    use zonedeck_core::key_capture::KeyEvent;
+
+    const VK_Q: u16 = 0x51;
+    const VK_LCONTROL: u16 = 0xA2;
+    const VK_NUMPAD0: u16 = 0x60;
+
+    fn ev(vk: u16, down: bool, modifiers: u32) -> KeyEvent {
+        KeyEvent {
+            vk,
+            down,
+            modifiers,
+        }
+    }
+
+    #[test]
+    fn only_modifiers_held_reports_no_main_key() {
+        let p = capture_payload(&ev(VK_LCONTROL, true, MOD_CONTROL));
+        assert_eq!(p.modifiers, "Ctrl");
+        assert_eq!(p.key, None);
+        assert!(!p.unsupported, "修饰键本身不算不支持的按键");
+    }
+
+    #[test]
+    fn a_supported_main_key_reports_the_whole_combo() {
+        let p = capture_payload(&ev(VK_Q, true, MOD_CONTROL | MOD_SHIFT));
+        assert_eq!(p.modifiers, "Ctrl+Shift");
+        assert_eq!(p.key.as_deref(), Some("Q"));
+        assert!(!p.unsupported);
+    }
+
+    #[test]
+    fn a_key_outside_the_hotkey_table_is_flagged_unsupported() {
+        let p = capture_payload(&ev(VK_NUMPAD0, true, 0));
+        assert_eq!(p.key, None);
+        assert!(p.unsupported, "界面据此提示换一个键");
+    }
+
+    #[test]
+    fn releasing_a_key_clears_the_main_key_and_never_flags_unsupported() {
+        let p = capture_payload(&ev(VK_Q, false, MOD_CONTROL));
+        assert_eq!(p.modifiers, "Ctrl", "抬起主键后修饰键还按着");
+        assert_eq!(p.key, None, "抬起时不报主键，界面据此知道松手了");
+        assert!(!p.down);
+        assert!(!p.unsupported);
+        // 不支持的键抬起同样不该再刷提示。
+        assert!(!capture_payload(&ev(VK_NUMPAD0, false, 0)).unsupported);
+    }
 
     #[test]
     fn build_number_comes_from_the_ver_banner() {

@@ -1,10 +1,11 @@
 <script>
   import { t } from "../lib/i18n.svelte.js";
-  // 录制热键期间暂停核心的全局热键监控，结束后恢复。
+  // 录制期独占键盘，并暂停核心的全局热键监控，结束后一并恢复。
   import { onDestroy } from "svelte";
   import IconPencil from "~icons/lucide/pencil";
   import IconBan from "~icons/lucide/ban";
-  import { comboFromEvent } from "../lib/hotkey.js";
+  import { startCapture } from "../lib/capture.js";
+  import { joinCombo } from "../lib/hotkey.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
   import ContentDialog from "./fluent/ContentDialog.svelte";
   import SettingsCard from "./fluent/SettingsCard.svelte";
@@ -26,27 +27,60 @@
   let open = $state(false);
   // 对话框里的待定值，保存前不碰 value。
   let draft = $state("");
+  // 此刻按住的键。
+  let live = $state({ modifiers: "", key: null });
+  // 本轮已录到完整组合；松手途中不再跟着 live 掉键，避免画面闪回半截组合。
+  let committed = $state(false);
+  // 上一次按了热键表里没有的键；按到能用的键或重开对话框才消掉。
+  let unsupported = $state(false);
+  // 没能独占键盘，按键仍会漏给其他程序。
+  let degraded = $state(false);
+
+  let stop = null;
 
   const keys = $derived(value ? value.split("+") : []);
-  const draftKeys = $derived(draft ? draft.split("+") : []);
+  const held = $derived(joinCombo(live.modifiers, live.key));
+  // 手按着就跟着手走，录完与全松开后停在已录到的组合上。
+  const stage = $derived(committed ? draft : held || draft);
+  const stageKeys = $derived(stage ? stage.split("+") : []);
 
-  function onKeydown(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    const combo = comboFromEvent(e);
-    if (!combo) return; // 修饰键或不支持的键，继续等待
-    draft = combo;
+  function reset() {
+    live = { modifiers: "", key: null };
+    committed = false;
+    unsupported = false;
+  }
+
+  function onState(s) {
+    live = { modifiers: s.modifiers, key: s.key };
+    // 手全松开，下一次按下重新开始录。
+    if (!s.modifiers && !s.key) committed = false;
+    if (!s.down) return;
+    // 键盘被独占时裸 Esc 是唯一的键盘退路；Win+Esc 等带修饰键的组合照常录。
+    if (s.key === "Esc" && !s.modifiers) return (open = false);
+    if (s.unsupported) return (unsupported = true);
+    if (!s.key) return;
+    draft = joinCombo(s.modifiers, s.key);
+    committed = true;
+    unsupported = false;
   }
 
   function edit() {
     draft = value;
+    reset();
+    degraded = false;
     open = true;
     suspendMonitoring(REASON);
-    window.addEventListener("keydown", onKeydown, true);
+    stop = startCapture({
+      onState,
+      onLost: () => (open = false),
+      onDegraded: () => (degraded = true),
+    });
   }
 
   function teardown() {
-    window.removeEventListener("keydown", onKeydown, true);
+    stop?.();
+    stop = null;
+    reset();
     resumeMonitoring(REASON);
   }
 
@@ -98,13 +132,19 @@
 
 <ContentDialog bind:open title={label}>
   <p class="hint">{t("recorder.dialogHint")}</p>
-  <div class="stage">
-    {#if draftKeys.length}
-      {#each draftKeys as k, i (i)}<kbd class="key big">{k}</kbd>{/each}
+  <div class="stage" class:live={!!held}>
+    {#if stageKeys.length}
+      {#each stageKeys as k, i (i)}<kbd class="key big">{k}</kbd>{/each}
     {:else}
       <span class="waiting">{t("recorder.waiting")}</span>
     {/if}
   </div>
+  {#if unsupported}
+    <p class="note">{t("recorder.unsupportedKey")}</p>
+  {/if}
+  {#if degraded}
+    <p class="note">{t("recorder.captureFailed")}</p>
+  {/if}
 
   {#snippet footer()}
     <button class="btn primary" type="button" onclick={save}>{t("common.save")}</button>
@@ -159,8 +199,20 @@
     padding: 20px;
     border-radius: var(--r-card);
     background: var(--card-2);
+    border: 1px solid transparent;
+    transition: border-color var(--dur-fast) var(--ease-standard);
+  }
+  /* 手按着键时描边点亮，让「程序收到了」这件事看得见 */
+  .stage.live {
+    border-color: var(--accent);
   }
   .waiting {
     color: var(--text-3);
+  }
+  .note {
+    margin-top: 10px;
+    font-size: 12px;
+    color: var(--text-2);
+    text-align: center;
   }
 </style>
