@@ -143,6 +143,11 @@
   --dur-fast: 83ms;
   --dur-normal: 167ms;
   --dur-slow: 333ms;
+  /* 换页进场：Win11 设置在旧页退场后留一小段空档，新页才慢慢滑上来。
+     位移距离没有做成令牌：关键帧里的 var() 是 pending-substitution 值，
+     浏览器插值不了，会退化成中途硬跳一下，所以距离必须写死在 @keyframes 里。 */
+  --dur-page: 600ms;
+  --delay-page: 90ms;
 
   --font-ui:
     "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", system-ui,
@@ -514,6 +519,19 @@ button {
 .lv-empty {
   text-align: center;
   padding: 24px 8px;
+}
+
+/* 顶部搜索跳转后的落点提示。SearchBox 把它作为内联 animation 挂到目标卡片上，
+   故只需要 keyframes 本身；写成 class 会被 Svelte 重写 class 属性时抹掉。
+   帧名必须是全局的，不能放在组件的 scoped 样式里。 */
+@keyframes search-hit {
+  0%,
+  60% {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 2px transparent;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

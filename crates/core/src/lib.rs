@@ -19,6 +19,7 @@ pub mod key_capture;
 pub mod keyboard_hook;
 pub mod logging;
 pub mod modifiers;
+pub mod monitor;
 pub mod mouse_hook;
 pub mod platform;
 pub mod recovery;

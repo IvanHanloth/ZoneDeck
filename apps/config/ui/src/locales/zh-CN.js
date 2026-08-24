@@ -9,7 +9,6 @@ export default {
   "tab.whitelist": "白名单",
   "tab.hotkeys": "热键与鼠标",
   "tab.hide": "隐藏设置",
-  "tab.notify": "提示设置",
   "tab.power": "能效控制",
   "tab.options": "通用设置",
   "tab.about": "关于与反馈",
@@ -30,6 +29,10 @@ export default {
   "common.collapse": "收起",
   "common.unknownProcess": "（未知进程）",
   "common.noTitleWindow": "无标题窗口",
+
+  "search.placeholder": "查找设置",
+  "search.noResults": "没有找到匹配的设置",
+  "search.resultsAria": "搜索结果",
 
   "titlebar.minimize": "最小化",
   "titlebar.maximize": "最大化",

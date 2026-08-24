@@ -26,8 +26,17 @@
   });
 </script>
 
-<div class="expander" class:open>
+<div class="expander" class:open data-setting={label}>
   <div class="head" class:disabled>
+    <!-- 整条头部都是展开热区（同 Win11），按钮铺满后垫在内容底下：
+         正文与箭头改为 pointer-events:none 把点击让给它，只有右侧控件浮在上面
+         保持可操作。 -->
+    <button
+      class="hit"
+      aria-expanded={open}
+      aria-label={t(open ? "common.collapse" : "common.expand")}
+      onclick={() => (open = !open)}
+    ></button>
     <div class="main">
       {#if Icon}
         <span class="icon" style:color={iconColor || null} aria-hidden="true">
@@ -40,15 +49,9 @@
       </div>
     </div>
     {#if control}<div class="control">{@render control()}</div>{/if}
-    <button
-      class="chev"
-      aria-expanded={open}
-      aria-label={t(open ? "common.collapse" : "common.expand")}
-      title={t(open ? "common.collapse" : "common.expand")}
-      onclick={() => (open = !open)}
-    >
+    <span class="chev" aria-hidden="true">
       <IconChevronDown width="14" height="14" />
-    </button>
+    </span>
   </div>
 
   <div class="wrap" aria-hidden={!open}>
@@ -65,6 +68,7 @@
   }
 
   .head {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 20px;
@@ -78,6 +82,28 @@
   .head.disabled .label,
   .head.disabled .desc {
     color: var(--text-disabled);
+  }
+
+  .hit {
+    position: absolute;
+    inset: 0;
+    transition: background var(--dur-fast) var(--ease-standard);
+  }
+  .head:hover .hit {
+    background: var(--subtle-hover);
+  }
+  .hit:active {
+    background: var(--subtle-pressed);
+  }
+  .hit:focus-visible {
+    outline-offset: -3px;
+  }
+
+  /* 垫在 .hit 之上只为盖住它的底色，点击一律穿透回 .hit */
+  .main,
+  .chev {
+    position: relative;
+    pointer-events: none;
   }
 
   .main {
@@ -106,6 +132,7 @@
     color: var(--text-2);
   }
   .control {
+    position: relative;
     flex: none;
     display: flex;
     align-items: center;
@@ -119,18 +146,8 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: var(--r-control);
     color: var(--text);
-    transition:
-      background var(--dur-fast) var(--ease-standard),
-      rotate var(--dur-slow) var(--ease-standard);
-  }
-  .chev:hover {
-    background: var(--subtle-hover);
-  }
-  .chev:active {
-    background: var(--subtle-pressed);
-    color: var(--text-2);
+    transition: rotate var(--dur-slow) var(--ease-standard);
   }
   .expander.open .chev {
     rotate: 180deg;

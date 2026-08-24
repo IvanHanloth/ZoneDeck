@@ -1,9 +1,7 @@
 //! 桌面悬浮窗：无边框、置顶、不占任务栏的小窗口，显示程序图标。
 //! 左键拖动、双击触发老板键、右键弹菜单。
 
-use core::ffi::c_void;
-
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateSolidBrush, DeleteObject, EndPaint, FillRect, PAINTSTRUCT,
 };
@@ -11,12 +9,12 @@ use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 use windows::Win32::UI::WindowsAndMessaging::{
     AppendMenuW, CS_DBLCLKS, CreateWindowExW, DI_NORMAL, DefWindowProcW, DestroyWindow, DrawIconEx,
-    GWLP_USERDATA, GetCursorPos, GetWindowLongPtrW, HICON, HWND_TOPMOST, IDC_ARROW, LWA_COLORKEY,
-    LoadCursorW, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterClassW, SPI_GETWORKAREA,
-    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOSIZE, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
-    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, SystemParametersInfoW,
-    TPM_LEFTALIGN, TPM_RIGHTBUTTON, WM_APP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP,
-    WM_MOUSEMOVE, WM_NCDESTROY, WM_PAINT, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
+    GWLP_USERDATA, GetCursorPos, GetSystemMetrics, GetWindowLongPtrW, HICON, HWND_TOPMOST,
+    IDC_ARROW, LWA_COLORKEY, LoadCursorW, MF_SEPARATOR, MF_STRING, PostMessageW, RegisterClassW,
+    SM_CXSCREEN, SM_CYSCREEN, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOSIZE,
+    SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos, ShowWindow, TPM_LEFTALIGN,
+    TPM_RIGHTBUTTON, WM_APP, WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
+    WM_NCDESTROY, WM_PAINT, WM_RBUTTONUP, WNDCLASSW, WS_EX_LAYERED, WS_EX_TOOLWINDOW,
     WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
@@ -33,14 +31,9 @@ const FLOAT_MARGIN: i32 = 24;
 /// 透明色键；背景填充此色后即变透明。
 const COLOR_KEY: COLORREF = COLORREF(0x00FF_00FF);
 
-/// 工作区（去掉任务栏后的可用屏幕区域），像素坐标。
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct WorkArea {
-    pub left: i32,
-    pub top: i32,
-    pub right: i32,
-    pub bottom: i32,
-}
+/// 工作区（去掉任务栏后的可用屏幕区域），虚拟屏幕坐标。
+/// 就是 [`crate::monitor::ScreenRect`]，这里换个贴合语境的名字。
+pub type WorkArea = crate::monitor::ScreenRect;
 
 /// 悬浮窗初始位置：贴工作区右下角，留 `margin` 像素边距。
 pub fn initial_position(work: WorkArea, size: i32, margin: i32) -> (i32, i32) {
@@ -86,7 +79,7 @@ impl FloatWindow {
             };
             RegisterClassW(&wc);
 
-            let (x, y) = initial_position(work_area(), FLOAT_SIZE, FLOAT_MARGIN);
+            let (x, y) = initial_position(initial_work_area(), FLOAT_SIZE, FLOAT_MARGIN);
             let hwnd = CreateWindowExW(
                 WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
                 class_name,
@@ -142,32 +135,34 @@ fn hiword_i32(l: LPARAM) -> i32 {
     ((l.0 >> 16) & 0xFFFF) as u16 as i16 as i32
 }
 
-fn work_area() -> WorkArea {
-    unsafe {
-        let mut r = RECT::default();
-        let ok = SystemParametersInfoW(
-            SPI_GETWORKAREA,
-            0,
-            Some(&mut r as *mut RECT as *mut c_void),
-            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
-        )
-        .is_ok();
-        if ok {
-            WorkArea {
-                left: r.left,
-                top: r.top,
-                right: r.right,
-                bottom: r.bottom,
-            }
-        } else {
-            WorkArea {
-                left: 0,
-                top: 0,
-                right: 1920,
-                bottom: 1080,
-            }
-        }
+/// 悬浮窗初始位置所依据的工作区：主显示器，贴它的右下角。
+///
+/// 取不到时按主显示器的全屏尺寸兜底（可能盖住任务栏，但至少落在屏幕里），
+/// 不再用写死的 1920×1080——那在任何非 FHD 屏上都是错的。
+fn initial_work_area() -> WorkArea {
+    if let Some(m) = crate::monitor::primary() {
+        return m.work;
     }
+    let (w, h) = unsafe { (GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN)) };
+    WorkArea {
+        left: 0,
+        top: 0,
+        right: w.max(FLOAT_SIZE),
+        bottom: h.max(FLOAT_SIZE),
+    }
+}
+
+/// 拖动时用的工作区：光标当前所在那块显示器的。
+///
+/// 这是悬浮窗能被拖到副屏的关键——按主显示器的工作区夹取，等于每次
+/// `WM_MOUSEMOVE` 都把窗口硬拽回主屏，用户永远拖不出去。
+fn work_area_at_cursor() -> WorkArea {
+    let mut pt = POINT::default();
+    let ok = unsafe { GetCursorPos(&mut pt) }.is_ok();
+    if ok && let Some(m) = crate::monitor::at_point(pt.x, pt.y) {
+        return m.work;
+    }
+    initial_work_area()
 }
 
 fn paint_icon(hwnd: HWND) {
@@ -220,7 +215,7 @@ unsafe extern "system" fn float_wndproc(
                     let (cx, cy) = clamp_position(
                         (pt.x - st.grab.x, pt.y - st.grab.y),
                         FLOAT_SIZE,
-                        work_area(),
+                        work_area_at_cursor(),
                     );
                     let _ = SetWindowPos(
                         hwnd,
@@ -364,5 +359,53 @@ mod tests {
         };
         assert_eq!(clamp_position((-5000, 500), 64, left_monitor), (-1920, 500));
         assert_eq!(clamp_position((5000, 500), 64, left_monitor), (-64, 500));
+    }
+
+    // ---- 多显示器 ----------------------------------------------------------
+
+    #[test]
+    fn dragging_onto_a_second_monitor_is_only_possible_with_that_monitors_work_area() {
+        // 病根不在 clamp 本身，而在喂给它的工作区：拖到右副屏时若仍拿主屏的工作区
+        // 去夹，每次 WM_MOUSEMOVE 都会把窗口硬拽回主屏，用户永远拖不出去。
+        let right_monitor = WorkArea {
+            left: 1920,
+            top: 0,
+            right: 3840,
+            bottom: 1080,
+        };
+        let on_second_screen = (2400, 300);
+
+        assert_eq!(
+            clamp_position(on_second_screen, 64, FHD),
+            (1920 - 64, 300),
+            "拿主屏工作区去夹，副屏上的位置会被拽回主屏右边缘"
+        );
+        assert_eq!(
+            clamp_position(on_second_screen, 64, right_monitor),
+            on_second_screen,
+            "拿光标所在那块显示器的工作区，位置原样留在副屏"
+        );
+    }
+
+    #[test]
+    fn the_initial_work_area_comes_from_a_real_monitor() {
+        // 兜底值曾是写死的 1920×1080，在任何非 FHD 屏上都是错的。
+        let work = initial_work_area();
+        assert!(
+            work.width() > 0 && work.height() > 0,
+            "工作区应有正的宽高: {work:?}"
+        );
+        let primary = crate::monitor::primary().expect("应能查到主显示器");
+        assert_eq!(work, primary.work, "初始位置应依据主显示器的工作区");
+    }
+
+    #[test]
+    fn the_drag_work_area_tracks_a_real_monitor() {
+        // 取不到光标时回落主显示器，无论哪条路径都得是真实显示器的工作区。
+        let work = work_area_at_cursor();
+        assert!(
+            work.width() > 0 && work.height() > 0,
+            "工作区应有正的宽高: {work:?}"
+        );
     }
 }

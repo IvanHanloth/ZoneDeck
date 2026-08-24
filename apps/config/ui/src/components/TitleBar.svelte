@@ -2,6 +2,7 @@
   import { t } from "../lib/i18n.svelte.js";
   import { win } from "../lib/ipc.js";
   import { app } from "../lib/state.svelte.js";
+  import SearchBox from "./SearchBox.svelte";
 </script>
 
 <header
@@ -13,6 +14,10 @@
   <div class="brand" data-tauri-drag-region>
     <img class="logo" src="/logo.svg" alt="" data-tauri-drag-region />
     <span class="name" data-tauri-drag-region>ZoneDeck</span>
+  </div>
+
+  <div class="search">
+    <SearchBox />
   </div>
 
   <div class="controls">
@@ -58,11 +63,31 @@
 
 <style>
   .titlebar {
+    position: relative;
     height: var(--titlebar-h);
     display: flex;
     align-items: stretch;
     justify-content: space-between;
     flex: none;
+  }
+
+  /* 搜索框对齐窗口中线，不受左侧品牌区宽度影响（同 Win11 设置）。
+     居中走 left/right + margin auto，不用 translate：任何 transform 都会成为
+     position:fixed 后代的包含块，结果弹层会以标题栏为基准而错位。 */
+  .search {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 8px;
+    bottom: 8px;
+    margin: 0 auto;
+    width: min(480px, 42%);
+  }
+  /* 窗口窄到搜索框会顶到品牌区或窗控时，直接收起 */
+  @media (max-width: 600px) {
+    .search {
+      display: none;
+    }
   }
   .brand {
     display: flex;
