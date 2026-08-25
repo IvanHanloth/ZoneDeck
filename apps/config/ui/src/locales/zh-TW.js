@@ -203,7 +203,6 @@ export default {
   "corner.windowRestored": "視窗已復原",
   "corner.restoreByHotkey": "用快速鍵或通知區域選單復原視窗",
 
-  "notify.card": "通知區域通知",
   "notify.onStart": "啟動執行時通知",
   "notify.onStartDesc": "核心啟動並開始服務時顯示通知",
   "notify.onQuit": "結束時通知",
@@ -215,7 +214,6 @@ export default {
   "notify.onShow": "顯示視窗時通知",
   "notify.onShowDesc": "每次復原顯示時顯示通知",
 
-  "notify.trayCard": "圖示狀態提示",
   "notify.badgeRed": "紅色",
   "notify.badgeGreen": "綠色",
   "notify.badgeYellow": "黃色",
@@ -228,16 +226,36 @@ export default {
   "notify.statusElevated": "以系統管理員身分執行",
   "notify.statusMonitorPaused": "快速鍵監控已暫停",
   "notify.trayPriorityNote": "多個狀態同時滿足時，依紅 > 綠 > 黃 > 藍的優先順序顯示",
-  "notify.trayTooltip": "顯示圖示懸浮名稱",
-  "notify.trayTooltipDesc": "滑鼠停留在通知區域圖示上時顯示「ZoneDeck」；關閉後不顯示任何文字，更為隱密。",
+
+  "tray.card": "通知區域與系統通知",
+  "tray.enabled": "顯示通知區域圖示",
+  "tray.enabledDesc":
+    "在通知區域顯示 ZoneDeck 圖示。關閉後更為隱密",
+  "tray.left": "左鍵按一下",
+  "tray.leftDesc": "以左鍵按一下通知區域圖示時執行的動作。",
+  "tray.double": "左鍵按兩下",
+  "tray.doubleDesc":
+    "以左鍵按兩下通知區域圖示時執行的動作。啟用後，按一下圖示的相關操作會有一定延遲。",
+  "tray.right": "右鍵按一下",
+  "tray.rightDesc": "以右鍵按一下通知區域圖示時執行的動作。",
+  "tray.actionNone": "不做任何事",
+  "tray.actionToggle": "隱藏／顯示視窗",
+  "tray.actionMenu": "顯示通知區域選單",
+  "tray.actionSettings": "開啟設定介面",
+  "tray.tooltip": "顯示圖示懸浮名稱",
+  "tray.tooltipDesc": "滑鼠停留在通知區域圖示上時顯示「ZoneDeck」；關閉後不顯示任何文字，更為隱密。",
+  "tray.badges": "圖示狀態提示",
+  "tray.badgesDesc": "在通知區域圖示右下角疊加一個彩色圓點，反映核心目前狀態。",
+  "tray.notify": "通知",
+  "tray.notifyDesc": "設定觸發系統通知的事件。",
+  "tray.disabledNote":
+    "通知區域圖示已關閉：再次執行 ZoneDeck 仍可開啟本介面。",
 
   "hide.generalCard": "一般",
   "hide.muteAfterHide": "隱藏視窗後靜音",
   "hide.muteAfterHideDesc": "隱藏時將目標程序靜音，復原顯示時自動取消靜音。",
   "hide.hideCurrent": "同時隱藏目前使用中的視窗",
   "hide.hideCurrentDesc": "按下快速鍵時，除已綁定的視窗外，同時隱藏目前正在使用的前景視窗。",
-  "hide.clickToHide": "按一下通知區域圖示切換隱藏",
-  "hide.clickToHideDesc": "以左鍵按一下通知區域圖示即可隱藏／顯示，不需按快速鍵。",
   "hide.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
   "hide.hideIconDesc":
     "隱藏視窗時連 ZoneDeck 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",

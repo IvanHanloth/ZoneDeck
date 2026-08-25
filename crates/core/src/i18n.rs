@@ -1,4 +1,4 @@
-//! 核心的用户可见文案（托盘菜单、气泡通知、IPC 错误信息）；日志不走此模块。
+//! 核心的用户可见文案（托盘菜单、系统通知、IPC 错误信息）；日志不走此模块。
 
 use std::sync::RwLock;
 
@@ -74,7 +74,7 @@ impl Msg {
             Msg::MenuAbout => "关于",
             Msg::MenuQuit => "退出",
             Msg::HiddenTitle => "已隐藏窗口",
-            Msg::HiddenBody => "可通过热键或托盘菜单「显示窗口」恢复",
+            Msg::HiddenBody => "按隐藏 / 显示热键即可恢复",
             Msg::ShownTitle => "已恢复显示窗口",
             Msg::ShownBody => "隐藏的窗口已重新出现在桌面上",
             Msg::ConfigExeMissingTitle => "未找到配置程序",
@@ -90,7 +90,7 @@ impl Msg {
             Msg::AutostartFailTitle => "开机自启设置失败",
             Msg::AutostartFailBody => "计划任务与注册表方式均失败",
             Msg::StartTitle => "核心已启动",
-            Msg::StartBody => "可在通知区域找到托盘图标",
+            Msg::StartBody => "热键与鼠标触发已开始监听",
             Msg::QuitTitle => "核心已退出",
             Msg::QuitBody => "热键监控已停止，隐藏的窗口已恢复显示",
             Msg::LegacyCoreRunningTitle => "检测到旧版本正在运行",
@@ -124,7 +124,7 @@ impl Msg {
             Msg::MenuAbout => "About",
             Msg::MenuQuit => "Exit",
             Msg::HiddenTitle => "Windows hidden",
-            Msg::HiddenBody => "Restore them with the hotkey or “Show Windows” in the tray menu",
+            Msg::HiddenBody => "Press the hide / show hotkey to bring them back",
             Msg::ShownTitle => "Windows restored",
             Msg::ShownBody => "The hidden windows are back on your desktop",
             Msg::ConfigExeMissingTitle => "Settings app not found",
@@ -144,7 +144,7 @@ impl Msg {
             Msg::AutostartFailTitle => "Could not configure startup",
             Msg::AutostartFailBody => "Both the scheduled task and the registry method failed",
             Msg::StartTitle => "The core is running",
-            Msg::StartBody => "Find the tray icon in the notification area",
+            Msg::StartBody => "Hotkey and mouse triggers are now being watched",
             Msg::QuitTitle => "The core has exited",
             Msg::QuitBody => "Hotkey monitoring stopped; hidden windows have been restored",
             Msg::LegacyCoreRunningTitle => "An old version is still running",
@@ -182,7 +182,7 @@ impl Msg {
             Msg::MenuAbout => "關於",
             Msg::MenuQuit => "結束",
             Msg::HiddenTitle => "已隱藏視窗",
-            Msg::HiddenBody => "可透過熱鍵或通知區域選單「顯示視窗」復原",
+            Msg::HiddenBody => "按隱藏／顯示快速鍵即可復原",
             Msg::ShownTitle => "已復原顯示視窗",
             Msg::ShownBody => "隱藏的視窗已重新出現在桌面上",
             Msg::ConfigExeMissingTitle => "找不到設定程式",
@@ -198,7 +198,7 @@ impl Msg {
             Msg::AutostartFailTitle => "開機自動啟動設定失敗",
             Msg::AutostartFailBody => "排程工作與登錄檔方式均失敗",
             Msg::StartTitle => "核心已啟動",
-            Msg::StartBody => "可在通知區域找到圖示",
+            Msg::StartBody => "快速鍵與滑鼠觸發已開始監聽",
             Msg::QuitTitle => "核心已結束",
             Msg::QuitBody => "熱鍵監控已停止，隱藏的視窗已復原顯示",
             Msg::LegacyCoreRunningTitle => "偵測到舊版本正在執行",

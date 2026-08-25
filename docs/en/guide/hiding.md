@@ -4,7 +4,7 @@ title: Hiding options
 
 # Hiding options
 
-The **Hiding** tab of the settings window gathers the extra behaviours applied when windows are hidden: muting, the pause key, the tray icon and minimising. For how hiding is triggered see [Hotkeys & mouse gestures](/en/guide/hotkeys); for process freezing and memory trimming see [Process freezing](/en/guide/freeze) (those settings live in the **Power & Memory** tab).
+The **Hiding** tab of the settings window gathers the extra behaviours applied when windows are hidden: muting, the pause key, the tray icon and minimising. For how hiding is triggered see [Hotkeys & mouse gestures](/en/guide/hotkeys); for process freezing and memory trimming see [Process freezing](/en/guide/freeze) (those settings live in the **Power & Memory** tab); for whether the tray icon is shown at all and what clicking it does, see [Alerts](/en/guide/notifications#show-the-tray-icon).
 
 ## Mute after hiding
 
@@ -20,18 +20,13 @@ When on, pressing the hide hotkey also hides **the foreground window you are cur
 - **On** by default.
 - Useful when the window you happen to be looking at was not bound in advance.
 
-## Toggle hiding by clicking the tray icon
-
-When on, a **left click on the tray icon** hides / shows the windows.
-
-- **On** by default.
-
 ## Also hide ZoneDeck's tray icon
 
 When on, hiding the windows **hides ZoneDeck's own tray icon as well** for extra discretion; triggering restore brings back both the windows and the icon.
 
 - **Off** by default.
 - This option only affects ZoneDeck's own tray icon — it **does not hide other programs' tray icons** (including the icons of the programs whose windows are hidden).
+- To keep the icon hidden **all the time**, use the [Show the tray icon](/en/guide/notifications#show-the-tray-icon) switch instead; this one only applies while windows are hidden.
 
 ::: warning
 Once the tray icon is hidden you cannot click it to restore or open the settings. Be sure to remember your **hide / show hotkey** or mouse gesture, and use that to restore.

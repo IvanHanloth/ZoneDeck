@@ -57,8 +57,9 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/hiding) |
 | `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/hiding) |
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/hiding) |
-| `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/hiding) |
 | `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/hiding) |
+| `tray_enabled` | bool | `true` | [顯示通知區域圖示](/zh-tw/guide/notifications#顯示通知區域圖示)；為假時圖示一直不顯示，氣泡與角標一併失效 |
+| `tray_clicks` | object | 見下 | [通知區域圖示點擊行為](/zh-tw/guide/notifications#通知區域圖示點擊行為) |
 | `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |
@@ -86,6 +87,20 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 ::: details 舊版「凍結完整程序」開關（已淘汰）
 `freeze_whole_tree` 僅用於還原序列化移轉：讀取時若設定檔裡沒有 `power_scope`，`true` 移轉為 `power_scope: "tree"`、`false` 移轉為 `"self"`，隨後歸零、不再寫回檔案。已明確設定過 `power_scope` 的檔案不受它影響。
 :::
+
+::: details 舊版「按一下通知區域圖示切換隱藏」開關（已淘汰）
+`click_to_hide` 僅用於還原序列化移轉：讀取時若設定檔裡沒有 `tray_clicks`，`true` 移轉為 `tray_clicks.left: "toggle"`、`false` 移轉為 `"none"`，隨後歸零、不再寫回檔案。舊設定檔完全沒有這個鍵時按 `true` 處理（舊版預設開啟）。已明確設定過 `tray_clicks` 的檔案不受它影響。
+:::
+
+### `setting.tray_clicks`
+
+[通知區域圖示點擊行為](/zh-tw/guide/notifications#通知區域圖示點擊行為)：三種點擊各綁一個動作，取值為 `none`（不做任何事）｜`toggle`（隱藏／顯示視窗）｜`menu`（顯示通知區域選單）｜`settings`（開啟設定介面），未知取值歸一為 `none`。
+
+| 欄位 | 預設 | 說明 |
+| --- | --- | --- |
+| `left` | `"toggle"` | 左鍵按一下 |
+| `double` | `"none"` | 左鍵按兩下。非 `none` 時按一下須等過系統連按判定時間才執行 |
+| `right` | `"menu"` | 右鍵按一下 |
 
 ### `setting.mouse`
 

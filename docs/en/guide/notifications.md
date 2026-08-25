@@ -4,7 +4,43 @@ title: Alerts
 
 # Alerts
 
-ZoneDeck reflects the core's state through two kinds of hints: **tray notifications** and **tray icon badges**. The **Alerts** tab of the settings window lets you control which notifications appear and which states the icon badge shows, so you stay informed without being interrupted.
+ZoneDeck reflects the core's state through two kinds of hints: **system notifications** and **tray icon badges**. The **General** tab of the settings window lets you decide whether the tray icon is shown at all, what clicking it does, and how notifications and badges behave — so you stay informed without being interrupted.
+
+## Show the tray icon
+
+The tray icon appears in the notification area by default. Turn this option off and it disappears entirely, for extra discretion.
+
+- **On** by default.
+- With the icon gone, its click actions, tooltip and status badges stop working and the corresponding settings are greyed out. **Notifications are unaffected** and keep coming through.
+- **Also hide ZoneDeck's tray icon** ([Hiding options](/en/guide/hiding#also-hide-zonedeck-s-tray-icon)) is tied to hiding windows and is independent of this switch.
+- The switch takes effect immediately — no need to restart the core.
+
+::: warning Work out how to get back in before you turn it off
+With no icon there is no menu to click. You can still **run ZoneDeck again** (double-click the program or a shortcut) to open the settings window — when the core is already running, launching it again opens the settings instead. But restoring your windows is down to your **hide / show hotkey** or mouse gesture, so make sure you remember it first.
+:::
+
+## Tray icon click actions
+
+**Single click**, **double click** and **right click** on the tray icon each get their own action:
+
+| Action | Description |
+| --- | --- |
+| **Do nothing** | No action at all |
+| **Hide / show windows** | Toggles hiding, same as pressing the hide / show hotkey once |
+| **Open the tray menu** | Pops up the [tray menu](/en/guide/getting-started#the-tray-menu) |
+| **Open the settings window** | Opens this settings window |
+
+Defaults:
+
+| Click | Default action |
+| --- | --- |
+| Single click | Hide / show windows |
+| Double click | Do nothing |
+| Right click | Open the tray menu |
+
+::: tip Binding the double click makes single clicks a beat slower
+Windows cannot tell on the first click whether a second one is coming. So as soon as the double click has an action bound, a single click has to wait out the system double-click time (adjustable in the Windows mouse settings) before it runs. With the double click left on "Do nothing" there is no conflict and single clicks respond immediately.
+:::
 
 ## Controllable events
 
@@ -46,5 +82,5 @@ Hovering over the tray icon shows "ZoneDeck" by default. Turn this option off to
 - **Start / exit / startup notifications are on by default**: these are infrequent events, and keeping them helps you confirm the core's state.
 
 ::: info Not the same as "Also hide ZoneDeck's tray icon"
-[Also hide ZoneDeck's tray icon](/en/guide/hiding) controls whether **the icon itself is visible**; this page controls **notifications and icon badges**. They are independent.
+[Also hide ZoneDeck's tray icon](/en/guide/hiding#also-hide-zonedeck-s-tray-icon) is tied to **hiding windows** and comes back when you restore; "Show the tray icon" on this page keeps the tray icon **hidden for good**.
 :::

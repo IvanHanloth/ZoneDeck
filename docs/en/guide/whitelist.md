@@ -56,7 +56,7 @@ Two locked entries sit at the top of the list. They **cannot be edited or remove
 | ZoneDeck core | `ZoneDeck.exe`, `core.exe` |
 | ZoneDeck settings | `config.exe`, `zonedeck-config.exe` |
 
-Both are permanently set to "Skip freezing". Here is why: the core is usually launched by File Explorer, which makes it a child process of `explorer.exe`, and the settings app is in turn a child of the core. Freeze File Explorer with [Freeze the whole process tree](/en/guide/freeze) enabled and the entire tree — ZoneDeck included — is suspended. Hotkeys stop responding, the settings window will not open, and windows you already hid become **unrecoverable**.
+Both are permanently set to "Skip freezing". Here is why: the core is usually launched by File Explorer, which makes it a child process of `explorer.exe`, and the settings app is in turn a child of the core. Freeze File Explorer with the [scope](/en/guide/freeze#scope) set to "Target process and all its children" and the entire tree — ZoneDeck included — is suspended. Hotkeys stop responding, the settings window will not open, and windows you already hid become **unrecoverable**.
 
 Manual freezing from the [window recovery tool](/en/guide/recovery) respects it too.
 

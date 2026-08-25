@@ -57,8 +57,9 @@ Hotkey strings support [richer combinations](/en/guide/hotkeys#richer-combinatio
 | `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/hiding) |
 | `minimize_before_hide` | bool | `false` | [Minimise windows before hiding](/en/guide/hiding) |
 | `hide_current` | bool | `true` | [Also hide the active window](/en/guide/hiding) |
-| `click_to_hide` | bool | `true` | [Toggle hiding by clicking the tray icon](/en/guide/hiding) |
 | `hide_icon_after_hide` | bool | `false` | [Also hide ZoneDeck's tray icon](/en/guide/hiding) |
+| `tray_enabled` | bool | `true` | [Show the tray icon](/en/guide/notifications#show-the-tray-icon); when false the icon never appears and balloons / badges go with it |
+| `tray_clicks` | object | See below | [Tray icon click actions](/en/guide/notifications#tray-icon-click-actions) |
 | `tray_badges` | object | See below | [Tray icon status](/en/guide/notifications#tray-icon-status) |
 | `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |
@@ -86,6 +87,20 @@ Hotkey strings support [richer combinations](/en/guide/hotkeys#richer-combinatio
 ::: details Legacy "freeze the whole process tree" switch (deprecated)
 `freeze_whole_tree` exists only for deserialisation and migration: if a config has no `power_scope`, `true` migrates to `power_scope: "tree"` and `false` to `"self"`, after which the old key is cleared and never written back. Configs that already set `power_scope` explicitly are unaffected.
 :::
+
+::: details Legacy "toggle hiding by clicking the tray icon" switch (deprecated)
+`click_to_hide` exists only for deserialisation and migration: if a config has no `tray_clicks`, `true` migrates to `tray_clicks.left: "toggle"` and `false` to `"none"`, after which the old key is cleared and never written back. Configs that lack the key entirely are treated as `true` (the old default was on). Configs that already set `tray_clicks` explicitly are unaffected.
+:::
+
+### `setting.tray_clicks`
+
+[Tray icon click actions](/en/guide/notifications#tray-icon-click-actions): each of the three clicks gets one action, out of `none` (do nothing) ｜ `toggle` (hide / show windows) ｜ `menu` (open the tray menu) ｜ `settings` (open the settings window). Unknown values normalise to `none`.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `left` | `"toggle"` | Single click |
+| `double` | `"none"` | Double click. When it is not `none`, a single click waits out the system double-click time before running |
+| `right` | `"menu"` | Right click |
 
 ### `setting.mouse`
 

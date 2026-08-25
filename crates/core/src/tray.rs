@@ -3,8 +3,8 @@ use std::sync::OnceLock;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::Shell::{
-    NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_TIP, NIIF_INFO, NIM_ADD, NIM_DELETE, NIM_MODIFY,
-    NOTIFYICONDATAW, Shell_NotifyIconW,
+    NIF_ICON, NIF_MESSAGE, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NOTIFYICONDATAW,
+    Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     HICON, IDI_APPLICATION, IMAGE_ICON, LR_DEFAULTSIZE, LR_LOADFROMFILE, LoadIconW, LoadImageW,
@@ -230,21 +230,6 @@ impl TrayIcon {
             return;
         }
         let data = self.base_data();
-        unsafe {
-            let _ = Shell_NotifyIconW(NIM_MODIFY, &data);
-        }
-    }
-
-    /// 弹出气泡通知；`title` 为状态短语，`message` 为补充详情且不可为空。
-    pub fn balloon(&self, title: &str, message: &str) {
-        if !self.visible {
-            return;
-        }
-        let mut data = self.base_data();
-        data.uFlags |= NIF_INFO;
-        data.dwInfoFlags = NIIF_INFO;
-        fill_wide(&mut data.szInfoTitle, title);
-        fill_wide(&mut data.szInfo, message);
         unsafe {
             let _ = Shell_NotifyIconW(NIM_MODIFY, &data);
         }

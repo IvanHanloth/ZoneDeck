@@ -386,6 +386,80 @@ impl TrayBadges {
     }
 }
 
+/// 点击托盘图标可执行的动作。
+pub const TRAY_ACTION_NONE: &str = "none";
+/// 隐藏 / 显示窗口（切换）。
+pub const TRAY_ACTION_TOGGLE: &str = "toggle";
+/// 弹出托盘菜单。
+pub const TRAY_ACTION_MENU: &str = "menu";
+/// 打开配置界面。
+pub const TRAY_ACTION_SETTINGS: &str = "settings";
+/// 全部合法取值。
+pub const TRAY_ACTIONS: [&str; 4] = [
+    TRAY_ACTION_NONE,
+    TRAY_ACTION_TOGGLE,
+    TRAY_ACTION_MENU,
+    TRAY_ACTION_SETTINGS,
+];
+
+/// 归一点击动作：忽略大小写与首尾空白，无法识别时回落 [`TRAY_ACTION_NONE`]。
+pub fn normalize_tray_action(value: &str) -> String {
+    let v = value.trim().to_ascii_lowercase();
+    if TRAY_ACTIONS.contains(&v.as_str()) {
+        v
+    } else {
+        TRAY_ACTION_NONE.to_string()
+    }
+}
+
+fn default_tray_double() -> String {
+    TRAY_ACTION_NONE.to_string()
+}
+fn default_tray_right() -> String {
+    TRAY_ACTION_MENU.to_string()
+}
+
+/// 托盘图标三种点击各自触发的动作，取值见 [`TRAY_ACTIONS`]。
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TrayClicks {
+    /// 左键单击。缺省为空串，由 [`Setting::normalize`] 按旧版 `click_to_hide` 填上。
+    #[serde(default)]
+    pub left: String,
+    /// 左键双击。绑定了动作时单击须等过双击判定窗口才执行。
+    #[serde(default = "default_tray_double")]
+    pub double: String,
+    #[serde(default = "default_tray_right")]
+    pub right: String,
+}
+
+/// 全新安装的默认：单击切换隐藏、双击不做事、右键出菜单。
+impl Default for TrayClicks {
+    fn default() -> Self {
+        Self {
+            left: TRAY_ACTION_TOGGLE.to_string(),
+            ..Self::unset()
+        }
+    }
+}
+
+impl TrayClicks {
+    /// 配置文件没有 `tray_clicks` 一节时用的值：左键待迁移（空串），其余同默认。
+    fn unset() -> Self {
+        Self {
+            left: String::new(),
+            double: default_tray_double(),
+            right: default_tray_right(),
+        }
+    }
+
+    /// 未知动作归一为不做事。幂等。
+    pub fn normalize(&mut self) {
+        for v in [&mut self.left, &mut self.double, &mut self.right] {
+            *v = normalize_tray_action(v);
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Setting {
     #[serde(default = "default_true")]
@@ -397,10 +471,18 @@ pub struct Setting {
     pub minimize_before_hide: bool,
     #[serde(default = "default_true")]
     pub hide_current: bool,
-    #[serde(default = "default_true")]
+    /// 仅用于反序列化迁移，迁移后清零、不再写回文件。见 [`TrayClicks::left`]。
+    #[serde(default = "default_true", skip_serializing)]
     pub click_to_hide: bool,
     #[serde(default)]
     pub hide_icon_after_hide: bool,
+    /// 是否显示托盘图标。关闭后图标上的点击、悬浮名称与状态角标一并失效；通知走
+    /// Toast，不受影响。
+    #[serde(default = "default_true")]
+    pub tray_enabled: bool,
+    /// 托盘图标的单击 / 双击 / 右键行为，见 [`TrayClicks`]。
+    #[serde(default = "TrayClicks::unset")]
+    pub tray_clicks: TrayClicks,
     /// 托盘图标状态角标的颜色绑定，见 [`TrayBadges`]。
     #[serde(default)]
     pub tray_badges: TrayBadges,
@@ -479,8 +561,10 @@ impl Default for Setting {
             send_before_hide: false,
             minimize_before_hide: false,
             hide_current: true,
-            click_to_hide: true,
+            click_to_hide: false,
             hide_icon_after_hide: false,
+            tray_enabled: true,
+            tray_clicks: TrayClicks::default(),
             tray_badges: TrayBadges::default(),
             tray_show_tooltip: true,
             freeze_after_hide: false,
@@ -512,7 +596,8 @@ impl Default for Setting {
 }
 
 impl Setting {
-    /// 迁移旧版扁平鼠标开关与「冻结完整进程」，并把连击次数、连击窗口夹到合法范围。幂等。
+    /// 迁移旧版扁平鼠标开关、「冻结完整进程」与「单击托盘图标切换隐藏」，
+    /// 并把连击次数、连击窗口夹到合法范围。幂等。
     pub fn normalize(&mut self) {
         if !self.mouse.any_enabled() {
             self.mouse.middle.enabled = self.middle_button_hide;
@@ -534,6 +619,17 @@ impl Setting {
         self.freeze_whole_tree = false;
         self.power_scope = normalize_power_scope(&self.power_scope);
         self.efficiency_scope = normalize_power_scope(&self.efficiency_scope);
+        // 同上：左键动作为空即文件里没有 tray_clicks，此时才看旧开关。
+        if self.tray_clicks.left.is_empty() {
+            self.tray_clicks.left = if self.click_to_hide {
+                TRAY_ACTION_TOGGLE
+            } else {
+                TRAY_ACTION_NONE
+            }
+            .to_string();
+        }
+        self.click_to_hide = false;
+        self.tray_clicks.normalize();
         self.tray_badges.normalize();
         self.mouse.normalize();
         self.language = crate::i18n::normalize_pref(&self.language);
@@ -541,22 +637,22 @@ impl Setting {
     }
 }
 
-/// 通知开关：逐事件控制是否弹出托盘气泡。
+/// 通知开关：逐事件控制是否弹出系统通知。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Notifications {
-    /// 核心启动运行时的气泡。
+    /// 核心启动运行时的通知。
     #[serde(default = "default_true")]
     pub on_start: bool,
-    /// 核心退出时的气泡。
+    /// 核心退出时的通知。
     #[serde(default = "default_true")]
     pub on_quit: bool,
-    /// 开机自启状态变更时的气泡。
+    /// 开机自启状态变更时的通知。
     #[serde(default = "default_true")]
     pub on_autostart: bool,
-    /// 每次隐藏窗口时的气泡（默认关闭）。
+    /// 每次隐藏窗口时的通知（默认关闭）。
     #[serde(default)]
     pub on_hide: bool,
-    /// 每次显示窗口时的气泡（默认关闭）。
+    /// 每次显示窗口时的通知（默认关闭）。
     #[serde(default)]
     pub on_show: bool,
 }
@@ -1130,7 +1226,7 @@ mod tests {
         let c = Config::from_json(r#"{"setting": {}}"#).unwrap();
         assert!(c.setting.mute_after_hide);
         assert!(c.setting.hide_current);
-        assert!(c.setting.click_to_hide);
+        assert!(c.setting.tray_enabled, "托盘图标默认显示");
         assert!(!c.setting.freeze_after_hide);
         assert_eq!(
             c.setting.power_scope, POWER_SCOPE_SELF,
@@ -1350,6 +1446,91 @@ mod tests {
             c.setting.tray_badges.blue, TRAY_STATUS_FREEZE,
             "其余颜色不受影响"
         );
+    }
+
+    #[test]
+    fn tray_clicks_default_bindings() {
+        let d = TrayClicks::default();
+        assert_eq!(d.left, TRAY_ACTION_TOGGLE, "单击默认切换隐藏");
+        assert_eq!(
+            d.double, TRAY_ACTION_NONE,
+            "双击默认不做事：绑上动作后单击就得等双击判定，手感变迟钝"
+        );
+        assert_eq!(d.right, TRAY_ACTION_MENU, "右键默认出菜单");
+        assert!(Setting::default().tray_enabled, "托盘图标默认显示");
+    }
+
+    #[test]
+    fn tray_clicks_round_trip() {
+        let c = Config::from_json(
+            r#"{"setting": {
+                "tray_enabled": false,
+                "tray_clicks": {"left": "settings", "double": "toggle", "right": "none"}
+            }}"#,
+        )
+        .unwrap();
+        assert!(!c.setting.tray_enabled);
+        assert_eq!(c.setting.tray_clicks.left, TRAY_ACTION_SETTINGS);
+        assert_eq!(c.setting.tray_clicks.double, TRAY_ACTION_TOGGLE);
+        assert_eq!(c.setting.tray_clicks.right, TRAY_ACTION_NONE);
+
+        let back = Config::from_json(&c.to_json().unwrap()).unwrap();
+        assert_eq!(
+            back.setting.tray_clicks, c.setting.tray_clicks,
+            "写回后应保留"
+        );
+        assert!(!back.setting.tray_enabled, "写回后应保留");
+    }
+
+    #[test]
+    fn tray_clicks_unknown_action_normalizes_to_none() {
+        let c = Config::from_json(r#"{"setting": {"tray_clicks": {"right": "self_destruct"}}}"#)
+            .unwrap();
+        assert_eq!(
+            c.setting.tray_clicks.right, TRAY_ACTION_NONE,
+            "未知动作不做事"
+        );
+        assert_eq!(
+            c.setting.tray_clicks.left, TRAY_ACTION_TOGGLE,
+            "缺失的键仍走旧开关迁移"
+        );
+        assert_eq!(
+            normalize_tray_action(" MENU "),
+            TRAY_ACTION_MENU,
+            "忽略大小写与空白"
+        );
+        assert_eq!(normalize_tray_action(""), TRAY_ACTION_NONE);
+    }
+
+    /// 「单击托盘图标切换隐藏」迁移为左键动作，且不再写回文件。
+    #[test]
+    fn legacy_click_to_hide_migrates_to_the_left_click_action() {
+        let on = Config::from_json(r#"{"setting": {"click_to_hide": true}}"#).unwrap();
+        assert_eq!(on.setting.tray_clicks.left, TRAY_ACTION_TOGGLE);
+        assert!(!on.setting.click_to_hide, "迁移后旧字段清零");
+
+        let off = Config::from_json(r#"{"setting": {"click_to_hide": false}}"#).unwrap();
+        assert_eq!(off.setting.tray_clicks.left, TRAY_ACTION_NONE);
+
+        // 老配置压根没有这个键，语义同「开启」。
+        let old = Config::from_json(r#"{"setting": {"mute_after_hide": true}}"#).unwrap();
+        assert_eq!(old.setting.tray_clicks.left, TRAY_ACTION_TOGGLE);
+
+        let json = on.to_json().unwrap();
+        assert!(!json.contains("click_to_hide"), "旧字段不应写回: {json}");
+
+        let back = Config::from_json(&json).unwrap();
+        assert_eq!(back.setting.tray_clicks, on.setting.tray_clicks, "迁移幂等");
+    }
+
+    /// 已显式配过 `tray_clicks` 的文件不受旧开关影响。
+    #[test]
+    fn explicit_tray_clicks_win_over_the_legacy_flag() {
+        let c = Config::from_json(
+            r#"{"setting": {"click_to_hide": true, "tray_clicks": {"left": "none"}}}"#,
+        )
+        .unwrap();
+        assert_eq!(c.setting.tray_clicks.left, TRAY_ACTION_NONE);
     }
 
     #[test]

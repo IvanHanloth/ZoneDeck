@@ -1,8 +1,9 @@
 ﻿# ZoneDeck 残留数据清理脚本
 #
-# 便携版的设置、日志、恢复文件就放在程序文件夹里，删掉文件夹即可。但另有两样东西在
+# 便携版的设置、日志、恢复文件就放在程序文件夹里，删掉文件夹即可。但另有几样东西在
 # 用户目录下，删文件夹清不掉：配置界面的浏览器数据，以及程序文件夹不可写时改存到
-# %APPDATA%\ZoneDeck 的那份设置。开机自启还会留下计划任务与注册表项。本脚本负责这些。
+# %APPDATA%\ZoneDeck 的那份设置。开机自启还会留下计划任务与注册表项，系统通知则会在
+# 开始菜单留下一个快捷方式。本脚本负责这些。
 #
 # 用法（在本文件所在目录打开 PowerShell）：
 #   powershell -ExecutionPolicy Bypass -File cleanup.ps1
@@ -35,6 +36,7 @@ $catalog = @{
         WebView   = '配置界面的浏览器数据'
         Task      = '开机自启计划任务'
         RegRun    = '开机自启注册表项'
+        Shortcut  = '开始菜单快捷方式（系统通知所需）'
     }
     'zh-TW' = @{
         Title     = 'ZoneDeck 殘留資料清理'
@@ -50,6 +52,7 @@ $catalog = @{
         WebView   = '設定介面的瀏覽器資料'
         Task      = '開機自動啟動排程工作'
         RegRun    = '開機自動啟動登錄項目'
+        Shortcut  = '開始功能表捷徑（系統通知所需）'
     }
     'en'    = @{
         Title     = 'ZoneDeck leftover data cleanup'
@@ -65,6 +68,7 @@ $catalog = @{
         WebView   = "Settings window's browser data"
         Task      = 'Autostart scheduled task'
         RegRun    = 'Autostart registry entry'
+        Shortcut  = 'Start menu shortcut (required for notifications)'
     }
 }
 $t = $catalog[$lang]
@@ -73,12 +77,17 @@ $t = $catalog[$lang]
 #   用户数据目录    crates/common/src/paths.rs（USER_DIR_NAME / LEGACY_USER_DIR_NAME）
 #   浏览器数据目录  apps/config/src-tauri/tauri.conf.json（identifier）
 #   自启任务与注册表项  crates/core/src/autostart.rs（TASK_NAME / REG_VALUE_NAME 及 LEGACY_*）
+#   开始菜单快捷方式  crates/core/src/toast.rs（SHORTCUT_NAME）
 $dataDirs = @('ZoneDeck', 'BossKey') | ForEach-Object { Join-Path $env:APPDATA $_ }
 $webViewDirs = @('cn.hanloth.zonedeck.config', 'cn.hanloth.bosskey.config') |
     ForEach-Object { Join-Path $env:LOCALAPPDATA $_ }
 $taskNames = @('ZoneDeckAutostart', 'BossKeyAutostart')
 $runSubkey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValueNames = @('ZoneDeck Application', 'Boss Key Application')
+# Toast 通知只认注册过 AppUserModelID 的程序，而未打包程序靠开始菜单里的快捷方式携带它，
+# 便携版首次弹通知时会自建一个。安装版的那份在 Programs\ZoneDeck\ 子目录下，由卸载程序
+# 负责，这里只看 Programs\ 根目录。
+$startMenuLink = Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\ZoneDeck.lnk'
 
 $targets = @()
 foreach ($dataDir in $dataDirs) {
@@ -108,6 +117,18 @@ foreach ($runValueName in $runValueNames) {
 $markerKey = 'HKCU:\Software\ZoneDeck'
 if (Test-Path $markerKey) {
     $targets += [pscustomobject]@{ Kind = 'RegKey'; Label = $t.RegRun; Detail = $markerKey }
+}
+# 同名的快捷方式未必是本程序建的，核对指向再列入：指向 ZoneDeck.exe，或已经指空
+# （用户先删了程序文件夹，正是本脚本要收拾的情形）。读不出目标就不动它。
+if (Test-Path $startMenuLink) {
+    $linkTarget = try {
+        (New-Object -ComObject WScript.Shell).CreateShortcut($startMenuLink).TargetPath
+    }
+    catch { $null }
+    if ($null -ne $linkTarget -and
+        ($linkTarget -like '*\ZoneDeck.exe' -or -not (Test-Path -LiteralPath $linkTarget))) {
+        $targets += [pscustomobject]@{ Kind = 'File'; Label = $t.Shortcut; Detail = $startMenuLink }
+    }
 }
 
 Write-Host $t.Title -ForegroundColor Cyan
@@ -142,6 +163,7 @@ foreach ($target in $targets) {
     try {
         switch ($target.Kind) {
             'Dir' { Remove-Item -LiteralPath $target.Detail -Recurse -Force -ErrorAction Stop }
+            'File' { Remove-Item -LiteralPath $target.Detail -Force -ErrorAction Stop }
             'Task' {
                 & schtasks.exe /Delete /F /TN $target.Detail *> $null
                 if ($LASTEXITCODE -ne 0) { throw "schtasks exit $LASTEXITCODE" }

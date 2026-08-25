@@ -7,7 +7,8 @@ pub mod paths;
 
 pub use config::{
     Config, ConfigError, Hotkey, LoadNote, MouseButton, MouseSetting, Notifications,
-    POWER_SCOPE_IMAGE, POWER_SCOPE_SELF, POWER_SCOPE_TREE, POWER_SCOPES, Setting, Verhub,
+    POWER_SCOPE_IMAGE, POWER_SCOPE_SELF, POWER_SCOPE_TREE, POWER_SCOPES, Setting, TRAY_ACTION_MENU,
+    TRAY_ACTION_NONE, TRAY_ACTION_SETTINGS, TRAY_ACTION_TOGGLE, TRAY_ACTIONS, TrayClicks, Verhub,
 };
 pub use i18n::{LANG_AUTO, Lang};
 pub use ipc::{Command, Response};

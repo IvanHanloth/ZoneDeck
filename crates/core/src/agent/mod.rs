@@ -6,6 +6,7 @@
 mod commands;
 mod log_fmt;
 mod menu;
+mod tray_click;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -13,7 +14,7 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
 use log_fmt::{hotkey_failure_message, log_hide, log_show};
-use menu::{show_tray_menu, toggle_auto_hide, toggle_autostart};
+use menu::{toggle_auto_hide, toggle_autostart};
 
 pub use commands::forward_open_settings;
 use commands::{find_config_exe, launch_settings};
@@ -28,8 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW,
     GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, KillTimer, MSG, MSGFLT_ALLOW, PostMessageW,
     PostQuitMessage, RegisterClassW, SetTimer, SetWindowLongPtrW, TranslateMessage,
-    WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_LBUTTONUP, WM_RBUTTONUP,
-    WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
 use zonedeck_common::ipc::{Command, Response};
@@ -48,6 +48,7 @@ use crate::input_hooks::InputHooks;
 use crate::keyboard_hook::{self, WM_KEY_TRIGGER};
 use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
+use crate::toast::{ToastSender, ToastWorker};
 use crate::tray::TrayIcon;
 use crate::tray_badge::TrayIconSet;
 use crate::win_event::{WM_APP_WINEVENT, WinEventHook};
@@ -60,7 +61,8 @@ const HK_SHOW_ONLY: i32 = 4;
 const HK_HIDE_FOREGROUND: i32 = 5;
 
 const WM_APP_IPC: u32 = WM_APP + 1;
-const WM_APP_TRAY: u32 = WM_APP + 2;
+/// 托盘图标的回调消息；`lparam` 携带鼠标消息，集成测试据此模拟点击。
+pub const WM_APP_TRAY: u32 = WM_APP + 2;
 
 const MENU_SETTINGS: usize = 1001;
 const MENU_TOGGLE: usize = 1002;
@@ -76,11 +78,15 @@ const AUTO_HIDE_TIMER_ID: usize = 11;
 const SUSPEND_GUARD_TIMER_ID: usize = 12;
 /// 托盘图标挂载重试间隔。
 const TRAY_RETRY_TIMER_ID: usize = 13;
+/// 单击后等双击判定的定时器；到点即认定为单击。
+const TRAY_CLICK_TIMER_ID: usize = 14;
 const AUTO_HIDE_INTERVAL_MS: u32 = 5000;
 const TRAY_RETRY_INTERVAL_MS: u32 = 2000;
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 /// 退出时等待副作用线程排干队列（解冻 / 取消静音）的上限。
 const EFFECTS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
+/// 退出时等待通知线程弹完最后一条的上限；首次运行还要算上注册 AUMID 的时间。
+const TOAST_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// 一次隐藏 / 恢复的触发来源，仅用于日志。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,13 +181,23 @@ struct AgentState {
     controller: HideController<WindowsWindowManager, AsyncEffects>,
     /// 副作用专职线程；退出时须 shutdown 排干队列。
     effects_worker: Option<EffectsWorker>,
-    /// 恢复文件写入失败是否已提醒过（每次运行只弹一次气泡）。
+    /// 恢复文件写入失败是否已提醒过（每次运行只提醒一次）。
     persist_warned: bool,
     /// 窗口事件钩子（销毁 / 显示 / 改标题）。
     win_event_hook: Option<WinEventHook>,
     tray: Option<TrayIcon>,
     /// 托盘图标的角标变体缓存；未启用托盘时为 None。
     tray_icons: Option<TrayIconSet>,
+    /// 本次运行是否允许有托盘图标（冒烟测试关掉它，优先于配置）。
+    tray_allowed: bool,
+    /// 已按下过一次左键，正在等双击判定窗口。
+    tray_click_pending: bool,
+    /// 双击已处理，忽略随后配对的那次抬起。
+    tray_swallow_up: bool,
+    /// 通知发送端（Toast，不依赖托盘图标）。
+    toast: ToastSender,
+    /// 通知专职线程；退出时须 shutdown，否则末尾的通知来不及弹。
+    toast_worker: Option<ToastWorker>,
     ipc_rx: Receiver<(Command, Sender<Response>)>,
     /// 承载两个低级输入钩子的专职线程；起不来时为 None。
     input_hooks: Option<InputHooks>,
@@ -387,7 +403,40 @@ impl AgentState {
             self.float_window = None;
         }
 
+        self.sync_tray_presence(hwnd);
         self.update_tray_icon();
+    }
+
+    /// 让托盘图标的有无对齐配置。冒烟测试的硬关闭优先于配置里的开关。
+    fn sync_tray_presence(&mut self, hwnd: HWND) {
+        let want = self.tray_allowed && self.config.setting.tray_enabled;
+        if want == self.tray.is_some() {
+            return;
+        }
+        if !want {
+            // Drop 里会摘掉图标；顺手停掉重试与未决的点击。
+            self.tray = None;
+            tray_click::reset(self, hwnd);
+            unsafe {
+                let _ = KillTimer(Some(hwnd), TRAY_RETRY_TIMER_ID);
+            }
+            logging::debug("按配置撤下托盘图标");
+            return;
+        }
+        let tray = TrayIcon::new(hwnd, WM_APP_TRAY, APP_NAME);
+        if !tray.is_visible() {
+            // 首挂失败时定时重试，TaskbarCreated 广播为主要恢复路径。
+            unsafe {
+                SetTimer(
+                    Some(hwnd),
+                    TRAY_RETRY_TIMER_ID,
+                    TRAY_RETRY_INTERVAL_MS,
+                    None,
+                );
+            }
+        }
+        self.tray = Some(tray);
+        self.tray_icons.get_or_insert_with(TrayIconSet::new);
     }
 
     fn sync_tray(&mut self) {
@@ -435,7 +484,7 @@ impl AgentState {
             );
             if !self.persist_warned {
                 self.persist_warned = true;
-                self.balloon(
+                self.notify(
                     Msg::RecoveryPersistFailedTitle,
                     Msg::RecoveryPersistFailedBody,
                 );
@@ -470,7 +519,7 @@ impl AgentState {
             &whitelist,
         );
         if self.config.notifications.on_hide && !plan.fresh.is_empty() {
-            self.balloon(Msg::HiddenTitle, Msg::HiddenBody);
+            self.notify(Msg::HiddenTitle, Msg::HiddenBody);
         }
         plan
     }
@@ -622,15 +671,13 @@ impl AgentState {
         self.persist_recovery();
         self.sync_tray();
         if self.config.notifications.on_show {
-            self.balloon(Msg::ShownTitle, Msg::ShownBody);
+            self.notify(Msg::ShownTitle, Msg::ShownBody);
         }
     }
 
-    /// 发送托盘气泡（托盘不存在或已隐藏时静默忽略）；标题与正文须成对传入。
-    fn balloon(&self, title: Msg, body: Msg) {
-        if let Some(tray) = &self.tray {
-            tray.balloon(i18n::t(title), i18n::t(body));
-        }
+    /// 弹一条通知（走 Toast，不需要托盘图标）；标题与正文须成对传入。
+    fn notify(&self, title: Msg, body: Msg) {
+        self.toast.show(i18n::t(title), i18n::t(body));
     }
 
     fn apply_toggle(&mut self, trigger: Trigger) {
@@ -677,12 +724,15 @@ fn quit(state: &mut AgentState, hwnd: HWND, reason: &str) {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
     }
     logging::session_exit(&format!("核心正常退出（{reason}）"));
-    let notify_quit = state.config.notifications.on_quit;
+    if state.config.notifications.on_quit {
+        state.notify(Msg::QuitTitle, Msg::QuitBody);
+    }
     if let Some(tray) = &mut state.tray {
-        if notify_quit {
-            tray.balloon(i18n::t(Msg::QuitTitle), i18n::t(Msg::QuitBody));
-        }
         tray.hide();
+    }
+    // 通知是异步弹的，这里排干队列，否则进程先退出、最后一条就没了。
+    if let Some(worker) = state.toast_worker.take() {
+        worker.shutdown(TOAST_SHUTDOWN_TIMEOUT);
     }
     unsafe {
         PostQuitMessage(0);
@@ -734,35 +784,13 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_APP_TRAY => {
-            match lparam.0 as u32 {
-                WM_LBUTTONUP => {
-                    if state.config.setting.click_to_hide {
-                        state.apply_toggle(Trigger::TrayClick);
-                    }
-                }
-                WM_RBUTTONUP => {
-                    show_tray_menu(
-                        hwnd,
-                        state.controller.is_hidden(),
-                        state.config.setting.auto_hide_enabled,
-                    );
-                    // 排干菜单模态期间积压的 IPC 命令。
-                    unsafe {
-                        let _ = PostMessageW(Some(hwnd), WM_APP_IPC, WPARAM(0), LPARAM(0));
-                    }
-                }
-                _ => {}
-            }
+            tray_click::on_tray_message(state, hwnd, lparam.0 as u32);
             LRESULT(0)
         }
         WM_APP_FLOAT => {
             match wparam.0 {
                 // 双击悬浮窗触发。
-                FLOAT_TOGGLE => {
-                    if state.config.setting.click_to_hide {
-                        state.apply_toggle(Trigger::FloatWindow);
-                    }
-                }
+                FLOAT_TOGGLE => state.apply_toggle(Trigger::FloatWindow),
                 FLOAT_MENU => {
                     crate::float_window::show_float_menu(hwnd, MENU_SETTINGS, MENU_QUIT);
                     unsafe {
@@ -838,6 +866,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         }
                     }
                 }
+                // 双击判定窗口到点，此前那次抬起确实是单击。
+                TRAY_CLICK_TIMER_ID => tray_click::on_click_timer(state, hwnd),
                 AUTO_HIDE_TIMER_ID if state.config.setting.auto_hide_enabled => {
                     let idle_ms = idle::idle_millis().unwrap_or(0);
                     if idle::should_auto_hide(
@@ -1003,7 +1033,7 @@ pub fn run(mut options: AgentOptions) {
         }
     };
 
-    let tray = if options.enable_tray {
+    if options.enable_tray {
         unsafe {
             // 管理员进程默认收不到中等完整性 explorer 的 TaskbarCreated 广播，须显式放行。
             let _ = ChangeWindowMessageFilterEx(
@@ -1013,22 +1043,7 @@ pub fn run(mut options: AgentOptions) {
                 None,
             );
         }
-        let tray = TrayIcon::new(hwnd, WM_APP_TRAY, "ZoneDeck");
-        if !tray.is_visible() {
-            // 首挂失败时定时重试，TaskbarCreated 广播为主要恢复路径。
-            unsafe {
-                SetTimer(
-                    Some(hwnd),
-                    TRAY_RETRY_TIMER_ID,
-                    TRAY_RETRY_INTERVAL_MS,
-                    None,
-                );
-            }
-        }
-        Some(tray)
-    } else {
-        None
-    };
+    }
 
     let (ipc_tx, ipc_rx) = channel::<(Command, Sender<Response>)>();
 
@@ -1041,8 +1056,6 @@ pub fn run(mut options: AgentOptions) {
         .config_path
         .with_file_name(recovery::RECOVERY_FILE_NAME);
 
-    let tray_icons = tray.as_ref().map(|_| TrayIconSet::new());
-
     let effects_worker = EffectsWorker::spawn(WinEffects::new(exe_dir));
 
     // 低级输入钩子挂在专职线程上，代理线程的重活不得拖慢全局输入。
@@ -1053,6 +1066,13 @@ pub fn run(mut options: AgentOptions) {
         );
     }
 
+    // 托盘图标随后由 sync_monitoring → refresh_runtime 按配置挂上。
+    // 冒烟测试不弹通知：那会往用户的开始菜单写快捷方式（Toast 注册所需）。
+    let toast_worker = if options.auto_quit_ms.is_some() {
+        ToastWorker::silent()
+    } else {
+        ToastWorker::spawn()
+    };
     let state = Box::new(RefCell::new(AgentState {
         config,
         config_path: options.config_path.clone(),
@@ -1061,8 +1081,13 @@ pub fn run(mut options: AgentOptions) {
         effects_worker: Some(effects_worker),
         persist_warned: false,
         win_event_hook: None,
-        tray,
-        tray_icons,
+        tray: None,
+        tray_icons: None,
+        tray_allowed: options.enable_tray,
+        tray_click_pending: false,
+        tray_swallow_up: false,
+        toast: toast_worker.sender(),
+        toast_worker: Some(toast_worker),
         ipc_rx,
         input_hooks,
         float_window: None,
@@ -1135,10 +1160,8 @@ pub fn run(mut options: AgentOptions) {
 
     {
         let state = state.borrow();
-        if state.config.notifications.on_start
-            && let Some(tray) = &state.tray
-        {
-            tray.balloon(i18n::t(Msg::StartTitle), i18n::t(Msg::StartBody));
+        if state.config.notifications.on_start {
+            state.notify(Msg::StartTitle, Msg::StartBody);
         }
     }
 
@@ -1163,9 +1186,12 @@ pub fn run(mut options: AgentOptions) {
         let _ = DestroyWindow(hwnd);
     }
 
-    // 非 quit() 路径退出时兜底排干副作用队列。
+    // 非 quit() 路径退出时兜底排干两条队列。
     if let Some(worker) = state.borrow_mut().effects_worker.take() {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
+    }
+    if let Some(worker) = state.borrow_mut().toast_worker.take() {
+        worker.shutdown(TOAST_SHUTDOWN_TIMEOUT);
     }
 
     drop(state);

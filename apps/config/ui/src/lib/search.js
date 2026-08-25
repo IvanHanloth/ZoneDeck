@@ -21,6 +21,7 @@ const PREFIX_TAB = {
   power: "power",
   // 提示设置已并入通用设置页
   notify: "options",
+  tray: "options",
   options: "options",
   about: "about",
 };
