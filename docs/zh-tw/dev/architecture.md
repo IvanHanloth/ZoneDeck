@@ -98,6 +98,7 @@ ZoneDeck/
 │           logging.rs    分級檔案記錄（按日切割 + 等級過濾 + 去識別化 + panic 掛鉤）
 │           recovery.rs   當機復原（意圖先行寫入 + 原子寫；快照帶開機時刻與
 │                         處理程序建立時刻，跨重新開機的快照會被丟棄）
+│           stats.rs      能效統計（凍結/效率模式/釋放記憶體的累計量，節流寫入 stats.json）
 │           icon.rs       程序圖示擷取（HICON → 手寫 PNG/base64 編碼）
 │           single_instance.rs  具名互斥鎖單一執行個體
 └── apps/config/                    設定介面（Tauri 2 + Svelte 5）
@@ -117,7 +118,7 @@ ZoneDeck/
 
 ## 資料目錄
 
-設定 `config.json`、記錄檔 `logs/`、復原檔 `recovery.json`、快取 `verhub_cache.json` 共處一個**資料目錄**，由 `crates/common/src/paths.rs` 定位。安裝版與可攜版分開對待：
+設定 `config.json`、記錄檔 `logs/`、復原檔 `recovery.json`、統計 `stats.json`、快取 `verhub_cache.json` 共處一個**資料目錄**，由 `crates/common/src/paths.rs` 定位。安裝版與可攜版分開對待：
 
 | 情形 | 資料目錄 | `DataDirKind` |
 | --- | --- | --- |

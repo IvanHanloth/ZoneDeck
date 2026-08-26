@@ -10,6 +10,7 @@ mod tray_click;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
@@ -48,6 +49,7 @@ use crate::input_hooks::InputHooks;
 use crate::keyboard_hook::{self, WM_KEY_TRIGGER};
 use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
+use crate::stats::{PowerStatsStore, STATS_FILE_NAME};
 use crate::toast::{ToastSender, ToastWorker};
 use crate::tray::TrayIcon;
 use crate::tray_badge::TrayIconSet;
@@ -181,6 +183,8 @@ struct AgentState {
     controller: HideController<WindowsWindowManager, AsyncEffects>,
     /// 副作用专职线程；退出时须 shutdown 排干队列。
     effects_worker: Option<EffectsWorker>,
+    /// 能效成绩单；与副作用线程共用，退出前须 flush。
+    power_stats: Arc<PowerStatsStore>,
     /// 恢复文件写入失败是否已提醒过（每次运行只提醒一次）。
     persist_warned: bool,
     /// 窗口事件钩子（销毁 / 显示 / 改标题）。
@@ -723,6 +727,8 @@ fn quit(state: &mut AgentState, hwnd: HWND, reason: &str) {
     if let Some(worker) = state.effects_worker.take() {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
     }
+    // 队列已排干，末尾那批解冻的时长都结算完了，此时落盘才是完整的。
+    state.power_stats.flush();
     logging::session_exit(&format!("核心正常退出（{reason}）"));
     if state.config.notifications.on_quit {
         state.notify(Msg::QuitTitle, Msg::QuitBody);
@@ -1056,7 +1062,8 @@ pub fn run(mut options: AgentOptions) {
         .config_path
         .with_file_name(recovery::RECOVERY_FILE_NAME);
 
-    let effects_worker = EffectsWorker::spawn(WinEffects::new(exe_dir));
+    let power_stats = PowerStatsStore::load(options.config_path.with_file_name(STATS_FILE_NAME));
+    let effects_worker = EffectsWorker::spawn(WinEffects::new(exe_dir, power_stats.clone()));
 
     // 低级输入钩子挂在专职线程上，代理线程的重活不得拖慢全局输入。
     let input_hooks = InputHooks::spawn(hwnd);
@@ -1079,6 +1086,7 @@ pub fn run(mut options: AgentOptions) {
         recovery_path,
         controller: HideController::new(WindowsWindowManager, effects_worker.effects()),
         effects_worker: Some(effects_worker),
+        power_stats,
         persist_warned: false,
         win_event_hook: None,
         tray: None,
@@ -1190,6 +1198,7 @@ pub fn run(mut options: AgentOptions) {
     if let Some(worker) = state.borrow_mut().effects_worker.take() {
         worker.shutdown(EFFECTS_SHUTDOWN_TIMEOUT);
     }
+    state.borrow().power_stats.flush();
     if let Some(worker) = state.borrow_mut().toast_worker.take() {
         worker.shutdown(TOAST_SHUTDOWN_TIMEOUT);
     }

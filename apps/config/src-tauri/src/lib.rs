@@ -561,6 +561,31 @@ async fn pssuspend_available() -> bool {
     blocking(|| zonedeck_core::freeze::pssuspend_available(&exe_dir())).await
 }
 
+fn stats_path() -> PathBuf {
+    data_dir().join(zonedeck_core::stats::STATS_FILE_NAME)
+}
+
+/// 累计能效统计。核心独占写入，这里只读；核心没运行时读到的是上次的成绩。
+#[tauri::command]
+async fn power_stats() -> zonedeck_core::stats::PowerStats {
+    blocking(|| zonedeck_core::stats::read_or_default(&stats_path())).await
+}
+
+/// 把能效统计清零。核心在运行时须由它自己清，否则它内存里的旧值会再覆盖回文件。
+#[tauri::command]
+async fn reset_power_stats() -> Result<(), String> {
+    blocking(|| match notify_core(&Command::ResetPowerStats) {
+        Ok(Response::Error { message }) => Err(message),
+        Ok(_) => Ok(()),
+        // 连不上核心即它没在运行，此时文件没人占着，直接删掉。
+        Err(_) => {
+            zonedeck_core::stats::clear(&stats_path());
+            Ok(())
+        }
+    })
+    .await
+}
+
 /// 一批正则各自命中随机样本的条数；`None` 表示该条正则编译失败。
 /// 判定放在后端，与核心共用同一个 `regex` 引擎。
 #[tauri::command]
@@ -832,6 +857,8 @@ pub fn run() {
             stop_key_capture,
             key_labels,
             pssuspend_available,
+            power_stats,
+            reset_power_stats,
             regex_breadth,
             whitelist_builtins,
             startup_action,

@@ -6,7 +6,10 @@ use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Memory::{
     SETPROCESSWORKINGSETSIZEEX_FLAGS, SetProcessWorkingSetSizeEx,
 };
-use windows::Win32::System::Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_SUSPEND_RESUME};
+use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA, PROCESS_SUSPEND_RESUME,
+};
 use windows::core::{PCSTR, s, w};
 
 pub const PSSUSPEND_EXE: &str = "pssuspend64.exe";
@@ -91,6 +94,22 @@ pub fn trim_working_set(pid: u32) -> Result<(), FreezeError> {
 
 pub fn pssuspend_available(exe_dir: &Path) -> bool {
     exe_dir.join(PSSUSPEND_EXE).exists()
+}
+
+/// 读进程当前驻留物理内存的字节数；打不开或查不到时返回 None。
+/// 用来量出 [`trim_working_set`] 究竟换出去多少，只需查询权限。
+pub fn working_set(pid: u32) -> Option<u64> {
+    const SIZE: u32 = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: SIZE,
+            ..Default::default()
+        };
+        let ok = GetProcessMemoryInfo(handle, &mut counters, SIZE).is_ok();
+        let _ = CloseHandle(handle);
+        ok.then_some(counters.WorkingSetSize as u64)
+    }
 }
 
 /// 一次系统进程快照的全部产出。
@@ -278,5 +297,16 @@ mod tests {
         };
         assert!(matches!(e, FreezeError::OpenFailed(_)));
         assert!(e.to_string().contains("0x"), "应带系统错误码: {e}");
+    }
+
+    #[test]
+    fn working_set_reads_our_own_process_and_tolerates_invalid_pid() {
+        let size = working_set(std::process::id()).expect("对自身进程应能读到工作集");
+        assert!(size > 0, "运行中的进程总有驻留内存");
+        assert_eq!(
+            working_set(0xFFFF_FFF0),
+            None,
+            "无效 PID 应返回 None 而非 panic"
+        );
     }
 }

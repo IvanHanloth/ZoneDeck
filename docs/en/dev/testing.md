@@ -50,6 +50,7 @@ Integration tests of system behaviour (mostly creating real resources and verify
 | Single-instance mutex | Named mutex |
 | Named pipe | Server send/receive; the back-to-back reconnect race (a client that connects before `ConnectNamedPipe` must still be served) |
 | Process freezing | Suspending / resuming a real child process |
+| Power stats | A real child process taken through freezing / efficiency mode, checked against the file on disk; reset over IPC |
 | Muting | The Core Audio COM path |
 | HideController | Mock injection verifying the muting / freezing / pause-key orchestration |
 | Startup | Plain registry-key logic + a real `schtasks` accepting the task XML |

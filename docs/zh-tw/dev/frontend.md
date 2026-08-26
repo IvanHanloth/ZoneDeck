@@ -32,6 +32,7 @@ apps/config/ui/
 │       ├── theme.js         佈景主題切換（配 theme.test.js）
 │       ├── i18n.svelte.js   介面語言：catalog 查表 + 語言解析（配 i18n.test.js）
 │       ├── markdown.js      公告/更新記錄的 Markdown 算繪（配 markdown.test.js）
+│       ├── powerstats.js   能效統計的換算與格式化（配 powerstats.test.js）
 │       └── verhub.js        檢查更新/公告/意見回饋（含轉 Issue）/專案連結/開啟外部連結
 ├── locales/                 三語文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js

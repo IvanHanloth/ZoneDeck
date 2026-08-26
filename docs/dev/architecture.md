@@ -99,6 +99,7 @@ ZoneDeck/
 │           logging.rs    分级文件日志（按天切割 + 等级过滤 + 脱敏 + panic 钩子）
 │           recovery.rs   崩溃恢复（意图先行落盘 + 原子写；快照带开机时刻与
 │                         进程创建时刻，跨重启的快照会被丢弃）
+│           stats.rs      能效统计（冻结/效率模式/释放内存的累计量，节流落盘 stats.json）
 │           icon.rs       进程图标提取（HICON → 手写 PNG/base64 编码）
 │           single_instance.rs  命名互斥单实例
 └── apps/config/                    配置界面（Tauri 2 + Svelte 5）
@@ -118,7 +119,7 @@ ZoneDeck/
 
 ## 数据目录
 
-配置 `config.json`、日志 `logs/`、恢复文件 `recovery.json`、缓存 `verhub_cache.json` 共处一个**数据目录**，由 `crates/common/src/paths.rs` 定位。安装版与便携版分开对待：
+配置 `config.json`、日志 `logs/`、恢复文件 `recovery.json`、统计 `stats.json`、缓存 `verhub_cache.json` 共处一个**数据目录**，由 `crates/common/src/paths.rs` 定位。安装版与便携版分开对待：
 
 | 情形 | 数据目录 | `DataDirKind` |
 | --- | --- | --- |

@@ -32,6 +32,7 @@ apps/config/ui/
 │       ├── theme.js         Theme switching (with theme.test.js)
 │       ├── i18n.svelte.js   Display language: catalog lookup + language resolution (with i18n.test.js)
 │       ├── markdown.js      Markdown rendering for announcements/release notes (with markdown.test.js)
+│       ├── powerstats.js   Conversion and formatting for the power stats (with powerstats.test.js)
 │       └── verhub.js        Update checks / announcements / feedback (incl. issue conversion) / project links / opening external links
 ├── locales/                 Three-language catalogs (zh-CN.js / en.js / zh-TW.js)
 ├── vite.config.js

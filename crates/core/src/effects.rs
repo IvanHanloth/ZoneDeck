@@ -1,7 +1,9 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use crate::stats::PowerStatsStore;
 use crate::{audio, efficiency, freeze, input, log_warn, logging};
 
 /// 隐藏 / 恢复的副作用（静音、冻结、暂停键）。
@@ -28,14 +30,17 @@ const FREEZE_SETTLE_DELAY: Duration = Duration::from_millis(200);
 
 pub struct WinEffects {
     exe_dir: PathBuf,
+    /// 能效成绩单；只在副作用真正生效时记账。
+    stats: Arc<PowerStatsStore>,
     /// 「已开增强冻结但缺 pssuspend」是否已记过，每次运行只记一条。
     missing_tool_logged: AtomicBool,
 }
 
 impl WinEffects {
-    pub fn new(exe_dir: PathBuf) -> Self {
+    pub fn new(exe_dir: PathBuf, stats: Arc<PowerStatsStore>) -> Self {
         Self {
             exe_dir,
+            stats,
             missing_tool_logged: AtomicBool::new(false),
         }
     }
@@ -72,13 +77,17 @@ impl Effects for WinEffects {
             match freeze::suspend_enhanced(&self.exe_dir, pid) {
                 Ok(()) => {
                     logging::debug(&format!("增强冻结成功 (pid={pid})"));
+                    self.stats.on_suspend(pid);
                     return;
                 }
                 Err(e) => log_warn!("增强冻结失败，回退普通冻结 (pid={pid}): {e}"),
             }
         }
         match freeze::suspend_process(pid) {
-            Ok(()) => logging::debug(&format!("普通冻结成功 (pid={pid})")),
+            Ok(()) => {
+                logging::debug(&format!("普通冻结成功 (pid={pid})"));
+                self.stats.on_suspend(pid);
+            }
             Err(e) => log_warn!("冻结失败，该进程未被冻结 (pid={pid}): {e}"),
         }
     }
@@ -88,21 +97,32 @@ impl Effects for WinEffects {
             match freeze::resume_enhanced(&self.exe_dir, pid) {
                 Ok(()) => {
                     logging::debug(&format!("增强解冻成功 (pid={pid})"));
+                    self.stats.on_resume(pid);
                     return;
                 }
                 Err(e) => log_warn!("增强解冻失败，回退普通解冻 (pid={pid}): {e}"),
             }
         }
         match freeze::resume_process(pid) {
-            Ok(()) => logging::debug(&format!("普通解冻成功 (pid={pid})")),
+            Ok(()) => {
+                logging::debug(&format!("普通解冻成功 (pid={pid})"));
+                self.stats.on_resume(pid);
+            }
             // 不升级为 error：身份校验后仍可能竞态。
             Err(e) => log_warn!("解冻失败 (pid={pid}): {e}"),
         }
     }
 
     fn trim_working_set(&self, pid: u32) {
+        // 清空前后各量一次，差值即真正换出去的物理内存；读不到就只是不记账。
+        let before = freeze::working_set(pid);
         match freeze::trim_working_set(pid) {
-            Ok(()) => logging::debug(&format!("已清空工作集 (pid={pid})")),
+            Ok(()) => {
+                logging::debug(&format!("已清空工作集 (pid={pid})"));
+                if let (Some(before), Some(after)) = (before, freeze::working_set(pid)) {
+                    self.stats.on_trim(before.saturating_sub(after));
+                }
+            }
             // 不升级为 error：受保护进程拿不到 PROCESS_SET_QUOTA 是可预期的。
             Err(e) => log_warn!("清空工作集失败，该进程的内存占用不会下降 (pid={pid}): {e}"),
         }
@@ -117,7 +137,10 @@ impl Effects for WinEffects {
 
     fn set_efficiency(&self, pid: u32) {
         match efficiency::enable(pid) {
-            Ok(()) => logging::debug(&format!("已开启效率模式 (pid={pid})")),
+            Ok(()) => {
+                logging::debug(&format!("已开启效率模式 (pid={pid})"));
+                self.stats.on_efficiency_on(pid);
+            }
             // 不升级为 error：拿不到 PROCESS_SET_INFORMATION 是可预期的。
             Err(e) => log_warn!("开启效率模式失败，该进程的能耗不会下降 (pid={pid}): {e}"),
         }
@@ -125,7 +148,10 @@ impl Effects for WinEffects {
 
     fn clear_efficiency(&self, pid: u32) {
         match efficiency::disable(pid) {
-            Ok(()) => logging::debug(&format!("已撤销效率模式 (pid={pid})")),
+            Ok(()) => {
+                logging::debug(&format!("已撤销效率模式 (pid={pid})"));
+                self.stats.on_efficiency_off(pid);
+            }
             Err(e) => log_warn!("撤销效率模式失败 (pid={pid}): {e}"),
         }
     }

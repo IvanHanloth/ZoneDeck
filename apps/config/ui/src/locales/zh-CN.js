@@ -266,6 +266,39 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",
 
+  "power.statsCard": "能效统计",
+  "power.statsCo2Label": "减少碳排放",
+  "power.statsCo2Desc": "由节省的电能按电网平均排放因子估算。",
+  "power.statsCo2Hint": "相当于 {trees} 棵树一天的吸收量",
+  "power.statsEmpty": "还没有攒下能效成绩",
+  "power.statsEmptyHint": "开启上面的进程冻结或效率模式，隐藏窗口后就开始记录。",
+  "power.statsFreeze": "累计冻结进程",
+  "power.statsFreezeDesc": "按次计，同一个进程反复冻结算多次。",
+  "power.statsEfficiency": "累计效率模式",
+  "power.statsEfficiencyDesc": "与冻结可以同时作用于一个进程。",
+  "power.statsDuration": "累计冻结时长",
+  "power.statsDurationDesc":
+    "所有进程的冻结时长之和。",
+  "power.statsMemory": "累计释放内存",
+  "power.statsMemoryDesc":
+    "冻结后清空工作集实际换出的物理内存。",
+  "power.statsEnergy": "累计节省电能",
+  "power.statsEnergyDesc": "按冻结与效率模式的时长估算。",
+  "power.statsUnitTimes": "次",
+  "power.statsUnitSeconds": "秒",
+  "power.statsUnitMinutes": "分钟",
+  "power.statsUnitHours": "小时",
+  "power.statsUnitDays": "天",
+  "power.statsSince": "统计自 {date}",
+  "power.statsSinceNever": "尚未开始统计",
+  "power.statsEstimate": "电能与碳排放为估算值",
+  "power.statsReset": "重置",
+  "power.statsResetTitle": "重置能效统计",
+  "power.statsResetBody":
+    "累计的冻结次数、释放内存与节能数据将全部清零，且无法恢复。是否继续？",
+  "power.statsResetDone": "能效统计已重置",
+  "power.statsResetFailed": "重置能效统计失败：{err}",
+
   "power.efficiencyCard": "效率模式",
   "power.efficiencyAfterHide": "隐藏窗口时启用效率模式",
   "power.efficiencyAfterHideDesc":

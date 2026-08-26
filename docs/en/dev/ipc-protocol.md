@@ -29,6 +29,7 @@ Serialised with `#[serde(tag = "cmd", rename_all = "snake_case")]`.
 | `SetHotkeys` | `{"cmd":"set_hotkeys","enabled":false}` | Temporarily suspend / resume hotkey and mouse monitoring |
 | `ReleaseWindows` | `{"cmd":"release_windows","hwnds":[..]}` | Recovery tool: show the given handles. Windows tracked by the core are released per whole process (including unfreeze / unmute); untracked handles are simply shown |
 | `AdoptWindows` | `{"cmd":"adopt_windows","hwnds":[..]}` | Recovery tool: hide the given handles and track them in the core (covered by crash recovery), without muting / freezing |
+| `ResetPowerStats` | `{"cmd":"reset_power_stats"}` | Reset the power stats to zero. While the core is running this has to go through it, or the values it holds in memory would be written back over the file |
 | `Quit` | `{"cmd":"quit"}` | Exit the core |
 
 ## Response (core → settings window)

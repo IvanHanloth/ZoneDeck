@@ -38,6 +38,8 @@ pub enum Command {
     },
     /// 打开配置界面。
     OpenSettings,
+    /// 把能效统计清零。核心在运行时必须走这里，否则它内存里的旧值会覆盖回文件。
+    ResetPowerStats,
     Quit,
 }
 
@@ -180,6 +182,7 @@ mod tests {
             },
             Command::ReleaseWindows { hwnds: vec![] },
             Command::AdoptWindows { hwnds: vec![42] },
+            Command::ResetPowerStats,
             Command::Quit,
         ];
         for c in cases {
