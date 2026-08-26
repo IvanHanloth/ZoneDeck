@@ -4,7 +4,6 @@
   import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
   import IconVolumeOff from "~icons/lucide/volume-off";
   import IconAppWindow from "~icons/lucide/app-window";
-  import IconMousePointerClick from "~icons/lucide/mouse-pointer-click";
   import IconEyeOff from "~icons/lucide/eye-off";
   import IconPause from "~icons/lucide/pause";
   import IconMinimize from "~icons/lucide/minimize-2";
@@ -12,6 +11,8 @@
   import { t } from "../lib/i18n.svelte.js";
 
   const s = $derived(app.config.setting);
+  // 没有托盘图标就无所谓「一起隐藏」。
+  const trayOff = $derived(!s.tray_enabled);
 </script>
 
 <SettingsGroup title={t("hide.generalCard")}>
@@ -21,11 +22,13 @@
   <SettingsCard icon={IconAppWindow} label={t("hide.hideCurrent")} description={t("hide.hideCurrentDesc")}>
     {#snippet control()}<ToggleSwitch bind:checked={s.hide_current} />{/snippet}
   </SettingsCard>
-  <SettingsCard icon={IconMousePointerClick} label={t("hide.clickToHide")} description={t("hide.clickToHideDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.click_to_hide} />{/snippet}
-  </SettingsCard>
-  <SettingsCard icon={IconEyeOff} label={t("hide.hideIcon")} description={t("hide.hideIconDesc")}>
-    {#snippet control()}<ToggleSwitch bind:checked={s.hide_icon_after_hide} />{/snippet}
+  <SettingsCard
+    icon={IconEyeOff}
+    label={t("hide.hideIcon")}
+    description={t("hide.hideIconDesc")}
+    disabled={trayOff}
+  >
+    {#snippet control()}<ToggleSwitch bind:checked={s.hide_icon_after_hide} disabled={trayOff} />{/snippet}
   </SettingsCard>
   <SettingsCard icon={IconPause} label={t("hide.sendPause")} description={t("hide.sendPauseDesc")}>
     {#snippet control()}<ToggleSwitch bind:checked={s.send_before_hide} />{/snippet}

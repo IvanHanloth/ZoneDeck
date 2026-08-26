@@ -25,6 +25,7 @@ pub mod platform;
 pub mod recovery;
 pub mod shell;
 pub mod single_instance;
+pub mod toast;
 pub mod tray;
 pub mod tray_badge;
 pub mod win_event;

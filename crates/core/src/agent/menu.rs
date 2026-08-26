@@ -6,7 +6,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::PCWSTR;
 
-use crate::i18n::{self, Msg};
+use crate::i18n::Msg;
 use crate::util::append_menu_item;
 use crate::{log_warn, logging};
 
@@ -72,10 +72,8 @@ pub(super) fn toggle_autostart(state: &AgentState) {
             }
         }
     };
-    if state.config.notifications.on_autostart
-        && let Some(tray) = &state.tray
-    {
-        tray.balloon(i18n::t(title), i18n::t(message));
+    if state.config.notifications.on_autostart {
+        state.notify(title, message);
     }
 }
 

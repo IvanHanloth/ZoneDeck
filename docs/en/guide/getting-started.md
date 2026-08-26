@@ -78,7 +78,7 @@ Day to day, **right-click the tray icon** to open the menu. It offers:
 - **Exit**: end the core process.
 
 ::: info Clicking the tray icon
-With [“Toggle hiding by clicking the tray icon”](/en/guide/hiding) enabled, a left click on the tray icon hides / shows the windows.
+By default a **left click** on the icon hides / shows the windows. You can change what single click, double click and right click each do — see [Tray icon click actions](/en/guide/notifications#tray-icon-click-actions).
 :::
 
 ## Default hotkeys

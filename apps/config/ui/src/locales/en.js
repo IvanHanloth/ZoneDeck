@@ -210,7 +210,6 @@ export default {
   "corner.windowRestored": "Window restored",
   "corner.restoreByHotkey": "Restore the window with a hotkey or the tray menu",
 
-  "notify.card": "Tray notifications",
   "notify.onStart": "Notify on startup",
   "notify.onStartDesc": "Show a notification when the core starts and begins running",
   "notify.onQuit": "Notify on exit",
@@ -223,7 +222,6 @@ export default {
   "notify.onShow": "Notify when showing windows",
   "notify.onShowDesc": "Show a notification each time windows are restored",
 
-  "notify.trayCard": "Tray icon status",
   "notify.badgeRed": "Red",
   "notify.badgeGreen": "Green",
   "notify.badgeYellow": "Yellow",
@@ -237,9 +235,32 @@ export default {
   "notify.statusMonitorPaused": "Hotkey monitoring is paused",
   "notify.trayPriorityNote":
     "When several states are active at once, they are shown in red > green > yellow > blue priority order",
-  "notify.trayTooltip": "Show the tray icon tooltip",
-  "notify.trayTooltipDesc":
+
+  "tray.card": "Tray & notifications",
+  "tray.enabled": "Show the tray icon",
+  "tray.enabledDesc":
+    "Show the ZoneDeck icon in the notification area. Turning it off is more discreet",
+  "tray.left": "Single click",
+  "tray.leftDesc": "What a left click on the tray icon does.",
+  "tray.double": "Double click",
+  "tray.doubleDesc":
+    "What a left double click on the tray icon does. Once enabled, single-click actions on the tray icon are delayed.",
+  "tray.right": "Right click",
+  "tray.rightDesc": "What a right click on the tray icon does.",
+  "tray.actionNone": "Do nothing",
+  "tray.actionToggle": "Hide / show windows",
+  "tray.actionMenu": "Open the tray menu",
+  "tray.actionSettings": "Open the settings window",
+  "tray.tooltip": "Show the tray icon tooltip",
+  "tray.tooltipDesc":
     "Show “ZoneDeck” when hovering over the tray icon; turn this off to show no text for extra discretion.",
+  "tray.badges": "Tray icon status",
+  "tray.badgesDesc":
+    "Overlay a coloured dot on the bottom-right of the tray icon to reflect the core’s current state.",
+  "tray.notify": "Notifications",
+  "tray.notifyDesc": "Choose which events raise a system notification.",
+  "tray.disabledNote":
+    "The tray icon is off: running ZoneDeck again still opens this window.",
 
   "hide.generalCard": "General",
   "hide.muteAfterHide": "Mute after hiding",
@@ -248,8 +269,6 @@ export default {
   "hide.hideCurrent": "Also hide the active window",
   "hide.hideCurrentDesc":
     "When the hotkey is pressed, also hide the foreground window in addition to the bound windows.",
-  "hide.clickToHide": "Toggle hiding by clicking the tray icon",
-  "hide.clickToHideDesc": "Left-click the tray icon to hide / show without pressing a hotkey.",
   "hide.hideIcon": "Also hide ZoneDeck's tray icon",
   "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",

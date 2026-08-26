@@ -242,12 +242,7 @@ pub(super) fn launch_settings(state: &mut AgentState, action: Option<&str>) {
         log_warn!(
             "核心所在目录下找不到配置程序（config.exe / zonedeck-config.exe），无法打开设置界面"
         );
-        if let Some(tray) = &state.tray {
-            tray.balloon(
-                i18n::t(Msg::ConfigExeMissingTitle),
-                i18n::t(Msg::ConfigExeMissingBody),
-            );
-        }
+        state.notify(Msg::ConfigExeMissingTitle, Msg::ConfigExeMissingBody);
         return;
     };
 

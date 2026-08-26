@@ -57,8 +57,9 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/hiding#隐藏前发送暂停键) |
 | `minimize_before_hide` | bool | `false` | [隐藏前先最小化窗口](/guide/hiding#隐藏前先最小化窗口) |
 | `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/hiding#同时隐藏当前活动窗口) |
-| `click_to_hide` | bool | `true` | [单击托盘切换隐藏](/guide/hiding#单击托盘图标切换隐藏) |
 | `hide_icon_after_hide` | bool | `false` | [同时隐藏 ZoneDeck 托盘图标](/guide/hiding#同时隐藏-zonedeck-托盘图标) |
+| `tray_enabled` | bool | `true` | [显示托盘图标](/guide/notifications#显示托盘图标)；为假时图标一直不显示，气泡与角标一并失效 |
+| `tray_clicks` | object | 见下 | [托盘图标点击行为](/guide/notifications#托盘图标点击行为) |
 | `tray_badges` | object | 见下 | [图标状态提示](/guide/notifications#图标状态提示) |
 | `tray_show_tooltip` | bool | `true` | [显示图标悬浮名称](/guide/notifications#显示图标悬浮名称) |
 | `freeze_after_hide` | bool | `false` | [进程冻结总开关](/guide/freeze#隐藏窗口时冻结进程) |
@@ -88,6 +89,20 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 ::: details 旧版「冻结完整进程」开关（已废弃）
 `freeze_whole_tree` 仅用于反序列化迁移：读取时若配置里没有 `power_scope`，`true` 迁移为 `power_scope: "tree"`、`false` 迁移为 `"self"`，随后清零、不再写回文件。已显式配过 `power_scope` 的文件不受它影响。
 :::
+
+::: details 旧版「单击托盘切换隐藏」开关（已废弃）
+`click_to_hide` 仅用于反序列化迁移：读取时若配置里没有 `tray_clicks`，`true` 迁移为 `tray_clicks.left: "toggle"`、`false` 迁移为 `"none"`，随后清零、不再写回文件。老配置压根没有这个键时按 `true` 处理（旧版默认开启）。已显式配过 `tray_clicks` 的文件不受它影响。
+:::
+
+### `setting.tray_clicks`
+
+[托盘图标点击行为](/guide/notifications#托盘图标点击行为)：三种点击各绑一个动作，取值为 `none`（无操作）｜`toggle`（隐藏 / 显示窗口）｜`menu`（显示托盘菜单）｜`settings`（打开配置界面），未知取值归一为 `none`。
+
+| 字段 | 默认 | 说明 |
+| --- | --- | --- |
+| `left` | `"toggle"` | 左键单击 |
+| `double` | `"none"` | 左键双击。非 `none` 时单击须等过系统双击判定时间才执行 |
+| `right` | `"menu"` | 右键单击 |
 
 ### `setting.mouse`
 

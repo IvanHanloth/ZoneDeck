@@ -204,7 +204,6 @@ export default {
   "corner.windowRestored": "窗口已恢复",
   "corner.restoreByHotkey": "用热键或托盘菜单恢复窗口",
 
-  "notify.card": "托盘通知",
   "notify.onStart": "启动运行时通知",
   "notify.onStartDesc": "核心启动并开始服务时弹出通知",
   "notify.onQuit": "退出时通知",
@@ -216,7 +215,6 @@ export default {
   "notify.onShow": "显示窗口时通知",
   "notify.onShowDesc": "每次恢复显示时弹出通知",
 
-  "notify.trayCard": "图标状态提示",
   "notify.badgeRed": "红色",
   "notify.badgeGreen": "绿色",
   "notify.badgeYellow": "黄色",
@@ -229,16 +227,36 @@ export default {
   "notify.statusElevated": "以管理员身份运行",
   "notify.statusMonitorPaused": "热键监控已暂停",
   "notify.trayPriorityNote": "多个状态同时满足时，按红 > 绿 > 黄 > 蓝的优先级显示",
-  "notify.trayTooltip": "显示图标悬浮名称",
-  "notify.trayTooltipDesc": "鼠标悬停在托盘图标上时显示「ZoneDeck」；关闭后不显示任何文字，更隐蔽。",
+
+  "tray.card": "托盘与通知",
+  "tray.enabled": "显示托盘图标",
+  "tray.enabledDesc":
+    "在通知区域显示 ZoneDeck 图标。关闭后更隐蔽",
+  "tray.left": "左键单击",
+  "tray.leftDesc": "左键单击托盘图标时执行的操作。",
+  "tray.double": "左键双击",
+  "tray.doubleDesc":
+    "左键双击托盘图标时执行的操作。启用后，单击托盘相关操作会有一定延迟。",
+  "tray.right": "右键单击",
+  "tray.rightDesc": "右键单击托盘图标时执行的操作。",
+  "tray.actionNone": "无操作",
+  "tray.actionToggle": "隐藏 / 显示窗口",
+  "tray.actionMenu": "显示托盘菜单",
+  "tray.actionSettings": "打开配置界面",
+  "tray.tooltip": "显示图标悬浮名称",
+  "tray.tooltipDesc": "鼠标悬停在托盘图标上时显示「ZoneDeck」；关闭后不显示任何文字，更隐蔽。",
+  "tray.badges": "图标状态提示",
+  "tray.badgesDesc": "在托盘图标右下角叠加一个彩色圆点，反映核心当前状态。",
+  "tray.notify": "通知",
+  "tray.notifyDesc": "配置触发系统通知的事件。",
+  "tray.disabledNote":
+    "托盘图标已关闭：再次运行 ZoneDeck 仍可打开本界面。",
 
   "hide.generalCard": "常规",
   "hide.muteAfterHide": "隐藏窗口后静音",
   "hide.muteAfterHideDesc": "隐藏时静音目标进程的音频，恢复显示时自动取消静音。",
   "hide.hideCurrent": "同时隐藏当前活动窗口",
   "hide.hideCurrentDesc": "按下热键时，除已绑定窗口外，同时隐藏当前正在使用的前台窗口。",
-  "hide.clickToHide": "单击托盘图标切换隐藏",
-  "hide.clickToHideDesc": "左键单击托盘图标即可隐藏 / 显示，无需按热键。",
   "hide.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "hide.hideIconDesc":
     "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
