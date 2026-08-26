@@ -29,12 +29,14 @@
 </div>
 
 <style>
-  /* Win11 SettingsCard 规格：无副标题 52，有副标题 68，左右 16 */
+  /* Win11 SettingsCard 规格：无副标题 52，有副标题 68，左右 16。
+     控件列排不下时整列换到标题下一行，同 WinUI SettingsCard 的自适应 */
   .card {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 20px;
+    gap: 12px 20px;
     min-height: 52px;
     padding: 10px 16px;
   }
@@ -46,9 +48,9 @@
     border: 1px solid var(--stroke);
     border-radius: var(--r-card);
   }
-  /* Expander 子行：靠分隔线分隔，不再画卡面 */
+  /* Expander 子行：靠分隔线分隔，不再画卡面；缩进对齐父项标题与控件列 */
   .card.sub {
-    padding: 10px 16px 10px 20px;
+    padding: 10px var(--sub-pad-end) 10px var(--sub-pad-start);
     border-top: 1px solid var(--divider);
   }
 
@@ -59,12 +61,13 @@
     color: var(--text-disabled);
   }
 
+  /* 标题列的下限：排不下时先让控件列换行，而不是一路把标题压没 */
   .main {
     display: flex;
     align-items: center;
     gap: 20px;
     flex: 1;
-    min-width: 0;
+    min-width: 160px;
   }
   .icon {
     flex: none;
@@ -84,10 +87,14 @@
     line-height: 16px;
     color: var(--text-2);
   }
+  /* 换行后仍靠右；整列比一行还宽时允许收缩，内部按钮跟着换行 */
   .control {
-    flex: none;
+    flex: 0 1 auto;
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     align-items: center;
     gap: 10px;
+    margin-inline-start: auto;
   }
 </style>

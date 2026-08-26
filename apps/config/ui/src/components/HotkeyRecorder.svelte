@@ -8,6 +8,7 @@
   import { isBareEscape, startCapture } from "../lib/capture.js";
   import { isModifierOnly, joinCombo, requiresHook } from "../lib/hotkey.js";
   import { initRecorder, stepRecorder } from "../lib/recorder.js";
+  import { invoke } from "../lib/ipc.js";
   import { keyLabel } from "../lib/keylabels.svelte.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
   import ContentDialog from "./fluent/ContentDialog.svelte";
@@ -31,6 +32,10 @@
   let rec = $state(initRecorder());
   // 没能独占键盘，按键仍会漏给其他程序。
   let degraded = $state(false);
+  // 核心的热键确实撤掉了，占用探测才不会探到 ZoneDeck 自己。
+  let probeReady = $state(false);
+  // 探到被别的程序占用的那个组合；为空表示当前草稿没冲突。
+  let taken = $state("");
 
   let stop = null;
 
@@ -43,6 +48,23 @@
   const modifierOnly = $derived(isModifierOnly(value));
   // 待保存的组合只有钩子承载得了，保存时会自动打开钩子开关。
   const willEnableHook = $derived(!!rec.draft && !hook && requiresHook(rec.draft));
+  // 只有走系统注册的组合才谈得上被占用；走钩子的不受影响，不必探。
+  const probe = $derived(
+    probeReady && rec.draft && !hook && !requiresHook(rec.draft) ? rec.draft : "",
+  );
+
+  // 草稿一落定就试注册一次，把冲突当场告诉用户，而不是等保存后热键悄悄失灵。
+  $effect(() => {
+    const combo = probe;
+    taken = "";
+    if (!combo) return;
+    let alive = true;
+    invoke("hotkey_taken", { combo }).then(
+      (hit) => alive && hit && (taken = combo),
+      () => {},
+    );
+    return () => (alive = false);
+  });
 
   // 「不传递」离不开钩子，也管不到纯修饰键组合。
   $effect(() => {
@@ -58,8 +80,12 @@
   function edit() {
     rec = initRecorder(value);
     degraded = false;
+    taken = "";
+    probeReady = false;
     open = true;
-    suspendMonitoring(REASON);
+    Promise.resolve(suspendMonitoring(REASON)).then(() => {
+      if (open) probeReady = true;
+    });
     stop = startCapture({
       onState,
       onLost: () => (open = false),
@@ -71,6 +97,7 @@
     stop?.();
     stop = null;
     rec = initRecorder();
+    probeReady = false;
     resumeMonitoring(REASON);
   }
 
@@ -149,6 +176,9 @@
   {#if willEnableHook}
     <p class="note">{t("recorder.hookAutoEnabled")}</p>
   {/if}
+  {#if taken}
+    <p class="note warn">{t("recorder.hotkeyTaken")}</p>
+  {/if}
   {#if degraded}
     <p class="note">{t("recorder.captureFailed")}</p>
   {/if}
@@ -221,5 +251,9 @@
     font-size: 12px;
     color: var(--text-2);
     text-align: center;
+  }
+  /* 组合被占用是「保存了也不生效」，比其余提示更该被看见 */
+  .note.warn {
+    color: var(--warn);
   }
 </style>

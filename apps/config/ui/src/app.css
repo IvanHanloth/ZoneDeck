@@ -137,6 +137,10 @@
   --content-pad: 24px;
   --scrollbar-w: 14px;
 
+  /* Expander 子项的左右缩进：左对齐父项标题，右让开父项控件列与折叠箭头 */
+  --sub-pad-start: 56px;
+  --sub-pad-end: 62px;
+
   /* WinUI 的标准缓动：进场用 standard，退场与位移用 out */
   --ease-standard: cubic-bezier(0, 0, 0, 1);
   --ease-out: cubic-bezier(0.1, 0.9, 0.2, 1);

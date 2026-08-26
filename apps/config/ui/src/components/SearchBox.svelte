@@ -4,6 +4,7 @@
   import IconSearch from "~icons/lucide/search";
   import IconX from "~icons/lucide/x";
   import Flyout from "./fluent/Flyout.svelte";
+  import { navItem } from "../lib/nav.js";
   import { search } from "../lib/search.js";
   import { app } from "../lib/state.svelte.js";
   import { t } from "../lib/i18n.svelte.js";
@@ -150,6 +151,7 @@
 >
   {#if hits.length}
     {#each hits as hit, i (hit.labelKey)}
+      {@const Icon = navItem(hit.tab).icon}
       <button
         class="res"
         class:active={i === active}
@@ -158,6 +160,9 @@
         onpointerenter={() => (active = i)}
         onclick={() => go(hit)}
       >
+        <span class="res-icon" aria-hidden="true">
+          <Icon width="16" height="16" />
+        </span>
         <span class="res-text">
           <span class="res-label">{hit.label}</span>
           {#if hit.desc}<span class="res-desc">{hit.desc}</span>{/if}
@@ -246,6 +251,17 @@
   }
   .res:active {
     background: var(--subtle-pressed);
+  }
+
+  /* 同 Win11 搜索：图标取自条目所属页面 */
+  .res-icon {
+    flex: none;
+    display: inline-flex;
+    width: 16px;
+    color: var(--text-2);
+  }
+  .res.active .res-icon {
+    color: var(--text);
   }
 
   .res-text {

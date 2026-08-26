@@ -130,11 +130,17 @@ fn map_announcement(item: AnnouncementItem) -> Announcement {
 }
 
 /// 检查更新：把当前版本发给 Verhub，由服务端判断是否需要更新、是否强制。
-pub async fn check_update(current_version: &str, include_preview: bool) -> Result<CheckUpdate> {
+/// `locale` 命中项目注册的语言时版本说明返回对应译文，否则回落默认内容。
+pub async fn check_update(
+    current_version: &str,
+    include_preview: bool,
+    locale: Option<&str>,
+) -> Result<CheckUpdate> {
     let input = CheckUpdateInput {
         current_version: Some(current_version.to_string()),
         current_comparable_version: Some(current_version.to_string()),
         include_preview: Some(include_preview),
+        locale: locale.map(str::to_string),
     };
     let resp = client()?.public().check_update(&input).await?;
     Ok(CheckUpdate {
@@ -148,10 +154,18 @@ pub async fn check_update(current_version: &str, include_preview: bool) -> Resul
 }
 
 /// 公告列表（只要本平台 / 全平台的），从新到旧，并滤掉隐藏公告。
-pub async fn announcements(limit: u32) -> Result<Vec<Announcement>> {
+/// `current_version` 不传时，所有设了可见版本范围的公告都收不到；
+/// `locale` 命中项目注册的语言时公告返回对应译文，否则回落默认内容。
+pub async fn announcements(
+    limit: u32,
+    current_version: &str,
+    locale: Option<&str>,
+) -> Result<Vec<Announcement>> {
     let options = ListAnnouncementsOptions {
         limit: Some(limit),
         platform: Some(PLATFORM),
+        version: Some(current_version.to_string()),
+        locale: locale.map(str::to_string),
         ..Default::default()
     };
     let resp = client()?.public().list_announcements(&options).await?;
@@ -232,6 +246,9 @@ pub struct ProjectLinks {
     pub docs_url: Option<String>,
     pub author: Option<String>,
     pub author_homepage_url: Option<String>,
+    /// 拉取时请求的语言标签；与当前语言不一致时缓存不再直接复用。
+    #[serde(default)]
+    pub locale: Option<String>,
     /// 拉取时刻（Unix 秒），用于判断缓存新鲜度。
     pub fetched_at: i64,
 }
@@ -239,7 +256,7 @@ pub struct ProjectLinks {
 /// 进程内缓存。
 static PROJECT_CACHE: Mutex<Option<ProjectLinks>> = Mutex::new(None);
 
-fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
+fn map_project(item: ProjectItem, locale: Option<&str>, fetched_at: i64) -> ProjectLinks {
     ProjectLinks {
         name: Some(item.name),
         website_url: item.website_url,
@@ -247,13 +264,15 @@ fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
         docs_url: item.docs_url,
         author: item.author,
         author_homepage_url: item.author_homepage_url,
+        locale: locale.map(str::to_string),
         fetched_at,
     }
 }
 
-/// 缓存是否仍在有效期内；`fetched_at` 在未来按过期处理。
-fn cache_fresh(links: &ProjectLinks, now: i64) -> bool {
-    (0..PROJECT_CACHE_TTL_SECS).contains(&(now - links.fetched_at))
+/// 缓存可否直接复用：语言一致且仍在有效期内；`fetched_at` 在未来按过期处理。
+fn cache_fresh(links: &ProjectLinks, now: i64, locale: Option<&str>) -> bool {
+    links.locale.as_deref() == locale
+        && (0..PROJECT_CACHE_TTL_SECS).contains(&(now - links.fetched_at))
 }
 
 fn cache_get() -> Option<ProjectLinks> {
@@ -287,23 +306,23 @@ fn unix_now() -> i64 {
 }
 
 /// 项目公开链接：内存缓存 → 磁盘缓存 → Verhub API 逐级回退。
-/// API 拉取失败时退回过期缓存，完全没有缓存才报错。
-pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
+/// API 拉取失败时退回过期缓存（可能是别的语言），完全没有缓存才报错。
+pub async fn project_links(cache_path: &Path, locale: Option<&str>) -> Result<ProjectLinks> {
     let now = unix_now();
     if let Some(cached) = cache_get()
-        && cache_fresh(&cached, now)
+        && cache_fresh(&cached, now, locale)
     {
         return Ok(cached);
     }
     if let Some(cached) = read_cache_file(cache_path)
-        && cache_fresh(&cached, now)
+        && cache_fresh(&cached, now, locale)
     {
         cache_put(cached.clone());
         return Ok(cached);
     }
-    match client()?.public().get_project().await {
+    match client()?.public().get_project(locale).await {
         Ok(item) => {
-            let links = map_project(item, now);
+            let links = map_project(item, locale, now);
             write_cache_file(cache_path, &links);
             cache_put(links.clone());
             Ok(links)
@@ -371,13 +390,30 @@ mod tests {
     #[test]
     fn cache_fresh_within_ttl_only() {
         let links = ProjectLinks {
+            locale: Some("zh-CN".into()),
             fetched_at: 1_000_000,
             ..Default::default()
         };
-        assert!(cache_fresh(&links, 1_000_000)); // 刚拉取
-        assert!(cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS - 1));
-        assert!(!cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS)); // 到期
-        assert!(!cache_fresh(&links, 999_999)); // 时钟回拨
+        let zh = Some("zh-CN");
+        assert!(cache_fresh(&links, 1_000_000, zh)); // 刚拉取
+        assert!(cache_fresh(
+            &links,
+            1_000_000 + PROJECT_CACHE_TTL_SECS - 1,
+            zh
+        ));
+        assert!(!cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS, zh)); // 到期
+        assert!(!cache_fresh(&links, 999_999, zh)); // 时钟回拨
+    }
+
+    #[test]
+    fn cache_not_reused_across_locales() {
+        let links = ProjectLinks {
+            locale: Some("zh-CN".into()),
+            fetched_at: 1_000_000,
+            ..Default::default()
+        };
+        assert!(!cache_fresh(&links, 1_000_000, Some("en")));
+        assert!(!cache_fresh(&links, 1_000_000, None));
     }
 
     #[test]
@@ -387,6 +423,7 @@ mod tests {
         let links = ProjectLinks {
             name: Some("ZoneDeck".into()),
             website_url: Some("https://example.com/".into()),
+            locale: Some("en".into()),
             fetched_at: 42,
             ..Default::default()
         };
@@ -394,6 +431,7 @@ mod tests {
         let read = read_cache_file(&path).expect("缓存应可读回");
         assert_eq!(read.name.as_deref(), Some("ZoneDeck"));
         assert_eq!(read.website_url.as_deref(), Some("https://example.com/"));
+        assert_eq!(read.locale.as_deref(), Some("en"));
         assert_eq!(read.fetched_at, 42);
     }
 

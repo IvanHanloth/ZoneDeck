@@ -165,7 +165,12 @@ fn rgba_to_hicon(icon: &IconRgba) -> Option<HICON> {
         }
         // RGBA → BGRA。
         let dst = std::slice::from_raw_parts_mut(bits as *mut u8, icon.pixels.len());
-        for (d, s) in dst.chunks_exact_mut(4).zip(icon.pixels.chunks_exact(4)) {
+        for (d, s) in dst
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(icon.pixels.as_chunks::<4>().0)
+        {
             d[0] = s[2];
             d[1] = s[1];
             d[2] = s[0];
@@ -403,7 +408,7 @@ mod tests {
     fn badge_survives_small_icons() {
         let icon = compose(&blank(16, 16), BadgeColor::Blue);
         assert!(
-            icon.pixels.chunks_exact(4).any(|px| px[3] == 255),
+            icon.pixels.as_chunks::<4>().0.iter().any(|px| px[3] == 255),
             "16×16 图标上也应画出角标"
         );
     }

@@ -18,13 +18,7 @@
   import DataNoticeModal from "./components/DataNoticeModal.svelte";
   import BroadRegexModal from "./components/BroadRegexModal.svelte";
   import Toast from "./components/Toast.svelte";
-  import IconAppWindow from "~icons/lucide/app-window";
-  import IconShieldCheck from "~icons/lucide/shield-check";
-  import IconKeyboard from "~icons/lucide/keyboard";
-  import IconEyeOff from "~icons/lucide/eye-off";
-  import IconZap from "~icons/lucide/zap";
-  import IconSettings from "~icons/lucide/settings";
-  import IconInfo from "~icons/lucide/info";
+  import { NAV, navItem } from "./lib/nav.js";
   import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
     app,
@@ -35,33 +29,20 @@
     loadAnnouncements,
     openAboutTab,
     openRestoreTool,
+    refreshLocalizedContent,
     refreshStatus,
     scheduleSave,
     startCore,
     startStatusPolling,
   } from "./lib/state.svelte.js";
-  import { setLangPref, t } from "./lib/i18n.svelte.js";
+  import { resolve, setLangPref, t } from "./lib/i18n.svelte.js";
   import { applyTheme, loadPreference } from "./lib/theme.js";
-
-  const NAV = [
-    { id: "binding", labelKey: "tab.binding", icon: IconAppWindow },
-    { id: "whitelist", labelKey: "tab.whitelist", icon: IconShieldCheck },
-    { id: "hotkeys", labelKey: "tab.hotkeys", icon: IconKeyboard },
-    { id: "hide", labelKey: "tab.hide", icon: IconEyeOff },
-    { id: "power", labelKey: "tab.power", icon: IconZap },
-    { id: "about", labelKey: "tab.about", icon: IconInfo, footer: true },
-    { id: "options", labelKey: "tab.options", icon: IconSettings, footer: true },
-  ];
 
   // 双栏页要撑满可用高度，其余页按内容自然增高后滚动。
   const FILL_TABS = ["binding", "whitelist"];
 
-  const pageTitle = $derived(
-    t(NAV.find((n) => n.id === app.tab)?.labelKey ?? "tab.binding"),
-  );
-  const PageIcon = $derived(
-    NAV.find((n) => n.id === app.tab)?.icon ?? IconAppWindow,
-  );
+  const pageTitle = $derived(t(navItem(app.tab).labelKey));
+  const PageIcon = $derived(navItem(app.tab).icon);
   const fill = $derived(FILL_TABS.includes(app.tab));
 
   // 导航折叠：窄窗口自动收起，点汉堡后以用户意愿为准。
@@ -70,9 +51,16 @@
   const navCollapsed = $derived(navOverride ?? innerWidth < 820);
 
   // 语言偏好改动后立即换文案；核心侧由 save_config 触发的重载配置跟进。
+  // 首次由 loadAll 拉取，之后每次真的换了语言才按新语言重取服务端内容。
+  let appliedLang = null;
   $effect(() => {
     const pref = app.config?.setting?.language;
-    if (pref) setLangPref(pref);
+    if (!pref) return;
+    setLangPref(pref);
+    const applied = resolve(pref, globalThis.navigator?.language);
+    if (appliedLang === applied) return;
+    if (appliedLang !== null) refreshLocalizedContent();
+    appliedLang = applied;
   });
 
   // 加载阶段不自动保存；loadAll 完成后才武装。

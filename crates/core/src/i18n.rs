@@ -40,6 +40,14 @@ pub enum Msg {
     QuitBody,
     LegacyCoreRunningTitle,
     LegacyCoreRunningBody,
+    HotkeyConflictTitle,
+    HotkeyConflictBody,
+    // 热键功能名，与配置界面里的标题逐字一致，便于用户按名字找到对应开关。
+    HotkeyNameHideShow,
+    HotkeyNameCloseApp,
+    HotkeyNameHideOnly,
+    HotkeyNameShowOnly,
+    HotkeyNameHideForeground,
     ErrReloadConfig,
     ErrCoreExited,
     ErrNotifyCore,
@@ -97,6 +105,15 @@ impl Msg {
             Msg::LegacyCoreRunningBody => {
                 "旧版本核心（Boss Key）仍在运行。请先退出旧版本（托盘图标，或任务管理器中的 Boss Key.exe），再启动 ZoneDeck。"
             }
+            Msg::HotkeyConflictTitle => "热键被其他程序占用",
+            Msg::HotkeyConflictBody => {
+                "「{name}」的热键 {hotkey} 已被其他程序注册，本次不生效。请退出占用它的程序或换一个组合，也可以在设置里为它开启「低级键盘钩子」绕开占用。"
+            }
+            Msg::HotkeyNameHideShow => "隐藏 / 显示窗口",
+            Msg::HotkeyNameCloseApp => "关闭核心",
+            Msg::HotkeyNameHideOnly => "仅隐藏窗口",
+            Msg::HotkeyNameShowOnly => "仅显示窗口",
+            Msg::HotkeyNameHideForeground => "隐藏前台窗口",
             Msg::ErrReloadConfig => "重载配置失败：{err}",
             Msg::ErrCoreExited => "核心已退出",
             Msg::ErrNotifyCore => "无法通知核心",
@@ -151,6 +168,15 @@ impl Msg {
             Msg::LegacyCoreRunningBody => {
                 "The previous Boss Key core is still running. Quit it first (via its tray icon, or Boss Key.exe in Task Manager), then start ZoneDeck."
             }
+            Msg::HotkeyConflictTitle => "Hotkey taken by another program",
+            Msg::HotkeyConflictBody => {
+                "{hotkey} for \"{name}\" is already registered by another program and will not work. Quit that program or pick another combination, or turn on \"Low-level keyboard hook\" for it in the settings to bypass the clash."
+            }
+            Msg::HotkeyNameHideShow => "Hide / show windows",
+            Msg::HotkeyNameCloseApp => "Close the core",
+            Msg::HotkeyNameHideOnly => "Hide windows only",
+            Msg::HotkeyNameShowOnly => "Show windows only",
+            Msg::HotkeyNameHideForeground => "Hide foreground window",
             Msg::ErrReloadConfig => "Failed to reload configuration: {err}",
             Msg::ErrCoreExited => "The core has exited",
             Msg::ErrNotifyCore => "Cannot reach the core",
@@ -205,6 +231,15 @@ impl Msg {
             Msg::LegacyCoreRunningBody => {
                 "舊版本核心（Boss Key）仍在執行。請先結束舊版本（通知區域圖示，或工作管理員中的 Boss Key.exe），再啟動 ZoneDeck。"
             }
+            Msg::HotkeyConflictTitle => "快速鍵被其他程式佔用",
+            Msg::HotkeyConflictBody => {
+                "「{name}」的快速鍵 {hotkey} 已被其他程式註冊，本次不生效。請結束佔用它的程式或改用其他組合，也可以在設定中為它開啟「低階鍵盤掛鉤」繞開佔用。"
+            }
+            Msg::HotkeyNameHideShow => "隱藏 / 顯示視窗",
+            Msg::HotkeyNameCloseApp => "關閉核心",
+            Msg::HotkeyNameHideOnly => "僅隱藏視窗",
+            Msg::HotkeyNameShowOnly => "僅顯示視窗",
+            Msg::HotkeyNameHideForeground => "隱藏前景視窗",
             Msg::ErrReloadConfig => "重新載入設定失敗：{err}",
             Msg::ErrCoreExited => "核心已結束",
             Msg::ErrNotifyCore => "無法通知核心",
@@ -277,7 +312,7 @@ mod tests {
     }
 
     /// 全部文案键；新增 Msg 变体后必须同步登记。
-    const ALL_MSGS: [Msg; 41] = [
+    const ALL_MSGS: [Msg; 48] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -308,6 +343,13 @@ mod tests {
         Msg::QuitBody,
         Msg::LegacyCoreRunningTitle,
         Msg::LegacyCoreRunningBody,
+        Msg::HotkeyConflictTitle,
+        Msg::HotkeyConflictBody,
+        Msg::HotkeyNameHideShow,
+        Msg::HotkeyNameCloseApp,
+        Msg::HotkeyNameHideOnly,
+        Msg::HotkeyNameShowOnly,
+        Msg::HotkeyNameHideForeground,
         Msg::ErrReloadConfig,
         Msg::ErrCoreExited,
         Msg::ErrNotifyCore,

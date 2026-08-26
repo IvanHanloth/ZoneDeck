@@ -30,6 +30,10 @@ Preview releases may contain features that are not fully tested and are less sta
 
 ZoneDeck can display **announcements** from the server (important update notices, known issues, and so on). New announcements pop up automatically; ones you have already read are not shown again.
 
+## Language of announcements and release notes
+
+Announcements and release notes are fetched in the **current interface language**, and are fetched again as soon as you switch languages. Anything without a translation for that language falls back to its original text.
+
 ## Feedback and reporting
 
 You can send **feedback or a problem report** directly from the "About & Feedback" tab, or open an [issue](https://github.com/IvanHanloth/ZoneDeck/issues) on the **GitHub repository**.

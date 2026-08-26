@@ -109,7 +109,10 @@ pub(crate) fn hicon_to_rgba(hicon: HICON) -> Option<IconRgba> {
 
             // 32bpp 图标不含 alpha 时用掩码位图补。
             let mut mask_bgra = None;
-            if lines != 0 && bgra.chunks_exact(4).all(|px| px[3] == 0) && !mask.is_invalid() {
+            if lines != 0
+                && bgra.as_chunks::<4>().0.iter().all(|px| px[3] == 0)
+                && !mask.is_invalid()
+            {
                 let mut buf = vec![0u8; (width * height * 4) as usize];
                 let mut mask_bmi = BITMAPINFO {
                     bmiHeader: header,
@@ -153,7 +156,7 @@ pub(crate) fn hicon_to_rgba(hicon: HICON) -> Option<IconRgba> {
 /// BGRA → RGBA；可选 AND 掩码（非零 = 透明）用于补全缺失的 alpha 通道。
 fn bgra_to_rgba(bgra: &[u8], mask: Option<&[u8]>) -> Vec<u8> {
     let mut rgba = Vec::with_capacity(bgra.len());
-    for (i, px) in bgra.chunks_exact(4).enumerate() {
+    for (i, px) in bgra.as_chunks::<4>().0.iter().enumerate() {
         let alpha = match mask {
             Some(m) => {
                 // 掩码位图像素非零表示透明。
@@ -419,7 +422,7 @@ mod tests {
         assert!(icon.width >= 16 && icon.height >= 16);
         assert_eq!(icon.pixels.len(), (icon.width * icon.height * 4) as usize);
         assert!(
-            icon.pixels.chunks_exact(4).any(|px| px[3] > 0),
+            icon.pixels.as_chunks::<4>().0.iter().any(|px| px[3] > 0),
             "图标应至少有一个不透明像素"
         );
 

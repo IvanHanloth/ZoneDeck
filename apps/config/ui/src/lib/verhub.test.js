@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { downloadUrl } from "./verhub.js";
+import { setLangPref } from "./i18n.svelte.js";
+import { downloadUrl, formatTime } from "./verhub.js";
 
 describe("downloadUrl", () => {
   it("优先取 windows 平台的链接", () => {
@@ -54,5 +55,25 @@ describe("downloadUrl", () => {
     expect(downloadUrl({})).toBe("");
     expect(downloadUrl({ download_links: [{ platform: "windows" }] })).toBe("");
     expect(downloadUrl({ download_links: [null] })).toBe("");
+  });
+});
+
+describe("formatTime", () => {
+  const ts = Date.UTC(2026, 7, 26) / 1000;
+
+  it("日期格式跟随界面语言", () => {
+    setLangPref("zh-CN");
+    const zh = formatTime(ts);
+    setLangPref("en");
+    const en = formatTime(ts);
+    expect(zh).toContain("2026");
+    expect(en).toContain("2026");
+    expect(zh).not.toBe(en);
+  });
+
+  it("没有时间戳时返回空串", () => {
+    expect(formatTime(0)).toBe("");
+    expect(formatTime(null)).toBe("");
+    expect(formatTime(undefined)).toBe("");
   });
 });

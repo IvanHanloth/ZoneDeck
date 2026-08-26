@@ -173,6 +173,7 @@ export default {
   "recorder.waiting": "等待按键…",
   "recorder.unsupportedKey": "该按键不能用作快捷键，请换一个。",
   "recorder.hookAutoEnabled": "此热键会自动开启低级键盘钩子。",
+  "recorder.hotkeyTaken": "该组合已被其他程序占用，直接注册会失败。请换一个组合，或保存后为该热键开启「低级键盘钩子」。",
   "recorder.captureFailed": "未能独占键盘，录制期间的按键仍可能触发其他程序。安全软件的「防键盘记录」会拦掉本程序的键盘钩子，把 ZoneDeck 加入信任即可恢复独占。",
   "common.save": "保存",
   "recorder.disabled": "已关闭",

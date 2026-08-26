@@ -183,6 +183,9 @@ function mockInvoke(cmd, args) {
     // 预览环境拿不到键盘布局，界面回落显示位置名。
     case "key_labels":
       return {};
+    // 预览环境注册不了全局热键，一律报空闲。
+    case "hotkey_taken":
+      return false;
     case "whitelist_builtins":
       return [
         { key: "core", names: ["ZoneDeck.exe", "core.exe"] },
@@ -232,6 +235,7 @@ function mockInvoke(cmd, args) {
         docs_url: "https://zonedeck.ivan-hanloth.cn/guide/",
         author: "Ivan Hanloth",
         author_homepage_url: "https://www.ivan-hanloth.cn/",
+        locale: args?.locale ?? null,
         fetched_at: Math.floor(Date.now() / 1000),
       };
     case "verhub_check_update":
@@ -243,18 +247,33 @@ function mockInvoke(cmd, args) {
         latest_version: null,
         target_version: null,
       };
-    case "verhub_announcements":
+    case "verhub_announcements": {
+      // 按 locale 取译文、缺译文回落默认内容，与服务端一致。
+      const texts = {
+        "zh-CN": {
+          title: "ZoneDeck 3.0 发布",
+          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://zonedeck.ivan-hanloth.cn/changelog/)。",
+        },
+        en: {
+          title: "ZoneDeck 3.0 is out",
+          content: "A new UI and core: **mouse button triggers**, crash recovery, process freezing. See the [changelog](https://zonedeck.ivan-hanloth.cn/changelog/).",
+        },
+        "zh-TW": {
+          title: "ZoneDeck 3.0 發布",
+          content: "全新介面與核心，**滑鼠按鍵觸發**、當機還原、行程凍結。詳見 [更新日誌](https://zonedeck.ivan-hanloth.cn/changelog/)。",
+        },
+      };
       return [
         {
           id: "mock-1",
-          title: "ZoneDeck 3.0 发布",
-          content: "全新界面与核心，**鼠标按键触发**、崩溃恢复、进程冻结。详见 [更新日志](https://zonedeck.ivan-hanloth.cn/changelog/)。",
+          ...(texts[args?.locale] ?? texts["zh-CN"]),
           is_pinned: true,
           is_hidden: false,
           author: "Ivan Hanloth",
           published_at: Date.now(),
         },
       ];
+    }
     case "verhub_feedback_options":
       return { github_forward_available: true, contact_required_for_forward: true };
     case "verhub_submit_feedback":

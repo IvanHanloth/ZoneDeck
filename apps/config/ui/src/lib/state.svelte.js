@@ -69,11 +69,18 @@ let heartbeat = null;
 /** 请求序号，防止慢应答覆盖后发的结果。 */
 let monitorSeq = 0;
 
-/** 以 reason 为名义请求停用监控；同名重复请求是幂等的。 */
+/** 最近一次停用请求的应答；探测热键占用要等它落地。 */
+let suspended = Promise.resolve();
+
+/**
+ * 以 reason 为名义请求停用监控；同名重复请求是幂等的。
+ * 返回的 promise 在核心确实撤掉热键后落定。
+ */
 export function suspendMonitoring(reason) {
   const first = suspenders.size === 0;
   suspenders.add(reason);
-  if (first) applyMonitoring(false);
+  if (first) suspended = applyMonitoring(false);
+  return suspended;
 }
 
 /** 撤销某个停用理由；所有理由都撤销后才真正恢复监控。 */
@@ -158,6 +165,8 @@ export async function loadAll() {
       if (loaded.fallback) reportError(t("state.configFallback"), loaded.fallback);
       // 配置来自更高版本：本次照常生效，但保存后新版设置项会丢。
       if (loaded.schema_note) reportError(t("state.configSchemaNewer"), loaded.schema_note);
+      // 语言定下来之后再拉，项目信息才会是当前语言的译文。
+      loadProjectLinks();
       return refreshWindows();
     }),
     refreshAutostart(),
@@ -174,14 +183,17 @@ export async function loadAll() {
       app.dataNoticeOpen = loc?.kind === "portable_fallback";
     }),
   ];
-  // 拉取失败静默，「关于」页有内置回退链接。
+  const results = await Promise.allSettled(tasks);
+  const failed = results.find((r) => r.status === "rejected");
+  if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);
+}
+
+/** 项目公开链接；拉取失败静默，「关于」页有内置回退链接。 */
+function loadProjectLinks() {
   verhub
     .projectLinks()
     .then((p) => (app.project = p))
     .catch(() => {});
-  const results = await Promise.allSettled(tasks);
-  const failed = results.find((r) => r.status === "rejected");
-  if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);
 }
 
 /** 回读开机自启真实状态。 */
@@ -367,6 +379,22 @@ export function markAnnouncementSeen(id) {
   if (!app.config || !id) return;
   app.config.verhub.seen_announcement_id = id;
   scheduleSave(0);
+}
+
+/** 界面语言切换后按新语言重取服务端下发的内容：项目信息、公告与更新说明。 */
+export async function refreshLocalizedContent() {
+  loadProjectLinks();
+  loadAnnouncements();
+  // 只重取已有的结果，免得换个语言就弹一次更新提示。
+  if (!app.update || app.updateChecking) return;
+  app.updateChecking = true;
+  try {
+    app.update = await verhub.checkUpdate(app.config?.verhub?.include_preview ?? false);
+  } catch {
+    /* 拉取失败时保留原语言的内容 */
+  } finally {
+    app.updateChecking = false;
+  }
 }
 
 /** 报告一次失败：弹出错误框，由用户决定是否上报日志。 */

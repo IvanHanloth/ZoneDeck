@@ -14,7 +14,7 @@ use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
-use log_fmt::{hotkey_failure_message, log_hide, log_show};
+use log_fmt::{hotkey_failure_message, is_hotkey_taken, log_hide, log_show};
 use menu::{toggle_auto_hide, toggle_autostart};
 
 pub use commands::forward_open_settings;
@@ -210,6 +210,32 @@ struct AgentState {
     monitoring: bool,
     /// 热键当前是否已注册（避免重复 RegisterHotKey）。
     hotkeys_armed: bool,
+    /// 已提醒过的热键占用。
+    hotkey_conflicts: ConflictMemo,
+}
+
+/// 一条被别的程序占用的热键：热键 ID、功能名与配置里的原始组合。
+type Conflict = (i32, Msg, String);
+
+/// 已提醒过的热键占用。配置界面会频繁停用 / 恢复监控，每次重注册都提醒会变成骚扰，
+/// 故只提醒新出现的那些；冲突消失后再出现会重新提醒。
+#[derive(Default)]
+struct ConflictMemo(Vec<(i32, String)>);
+
+impl ConflictMemo {
+    /// 用本次的占用刷新记忆，返回其中值得提醒的（功能名，组合）。
+    fn refresh(&mut self, current: &[Conflict]) -> Vec<(Msg, String)> {
+        let fresh = current
+            .iter()
+            .filter(|(id, _, raw)| !self.0.iter().any(|(s, r)| s == id && r == raw))
+            .map(|(_, name, raw)| (*name, raw.clone()))
+            .collect();
+        self.0 = current
+            .iter()
+            .map(|(id, _, raw)| (*id, raw.clone()))
+            .collect();
+        fresh
+    }
 }
 
 /// 一条待装进键盘钩子的热键。
@@ -227,10 +253,12 @@ struct HookedHotkey {
 impl AgentState {
     fn register_hotkeys(&mut self, hwnd: HWND) {
         let mut hooked: Vec<HookedHotkey> = Vec::new();
-        for (id, label, raw, want_hook, swallow) in [
+        let mut conflicts: Vec<Conflict> = Vec::new();
+        for (id, label, name, raw, want_hook, swallow) in [
             (
                 HK_HIDE,
                 "隐藏",
+                Msg::HotkeyNameHideShow,
                 &self.config.hotkey.hide_hotkey,
                 self.config.hotkey.hide_hook,
                 self.config.hotkey.hide_intercept,
@@ -238,6 +266,7 @@ impl AgentState {
             (
                 HK_CLOSE,
                 "关闭",
+                Msg::HotkeyNameCloseApp,
                 &self.config.hotkey.close_hotkey,
                 self.config.hotkey.close_hook,
                 self.config.hotkey.close_intercept,
@@ -245,6 +274,7 @@ impl AgentState {
             (
                 HK_HIDE_ONLY,
                 "仅隐藏",
+                Msg::HotkeyNameHideOnly,
                 &self.config.hotkey.hide_only_hotkey,
                 self.config.hotkey.hide_only_hook,
                 self.config.hotkey.hide_only_intercept,
@@ -252,6 +282,7 @@ impl AgentState {
             (
                 HK_SHOW_ONLY,
                 "仅显示",
+                Msg::HotkeyNameShowOnly,
                 &self.config.hotkey.show_only_hotkey,
                 self.config.hotkey.show_only_hook,
                 self.config.hotkey.show_only_intercept,
@@ -259,6 +290,7 @@ impl AgentState {
             (
                 HK_HIDE_FOREGROUND,
                 "隐藏前台窗口",
+                Msg::HotkeyNameHideForeground,
                 &self.config.hotkey.hide_foreground_hotkey,
                 self.config.hotkey.hide_foreground_hook,
                 self.config.hotkey.hide_foreground_intercept,
@@ -282,14 +314,31 @@ impl AgentState {
                     unsafe {
                         match register(hwnd, id, hk.modifiers, vk) {
                             Ok(()) => logging::debug(&format!("{label}热键已注册: {raw}")),
-                            Err(e) => log_warn!("{}", hotkey_failure_message(label, raw, &e)),
+                            Err(e) => {
+                                log_warn!("{}", hotkey_failure_message(label, raw, &e));
+                                if is_hotkey_taken(&e) {
+                                    conflicts.push((id, name, raw.clone()));
+                                }
+                            }
                         }
                     }
                 }
                 Err(e) => log_warn!("{label}热键解析失败，该热键不生效: {raw} — {e}"),
             }
         }
+        self.report_hotkey_conflicts(conflicts);
         self.arm_hook_hotkeys(hwnd, hooked);
+    }
+
+    /// 为新出现的热键占用各弹一条提醒：改走键盘钩子能绕开占用，用户未必知道。
+    fn report_hotkey_conflicts(&mut self, conflicts: Vec<Conflict>) {
+        for (name, raw) in self.hotkey_conflicts.refresh(&conflicts) {
+            self.notify_with(
+                Msg::HotkeyConflictTitle,
+                Msg::HotkeyConflictBody,
+                &[("name", i18n::t(name)), ("hotkey", &raw)],
+            );
+        }
     }
 
     /// 把走钩子的热键装载进键盘钩子；安装失败时能回退的回退 `RegisterHotKey`。
@@ -682,6 +731,11 @@ impl AgentState {
     /// 弹一条通知（走 Toast，不需要托盘图标）；标题与正文须成对传入。
     fn notify(&self, title: Msg, body: Msg) {
         self.toast.show(i18n::t(title), i18n::t(body));
+    }
+
+    /// 同 notify，但正文里的 `{名字}` 占位符按 `params` 替换。
+    fn notify_with(&self, title: Msg, body: Msg, params: &[(&str, &str)]) {
+        self.toast.show(i18n::t(title), &i18n::tf(body, params));
     }
 
     fn apply_toggle(&mut self, trigger: Trigger) {
@@ -1101,6 +1155,7 @@ pub fn run(mut options: AgentOptions) {
         float_window: None,
         monitoring: true,
         hotkeys_armed: false,
+        hotkey_conflicts: ConflictMemo::default(),
     }));
 
     // 恢复文件存在即上次异常退出仍有窗口被隐藏。
@@ -1231,6 +1286,34 @@ mod tests {
         assert!(
             should_open_settings(false, "3.1.0", "3.1.0-rc.2"),
             "回退到预发布版也是版本变动"
+        );
+    }
+
+    #[test]
+    fn only_newly_occupied_hotkeys_are_worth_a_toast() {
+        let hide = (HK_HIDE, Msg::HotkeyNameHideShow, "Ctrl+Q".to_string());
+        let close = (HK_CLOSE, Msg::HotkeyNameCloseApp, "Win+Esc".to_string());
+        let mut memo = ConflictMemo::default();
+
+        assert_eq!(
+            memo.refresh(std::slice::from_ref(&hide)),
+            vec![(Msg::HotkeyNameHideShow, "Ctrl+Q".to_string())]
+        );
+        assert!(
+            memo.refresh(std::slice::from_ref(&hide)).is_empty(),
+            "重注册同一条被占用的热键不该再提醒一次"
+        );
+        assert_eq!(
+            memo.refresh(&[hide.clone(), close]),
+            vec![(Msg::HotkeyNameCloseApp, "Win+Esc".to_string())],
+            "只提醒新增的那条"
+        );
+
+        assert!(memo.refresh(&[]).is_empty(), "占用消失时无话可说");
+        assert_eq!(
+            memo.refresh(&[hide]),
+            vec![(Msg::HotkeyNameHideShow, "Ctrl+Q".to_string())],
+            "冲突消失后再出现，值得重新提醒"
         );
     }
 

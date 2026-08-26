@@ -179,6 +179,7 @@ export default {
   "recorder.waiting": "Waiting for a key…",
   "recorder.unsupportedKey": "That key cannot be used in a shortcut. Try another one.",
   "recorder.hookAutoEnabled": "The low-level keyboard hook will be turned on for this hotkey automatically.",
+  "recorder.hotkeyTaken": "Another program has already taken this combination, so registering it will fail. Pick a different one, or save and then turn on the low-level keyboard hook for this hotkey.",
   "recorder.captureFailed": "The keyboard could not be captured exclusively; keys pressed while recording may still trigger other programs. Anti-keylogger protection in security software blocks this app's keyboard hook — trusting ZoneDeck restores exclusive capture.",
   "common.save": "Save",
   "recorder.disabled": "Disabled",

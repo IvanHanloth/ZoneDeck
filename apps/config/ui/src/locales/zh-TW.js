@@ -172,6 +172,7 @@ export default {
   "recorder.waiting": "等待按鍵…",
   "recorder.unsupportedKey": "此按鍵不能用作快速鍵，請換一個。",
   "recorder.hookAutoEnabled": "此快速鍵會自動開啟低階鍵盤掛鉤。",
+  "recorder.hotkeyTaken": "該組合已被其他程式佔用，直接註冊會失敗。請改用其他組合，或儲存後為該快速鍵開啟「低階鍵盤掛鉤」。",
   "recorder.captureFailed": "未能獨佔鍵盤，錄製期間的按鍵仍可能觸發其他程式。防毒軟體的「防鍵盤側錄」會攔掉本程式的鍵盤掛鉤，把 ZoneDeck 加入信任即可恢復獨佔。",
   "common.save": "儲存",
   "recorder.disabled": "已關閉",
