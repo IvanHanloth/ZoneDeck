@@ -124,6 +124,18 @@ let mockMonitoring = true;
 let mockAutoHide = mockConfig.setting.auto_hide_enabled;
 /** mock 下的开机自启状态（有状态，供预览联动 UI）。 */
 let mockAutostart = false;
+/** mock 下的能效统计；重置按钮在预览里也能看出效果。 */
+let mockPowerStats = {
+  schema: 1,
+  since: Math.floor(Date.now() / 1000) - 86400 * 30,
+  updated_at: Math.floor(Date.now() / 1000),
+  freeze_count: 1284,
+  efficiency_count: 932,
+  // 与次数对得上：每次平均隐藏 45 分钟。
+  freeze_seconds: 1284 * 2700,
+  efficiency_seconds: 932 * 2700,
+  memory_freed_bytes: 1024 ** 3 * 46.2,
+};
 
 function mockInvoke(cmd, args) {
   switch (cmd) {
@@ -154,6 +166,20 @@ function mockInvoke(cmd, args) {
       return true;
     case "pssuspend_available":
       return false;
+    case "power_stats":
+      return structuredClone(mockPowerStats);
+    case "reset_power_stats":
+      mockPowerStats = {
+        schema: 1,
+        since: Math.floor(Date.now() / 1000),
+        updated_at: Math.floor(Date.now() / 1000),
+        freeze_count: 0,
+        efficiency_count: 0,
+        freeze_seconds: 0,
+        efficiency_seconds: 0,
+        memory_freed_bytes: 0,
+      };
+      return null;
     // 预览环境拿不到键盘布局，界面回落显示位置名。
     case "key_labels":
       return {};

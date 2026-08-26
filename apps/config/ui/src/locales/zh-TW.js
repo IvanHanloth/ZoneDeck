@@ -265,6 +265,39 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "隱藏前先把視窗最小化，復原時還原成原大小。此功能對降低部分遊戲引擎的背景佔用有效。",
 
+  "power.statsCard": "能效統計",
+  "power.statsCo2Label": "減少碳排放",
+  "power.statsCo2Desc": "由節省的電能按電網平均排放係數估算。",
+  "power.statsCo2Hint": "相當於 {trees} 棵樹一天的吸收量",
+  "power.statsEmpty": "還沒有攢下能效成績",
+  "power.statsEmptyHint": "開啟上面的程序凍結或效率模式，隱藏視窗後就開始記帳。",
+  "power.statsFreeze": "累計凍結程序",
+  "power.statsFreezeDesc": "按次計，同一個程序反覆凍結算多次。",
+  "power.statsEfficiency": "累計效率模式",
+  "power.statsEfficiencyDesc": "與凍結各記各的，兩者可以同時作用於一個程序。",
+  "power.statsDuration": "累計凍結時長",
+  "power.statsDurationDesc":
+    "所有程序的凍結時長之和：三個程序各凍結一小時記三小時。解除凍結時結算。",
+  "power.statsMemory": "累計釋放記憶體",
+  "power.statsMemoryDesc":
+    "凍結後清空工作集實際換出的實體記憶體，需開啟上方的「降低記憶體佔用」。",
+  "power.statsEnergy": "累計節省電能",
+  "power.statsEnergyDesc": "依凍結與效率模式的時長估算，在復原顯示時結算。",
+  "power.statsUnitTimes": "次",
+  "power.statsUnitSeconds": "秒",
+  "power.statsUnitMinutes": "分鐘",
+  "power.statsUnitHours": "小時",
+  "power.statsUnitDays": "天",
+  "power.statsSince": "統計自 {date}",
+  "power.statsSinceNever": "尚未開始統計",
+  "power.statsEstimate": "電能與碳排放為估算值",
+  "power.statsReset": "重設",
+  "power.statsResetTitle": "重設能效統計",
+  "power.statsResetBody":
+    "累計的凍結次數、釋放記憶體與節能資料將全部歸零，且無法復原。是否繼續？",
+  "power.statsResetDone": "能效統計已重設",
+  "power.statsResetFailed": "重設能效統計失敗：{err}",
+
   "power.efficiencyCard": "效率模式",
   "power.efficiencyAfterHide": "隱藏視窗時啟用效率模式",
   "power.efficiencyAfterHideDesc":

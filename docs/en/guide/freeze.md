@@ -10,10 +10,8 @@ The related settings live in the **Power & Memory** tab of the settings window, 
 
 ::: warning Freezing is an advanced feature
 Freezing stops the target process entirely, so its background work (downloads, incoming messages) is paused too. Enable it only once you understand the impact.
-:::
 
-::: info Freezing does not lower memory usage
-Suspending a process merely stops its threads from being scheduled; it **never touches the memory manager**. Not one page of the physical memory it already holds is handed back, and the "Memory" column in Task Manager does not budge. To bring memory down as well, see [Reduce memory usage](#reduce-memory-usage) below.
+Suspending merely stops the process's threads from being scheduled; it does not lower memory usage on its own. To bring memory down as well, see [Reduce memory usage](#reduce-memory-usage) below.
 :::
 
 ## Freeze processes when hiding
@@ -103,13 +101,30 @@ This option is still in beta. It **may lengthen the time restoring takes in exch
 
 - **Off** by default, and requires "Freeze processes when hiding" to be on — otherwise the option is greyed out.
 - Applies only to processes that were **actually frozen**, sharing the "Freezing & memory scope" with freezing (see [Scope](#scope)). A running process pulls its pages straight back in, so emptying its working set achieves nothing.
-- Part of the saving is on paper only: the evicted pages go to the system's standby list first, and Windows would have reclaimed them anyway once memory got tight. This option just pays that cost up front.
+- Part of the memory saved is not reclaimed outright: the evicted pages go to the system's standby list first, and Windows would have reclaimed them anyway once memory got tight.
 
-### Why freezing alone does not lower memory
+## Efficiency report
 
-Suspending goes through `NtSuspendProcess`, which does exactly one thing: stop every thread in the process from being scheduled. The process's address space, committed memory, and working set are all left exactly as they were — suspending is a **scheduling** operation and has nothing to do with memory management.
+The bottom of the Power & Memory page carries an **efficiency report**, covering the statistics from ZoneDeck's power control: how many processes it has frozen, how often efficiency mode was applied, how much memory was paged out, and the electricity and CO₂ estimated from all of that.
 
-Windows only reclaims physical memory in two situations: the memory manager trims working sets when the system is under pressure, or something explicitly asks for a process's working set to be emptied. Freezing neither creates memory pressure nor triggers a trim, so on a machine with plenty of RAM a frozen process happily sits on hundreds of megabytes. "Reduce memory usage" is that explicit request.
+| Figure | Source |
+| --- | --- |
+| Processes frozen / efficiency mode applied | **Measured**. Counted per action; freezing the same process again counts again |
+| Time spent frozen | **Measured**. Every process's frozen time added up — three processes frozen for an hour each counts as three hours; settled on resume |
+| Memory released | **Measured**. The working set is read before and after trimming, and the difference accumulated |
+| Energy saved | **Estimated**. The wattages below, multiplied by how long each process stayed frozen or throttled |
+| CO₂ avoided, equivalent trees | **Estimated**. Derived from the energy figure |
+
+The coefficients behind the estimates:
+
+| Coefficient | Value | Rationale |
+| --- | --- | --- |
+| Saved per frozen process | 0.9 W | Roughly 0.5 W on the CPU side, adjusted for power-supply conversion loss and then scaled up for the GPU, memory and I/O work that stops along with it |
+| Saved per process in efficiency mode | 0.35 W | Four tenths of freezing: the process keeps running, just on efficiency cores at a lower clock |
+| Grid emission factor | 0.55 kg CO₂/kWh | An approximation of the national average for electricity (the official 2023 figure is 0.5306) |
+| Absorbed by one tree per year | 20 kg CO₂ | Commonly quoted as 20–25; this takes the low end |
+
+**Reset** at the bottom right of the report clears the tally, and that cannot be undone.
 
 ## Prerequisites at a glance
 

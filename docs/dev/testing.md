@@ -50,6 +50,7 @@ cargo test -p zonedeck-core -- --test-threads=1
 | 单实例互斥 | 命名互斥体 |
 | 命名管道 | 服务端收发；连开连关的重连竞态（客户端抢在 `ConnectNamedPipe` 之前连上仍须正常应答） |
 | 进程冻结 | 真实子进程挂起 / 恢复 |
+| 能效统计 | 真实子进程走一遍冻结 / 效率模式，核对落盘的成绩单；经 IPC 重置清零 |
 | 静音 | Core Audio COM 链路 |
 | HideController | mock 注入验证静音 / 冻结 / 暂停键编排 |
 | 开机自启 | 普通注册表键逻辑 + 真实 `schtasks` 接受任务 XML |

@@ -99,6 +99,7 @@ ZoneDeck/
 │           logging.rs    Levelled file logging (daily rotation + level filter + redaction + panic hook)
 │           recovery.rs   Crash recovery (intent persisted before acting + atomic writes; snapshots carry
 │                         boot time and process creation times, snapshots from a previous boot are discarded)
+│           stats.rs      Power stats (cumulative freezing/efficiency mode/memory released; throttled writes to stats.json)
 │           icon.rs       Process icon extraction (HICON → hand-written PNG/base64 encoding)
 │           single_instance.rs  Named-mutex single instance
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
@@ -119,7 +120,7 @@ ZoneDeck/
 
 ## Data folder
 
-The configuration (`config.json`), logs (`logs/`), the recovery snapshot (`recovery.json`) and the cache (`verhub_cache.json`) all live in a single **data folder**, resolved by `crates/common/src/paths.rs`. Installed and portable copies are treated differently:
+The configuration (`config.json`), logs (`logs/`), the recovery snapshot (`recovery.json`), the power stats (`stats.json`) and the cache (`verhub_cache.json`) all live in a single **data folder**, resolved by `crates/common/src/paths.rs`. Installed and portable copies are treated differently:
 
 | Case | Data folder | `DataDirKind` |
 | --- | --- | --- |

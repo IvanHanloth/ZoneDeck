@@ -4,6 +4,7 @@
   import SettingsExpander from "./fluent/SettingsExpander.svelte";
   import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
   import ComboBox from "./fluent/ComboBox.svelte";
+  import PowerStatsCard from "./PowerStatsCard.svelte";
   import IconCrosshair from "~icons/lucide/crosshair";
   import IconSnowflake from "~icons/lucide/snowflake";
   import IconZap from "~icons/lucide/zap";
@@ -193,6 +194,8 @@
     {/snippet}
   </SettingsCard>
 </SettingsGroup>
+
+<PowerStatsCard />
 
 <style>
   /* 未检测到时用警告色，一眼能看出增强冻结还差这一步 */

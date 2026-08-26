@@ -131,6 +131,11 @@ impl AgentState {
                 launch_settings(self, None);
                 (Response::Ok, false)
             }
+            Command::ResetPowerStats => {
+                self.power_stats.reset();
+                logging::debug("能效统计已清零");
+                (Response::Ok, false)
+            }
             Command::Quit => (Response::Ok, true),
         }
     }

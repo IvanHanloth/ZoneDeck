@@ -278,6 +278,42 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
+  "power.statsCard": "Efficiency report",
+  "power.statsCo2Label": "CO₂ avoided",
+  "power.statsCo2Desc": "Estimated from the energy saved, at an average grid emission factor.",
+  "power.statsCo2Hint": "Roughly what {trees} trees absorb in a day",
+  "power.statsEmpty": "Nothing tallied up yet",
+  "power.statsEmptyHint":
+    "Turn on process freezing or efficiency mode above — the tally starts the next time windows are hidden.",
+  "power.statsFreeze": "Processes frozen",
+  "power.statsFreezeDesc": "Counted per action; freezing the same process again counts again.",
+  "power.statsEfficiency": "Efficiency mode applied",
+  "power.statsEfficiencyDesc":
+    "Tallied separately from freezing; both can apply to the same process.",
+  "power.statsDuration": "Time spent frozen",
+  "power.statsDurationDesc":
+    "Every process's frozen time added up: three processes frozen for an hour each counts as three hours. Settled on resume.",
+  "power.statsMemory": "Memory released",
+  "power.statsMemoryDesc":
+    "Physical memory actually paged out by trimming working sets. Requires “Reduce memory usage” above.",
+  "power.statsEnergy": "Energy saved",
+  "power.statsEnergyDesc":
+    "Estimated from how long processes stayed frozen or throttled; settled when the windows come back.",
+  "power.statsUnitTimes": "times",
+  "power.statsUnitSeconds": "sec",
+  "power.statsUnitMinutes": "min",
+  "power.statsUnitHours": "hours",
+  "power.statsUnitDays": "days",
+  "power.statsSince": "Since {date}",
+  "power.statsSinceNever": "Not started yet",
+  "power.statsEstimate": "energy and CO₂ figures are estimates",
+  "power.statsReset": "Reset",
+  "power.statsResetTitle": "Reset efficiency report",
+  "power.statsResetBody":
+    "Every accumulated count, the released memory and the energy figures will be cleared. This cannot be undone. Continue?",
+  "power.statsResetDone": "Efficiency report reset",
+  "power.statsResetFailed": "Could not reset the efficiency report: {err}",
+
   "power.efficiencyCard": "Efficiency mode",
   "power.efficiencyAfterHide": "Enable efficiency mode when hiding",
   "power.efficiencyAfterHideDesc":
