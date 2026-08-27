@@ -9,7 +9,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
     GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow,
     IsWindowVisible, IsZoomed, SW_HIDE, SW_RESTORE, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE,
-    ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    ShowWindow, WS_EX_APPWINDOW,
 };
 use windows::core::{BOOL, PWSTR};
 use zonedeck_common::{NO_TITLE, WindowInfo};
@@ -131,15 +131,13 @@ fn fill_missing_names(windows: &mut [WindowInfo]) {
     }
 }
 
-/// 是否把该顶层窗口列入进程列表；类 Alt+Tab 过滤，排除工具窗口。
+/// 是否把该顶层窗口列入枚举结果；只挡掉归属于某个主窗口的附属窗口
+/// （对话框、下拉面板等），它们跟着宿主一起显隐，不该单独成为隐藏目标。
+///
+/// 工具窗口（`WS_EX_TOOLWINDOW`）照常列出：桌面歌词、悬浮球一类的悬浮窗大多
+/// 带这个样式，滤掉就再也匹配不到。
 fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
-    if ex_style & WS_EX_TOOLWINDOW.0 != 0 {
-        return false;
-    }
-    if has_owner && (ex_style & WS_EX_APPWINDOW.0 == 0) {
-        return false;
-    }
-    true
+    !has_owner || ex_style & WS_EX_APPWINDOW.0 != 0
 }
 
 unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -286,14 +284,18 @@ mod tests {
     }
 
     #[test]
-    fn is_listable_window_filters_like_alt_tab() {
-        const TOOL: u32 = WS_EX_TOOLWINDOW.0;
+    fn is_listable_window_keeps_tool_windows_and_drops_owned_ones() {
+        const TOOL: u32 = windows::Win32::UI::WindowsAndMessaging::WS_EX_TOOLWINDOW.0;
         const APP: u32 = WS_EX_APPWINDOW.0;
 
         assert!(is_listable_window(0, false));
-        assert!(!is_listable_window(TOOL, false));
-        assert!(!is_listable_window(0, true));
-        assert!(is_listable_window(APP, true));
+        assert!(is_listable_window(TOOL, false), "悬浮窗多为无主的工具窗口");
+        assert!(!is_listable_window(0, true), "附属窗口跟着宿主走");
+        assert!(!is_listable_window(TOOL, true));
+        assert!(
+            is_listable_window(APP, true),
+            "自称应用窗口的附属窗口仍列出"
+        );
     }
 
     use windows::Win32::UI::WindowsAndMessaging::{

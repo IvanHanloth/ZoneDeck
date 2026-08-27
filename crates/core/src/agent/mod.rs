@@ -40,8 +40,8 @@ use crate::effects::WinEffects;
 use crate::effects_worker::{AsyncEffects, EffectsWorker};
 use crate::float_window::{FLOAT_MENU, FLOAT_TOGGLE, FloatWindow, WM_APP_FLOAT};
 use crate::hide::{
-    HideController, HidePlan, Target, dormant_pids, expand_descendants, expand_same_image,
-    filter_freeze_whitelist, foreground_target, resolve_targets,
+    ExternalShow, HideController, HidePlan, Target, dormant_pids, expand_descendants,
+    expand_same_image, filter_freeze_whitelist, foreground_target, resolve_targets,
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
@@ -691,16 +691,30 @@ impl AgentState {
         self.hide_with_plan(targets, &freeze_set, &efficiency_set, &dormant)
     }
 
-    /// 处理窗口事件：销毁 / 被外部恢复显示的窗口移出隐藏记录，标题变化同步进
+    /// 处理窗口事件：销毁的窗口移出隐藏记录；被外部重新显示的窗口先尝试
+    /// 升级压制（自我显示型悬浮窗），压不住才移出记录；标题变化同步进
     /// 隐藏记录与规则（仅内存）。
     fn on_win_event(&mut self, event: u32, hwnd: i64) {
         match event {
-            EVENT_OBJECT_DESTROY | EVENT_OBJECT_SHOW => {
+            EVENT_OBJECT_DESTROY => {
                 if self.controller.forget_window(hwnd) {
                     self.persist_recovery();
                     self.sync_tray();
                 }
             }
+            EVENT_OBJECT_SHOW => match self.controller.on_external_show(hwnd) {
+                ExternalShow::Released => {
+                    self.persist_recovery();
+                    self.sync_tray();
+                }
+                ExternalShow::Rehidden => {
+                    logging::debug(&format!(
+                        "窗口(hwnd={hwnd})被程序自我显示，已压成最小化继续隐藏"
+                    ));
+                    self.persist_recovery();
+                }
+                ExternalShow::KeptMinimized | ExternalShow::NotTracked => {}
+            },
             EVENT_OBJECT_NAMECHANGE => {
                 let tracked_rule = self
                     .config
