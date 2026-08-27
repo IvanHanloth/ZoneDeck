@@ -223,6 +223,8 @@ export default {
   "notify.onHideDesc": "Show a notification each time hiding is triggered",
   "notify.onShow": "Notify when showing windows",
   "notify.onShowDesc": "Show a notification each time windows are restored",
+  "notify.onRecoveryMismatch": "Notify when hidden-window records go stale",
+  "notify.onRecoveryMismatchDesc": "After the core exits abnormally, windows that are still hidden stay hidden; if any record no longer matches what was recorded (the window is gone, the handle was reused, or something already showed it), a notification tells you.",
 
   "notify.badgeRed": "Red",
   "notify.badgeGreen": "Green",

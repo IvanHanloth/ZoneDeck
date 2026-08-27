@@ -140,6 +140,7 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `on_autostart` | `true` | 开机自启状态变更通知 |
 | `on_hide` | `false` | 每次隐藏通知 |
 | `on_show` | `false` | 每次显示通知 |
+| `on_recovery_mismatch` | `true` | 上次异常退出后接管隐藏记录时，有记录与当初对不上就通知 |
 
 ## `verhub`
 

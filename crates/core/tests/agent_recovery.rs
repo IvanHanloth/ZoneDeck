@@ -54,8 +54,9 @@ fn is_visible(hwnd: i64) -> bool {
     unsafe { IsWindowVisible(HWND(hwnd as isize as *mut std::ffi::c_void)).as_bool() }
 }
 
+/// 上一轮异常退出时窗口还藏着：核心接手后应继续藏，不把它弹出来。
 #[test]
-fn agent_restores_hidden_windows_left_by_a_crash() {
+fn agent_keeps_windows_that_a_crash_left_hidden() {
     let (hwnd, window_tid, window_thread) = spawn_hidden_window();
     assert!(!is_visible(hwnd), "测试前提：窗口已隐藏");
 
@@ -92,12 +93,18 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
     let state = client.send(&Command::GetState).unwrap();
     assert_eq!(
         state,
-        Response::State { hidden: false },
-        "恢复完成后核心应处于未隐藏状态"
+        Response::State { hidden: true },
+        "接管之后核心应处于隐藏状态"
     );
 
-    assert!(is_visible(hwnd), "崩溃前被隐藏的窗口应在核心启动时被找回");
-    assert!(!recovery_path.exists(), "恢复完成后 recovery.json 应被清除");
+    assert!(
+        !is_visible(hwnd),
+        "崩溃前藏着的窗口应继续藏着，核心接手不得把它弹出来"
+    );
+    assert!(
+        recovery_path.exists(),
+        "接管后的记录须重新落盘，以防再次异常退出"
+    );
 
     let quit = client.send(&Command::Quit).unwrap();
     assert_eq!(quit, Response::Ok);
@@ -108,6 +115,8 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
         std::thread::sleep(Duration::from_millis(50));
     }
     agent_thread.join().unwrap();
+
+    assert!(is_visible(hwnd), "核心正常退出时应把接管的窗口还回来");
 
     unsafe {
         let _ = PostThreadMessageW(window_tid, WM_QUIT, WPARAM(0), LPARAM(0));

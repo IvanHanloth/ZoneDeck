@@ -138,6 +138,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `on_autostart` | `true` | 開機自動啟動狀態變更通知 |
 | `on_hide` | `false` | 每次隱藏通知 |
 | `on_show` | `false` | 每次顯示通知 |
+| `on_recovery_mismatch` | `true` | 上次異常結束後接手隱藏紀錄時，有紀錄與當初對不上就通知 |
 
 ## `verhub`
 

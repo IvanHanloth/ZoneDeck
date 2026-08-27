@@ -215,6 +215,8 @@ export default {
   "notify.onHideDesc": "每次觸發隱藏時顯示通知",
   "notify.onShow": "顯示視窗時通知",
   "notify.onShowDesc": "每次復原顯示時顯示通知",
+  "notify.onRecoveryMismatch": "隱藏紀錄失效時通知",
+  "notify.onRecoveryMismatchDesc": "核心異常結束後，仍藏著的視窗會繼續保持隱藏；若有紀錄與當初對不上（視窗已關閉、控制代碼被重複使用或已被顯示出來），會顯示通知告知。",
 
   "notify.badgeRed": "紅色",
   "notify.badgeGreen": "綠色",

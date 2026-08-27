@@ -1163,21 +1163,42 @@ pub fn run(mut options: AgentOptions) {
         let mut state = state.borrow_mut();
         if let Some(snapshot) = recovery::load(&state.recovery_path) {
             if snapshot.is_restorable(recovery::current_boot_time_ms()) {
-                let (hidden, frozen, muted) = (
-                    snapshot.hidden.len(),
-                    snapshot.frozen.len(),
-                    snapshot.muted.len(),
-                );
-                let outcome = state.controller.restore_from(snapshot);
-                logging::warn(&format!(
-                    "检测到上次异常退出：{hidden} 个被隐藏的窗口中恢复 {} 个、跳过 {} 条失效记录（另解冻 {frozen} 个、取消静音 {muted} 个进程）",
-                    outcome.shown, outcome.stale
-                ));
+                // 上一轮是被外部干掉的，用户的隐藏意图没变：核对无误的窗口继续藏着，
+                // 不弹出来。对不上的只丢记录，并让用户知道。
+                let outcome = state.controller.adopt_from(snapshot);
+                if outcome.mismatched > 0 {
+                    let released = if outcome.released > 0 {
+                        format!("；另解除 {} 项进程副作用", outcome.released)
+                    } else {
+                        String::new()
+                    };
+                    logging::warn(&format!(
+                        "上次异常退出后接管隐藏记录：{} 个窗口仍藏着，继续保持；{} 条记录与当初对不上（窗口已关闭、句柄被复用或已被显示出来），已丢弃{released}",
+                        outcome.kept, outcome.mismatched
+                    ));
+                    if state.config.notifications.on_recovery_mismatch {
+                        state.notify_with(
+                            Msg::RecoveryMismatchTitle,
+                            Msg::RecoveryMismatchBody,
+                            &[
+                                ("kept", &outcome.kept.to_string()),
+                                ("lost", &outcome.mismatched.to_string()),
+                            ],
+                        );
+                    }
+                } else {
+                    logging::info(&format!(
+                        "上次异常退出后接管隐藏记录：{} 个窗口核对无误，继续保持隐藏",
+                        outcome.kept
+                    ));
+                }
+                // 记录已经变了，重新落盘；接管后没剩下什么时 save 内部会清掉文件。
+                state.persist_recovery();
             } else {
                 // 跨重启或旧版格式的快照中句柄与 PID 已失效，丢弃不恢复。
                 logging::debug("恢复文件来自上一次开机或旧版本，其中的窗口句柄已失效，跳过恢复");
+                recovery::clear(&state.recovery_path);
             }
-            recovery::clear(&state.recovery_path);
         }
     }
 

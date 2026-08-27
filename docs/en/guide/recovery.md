@@ -32,11 +32,15 @@ The core writes key events and panic information to log files in the `logs` fold
 
 Each time windows are hidden, the core records which windows were hidden and which processes were frozen or muted into `recovery.json`, and deletes the file on a normal restore or exit.
 
-If that file still exists when the core restarts, the previous run **exited abnormally** — so the core automatically **restores the windows, resumes the processes and unmutes them**. If a window handle is no longer valid (for example the app recreated its window), the core additionally tries to refind the window by process path and title.
+If that file still exists when the core restarts, the previous run **exited abnormally**. The core then checks the recorded windows one by one:
+
+- **Everything matches**: your intent has not changed, so the windows **stay hidden**. The core takes the records over and your hotkey restores them as usual.
+- **Some records no longer match** (the window is gone, the handle was recycled to a different window, or something already showed it): those records are dropped, the core will not touch whatever that handle now points at, and it writes a warning to the log and shows you a notification.
+- **Not a single window could be taken over**: that round of hiding is no longer in effect, so the core **resumes, unmutes and un-throttles** whatever processes are still alive instead of leaving them stuck.
 
 ### Layer 3: the scheduled task
 
-When [startup](/en/guide/autostart) is registered as a scheduled task, it carries a restart-on-failure policy (automatic restart within about a minute of a crash, up to 3 times). Core crashes → the scheduled task restarts it → layer 2 then restores the windows, closing the loop.
+When [startup](/en/guide/autostart) is registered as a scheduled task, it carries a restart-on-failure policy (automatic restart within about a minute of a crash, up to 3 times). Core crashes → the scheduled task restarts it → layer 2 then takes the hidden-window records over, closing the loop.
 
 ## Related files
 

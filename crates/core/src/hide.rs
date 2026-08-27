@@ -297,6 +297,17 @@ pub struct ShowOutcome {
     pub skipped: usize,
 }
 
+/// [`HideController::adopt_from`] 的执行结果。
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct AdoptOutcome {
+    /// 核对无误、继续藏着的窗口数。
+    pub kept: usize,
+    /// 与记录对不上的窗口数：窗口没了、句柄被复用、换了进程，或已经被显示出来。
+    pub mismatched: usize,
+    /// 一个窗口都没接管成功时，顺带解除的进程副作用项数。
+    pub released: usize,
+}
+
 /// 把标题变化同步进句柄匹配的精确窗口规则（仅内存，随下次配置保存落盘）。
 /// `NO_TITLE` 不参与同步。返回是否有规则被更新。
 pub fn sync_rule_titles(rules: &mut [WindowRule], hwnd: i64, title: &str) -> bool {
@@ -791,6 +802,78 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         self.efficiency = snapshot.efficiency;
         self.used_enhanced = snapshot.enhanced;
         self.show()
+    }
+
+    /// 接管上次异常退出留下的快照：逐条核对窗口还是不是当初那个、是不是仍藏着。
+    /// 对得上的原样接着藏，**不把窗口弹出来**——上一轮核心是被外部干掉的，
+    /// 用户的隐藏意图并没有变。对不上的只丢弃记录，绝不去动那个句柄现在指向的窗口。
+    ///
+    /// 一个窗口都没接管成功时，这轮隐藏已经失效，把还活着的进程解冻、取消静音、
+    /// 清除效率模式，免得它们一直挂在那儿。
+    pub fn adopt_from(&mut self, snapshot: Snapshot) -> AdoptOutcome {
+        let mut outcome = AdoptOutcome::default();
+        let mut kept = Vec::with_capacity(snapshot.hidden.len());
+        for t in snapshot.hidden {
+            if self.still_hidden_as_recorded(&t) {
+                kept.push(t);
+            } else {
+                outcome.mismatched += 1;
+            }
+        }
+        outcome.kept = kept.len();
+        self.hidden = kept;
+        self.used_enhanced = snapshot.enhanced;
+
+        if outcome.kept > 0 {
+            self.frozen = snapshot.frozen;
+            self.muted = snapshot.muted;
+            self.efficiency = snapshot.efficiency;
+            return outcome;
+        }
+
+        for r in &snapshot.frozen {
+            if self.proc_alive(r) {
+                self.effects.resume(r.pid, snapshot.enhanced);
+                outcome.released += 1;
+            }
+        }
+        for r in &snapshot.muted {
+            if self.proc_alive(r) {
+                self.effects.mute(r.pid, false);
+                outcome.released += 1;
+            }
+        }
+        // 排在解冻之后：先让进程跑起来，再把调度待遇还回去。
+        for r in &snapshot.efficiency {
+            if self.proc_alive(r) {
+                self.effects.clear_efficiency(r.pid);
+                outcome.released += 1;
+            }
+        }
+        outcome
+    }
+
+    /// 这条记录指的还是当初那个窗口，而且仍然藏着吗。
+    ///
+    /// 标题不参与判定：游戏、聊天软件的标题随时在变，拿它比对会把正常情况误判成失配。
+    fn still_hidden_as_recorded(&self, t: &Target) -> bool {
+        if !self.wm.is_window(t.hwnd) {
+            return false;
+        }
+        // 句柄会被系统回收复用，PID 对得上才算同一个窗口。
+        if t.pid != 0 && self.wm.window_pid(t.hwnd) != t.pid {
+            return false;
+        }
+        // PID 也会被回收，再比一次映像名。查不到映像名的（反作弊进程拒绝查询）
+        // 不当作失配，否则每次重启都要误报一轮。
+        if t.pid != 0 && !t.process.is_empty() {
+            let now = self.wm.process_name(t.pid);
+            if !now.is_empty() && !now.eq_ignore_ascii_case(&t.process) {
+                return false;
+            }
+        }
+        // 隐藏前就不可见的窗口本程序没动过它的可见性，这一条不作数。
+        t.restore == Restore::Skip || !self.wm.is_visible(t.hwnd)
     }
 }
 
@@ -1557,6 +1640,145 @@ mod tests {
             "应取消静音"
         );
         assert!(controller.snapshot().is_empty());
+    }
+
+    /// 上一轮隐藏了 hwnd=10（WeChat.exe / pid 10），并冻结、静音了它的进程。
+    fn crash_snapshot() -> Snapshot {
+        Snapshot {
+            hidden: vec![Target::from_window(&win(
+                "微信",
+                10,
+                "WeChat.exe",
+                "C:\\WeChat.exe",
+            ))],
+            frozen: vec![ProcRecord {
+                pid: 10,
+                created_at: start_of(10),
+            }],
+            muted: vec![ProcRecord {
+                pid: 10,
+                created_at: start_of(10),
+            }],
+            enhanced: false,
+            ..Default::default()
+        }
+    }
+
+    fn crashed_with(prepare: impl FnOnce(&MockWm)) -> HideController<MockWm, MockEffects> {
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
+        // 上一轮核心是在窗口藏着的时候被干掉的。
+        wm.hide(10);
+        prepare(&wm);
+        HideController::new(wm, MockEffects::default())
+    }
+
+    #[test]
+    fn adopt_keeps_windows_that_are_still_hidden_as_recorded() {
+        let mut controller = crashed_with(|_| {});
+        let outcome = controller.adopt_from(crash_snapshot());
+
+        assert_eq!(
+            outcome,
+            AdoptOutcome {
+                kept: 1,
+                mismatched: 0,
+                released: 0
+            }
+        );
+        assert!(!controller.wm.is_visible(10), "接管不得把窗口弹出来");
+        assert!(controller.is_hidden(), "接管后仍是隐藏状态");
+        assert!(
+            controller.effects.resumes.borrow().is_empty(),
+            "窗口还藏着，进程就该继续冻着"
+        );
+        assert!(controller.snapshot().hidden.len() == 1, "记录须留着供恢复");
+    }
+
+    #[test]
+    fn adopt_drops_a_window_that_someone_already_brought_back() {
+        // 解锁后游戏自己把窗口显示了出来：记录已经名不副实。
+        let mut controller = crashed_with(|wm| wm.show(10));
+        let outcome = controller.adopt_from(crash_snapshot());
+
+        assert_eq!(outcome.kept, 0);
+        assert_eq!(outcome.mismatched, 1);
+        assert!(outcome.released > 0, "没有窗口要藏了，进程得放开");
+        assert_eq!(*controller.effects.resumes.borrow(), vec![10], "应解冻");
+        assert!(controller.wm.is_visible(10), "接管不得反过来把它藏回去");
+    }
+
+    #[test]
+    fn adopt_drops_records_whose_window_is_gone_or_taken_over() {
+        for (name, prepare) in [
+            (
+                "窗口已关闭",
+                Box::new(|wm: &MockWm| wm.destroy(10)) as Box<dyn Fn(&MockWm)>,
+            ),
+            (
+                "句柄被别的进程复用",
+                Box::new(|wm: &MockWm| {
+                    wm.pid_overrides.borrow_mut().insert(10, 999);
+                }),
+            ),
+            (
+                "PID 被回收给了别的程序",
+                Box::new(|wm: &MockWm| {
+                    wm.paths
+                        .borrow_mut()
+                        .insert(10, "C:\\Other.exe".to_string());
+                }),
+            ),
+        ] {
+            let mut controller = crashed_with(|wm| prepare(wm));
+            let outcome = controller.adopt_from(crash_snapshot());
+            assert_eq!(outcome.kept, 0, "{name}");
+            assert_eq!(outcome.mismatched, 1, "{name}");
+        }
+    }
+
+    #[test]
+    fn adopt_does_not_judge_visibility_of_skip_records() {
+        // 隐藏前就不可见的窗口本程序没动过它，可见与否都不算失配。
+        let mut controller = crashed_with(|wm| wm.show(10));
+        let mut snapshot = crash_snapshot();
+        snapshot.hidden[0].restore = Restore::Skip;
+
+        let outcome = controller.adopt_from(snapshot);
+        assert_eq!(outcome.kept, 1);
+        assert_eq!(outcome.mismatched, 0);
+    }
+
+    #[test]
+    fn adopt_keeps_effects_as_long_as_one_window_survives() {
+        let wm = MockWm::new(
+            vec![
+                win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+                win("记事本", 20, "notepad.exe", "C:\\notepad.exe"),
+            ],
+            0,
+        );
+        wm.hide(10);
+        wm.hide(20);
+        // 其中一个被人显示了出来，另一个还藏着。
+        wm.show(20);
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        let mut snapshot = crash_snapshot();
+        snapshot.hidden.push(Target::from_window(&win(
+            "记事本",
+            20,
+            "notepad.exe",
+            "C:\\notepad.exe",
+        )));
+
+        let outcome = controller.adopt_from(snapshot);
+        assert_eq!(outcome.kept, 1);
+        assert_eq!(outcome.mismatched, 1);
+        assert_eq!(outcome.released, 0, "还有窗口藏着，副作用不动");
+        assert!(
+            controller.effects.resumes.borrow().is_empty(),
+            "不得解冻仍在隐藏的进程"
+        );
     }
 
     #[test]

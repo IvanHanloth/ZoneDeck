@@ -655,6 +655,9 @@ pub struct Notifications {
     /// 每次显示窗口时的通知（默认关闭）。
     #[serde(default)]
     pub on_show: bool,
+    /// 上次异常退出后接管隐藏记录时，发现有窗口与记录对不上的通知。
+    #[serde(default = "default_true")]
+    pub on_recovery_mismatch: bool,
 }
 
 impl Default for Notifications {
@@ -665,6 +668,7 @@ impl Default for Notifications {
             on_autostart: true,
             on_hide: false,
             on_show: false,
+            on_recovery_mismatch: true,
         }
     }
 }

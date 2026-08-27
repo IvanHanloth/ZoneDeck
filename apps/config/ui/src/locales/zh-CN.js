@@ -216,6 +216,8 @@ export default {
   "notify.onHideDesc": "每次触发隐藏时弹出通知",
   "notify.onShow": "显示窗口时通知",
   "notify.onShowDesc": "每次恢复显示时弹出通知",
+  "notify.onRecoveryMismatch": "隐藏记录失效时通知",
+  "notify.onRecoveryMismatchDesc": "核心异常退出后，仍藏着的窗口会继续保持隐藏；若有记录与当初对不上（窗口已关闭、句柄被复用或已被显示出来），弹出通知告知。",
 
   "notify.badgeRed": "红色",
   "notify.badgeGreen": "绿色",

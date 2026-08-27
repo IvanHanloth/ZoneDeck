@@ -138,7 +138,7 @@ The coefficients behind the estimates:
 
 ## Crash safety
 
-ZoneDeck records which processes are currently frozen, and which ones have efficiency mode applied, in `recovery.json`. Even if the core exits abnormally, the previously suspended processes are **resumed automatically** on the next start and efficiency mode is lifted along with them.
+ZoneDeck records which processes are currently frozen, and which ones have efficiency mode applied, in `recovery.json`. Even if the core exits abnormally, the next start takes those records over; if they cannot be taken over properly, the previously suspended processes are **resumed right away** and efficiency mode is lifted along with them.
 
 See [Window recovery & crash self-healing](/en/guide/recovery) for how to resume frozen processes manually.
 

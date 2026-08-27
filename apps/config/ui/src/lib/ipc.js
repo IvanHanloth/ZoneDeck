@@ -73,6 +73,7 @@ const mockConfig = {
     on_autostart: true,
     on_hide: false,
     on_show: false,
+    on_recovery_mismatch: true,
   },
   verhub: {
     include_preview: false,

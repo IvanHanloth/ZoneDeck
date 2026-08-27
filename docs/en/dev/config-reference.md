@@ -138,6 +138,7 @@ Each field accepts `hidden` (windows are hidden) \| `auto_hide` (auto hide is en
 | `on_autostart` | `true` | Startup setting changed |
 | `on_hide` | `false` | Every hide |
 | `on_show` | `false` | Every show |
+| `on_recovery_mismatch` | `true` | Notify when, after an abnormal exit, some hidden-window records no longer match what was recorded |
 
 ## `verhub`
 
