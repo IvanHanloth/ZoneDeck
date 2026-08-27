@@ -2,7 +2,12 @@
   import { t } from "../lib/i18n.svelte.js";
   import WindowList from "./WindowList.svelte";
   import WhitelistList from "./WhitelistList.svelte";
-  import { addWhitelistRules, applyListFilters, newWhitelistRegexRule } from "../lib/grouping.js";
+  import {
+    addWhitelistRules,
+    applyListFilters,
+    hasProcessIdentity,
+    newWhitelistRegexRule,
+  } from "../lib/grouping.js";
   import { app, refreshWindows, toast } from "../lib/state.svelte.js";
 
   let selectedAvail = $state([]);
@@ -22,8 +27,10 @@
   function addProcesses() {
     const picked = pickedWindows();
     if (picked.length === 0) return toast(t("whitelist.pickFirst"), true);
+    const unknown = picked.filter((w) => !hasProcessIdentity(w)).length;
     app.config.whitelist = addWhitelistRules(app.config.whitelist, picked);
     selectedAvail = [];
+    if (unknown) toast(t("binding.processUnidentified", { count: unknown }), true);
   }
 
   function addRegex() {

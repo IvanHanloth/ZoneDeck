@@ -66,6 +66,7 @@ export default {
   "binding.pickWindowsFirst": "请先在左侧勾选要隐藏的窗口",
   "binding.pickProcessesFirst": "请先在左侧勾选要隐藏的进程",
   "binding.windowsRefreshed": "窗口列表已刷新",
+  "binding.processUnidentified": "已跳过 {count} 个查不到所属程序的窗口（多为反作弊保护），改用「窗口隐藏」即可",
   "binding.regexSeedKeyword": "关键词",
   "binding.regexSeedProcess": "程序名.exe",
 

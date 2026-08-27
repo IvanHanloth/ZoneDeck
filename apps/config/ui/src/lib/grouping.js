@@ -71,12 +71,17 @@ export function windowRuleFromWindow(w) {
   };
 }
 
-/** 由现有窗口构造一条「进程」精确规则（按可执行文件路径）。 */
+/** 能否据此窗口构造按进程匹配的规则：映像名与完整路径至少要有一个。 */
+export function hasProcessIdentity(w) {
+  return !!(w?.process || w?.path);
+}
+
+/** 由现有窗口构造一条「进程」精确规则；查不到完整路径时退回按文件名匹配。 */
 export function processRuleFromWindow(w) {
   return {
     process: w.process,
     path: w.path,
-    by_name: false,
+    by_name: !w.path,
     include_untitled: false,
     include_background: false,
   };
@@ -134,8 +139,8 @@ export function newWhitelistRegexRule(seedProcess) {
   };
 }
 
-/** 白名单条目的去重键：按文件名匹配看进程名，否则看路径。 */
-function whitelistKey(rule) {
+/** 精确规则的去重键：按文件名匹配看进程名，否则看路径。 */
+function ruleKey(rule) {
   return (rule.by_name ? rule.process : rule.path)?.toLowerCase() || "";
 }
 
@@ -143,12 +148,12 @@ function whitelistKey(rule) {
 export function addWhitelistRules(existing, pickedWindows) {
   const result = existing.slice();
   const seen = new Set(
-    result.filter((r) => !isRegexRule(r)).map(whitelistKey).filter(Boolean),
+    result.filter((r) => !isRegexRule(r)).map(ruleKey).filter(Boolean),
   );
   for (const w of pickedWindows) {
-    if (!w.process) continue;
+    if (!hasProcessIdentity(w)) continue;
     const rule = whitelistRuleFromWindow(w);
-    const key = whitelistKey(rule);
+    const key = ruleKey(rule);
     if (!key || seen.has(key)) continue;
     seen.add(key);
     result.push(rule);
@@ -177,14 +182,19 @@ export function addWindowRules(existing, pickedWindows) {
   return result;
 }
 
-/** 按可执行文件路径去重后追加为进程规则，返回新数组。 */
+/** 按匹配依据去重后追加为进程规则，跳过身份不明的窗口，返回新数组。 */
 export function addProcessRules(existing, pickedWindows) {
   const result = existing.slice();
-  const seen = new Set(result.filter((r) => !isRegexRule(r)).map((r) => r.path));
+  const seen = new Set(
+    result.filter((r) => !isRegexRule(r)).map(ruleKey).filter(Boolean),
+  );
   for (const w of pickedWindows) {
-    if (!w.path || seen.has(w.path)) continue;
-    seen.add(w.path);
-    result.push(processRuleFromWindow(w));
+    if (!hasProcessIdentity(w)) continue;
+    const rule = processRuleFromWindow(w);
+    const key = ruleKey(rule);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(rule);
   }
   return result;
 }

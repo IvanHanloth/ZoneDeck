@@ -10,13 +10,16 @@ use crate::effects::Effects;
 use crate::platform::{Restore, WindowManager};
 use crate::recovery::{ProcRecord, Snapshot};
 
-/// 一条隐藏记录。`process_path` / `title` 仅供日志。
+/// 一条隐藏记录。`title` 仅供日志，进程路径与映像名还用于白名单判定。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Target {
     pub hwnd: i64,
     pub pid: u32,
     #[serde(default)]
     pub process_path: String,
+    /// 映像名。路径查得到时可由它推出，查不到时（反作弊进程）只有这一项可用。
+    #[serde(default)]
+    pub process: String,
     #[serde(default)]
     pub title: String,
     /// 恢复时该怎么对待这个窗口，见 [`Restore`]。
@@ -31,6 +34,7 @@ impl Target {
             hwnd,
             pid,
             process_path: String::new(),
+            process: String::new(),
             title: String::new(),
             restore: Restore::default(),
         }
@@ -41,13 +45,17 @@ impl Target {
             hwnd: w.hwnd,
             pid: w.pid,
             process_path: w.path.clone(),
+            process: w.process.clone(),
             title: w.title.clone(),
             restore: Restore::default(),
         }
     }
 
-    /// 可执行文件名（如 `WeChat.exe`）；路径为空时返回空串。
+    /// 可执行文件名（如 `WeChat.exe`）；路径与映像名都为空时返回空串。
     pub fn process_name(&self) -> &str {
+        if !self.process.is_empty() {
+            return &self.process;
+        }
         std::path::Path::new(&self.process_path)
             .file_name()
             .and_then(|s| s.to_str())
@@ -422,9 +430,12 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                     continue;
                 }
             }
-            // 任务栏与桌面带 WS_EX_TOOLWINDOW，不在枚举结果里，须先补上路径。
+            // 任务栏与桌面带 WS_EX_TOOLWINDOW，不在枚举结果里，须先补上身份。
             if t.process_path.is_empty() && !whitelist.is_empty() {
                 t.process_path = self.wm.process_path(t.pid);
+            }
+            if t.process.is_empty() && t.process_path.is_empty() {
+                t.process = self.wm.process_name(t.pid);
             }
             if is_ignored(
                 whitelist,
@@ -2772,6 +2783,37 @@ mod tests {
             Target::bare(1, 2).describe(),
             "未知进程(hwnd=1, pid=2)",
             "无路径时日志摘要仍要可读"
+        );
+    }
+
+    #[test]
+    fn target_keeps_the_image_name_when_the_path_is_unavailable() {
+        // 反作弊进程拒绝 OpenProcess，只有映像名可查。
+        let t = Target::from_window(&win("魔兽世界", 10, "Wow.exe", ""));
+        assert_eq!(t.process_path, "");
+        assert_eq!(t.process_name(), "Wow.exe");
+        assert_eq!(t.describe(), "Wow.exe(hwnd=10, pid=10)");
+    }
+
+    #[test]
+    fn hide_whitelist_can_skip_a_process_known_only_by_name() {
+        let mut config = Config {
+            process_rules: vec![ProcessRule::from_window(&win(
+                "魔兽世界",
+                10,
+                "Wow.exe",
+                "",
+            ))],
+            whitelist: Some(vec![allow("Wow.exe", IgnoreMode::Hide)]),
+            ..Default::default()
+        };
+        let windows = vec![win("魔兽世界", 10, "Wow.exe", "")];
+        let (targets, _) = resolve_targets(&mut config, &windows, 0);
+        assert_eq!(targets.len(), 1);
+        assert_eq!(
+            targets[0].restore,
+            Restore::Skip,
+            "查不到路径时白名单仍应按映像名放过它"
         );
     }
 }

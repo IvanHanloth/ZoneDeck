@@ -66,6 +66,7 @@ export default {
   "binding.pickWindowsFirst": "Select the windows to hide in the list on the left first",
   "binding.pickProcessesFirst": "Select the processes to hide in the list on the left first",
   "binding.windowsRefreshed": "Window list refreshed",
+  "binding.processUnidentified": "Skipped {count} window(s) whose program could not be identified (usually anti-cheat protection) — use window hiding instead",
   "binding.regexSeedKeyword": "keyword",
   "binding.regexSeedProcess": "program.exe",
 

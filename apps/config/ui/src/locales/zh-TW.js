@@ -65,6 +65,7 @@ export default {
   "binding.pickWindowsFirst": "請先在左側勾選要隱藏的視窗",
   "binding.pickProcessesFirst": "請先在左側勾選要隱藏的程序",
   "binding.windowsRefreshed": "視窗清單已重新整理",
+  "binding.processUnidentified": "已跳過 {count} 個查不到所屬程式的視窗（多為反作弊保護），改用「視窗隱藏」即可",
   "binding.regexSeedKeyword": "關鍵字",
   "binding.regexSeedProcess": "程式名稱.exe",
 
