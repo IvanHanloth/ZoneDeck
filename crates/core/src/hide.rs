@@ -2,7 +2,8 @@ use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 use zonedeck_common::matching::{
-    IgnoreMode, WindowResolution, is_ignored, match_process_rule, resolve_window_rule,
+    IgnoreMode, WindowResolution, is_config_image, is_ignored, match_process_rule,
+    resolve_window_rule,
 };
 use zonedeck_common::{Config, NO_TITLE, Setting, WhitelistRule, WindowInfo, WindowRule};
 
@@ -127,6 +128,16 @@ pub fn resolve_targets(
         match windows.iter().find(|w| w.hwnd == foreground) {
             Some(w) => result.push(Target::from_window(w)),
             None => result.push(Target::bare(foreground, 0)),
+        }
+    }
+
+    // 配置窗口只在此刻可见时才纳入，本来就没开着的不去动它。
+    if config.setting.hide_config_after_hide {
+        for w in windows
+            .iter()
+            .filter(|w| w.visible && is_config_image(&w.process))
+        {
+            result.push(Target::from_window(w));
         }
     }
 
@@ -1198,6 +1209,31 @@ mod tests {
 
         let (same, _) = resolve_targets(&mut config, &windows, 10);
         assert_eq!(ids(&same), vec![(10, 10)], "前台与已命中窗口相同应去重");
+    }
+
+    #[test]
+    fn the_config_window_joins_the_hide_only_while_it_is_on_screen() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let open = vec![
+            win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+            win("ZoneDeck", 30, "config.exe", "C:\\ZoneDeck\\config.exe"),
+        ];
+        let (targets, _) = resolve_targets(&mut config.clone(), &open, 0);
+        assert_eq!(ids(&targets), vec![(10, 10), (30, 30)], "开着就一起藏");
+
+        let closed: Vec<WindowInfo> = open
+            .iter()
+            .map(|w| w.clone().with_visibility(w.hwnd == 10))
+            .collect();
+        let (targets, _) = resolve_targets(&mut config.clone(), &closed, 0);
+        assert_eq!(ids(&targets), vec![(10, 10)], "没开着就不去动它");
+
+        config.setting.hide_config_after_hide = false;
+        let (targets, _) = resolve_targets(&mut config, &open, 0);
+        assert_eq!(ids(&targets), vec![(10, 10)], "关掉开关后不再纳入");
     }
 
     struct MockWm {
@@ -3253,9 +3289,10 @@ mod tests {
         assert_eq!(got, vec![200, 300], "大小写不敏感；未知 PID 保留");
     }
 
-    /// 展开子进程树后，ZoneDeck 自己必须被内置保护挡下；白名单为空时同样生效。
+    /// 展开子进程树后，核心必须被内置保护挡下；白名单为空时同样生效。
+    /// 配置程序不在保护之列，跟着一起冻。
     #[test]
-    fn freeze_whitelist_protects_zonedeck_inside_an_expanded_tree() {
+    fn freeze_whitelist_protects_the_core_inside_an_expanded_tree() {
         // explorer(100) → 核心(200) → 配置程序(300)，另有普通子进程 400。
         let edges = [(200, 100), (300, 200), (400, 100)];
         let expanded = expand_descendants(&[100], &edges);
@@ -3268,7 +3305,7 @@ mod tests {
             (400, "helper.exe".to_string()),
         ]);
         let got = filter_freeze_whitelist(expanded, &names, &std::collections::HashMap::new(), &[]);
-        assert_eq!(got, vec![100, 400], "核心与配置程序必须留下");
+        assert_eq!(got, vec![100, 300, 400], "只有核心留下");
     }
 
     #[test]

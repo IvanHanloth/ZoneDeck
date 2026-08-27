@@ -127,8 +127,7 @@ export default {
   "whitelist.ignoreFreeze": "略過凍結：不凍結這個程式的程序",
   "whitelist.ignoreMute": "略過靜音：不靜音這個程式的程序",
   "whitelist.builtinCore": "ZoneDeck 核心",
-  "whitelist.builtinConfig": "ZoneDeck 設定",
-  "whitelist.builtinLocked": "內建保護：凍結 ZoneDeck 自己會讓快速鍵失效、已隱藏的視窗再也無法復原，因此不可關閉、不可刪除。",
+  "whitelist.builtinLocked": "內建保護：凍結 ZoneDeck 核心會讓快速鍵失效、已隱藏的視窗再也無法復原，因此不可關閉、不可刪除。設定視窗不在此列，它被隱藏之後照常可凍結。",
 
   "broadRegex.title": "正規表示式可能過寬",
   "broadRegex.lead": "以下正規表示式命中了超過一半的隨機樣本（共 {total} 條），通常代表寫錯了——它會連帶命中大量無關的視窗或程序。",
@@ -263,6 +262,9 @@ export default {
   "hide.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
   "hide.hideIconDesc":
     "隱藏視窗時連 ZoneDeck 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
+  "hide.hideConfig": "一併隱藏 ZoneDeck 設定視窗",
+  "hide.hideConfigDesc":
+    "觸發隱藏時，設定視窗正開著就把它一起隱藏，復原時一併顯示；沒開著則不去動它。",
   "hide.sendPause": "同時暫停播放",
   "hide.sendPauseDesc": "隱藏同時嘗試暫停正在播放的媒體。",
   "hide.resumeMedia": "復原時繼續播放",

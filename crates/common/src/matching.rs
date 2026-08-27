@@ -179,16 +179,21 @@ pub struct BuiltinGuard {
 }
 
 /// 永不冻结的自有进程；不可由用户关闭，由 [`is_ignored`] 内部兜底。
-pub const BUILTIN_FREEZE_GUARDS: [BuiltinGuard; 2] = [
-    BuiltinGuard {
-        key: "core",
-        names: &["ZoneDeck.exe", "core.exe"],
-    },
-    BuiltinGuard {
-        key: "config",
-        names: &["config.exe", "zonedeck-config.exe"],
-    },
-];
+/// 配置程序不在其列：它被藏起来之后照常可冻结。
+pub const BUILTIN_FREEZE_GUARDS: [BuiltinGuard; 1] = [BuiltinGuard {
+    key: "core",
+    names: &["ZoneDeck.exe", "core.exe"],
+}];
+
+/// 配置程序的映像名：生产名与开发构建名各一条。
+pub const CONFIG_IMAGE_NAMES: [&str; 2] = ["config.exe", "zonedeck-config.exe"];
+
+/// 映像名是否属于 ZoneDeck 配置程序；不区分大小写。
+pub fn is_config_image(process: &str) -> bool {
+    CONFIG_IMAGE_NAMES
+        .iter()
+        .any(|n| n.eq_ignore_ascii_case(process))
+}
 
 /// 映像名是否属于内置强制忽略冻结项；不区分大小写。
 pub fn is_builtin_freeze_guarded(process: &str) -> bool {
@@ -762,13 +767,8 @@ mod tests {
 
     /// 这条保护不依赖任何用户配置。
     #[test]
-    fn builtin_guards_block_freezing_ourselves_with_empty_whitelist() {
-        for name in [
-            "ZoneDeck.exe",
-            "config.exe",
-            "core.exe",
-            "zonedeck-config.exe",
-        ] {
+    fn builtin_guards_block_freezing_the_core_with_empty_whitelist() {
+        for name in ["ZoneDeck.exe", "core.exe"] {
             assert!(
                 is_ignored(&[], "D:\\安装目录\\", name, IgnoreMode::Freeze),
                 "{name} 必须恒被排除在冻结之外"
@@ -776,6 +776,17 @@ mod tests {
             assert!(is_builtin_freeze_guarded(&name.to_ascii_uppercase()));
         }
         assert!(!is_builtin_freeze_guarded("explorer.exe"));
+    }
+
+    /// 配置程序可冻结，但仍要认得出它，隐藏与唤醒都靠这个判定。
+    #[test]
+    fn the_config_program_is_recognised_but_no_longer_freeze_guarded() {
+        for name in CONFIG_IMAGE_NAMES {
+            assert!(is_config_image(&name.to_ascii_uppercase()));
+            assert!(!is_builtin_freeze_guarded(name), "{name} 不再免疫冻结");
+            assert!(!is_ignored(&[], "D:\\安装目录\\", name, IgnoreMode::Freeze));
+        }
+        assert!(!is_config_image("explorer.exe"));
     }
 
     /// 内置保护只挡冻结。

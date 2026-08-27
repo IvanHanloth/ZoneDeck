@@ -37,6 +37,14 @@ title: 隱藏設定
 Windows 內建控制通知區域圖示顯示與否的功能，可手動設定哪些程式的圖示顯示在工作列角落，詳細步驟參見微軟官方教學 [在 Windows 中自訂工作列 · 系統匣](https://support.microsoft.com/zh-tw/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接開啟 [工作列設定](ms-settings:taskbar)（`ms-settings:taskbar` 連結僅在 Windows 上有效，瀏覽器會先要求確認）。
 :::
 
+## 一併隱藏 ZoneDeck 設定視窗
+
+開啟後，觸發隱藏時若 ZoneDeck 設定視窗正開著，把它**一併隱藏**，復原時隨其餘視窗一起顯示。
+
+- 預設**開啟**。
+- 通知區域的[「開啟設定介面」](/zh-tw/guide/notifications#通知區域圖示點擊行為)會先把它放出來，因此圖示還在時隨時能叫回設定視窗。
+- 開了[程序凍結](/zh-tw/guide/freeze)時，設定視窗隱藏之後也會跟著被凍結。
+
 ## 同時暫停播放
 
 隱藏同時嘗試暫停正在播放的媒體。

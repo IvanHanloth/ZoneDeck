@@ -59,6 +59,7 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | `minimize_before_hide` | bool | `false` | [隐藏前先最小化窗口](/guide/hiding#隐藏前先最小化窗口) |
 | `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/hiding#同时隐藏当前活动窗口) |
 | `hide_icon_after_hide` | bool | `false` | [同时隐藏 ZoneDeck 托盘图标](/guide/hiding#同时隐藏-zonedeck-托盘图标) |
+| `hide_config_after_hide` | bool | `true` | [同时隐藏 ZoneDeck 配置窗口](/guide/hiding#同时隐藏-zonedeck-配置窗口)：只对触发那一刻可见的配置窗口生效 |
 | `tray_enabled` | bool | `true` | [显示托盘图标](/guide/notifications#显示托盘图标)；为假时图标一直不显示，气泡与角标一并失效 |
 | `tray_clicks` | object | 见下 | [托盘图标点击行为](/guide/notifications#托盘图标点击行为) |
 | `tray_badges` | object | 见下 | [图标状态提示](/guide/notifications#图标状态提示) |
@@ -102,7 +103,7 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | 字段 | 默认 | 说明 |
 | --- | --- | --- |
 | `left` | `"toggle"` | 左键单击 |
-| `double` | `"none"` | 左键双击。非 `none` 时单击须等过系统双击判定时间才执行 |
+| `double` | `"settings"` | 左键双击。非 `none` 时单击须等过系统双击判定时间才执行 |
 | `right` | `"menu"` | 右键单击 |
 
 ### `setting.mouse`

@@ -84,7 +84,7 @@ title: 进程冻结
 ::: danger 别冻结文件资源管理器
 `explorer.exe` 就是桌面与任务栏本身，冻结它会让整个 Windows 外壳卡住。而且 ZoneDeck 通常由它启动、是它的子进程——用「目标进程及所有子进程」冻结资源管理器会把 ZoneDeck 一起挂起。
 
-因此 ZoneDeck 的核心与配置程序被**内置**在[白名单](/guide/whitelist#内置条目-zonedeck-自己)里，恒不冻结、不可关闭；`explorer.exe` 也预置了一条可删除的白名单条目。
+因此 ZoneDeck 的核心被**内置**在[白名单](/guide/whitelist#内置条目-zonedeck-自己)里，恒不冻结、不可关闭；`explorer.exe` 也预置了一条可删除的白名单条目。配置程序不在此列，它被藏起来之后照常可冻结。
 :::
 
 ## 排除特定程序

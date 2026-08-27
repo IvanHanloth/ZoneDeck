@@ -84,7 +84,7 @@ A wider scope is more thorough, more likely to disturb background work you did n
 ::: danger Do not freeze File Explorer
 `explorer.exe` *is* the desktop and the taskbar; freezing it locks up the entire Windows shell. Worse, ZoneDeck is usually launched by File Explorer and is therefore its child process — freezing File Explorer with "Target process and all its children" selected suspends ZoneDeck along with it.
 
-That is why ZoneDeck's core and settings app are **built into** the [whitelist](/en/guide/whitelist) as permanently non-freezable entries that cannot be turned off, and why `explorer.exe` ships as a removable whitelist entry.
+That is why ZoneDeck's core is **built into** the [whitelist](/en/guide/whitelist) as a permanently non-freezable entry that cannot be turned off, and why `explorer.exe` ships as a removable whitelist entry. The settings app is not covered — it can be frozen once hidden.
 :::
 
 ## Excluding specific programs

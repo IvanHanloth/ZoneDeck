@@ -58,6 +58,7 @@ export const WATCHED = [
   ["setting.resume_media_after_show", "hide", "resume_media"],
   ["setting.mute_after_hide", "hide", "mute"],
   ["setting.hide_icon_after_hide", "hide", "hide_tray_icon"],
+  ["setting.hide_config_after_hide", "hide", "hide_config_window"],
   ["setting.auto_hide_enabled", "hide", "auto_hide"],
   ["setting.auto_hide_time", "hide", "auto_hide_time"],
   ["setting.show_float_window", "hide", "float_window"],
@@ -134,6 +135,7 @@ export function featureProps(config, env = {}) {
     resume_media: !!s.resume_media_after_show,
     mute: !!s.mute_after_hide,
     hide_tray_icon: !!s.hide_icon_after_hide,
+    hide_config_window: !!s.hide_config_after_hide,
     auto_hide: !!s.auto_hide_enabled,
     float_window: !!s.show_float_window,
 

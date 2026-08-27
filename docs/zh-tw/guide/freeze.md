@@ -84,7 +84,7 @@ title: 程序凍結
 ::: danger 別凍結檔案總管
 `explorer.exe` 就是桌面與工作列本身，凍結它會讓整個 Windows 殼層卡住。而且 ZoneDeck 通常由它啟動、是它的子程序——用「目標程序及所有子程序」凍結檔案總管會把 ZoneDeck 一起暫停。
 
-因此 ZoneDeck 的核心與設定程式被**內建**在[白名單](/zh-tw/guide/whitelist)裡，恆不凍結、不可關閉；`explorer.exe` 也預置了一條可刪除的白名單項目。
+因此 ZoneDeck 的核心被**內建**在[白名單](/zh-tw/guide/whitelist)裡，恆不凍結、不可關閉；`explorer.exe` 也預置了一條可刪除的白名單項目。設定程式不在此列，它被隱藏之後照常可凍結。
 :::
 
 ## 排除特定程式

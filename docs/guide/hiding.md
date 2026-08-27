@@ -37,6 +37,14 @@ title: 隐藏设置
 Windows 自带控制托盘图标显隐的功能，可手动设置哪些程序的图标显示在任务栏角落，具体步骤参见微软官方教程 [在 Windows 中自定义任务栏 · 系统托盘](https://support.microsoft.com/zh-cn/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray)，或直接打开 [任务栏设置](ms-settings:taskbar)（`ms-settings:taskbar` 链接仅在 Windows 上有效，浏览器会先请求确认）。
 :::
 
+## 同时隐藏 ZoneDeck 配置窗口
+
+开启后，触发隐藏时若 ZoneDeck 配置窗口正开着，把它**一并隐藏**，恢复时随其余窗口一起显示。
+
+- 默认**开启**。
+- 托盘的[「打开配置界面」](/guide/notifications#托盘图标点击行为)会先把它放出来，因此图标还在时随时能叫回配置窗口。
+- 开了[进程冻结](/guide/freeze)时，配置窗口藏起来之后也会跟着被冻结。
+
 ## 同时暂停播放
 
 隐藏同时尝试暂停正在播放的媒体。

@@ -128,8 +128,7 @@ export default {
   "whitelist.ignoreFreeze": "忽略冻结：不冻结这个程序的进程",
   "whitelist.ignoreMute": "忽略静音：不静音这个程序的进程",
   "whitelist.builtinCore": "ZoneDeck 核心",
-  "whitelist.builtinConfig": "ZoneDeck 设置",
-  "whitelist.builtinLocked": "内置保护：冻结 ZoneDeck 自己会让热键失效、已隐藏的窗口再也无法恢复，故不可关闭、不可删除。",
+  "whitelist.builtinLocked": "内置保护：冻结 ZoneDeck 核心会让热键失效、已隐藏的窗口再也无法恢复，故不可关闭、不可删除。配置窗口不在此列，它被藏起来之后照常可冻结。",
 
   "broadRegex.title": "正则可能过宽",
   "broadRegex.lead": "以下正则命中了超过一半的随机样本（共 {total} 条），通常意味着写错了——它会连带命中大量无关窗口或进程。",
@@ -264,6 +263,9 @@ export default {
   "hide.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "hide.hideIconDesc":
     "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
+  "hide.hideConfig": "同时隐藏 ZoneDeck 配置窗口",
+  "hide.hideConfigDesc":
+    "触发隐藏时，配置窗口正开着就把它一起藏起来，恢复时一并显示；没开着则不去动它。",
   "hide.sendPause": "同时暂停播放",
   "hide.sendPauseDesc": "隐藏同时尝试暂停正在播放的媒体。",
   "hide.resumeMedia": "恢复时继续播放",
