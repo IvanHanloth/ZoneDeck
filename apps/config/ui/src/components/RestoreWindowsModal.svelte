@@ -2,6 +2,7 @@
   import ContentDialog from "./fluent/ContentDialog.svelte";
   import WindowList from "./WindowList.svelte";
   import { invoke } from "../lib/ipc.js";
+  import { track } from "../lib/analytics.js";
   import { app, toast } from "../lib/state.svelte.js";
   import { applyListFilters } from "../lib/grouping.js";
   import { t } from "../lib/i18n.svelte.js";
@@ -63,6 +64,7 @@
     if (selected.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.showWindows"), async () => {
       await invoke("show_windows", { hwnds: selected });
+      track("restore_tool_action", { action: "show", count: selected.length });
       toast(t("restore.shown"));
     });
   }
@@ -71,6 +73,7 @@
     if (selected.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.hideWindows"), async () => {
       await invoke("hide_windows", { hwnds: selected });
+      track("restore_tool_action", { action: "hide", count: selected.length });
       toast(t("restore.hidden"));
     });
   }
@@ -80,6 +83,7 @@
     if (pids.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.freezeProcesses"), async () => {
       await invoke("freeze_pids", { pids, ...freezeArgs });
+      track("restore_tool_action", { action: "freeze", count: pids.length });
       toast(t("restore.frozen", { n: pids.length }));
     });
   }
@@ -89,6 +93,7 @@
     if (pids.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.resumeProcesses"), async () => {
       await invoke("resume_pids", { pids, ...freezeArgs });
+      track("restore_tool_action", { action: "resume", count: pids.length });
       toast(t("restore.resumed", { n: pids.length }));
     });
   }

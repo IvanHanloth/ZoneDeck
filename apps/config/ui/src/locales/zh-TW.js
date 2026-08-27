@@ -377,6 +377,10 @@ export default {
     "設定介面與核心的通知區域選單、通知所使用的語言；選擇「跟隨系統」時使用系統顯示語言。",
   "options.languageAuto": "跟隨系統",
 
+  "options.privacyCard": "隱私",
+  "options.analytics": "匿名使用統計",
+  "options.analyticsDesc": "參與匿名使用者體驗計畫，在使用中讓 ZoneDeck 變得更好。所有資料均為匿名非隱私採集，您可隨時退出此統計",
+
   "options.toolsCard": "工具",
   "options.restoreTool": "視窗復原工具",
   "options.restoreToolDesc":
@@ -460,6 +464,22 @@ export default {
   "announce.title": "公告",
   "announce.pinned": "置頂",
   "announce.gotIt": "知道了",
+
+  "consent.title": "ZoneDeck 匿名使用統計",
+  "consent.heading": "在使用過程中幫助 ZoneDeck 變得更好！",
+  "consent.intro": "是否願意分享匿名的功能使用情況？它幫助我們更了解產品的實際使用情況。選「不參與」不影響任何功能，您可隨時在設定頁面中退出",
+  "consent.collectTitle": "會回報",
+  "consent.collectFeatures": "各項功能開關的開啟與關閉情況；",
+  "consent.collectScale": "規則與白名單數量、正規表示式規則數量、常用快速鍵統計情況；",
+  "consent.collectEnv": "程式版本、語言、執行情況；",
+  "consent.collectId": "一組隨機產生、不含任何裝置特徵的匿名識別碼。",
+  "consent.neverTitle": "絕不回報",
+  "consent.neverHide": "隱藏了哪些視窗、綁定了哪些行程，以及每次隱藏發生在什麼時候；",
+  "consent.neverContent": "視窗標題、行程名稱、檔案路徑、正規表示式本身與意見回饋內容；",
+  "consent.neverIdentity": "姓名、電子郵件等能指向你本人的資訊。",
+  "consent.control": "您隨時可以在「一般設定 → 隱私」裡退出此功能。關閉後不會再送出任何紀錄，本機的匿名識別碼也會一併刪除。",
+  "consent.agree": "同意參與",
+  "consent.decline": "不參與",
 
   "dataNotice.title": "設定的存放位置",
   "dataNotice.heading": "程式所在資料夾無法寫入",

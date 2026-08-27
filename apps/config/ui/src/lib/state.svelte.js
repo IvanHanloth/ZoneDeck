@@ -1,12 +1,13 @@
 // 全局应用状态：配置双向绑定的单一数据源 + 核心状态轮询。
 
 import { invoke } from "./ipc.js";
-import { setLangPref, t } from "./i18n.svelte.js";
+import { lang, setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
 import { sanitizeConfig } from "./sanitize.js";
 import { createAutosave } from "./autosave.js";
 import { createBreadthGuard } from "./regexcheck.js";
 import * as verhub from "./verhub.js";
+import * as analytics from "./analytics.js";
 
 export const app = $state({
   /** config.json 的完整内容；表单直接 bind 到它的字段。 */
@@ -165,6 +166,8 @@ export async function loadAll() {
       if (loaded.fallback) reportError(t("state.configFallback"), loaded.fallback);
       // 配置来自更高版本：本次照常生效，但保存后新版设置项会丢。
       if (loaded.schema_note) reportError(t("state.configSchemaNewer"), loaded.schema_note);
+      // 埋点的比较基线：启动时的配置不算「刚改过」。
+      trackedConfig = sanitizeConfig(structuredClone($state.snapshot(loaded.config)));
       // 语言定下来之后再拉，项目信息才会是当前语言的译文。
       loadProjectLinks();
       return refreshWindows();
@@ -265,6 +268,9 @@ async function warnOnBroadRegex(config) {
   });
 }
 
+/** 上一次落盘的配置，用来算出这次改了哪些功能项。 */
+let trackedConfig = null;
+
 const autosave = createAutosave(async () => {
   if (!app.config) return true;
   const config = sanitizeConfig($state.snapshot(app.config));
@@ -272,6 +278,7 @@ const autosave = createAutosave(async () => {
   app.saving = true;
   try {
     await invoke("save_config", { config });
+    trackedConfig = analytics.trackConfigChanges(trackedConfig, config);
     return true;
   } catch (err) {
     reportError(t("state.saveFailed"), err);
@@ -300,6 +307,7 @@ export async function startCore(elevated) {
   try {
     const accepted = await invoke("start_core", { elevated });
     if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    analytics.track("core_action", { action: "start", elevated });
     toast(t(elevated ? "state.coreStartingAdmin" : "state.coreStarting"));
     setTimeout(refreshStatus, 1200);
   } catch (err) {
@@ -311,6 +319,7 @@ export async function restartCore(elevated) {
   try {
     const accepted = await invoke("restart_core", { elevated });
     if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    analytics.track("core_action", { action: "restart", elevated });
     toast(t(elevated ? "state.coreRestartingAdmin" : "state.coreRestarting"));
     setTimeout(refreshStatus, 1500);
   } catch (err) {
@@ -321,6 +330,7 @@ export async function restartCore(elevated) {
 export async function quitCore() {
   try {
     await invoke("quit_core");
+    analytics.track("core_action", { action: "quit" });
     toast(t("state.coreQuitRequested"));
     setTimeout(refreshStatus, 800);
   } catch (err) {
@@ -346,8 +356,15 @@ export async function checkForUpdate(manual = false) {
   if (app.updateChecking) return;
   app.updateChecking = true;
   try {
-    const result = await verhub.checkUpdate(app.config?.verhub?.include_preview ?? false);
+    const preview = app.config?.verhub?.include_preview ?? false;
+    const result = await verhub.checkUpdate(preview);
     app.update = result;
+    analytics.track("update_checked", {
+      manual,
+      preview,
+      should_update: !!result.should_update,
+      required: !!result.required,
+    });
     if (result.should_update) app.updateOpen = true;
     else if (manual) toast(t("state.upToDate"));
   } catch (err) {
@@ -395,6 +412,45 @@ export async function refreshLocalizedContent() {
   } finally {
     app.updateChecking = false;
   }
+}
+
+/**
+ * 报一次功能采用快照。「多少人在用某个功能」只能这么算——变更事件算出来的是
+ * 改动次数，不是人数。管理员状态要等核心状态回读完才准。
+ */
+export async function trackFeatures() {
+  await refreshStatus();
+  analytics.trackFeatures(app.config, {
+    locale: lang(),
+    install: app.dataLocation?.kind ?? "unknown",
+    elevated: !!app.status.elevated,
+    autostart: !!app.autostart,
+  });
+}
+
+/** 用户还没就匿名统计表过态，须先征求同意。 */
+export function analyticsUnanswered() {
+  return !!app.config && app.config.verhub?.analytics == null;
+}
+
+/**
+ * 记下用户对匿名统计的选择；`source` 区分首次征询与设置页开关。
+ * 先落到 SDK 再埋点：撤回之后的事件本就不该发出去。
+ */
+export async function setAnalyticsConsent(granted, source) {
+  if (!app.config) return;
+  const v = (app.config.verhub ??= {});
+  v.analytics = granted;
+  // 同意只在这台设备上报一次，就在点下同意的那一刻；之后的启动与反复开关都不再报。
+  const firstYes = granted && !v.analytics_consent_sent;
+  if (firstYes) v.analytics_consent_sent = true;
+  scheduleSave(0);
+  // 退出是用户不想再被记录，那就一条也不发，包括退出这件事本身。
+  await analytics.setConsent(granted);
+  if (!granted) return;
+  if (firstYes) analytics.track("analytics_consent", { source });
+  // 首次征询排在启动埋点之后，同意了就把这次的快照补上。
+  if (source === "first_run") trackFeatures();
 }
 
 /** 报告一次失败：弹出错误框，由用户决定是否上报日志。 */

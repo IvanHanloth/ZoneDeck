@@ -34,6 +34,25 @@ ZoneDeck can display **announcements** from the server (important update notices
 
 Announcements and release notes are fetched in the **current interface language**, and are fetched again as soon as you switch languages. Anything without a translation for that language falls back to its original text.
 
+## Anonymous usage statistics
+
+On first launch ZoneDeck asks whether you want to share anonymous usage statistics. **No statistics are collected before you answer.**
+
+What is sent:
+
+- whether each feature switch is on or off;
+- how many rules and whitelist entries there are, how many use a regex, and which hotkeys are commonly set;
+- the app version, the language, and how it is running;
+- a randomly generated anonymous id that carries no device characteristics.
+
+What is never sent:
+
+- which windows were hidden, which processes are bound, or when any hide happened;
+- window titles, process names, file paths, the regexes themselves and feedback text;
+- your name, email or anything else that points back to you.
+
+You can opt out any time under **General → Privacy**. Once it is off nothing further is ever sent, and the anonymous id on this device is deleted as well.
+
 ## Feedback and reporting
 
 You can send **feedback or a problem report** directly from the "About & Feedback" tab, or open an [issue](https://github.com/IvanHanloth/ZoneDeck/issues) on the **GitHub repository**.

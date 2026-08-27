@@ -2,7 +2,7 @@
 //! 只用公开端点；本模块把 SDK 的响应类型映射成前端 IPC 契约所需的 DTO。
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -25,14 +25,24 @@ pub const LOG_EXCERPT_MAX: usize = LOG_CONTENT_MAX * 3 / 5;
 
 type Result<T> = verhub_sdk::Result<T>;
 
-/// 构造公开接口客户端；User-Agent 追加 `ZoneDeck/{版本}`。
-fn client() -> Result<VerhubClient> {
-    VerhubClient::builder(BASE_URL)
+/// 进程内共享的客户端。事件采集的匿名标识与待发队列挂在客户端上，
+/// 每次调用新建一个会反复读写状态文件，也会把攒批的计时清零。
+static CLIENT: OnceLock<VerhubClient> = OnceLock::new();
+
+/// 取共享客户端；User-Agent 追加 `ZoneDeck/{版本}`。
+pub fn client() -> Result<VerhubClient> {
+    if let Some(client) = CLIENT.get() {
+        return Ok(client.clone());
+    }
+    let client = VerhubClient::builder(BASE_URL)
         .project_key(PROJECT_KEY)
         .platform(PLATFORM)
         .timeout(TIMEOUT)
         .app_identifier(concat!("ZoneDeck/", env!("CARGO_PKG_VERSION")))
-        .build()
+        .analytics(crate::analytics::options())
+        .build()?;
+    // 竞态下别的线程先放进去也无妨，两个客户端等价。
+    Ok(CLIENT.get_or_init(|| client).clone())
 }
 
 /// 把 `serde_json::Value` 收敛为 JSON 对象；非对象一律丢弃。

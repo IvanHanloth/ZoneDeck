@@ -11,6 +11,7 @@ use zonedeck_common::model::WindowInfo;
 use zonedeck_core::i18n::{self, Msg};
 use zonedeck_core::key_capture::{KeyCapture, KeyEvent};
 
+mod analytics;
 mod verhub;
 
 const CORE_EXE: &str = "ZoneDeck.exe";
@@ -106,6 +107,8 @@ fn load_config() -> Result<LoadedConfig, String> {
     use zonedeck_common::LoadNote;
     let (config, note) = Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
     i18n::set_from_pref(&config.setting.language);
+    // 采集的开闸状态不落盘，每次读配置都要重新对齐一次。
+    analytics::apply_consent(config.verhub.analytics);
     let (fallback, schema_note) = match note {
         None => (None, None),
         Some(LoadNote::Corrupt(s)) => (Some(s), None),
@@ -125,6 +128,7 @@ async fn save_config(config: serde_json::Value) -> Result<(), String> {
     blocking(move || {
         let config = Config::from_value(config).map_err(|e| e.to_string())?;
         i18n::set_from_pref(&config.setting.language);
+        analytics::apply_consent(config.verhub.analytics);
         config.save(&config_path()).map_err(|e| e.to_string())?;
         // 通知核心热重载；核心未运行时忽略错误。
         let _ = notify_core(&Command::ReloadConfig);
@@ -691,6 +695,24 @@ async fn open_external(url: String) -> Result<(), String> {
     blocking(move || zonedeck_core::shell::open(&url)).await
 }
 
+/// 记一次功能使用事件；未获授权、或事件名没在 [`analytics::EVENTS`] 登记时直接丢弃。
+#[tauri::command]
+async fn analytics_track(event: String, props: Option<serde_json::Value>) {
+    analytics::track(&event, props).await;
+}
+
+/// 应用采集授权：界面首次征求同意、以及设置页开关变动时调用。
+#[tauri::command]
+async fn analytics_set_consent(granted: bool) {
+    analytics::apply_consent(Some(granted));
+}
+
+/// 把攒着的事件发出去；界面关窗前调一次，否则最后一批要等下次启动补发。
+#[tauri::command]
+async fn analytics_flush() {
+    analytics::flush().await;
+}
+
 /// 服务端下发内容（版本说明 / 公告 / 项目信息）要用的语言标签：
 /// 界面传什么用什么，缺省或无法识别时回落到当前生效语言。
 fn content_locale(locale: Option<String>) -> String {
@@ -902,6 +924,9 @@ pub fn run() {
             verhub_submit_feedback,
             verhub_upload_log,
             current_session_log,
+            analytics_track,
+            analytics_set_consent,
+            analytics_flush,
         ])
         .run(tauri::generate_context!())
         .expect("运行 ZoneDeck 配置程序时出错");

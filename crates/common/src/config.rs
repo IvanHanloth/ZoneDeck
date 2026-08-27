@@ -678,6 +678,13 @@ pub struct Verhub {
     /// 用户已读过的最新一条公告 id。
     #[serde(default)]
     pub seen_announcement_id: String,
+    /// 匿名使用统计的授权：`None` 表示还没问过用户，首次启动时须征求同意；
+    /// `Some(false)` 是明确拒绝，不再追问。
+    #[serde(default)]
+    pub analytics: Option<bool>,
+    /// 「同意参与」是否已经上报过。同一台设备只报一次，反复开关不再重复。
+    #[serde(default)]
+    pub analytics_consent_sent: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

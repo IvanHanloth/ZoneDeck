@@ -7,6 +7,7 @@
   import { win } from "../lib/ipc.js";
   import { app, toast } from "../lib/state.svelte.js";
   import { downloadUrl, formatTime, openExternal } from "../lib/verhub.js";
+  import { track } from "../lib/analytics.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const target = $derived(app.update?.target_version ?? app.update?.latest_version ?? null);
@@ -15,6 +16,7 @@
 
   async function download() {
     if (!url) return toast(t("update.noDownloadUrl"), true);
+    track("update_download", { preview: !!target?.is_preview, forced });
     try {
       await openExternal(url);
     } catch (err) {

@@ -7,8 +7,10 @@
 //! 加 `IDLE_PRIORITY_CLASS`，全是原生 Win32，不依赖外部工具。
 //! Win10 1709+ 该 API 即存在（降级为执行速度节流），Win11 22000+ 才是完整 EcoQoS。
 
+use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::mem::size_of;
+use std::sync::{Mutex, MutexGuard};
 
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{
@@ -39,20 +41,24 @@ fn open(pid: u32) -> Result<windows::Win32::Foundation::HANDLE, EfficiencyError>
     }
 }
 
-/// 施加或撤销 EcoQoS。`on=false` 时保留 ControlMask 只清 StateMask，
-/// 这是文档规定的「交还系统托管」写法，不能连 ControlMask 一起清。
+/// 施加或撤销 EcoQoS。
+///
+/// 撤销须连 ControlMask 一起清零：文档里两个掩码都为 0 才是「交还系统托管」，
+/// 而 `ControlMask=EXECUTION_SPEED, StateMask=0` 是「显式禁止节流」——那会让进程
+/// 从此不再被系统自动放进 EcoQoS，比没用过效率模式还费电。
 unsafe fn set_eco(
     handle: windows::Win32::Foundation::HANDLE,
     on: bool,
 ) -> Result<(), EfficiencyError> {
+    let mask = if on {
+        PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+    } else {
+        0
+    };
     let state = PROCESS_POWER_THROTTLING_STATE {
         Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
-        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
-        StateMask: if on {
-            PROCESS_POWER_THROTTLING_EXECUTION_SPEED
-        } else {
-            0
-        },
+        ControlMask: mask,
+        StateMask: mask,
     };
     unsafe {
         SetProcessInformation(
@@ -65,16 +71,27 @@ unsafe fn set_eco(
     }
 }
 
+/// 本次运行施加过效率模式的进程 → 当时有没有顺带把优先级压到 Idle。
+/// [`disable`] 据此决定抬不抬，免得把用户自己设成低优先级的进程抬成普通。
+static LOWERED: Mutex<BTreeMap<u32, bool>> = Mutex::new(BTreeMap::new());
+
+/// 记账失败不该拖垮效率模式，锁中毒后照常沿用里面的数据。
+fn lowered() -> MutexGuard<'static, BTreeMap<u32, bool>> {
+    LOWERED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
 /// 开启效率模式。
 ///
-/// 只有原本是普通优先级的进程才降到 Idle，其余只给 EcoQoS。
-/// 只动普通优先级这一档，还原目标恒为普通，[`disable`] 不必记账。
+/// 只有原本是普通优先级的进程才降到 Idle，其余只给 EcoQoS；压没压过都记一笔，
+/// [`disable`] 照着还原。
 pub fn enable(pid: u32) -> Result<(), EfficiencyError> {
     unsafe {
         let handle = open(pid)?;
         let result = set_eco(handle, true);
-        if result.is_ok() && GetPriorityClass(handle) == NORMAL_PRIORITY_CLASS.0 {
-            let _ = SetPriorityClass(handle, IDLE_PRIORITY_CLASS);
+        if result.is_ok() {
+            let lower = GetPriorityClass(handle) == NORMAL_PRIORITY_CLASS.0;
+            let done = lower && SetPriorityClass(handle, IDLE_PRIORITY_CLASS).is_ok();
+            lowered().insert(pid, done);
         }
         let _ = CloseHandle(handle);
         result
@@ -83,12 +100,17 @@ pub fn enable(pid: u32) -> Result<(), EfficiencyError> {
 
 /// 关闭效率模式，并把 [`enable`] 压下去的优先级抬回普通。
 ///
-/// 只在当前确实是 Idle 时才抬。无状态，崩溃重启后的恢复流程可以直接调用。
+/// 本次运行压过的照记录还原；没有记录的只可能来自崩溃恢复（记账随进程一起没了），
+/// 那时只剩「当前是 Idle 就抬」这一条可依。
 pub fn disable(pid: u32) -> Result<(), EfficiencyError> {
     unsafe {
         let handle = open(pid)?;
         let result = set_eco(handle, false);
-        if GetPriorityClass(handle) == IDLE_PRIORITY_CLASS.0 {
+        let restore = match lowered().remove(&pid) {
+            Some(lowered) => lowered,
+            None => GetPriorityClass(handle) == IDLE_PRIORITY_CLASS.0,
+        };
+        if restore {
             let _ = SetPriorityClass(handle, NORMAL_PRIORITY_CLASS);
         }
         let _ = CloseHandle(handle);
@@ -103,9 +125,9 @@ mod tests {
         ABOVE_NORMAL_PRIORITY_CLASS, GetProcessInformation, PROCESS_CREATION_FLAGS,
     };
 
-    /// 读回进程当前的 EcoQoS 状态位；用来确认标志确实落到了进程上，
+    /// 读回进程当前的 `(ControlMask, StateMask)`；用来确认标志确实落到了进程上，
     /// 而不是只看 SetProcessInformation 返回成功。
-    fn eco_enabled(pid: u32) -> bool {
+    fn eco_masks(pid: u32) -> (u32, u32) {
         unsafe {
             let h = open(pid).expect("应能打开自身进程");
             let mut state = PROCESS_POWER_THROTTLING_STATE {
@@ -120,11 +142,16 @@ mod tests {
             )
             .is_ok();
             let _ = CloseHandle(h);
-            ok && state.StateMask & PROCESS_POWER_THROTTLING_EXECUTION_SPEED != 0
+            assert!(ok, "应能读回 EcoQoS 状态");
+            (state.ControlMask, state.StateMask)
         }
     }
 
-    /// 拿当前进程走一遍开关。两种情形合在一个用例里跑：它们共用同一个进程的
+    fn eco_enabled(pid: u32) -> bool {
+        eco_masks(pid).1 & PROCESS_POWER_THROTTLING_EXECUTION_SPEED != 0
+    }
+
+    /// 拿当前进程走一遍开关。几种情形合在一个用例里跑：它们共用同一个进程的
     /// 优先级，拆开会被测试框架并行调度而互相打架。
     #[test]
     fn efficiency_mode_round_trips_on_the_current_process() {
@@ -143,6 +170,24 @@ mod tests {
         };
 
         let original = priority_now();
+
+        // 撤销要把进程交还系统托管，而不是给它盖上「显式禁止节流」的戳：
+        // ControlMask 留着会让进程从此不再被系统自动放进 EcoQoS。
+        enable(pid).expect("开启效率模式应当成功");
+        assert_eq!(
+            eco_masks(pid),
+            (
+                PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+                PROCESS_POWER_THROTTLING_EXECUTION_SPEED
+            ),
+            "开启时两个掩码都该置上"
+        );
+        disable(pid).expect("关闭效率模式应当成功");
+        assert_eq!(
+            eco_masks(pid),
+            (0, 0),
+            "撤销后两个掩码都该清零，否则进程被钉死在「不节流」上"
+        );
 
         // 情形一：普通优先级会被压到 Idle，关闭后抬回普通。
         if original == NORMAL_PRIORITY_CLASS.0 {
@@ -169,6 +214,18 @@ mod tests {
                 priority_now(),
                 ABOVE_NORMAL_PRIORITY_CLASS.0,
                 "没被压过的优先级不该被 disable 改成普通"
+            );
+            set_priority(PROCESS_CREATION_FLAGS(original));
+        }
+
+        // 情形三：用户自己设成 Idle 的进程，走一遍效率模式后仍该是 Idle。
+        if set_priority(IDLE_PRIORITY_CLASS) {
+            enable(pid).expect("开启效率模式应当成功");
+            disable(pid).expect("关闭效率模式应当成功");
+            assert_eq!(
+                priority_now(),
+                IDLE_PRIORITY_CLASS.0,
+                "本就是 Idle 的进程不该被 disable 抬成普通"
             );
             set_priority(PROCESS_CREATION_FLAGS(original));
         }

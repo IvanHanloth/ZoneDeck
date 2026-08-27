@@ -2,7 +2,8 @@
 //!
 //! 代价是 Toast 只认 AppUserModelID：未打包的 Win32 程序必须在开始菜单里有一个
 //! 带该 AUMID 属性的快捷方式，否则 `Show` 会返回成功但什么都不弹。安装版由安装器
-//! 建好，便携版则在真要弹第一条通知时自建一个（见 [`ensure_registered`]）。
+//! 建好；旧版安装器没写该属性的，给它补上；便携版则在真要弹第一条通知时自建一个
+//! （见 [`ensure_registered`]）。
 //!
 //! 通知走专职线程：WinRT 要求单元化的 COM，而代理线程是消息循环，不宜改动它的
 //! 单元模型；顺带也把首次注册那一两秒的等待挪出了消息循环。
@@ -13,11 +14,12 @@ use std::time::{Duration, Instant};
 
 use windows::Data::Xml::Dom::XmlDocument;
 use windows::UI::Notifications::{ToastNotification, ToastNotificationManager};
+use windows::Win32::Foundation::MAX_PATH;
 use windows::Win32::Storage::EnhancedStorage::PKEY_AppUserModel_ID;
 use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
-    CoTaskMemFree, CoUninitialize, IPersistFile, STGM_READ,
+    CoTaskMemFree, CoUninitialize, IPersistFile, STGM, STGM_READ, STGM_READWRITE,
 };
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
 use windows::Win32::UI::Shell::{
@@ -154,6 +156,28 @@ fn ensure_registered() -> bool {
         return true;
     }
 
+    // 先试着认领已有的那条，别急着另建：3.1.0 及更早的安装器不写 AUMID，
+    // 直接自建会让开始菜单里并排出现两个 ZoneDeck。
+    if let Some(path) = adoptable_shortcut() {
+        match set_shortcut_aumid(&path) {
+            Ok(()) => {
+                settle_for_shell();
+                logging::debug(&format!(
+                    "已给开始菜单里的快捷方式补上 AppUserModelID（旧版安装器没写）: {}｜通知平台已认领={}",
+                    path.display(),
+                    notifier_ready()
+                ));
+                return true;
+            }
+            // 所有用户目录下的那份要管理员权限才改得动；改不了就退回自建。
+            Err(e) => log_warn!(
+                "给已有快捷方式补写 AppUserModelID 失败，改为在开始菜单另建一条: {} — {}",
+                path.display(),
+                crate::util::win_err(&e)
+            ),
+        }
+    }
+
     let Some(path) = user_shortcut_path() else {
         log_warn!("定位不到开始菜单目录，无法注册通知，本次运行不弹通知");
         return false;
@@ -167,15 +191,19 @@ fn ensure_registered() -> bool {
         return false;
     }
 
-    // 给 shell 一点时间把新快捷方式的 AUMID 收进通知平台。等不到也照发不误，
-    // 最坏是这一条不响，下次启动时快捷方式已经在了。
-    std::thread::sleep(REGISTER_SETTLE);
+    settle_for_shell();
     logging::debug(&format!(
         "已在开始菜单创建通知所需的快捷方式（Toast 只认注册过的 AppUserModelID）: {}｜通知平台已认领={}",
         path.display(),
         notifier_ready()
     ));
     true
+}
+
+/// 给 shell 一点时间把快捷方式上的 AUMID 收进通知平台。等不到也照发不误，
+/// 最坏是这一条不响，下次启动时快捷方式已经在了。
+fn settle_for_shell() {
+    std::thread::sleep(REGISTER_SETTLE);
 }
 
 /// 通知平台是否已认领本程序的 AUMID。仅用于日志：它为假不代表这条通知一定不响。
@@ -185,12 +213,12 @@ fn notifier_ready() -> bool {
         .is_ok()
 }
 
-/// 开始菜单里已有的、带本程序 AUMID 的快捷方式。
+/// 开始菜单里可能放着本程序快捷方式的位置。
 ///
-/// 候选覆盖安装版与便携版各自会用到的位置：安装器把快捷方式放进 `{group}`，
+/// 覆盖安装版与便携版各自会用到的地方：安装器把快捷方式放进 `{group}`，
 /// 即 `<开始菜单>\Programs\ZoneDeck\`，按安装权限落在当前用户或所有用户下；
 /// 便携版自建的那个则直接放在 `Programs\` 根下。
-fn existing_shortcut() -> Option<std::path::PathBuf> {
+fn shortcut_candidates() -> Vec<std::path::PathBuf> {
     let mut roots = Vec::new();
     if let Some(dir) = known_folder(&FOLDERID_Programs) {
         roots.push(dir);
@@ -206,7 +234,37 @@ fn existing_shortcut() -> Option<std::path::PathBuf> {
                 root.join(APP_NAME).join(SHORTCUT_NAME),
             ]
         })
+        .collect()
+}
+
+/// 开始菜单里已有的、带本程序 AUMID 的快捷方式。
+fn existing_shortcut() -> Option<std::path::PathBuf> {
+    shortcut_candidates()
+        .into_iter()
         .find(|p| shortcut_has_aumid(p))
+}
+
+/// 开始菜单里指向本程序、却没有 AUMID 的快捷方式。
+///
+/// 只认目标就是本 exe 的那条：便携版不该去篡改安装版的快捷方式，
+/// 反之亦然，两边指向的 exe 不同，各自另建才是对的。
+fn adoptable_shortcut() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    shortcut_candidates()
+        .into_iter()
+        .find(|p| is_adoptable(p, &exe))
+}
+
+/// 这条快捷方式是不是「指向 `exe` 却缺 AUMID」的那一种。
+fn is_adoptable(path: &std::path::Path, exe: &std::path::Path) -> bool {
+    path.exists()
+        && !shortcut_has_aumid(path)
+        && read_shortcut_target(path).is_ok_and(|target| same_path(&target, exe))
+}
+
+/// Windows 路径不区分大小写。
+fn same_path(a: &std::path::Path, b: &std::path::Path) -> bool {
+    a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
 }
 
 /// 快捷方式存在且它的 AppUserModelID 正是本程序的。
@@ -221,14 +279,49 @@ fn shortcut_has_aumid(path: &std::path::Path) -> bool {
 
 fn read_shortcut_aumid(path: &std::path::Path) -> windows::core::Result<String> {
     unsafe {
-        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
-        let file: IPersistFile = link.cast()?;
-        let wide = HSTRING::from(path.as_os_str());
-        file.Load(PCWSTR(wide.as_ptr()), STGM_READ)?;
-
+        let link = load_shortcut(path, STGM_READ)?;
         let store: IPropertyStore = link.cast()?;
         let value = store.GetValue(&PKEY_AppUserModel_ID)?;
         Ok(value.to_string())
+    }
+}
+
+/// 快捷方式指向的可执行文件路径。
+fn read_shortcut_target(path: &std::path::Path) -> windows::core::Result<std::path::PathBuf> {
+    unsafe {
+        let link = load_shortcut(path, STGM_READ)?;
+        let mut buf = [0u16; MAX_PATH as usize];
+        link.GetPath(&mut buf, std::ptr::null_mut(), 0)?;
+        let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Ok(std::path::PathBuf::from(String::from_utf16_lossy(
+            &buf[..len],
+        )))
+    }
+}
+
+/// 给已有的快捷方式补上本程序的 AUMID，其余属性原样保留。
+fn set_shortcut_aumid(path: &std::path::Path) -> windows::core::Result<()> {
+    unsafe {
+        let link = load_shortcut(path, STGM_READWRITE)?;
+        let store: IPropertyStore = link.cast()?;
+        store.SetValue(&PKEY_AppUserModel_ID, &PROPVARIANT::from(AUMID))?;
+        store.Commit()?;
+
+        let file: IPersistFile = link.cast()?;
+        let wide = HSTRING::from(path.as_os_str());
+        file.Save(PCWSTR(wide.as_ptr()), true)
+    }
+}
+
+/// 把磁盘上的快捷方式读进一个 `IShellLinkW`。
+/// 要改写它就得用 [`STGM_READWRITE`] 打开，只读句柄存不回同一个文件。
+fn load_shortcut(path: &std::path::Path, mode: STGM) -> windows::core::Result<IShellLinkW> {
+    unsafe {
+        let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+        let file: IPersistFile = link.cast()?;
+        let wide = HSTRING::from(path.as_os_str());
+        file.Load(PCWSTR(wide.as_ptr()), mode)?;
+        Ok(link)
     }
 }
 
@@ -310,6 +403,97 @@ fn escape_xml(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// 建一条不带 AUMID 的快捷方式；3.1.0 及更早的安装器留下的就是这种。
+    fn create_bare_shortcut(
+        path: &std::path::Path,
+        target: &std::path::Path,
+    ) -> windows::core::Result<()> {
+        unsafe {
+            let link: IShellLinkW = CoCreateInstance(&ShellLink, None, CLSCTX_INPROC_SERVER)?;
+            link.SetPath(&HSTRING::from(target.as_os_str()))?;
+            let file: IPersistFile = link.cast()?;
+            let wide = HSTRING::from(path.as_os_str());
+            file.Save(PCWSTR(wide.as_ptr()), true)
+        }
+    }
+
+    /// 认领旧快捷方式：补上 AUMID，指向的 exe 原样不动。
+    #[test]
+    fn adopting_a_shortcut_adds_the_aumid_and_keeps_its_target() {
+        let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let path = dir.path().join(SHORTCUT_NAME);
+        let target = std::env::current_exe().expect("取当前可执行文件路径失败");
+
+        create_bare_shortcut(&path, &target).expect("建裸快捷方式失败");
+        assert!(!shortcut_has_aumid(&path), "裸快捷方式本就不该有 AUMID");
+        assert!(
+            same_path(&read_shortcut_target(&path).expect("应能读出目标"), &target),
+            "裸快捷方式该指向刚写进去的 exe"
+        );
+
+        set_shortcut_aumid(&path).expect("补写 AUMID 失败");
+        assert!(shortcut_has_aumid(&path), "补写后应认得出本程序的 AUMID");
+        assert!(
+            same_path(&read_shortcut_target(&path).expect("应能读出目标"), &target),
+            "补写 AUMID 不该动到快捷方式指向的 exe"
+        );
+
+        if com.is_ok() {
+            unsafe { CoUninitialize() };
+        }
+    }
+
+    /// 只认「指向本 exe 且没有 AUMID」的那条：已注册的不必再动，
+    /// 指向别处的（另一份安装、另一个便携目录）更不该被篡改。
+    #[test]
+    fn only_an_unregistered_shortcut_to_our_own_exe_is_adoptable() {
+        let com = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        let dir = tempfile::tempdir().expect("创建临时目录失败");
+        let exe = std::env::current_exe().expect("取当前可执行文件路径失败");
+
+        let bare = dir.path().join("bare.lnk");
+        create_bare_shortcut(&bare, &exe).expect("建裸快捷方式失败");
+        assert!(is_adoptable(&bare, &exe), "旧安装器留下的那种应当认领");
+
+        let elsewhere = dir.path().join("elsewhere.lnk");
+        create_bare_shortcut(&elsewhere, std::path::Path::new("C:\\Windows\\notepad.exe"))
+            .expect("建裸快捷方式失败");
+        assert!(
+            !is_adoptable(&elsewhere, &exe),
+            "指向别处的快捷方式不该被认领"
+        );
+
+        let registered = dir.path().join(SHORTCUT_NAME);
+        create_bare_shortcut(&registered, &exe).expect("建裸快捷方式失败");
+        set_shortcut_aumid(&registered).expect("补写 AUMID 失败");
+        assert!(
+            !is_adoptable(&registered, &exe),
+            "已经带 AUMID 的不必再认领一次"
+        );
+
+        assert!(
+            !is_adoptable(&dir.path().join("missing.lnk"), &exe),
+            "不存在的路径不该被认领"
+        );
+
+        if com.is_ok() {
+            unsafe { CoUninitialize() };
+        }
+    }
+
+    #[test]
+    fn paths_compare_case_insensitively() {
+        assert!(same_path(
+            std::path::Path::new("C:\\ZoneDeck\\ZoneDeck.exe"),
+            std::path::Path::new("c:\\zonedeck\\zonedeck.EXE")
+        ));
+        assert!(!same_path(
+            std::path::Path::new("C:\\ZoneDeck\\ZoneDeck.exe"),
+            std::path::Path::new("D:\\ZoneDeck\\ZoneDeck.exe")
+        ));
+    }
 
     #[test]
     fn xml_special_characters_are_escaped() {

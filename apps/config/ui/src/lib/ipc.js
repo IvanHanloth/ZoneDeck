@@ -77,6 +77,8 @@ const mockConfig = {
   verhub: {
     include_preview: false,
     seen_announcement_id: "",
+    analytics: null,
+    analytics_consent_sent: false,
   },
   window_rules: [
     {
@@ -276,6 +278,10 @@ function mockInvoke(cmd, args) {
     }
     case "verhub_feedback_options":
       return { github_forward_available: true, contact_required_for_forward: true };
+    // 预览环境不联网，埋点一律空转。
+    case "analytics_track":
+    case "analytics_set_consent":
+    case "analytics_flush":
     case "verhub_submit_feedback":
     case "verhub_upload_log":
     case "open_external":

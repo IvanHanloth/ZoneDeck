@@ -107,6 +107,9 @@ ZoneDeck/
     │                      回饋可選轉為 GitHub Issue，由 Verhub 機器人建立，此時須填 GitHub 帳號；
     │                      版本說明／公告／專案資訊依介面語言取譯文，缺譯文時回落預設內容；
     │                      專案連結帶快取：記憶體 + 資料目錄下的 verhub_cache.json，有效期一天，換語言即失效）
+    │   └── src/analytics.rs  匿名使用統計（啟動時回報一份功能採用快照 + 設定變更事件，
+    │                      事件名與屬性都有白名單，規則與白名單只回報條數；
+    │                      未獲授權前一位元組不採不寫，授權狀態存在 config 的 verhub.analytics）
     ├── ui/         前端原始碼（Vite + Svelte 5）
     │   └── src/    lib/（純邏輯 + vitest 測試）+ components/（Svelte 元件）
     │                + locales/（三語文案 catalog，以 zh-CN.js 為基準）

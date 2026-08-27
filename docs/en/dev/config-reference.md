@@ -145,6 +145,8 @@ Each field accepts `hidden` (windows are hidden) \| `auto_hide` (auto hide is en
 | --- | --- | --- |
 | `include_preview` | `false` | Whether update checks include preview releases |
 | `seen_announcement_id` | `""` | The id of the newest announcement already read |
+| `analytics` | `null` | Consent for anonymous usage statistics: `null` means the user has not been asked yet and the first run prompts for it; `true` granted, `false` declined |
+| `analytics_consent_sent` | `false` | Whether the "took part" event has already been sent. One per device; toggling the switch again does not resend it |
 
 ## `window_rules`
 

@@ -16,6 +16,7 @@
   import AnnouncementModal from "./components/AnnouncementModal.svelte";
   import ErrorReportModal from "./components/ErrorReportModal.svelte";
   import DataNoticeModal from "./components/DataNoticeModal.svelte";
+  import AnalyticsConsentModal from "./components/AnalyticsConsentModal.svelte";
   import BroadRegexModal from "./components/BroadRegexModal.svelte";
   import Toast from "./components/Toast.svelte";
   import { NAV, navItem } from "./lib/nav.js";
@@ -34,7 +35,9 @@
     scheduleSave,
     startCore,
     startStatusPolling,
+    trackFeatures,
   } from "./lib/state.svelte.js";
+  import { flush as flushAnalytics } from "./lib/analytics.js";
   import { resolve, setLangPref, t } from "./lib/i18n.svelte.js";
   import { applyTheme, loadPreference } from "./lib/theme.js";
 
@@ -82,18 +85,20 @@
     const onSystemTheme = () => applyTheme(loadPreference());
     media.addEventListener("change", onSystemTheme);
 
-    loadAll().then(() => {
-      autoSaveReady = true;
-      checkForUpdate();
-      loadAnnouncements({ popNew: true });
-    });
-    const stopPolling = startStatusPolling(2000);
-
     // 托盘直达：冷启动时从启动参数读，已在运行时由单实例插件发来事件。
     invoke("startup_action").then((a) => {
       if (a === "restore") openRestoreTool();
       else if (a === "about") openAboutTab();
     });
+
+    loadAll().then(() => {
+      autoSaveReady = true;
+      // 配置读完才知道用户授权没有，埋点一律排在它后面。
+      trackFeatures();
+      checkForUpdate();
+      loadAnnouncements({ popNew: true });
+    });
+    const stopPolling = startStatusPolling(2000);
     const stopRestoreEvent = onAppEvent("open-restore", openRestoreTool);
     const stopAboutEvent = onAppEvent("open-about", openAboutTab);
 
@@ -109,10 +114,17 @@
     });
 
     // 关窗前把未落盘的改动写完；写盘失败时留在窗口，再次关闭不再阻拦。
+    // 收尾走完之后自己调 close，那一次不能再拦，否则关不掉。
+    let closing = false;
     const closeReg = win.onCloseRequested(async (e) => {
-      if (!hasUnsavedChanges()) return;
+      if (closing) return;
       e.preventDefault();
-      if (await flushSave()) win.close();
+      // 攒着的埋点要赶在进程消失前送出去。
+      await flushAnalytics();
+      // 写盘失败就留在窗口里，再次关闭时重来一遍。
+      if (hasUnsavedChanges() && !(await flushSave())) return;
+      closing = true;
+      win.close();
     });
 
     return () => {
@@ -180,6 +192,7 @@
   <RestoreWindowsModal bind:open={app.restoreOpen} />
   <AnnouncementModal />
   <DataNoticeModal />
+  <AnalyticsConsentModal />
   <BroadRegexModal />
   <ErrorReportModal />
   <!-- 放最后，强制更新的遮罩层级最高 -->

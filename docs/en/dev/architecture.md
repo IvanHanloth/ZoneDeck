@@ -111,6 +111,10 @@ ZoneDeck/
     │                      falling back to the default content when no translation exists;
     │                      project links are cached: in memory + verhub_cache.json in the data folder,
     │                      valid for one day and invalidated on a language change)
+    │   └── src/analytics.rs  anonymous usage statistics (a feature-adoption snapshot on launch
+    │                      plus setting-change events; event names and properties are both
+    │                      allow-listed and rules/whitelist are only counted; nothing is collected
+    │                      or written before consent, which lives in config's verhub.analytics)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)

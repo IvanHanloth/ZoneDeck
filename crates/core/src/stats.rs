@@ -152,7 +152,9 @@ impl PowerStatsStore {
         self.write(&mut inner);
     }
 
-    /// 无视节流立即落盘；退出前调用，否则末尾几笔来不及写。
+    /// 无视节流立即落盘。除退出前，副作用队列排空静置后也会调一次
+    /// （见 [`crate::effects_worker`]）：只靠 [`SAVE_THROTTLE`] 的话，
+    /// 一批操作末尾那几笔要一直等到下次有改动才写得进去。
     pub fn flush(&self) {
         let mut inner = self.lock();
         if inner.dirty {

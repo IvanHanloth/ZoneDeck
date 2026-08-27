@@ -377,6 +377,10 @@ export default {
   "options.languageDesc": "配置界面与核心的托盘菜单、通知所用的语言；「跟随系统」时使用系统显示语言。",
   "options.languageAuto": "跟随系统",
 
+  "options.privacyCard": "隐私",
+  "options.analytics": "匿名使用统计",
+  "options.analyticsDesc": "参与匿名用户体验计划，在使用中让 ZoneDeck 变得更好。所有数据均为匿名非隐私采集，您可随时退出此统计",
+
   "options.toolsCard": "工具",
   "options.restoreTool": "窗口恢复工具",
   "options.restoreToolDesc": "找回被误隐藏、无法通过热键恢复的窗口：列出所有窗口，勾选后恢复显示。",
@@ -459,6 +463,22 @@ export default {
   "announce.title": "公告",
   "announce.pinned": "置顶",
   "announce.gotIt": "知道了",
+
+  "consent.title": "ZoneDeck 匿名使用统计",
+  "consent.heading": "在使用过程中帮助 ZoneDeck 变得更好！",
+  "consent.intro": "是否愿意分享匿名的功能使用情况？他帮助我们更好的了解产品的实际使用情况。选「不参与」不影响任何功能，您可随时在设置页面中退出",
+  "consent.collectTitle": "会上报",
+  "consent.collectFeatures": "各项功能开关的开启与关闭情况；",
+  "consent.collectScale": "规则与白名单数量、正则规则数量、常用热键统计情况；",
+  "consent.collectEnv": "程序版本、语言、运行情况；",
+  "consent.collectId": "一个随机生成的不含任何设备特征的匿名标识。",
+  "consent.neverTitle": "绝不上报",
+  "consent.neverHide": "隐藏了哪些窗口、绑定了哪些进程，以及每次隐藏发生在什么时候；",
+  "consent.neverContent": "窗口标题、进程名、文件路径、正则式本身与反馈正文；",
+  "consent.neverIdentity": "姓名、邮箱等能指向你本人的信息。",
+  "consent.control": "您随时可以在「通用设置 → 隐私」里退出此功能。关闭后不会再发出任何记录，本机的匿名标识也会一并删除。",
+  "consent.agree": "同意参与",
+  "consent.decline": "不参与",
 
   "dataNotice.title": "设置的存放位置",
   "dataNotice.heading": "程序所在目录无法写入",

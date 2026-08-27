@@ -3,11 +3,12 @@
   import IconMegaphone from "~icons/lucide/megaphone";
   import Markdown from "./Markdown.svelte";
   import ContentDialog from "./fluent/ContentDialog.svelte";
-  import { app, markAnnouncementSeen } from "../lib/state.svelte.js";
+  import { analyticsUnanswered, app, markAnnouncementSeen } from "../lib/state.svelte.js";
   import { formatTime } from "../lib/verhub.js";
   import { t } from "../lib/i18n.svelte.js";
 
-  const item = $derived(app.pendingAnnouncement);
+  // 首次启动要先答完统计授权，别让两层弹窗叠在一起。
+  const item = $derived(analyticsUnanswered() ? null : app.pendingAnnouncement);
 
   // 关闭（含 Esc / 点遮罩）即记为已读。
   let open = $state(false);
