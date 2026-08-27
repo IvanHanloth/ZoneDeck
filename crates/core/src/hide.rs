@@ -1,4 +1,5 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use zonedeck_common::matching::{
@@ -124,7 +125,7 @@ pub fn resolve_targets(
     }
 
     if config.setting.hide_current && foreground != 0 {
-        // 枚举不到的前台窗口（如工具窗口）只带句柄，PID 由 plan_hide 补查。
+        // 枚举不到的前台窗口（如附属窗口）只带句柄，PID 由 plan_hide 补查。
         match windows.iter().find(|w| w.hwnd == foreground) {
             Some(w) => result.push(Target::from_window(w)),
             None => result.push(Target::bare(foreground, 0)),
@@ -350,6 +351,22 @@ pub fn sync_rule_titles(rules: &mut [WindowRule], hwnd: i64, title: &str) -> boo
     changed
 }
 
+/// 隐藏后允许升级压制自我显示窗口的宽限期；超过它的外部显示视为真恢复。
+const REHIDE_GRACE: Duration = Duration::from_secs(3);
+
+/// [`HideController::on_external_show`] 的处理结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalShow {
+    /// 不在隐藏记录里，与我们无关。
+    NotTracked,
+    /// 窗口以最小化形态现身，屏幕上仍不可见；继续跟踪。
+    KeptMinimized,
+    /// 宽限期内被自我显示，已升级为「最小化 + 隐藏」再压一次。
+    Rehidden,
+    /// 视为被外部真恢复，已放弃跟踪。
+    Released,
+}
+
 pub struct HideController<W: WindowManager, E: Effects> {
     wm: W,
     effects: E,
@@ -361,6 +378,10 @@ pub struct HideController<W: WindowManager, E: Effects> {
     resume_media: bool,
     efficiency: Vec<ProcRecord>,
     used_enhanced: bool,
+    /// 各窗口最近一次被本程序隐藏的时刻，界定升级压制的宽限期。运行期状态，不落盘。
+    recent_hides: HashMap<i64, Instant>,
+    /// 已压成（或自行停在）最小化、继续跟踪的窗口。带此标记的窗口即使可见也不算被外部恢复。
+    parked: HashSet<i64>,
 }
 
 impl<W: WindowManager, E: Effects> HideController<W, E> {
@@ -375,6 +396,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             resume_media: false,
             efficiency: Vec::new(),
             used_enhanced: false,
+            recent_hides: HashMap::new(),
+            parked: HashSet::new(),
         }
     }
 
@@ -417,7 +440,50 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     pub fn forget_window(&mut self, hwnd: i64) -> bool {
         let before = self.hidden.len();
         self.hidden.retain(|t| t.hwnd != hwnd);
+        self.recent_hides.remove(&hwnd);
+        self.parked.remove(&hwnd);
         self.hidden.len() != before
+    }
+
+    /// 处理隐藏记录里的窗口被外部重新显示。
+    ///
+    /// 部分悬浮窗（桌面歌词等）被 `SW_HIDE` 后会在毫秒级自我显示。宽限期内升级为
+    /// 「最小化 + 隐藏」再压一次：这类窗口通常只 `SW_SHOW` 不还原，最小化后便在
+    /// 屏幕上保持不可见。升级后仍被还原、或超出宽限期的，视为真被外部恢复，放弃跟踪。
+    pub fn on_external_show(&mut self, hwnd: i64) -> ExternalShow {
+        if !self.tracks_window(hwnd) {
+            return ExternalShow::NotTracked;
+        }
+        if self.wm.restore_mode(hwnd) == Restore::Minimized {
+            // 最小化形态的「显示」屏幕上看不见；SW_RESTORE 可回到最小化前的形态。
+            if let Some(t) = self.hidden.iter_mut().find(|t| t.hwnd == hwnd)
+                && t.restore == Restore::Show
+            {
+                t.restore = Restore::Normal;
+            }
+            self.parked.insert(hwnd);
+            return ExternalShow::KeptMinimized;
+        }
+        if !self.parked.contains(&hwnd)
+            && self
+                .recent_hides
+                .get(&hwnd)
+                .is_some_and(|at| at.elapsed() < REHIDE_GRACE)
+        {
+            // 此刻窗口可见且非最小化，形态可信，记下供恢复。
+            let shape = self.wm.restore_mode(hwnd);
+            if let Some(t) = self.hidden.iter_mut().find(|t| t.hwnd == hwnd)
+                && t.restore != Restore::Skip
+            {
+                t.restore = shape;
+            }
+            self.parked.insert(hwnd);
+            self.wm.minimize(hwnd);
+            self.wm.hide(hwnd);
+            return ExternalShow::Rehidden;
+        }
+        self.forget_window(hwnd);
+        ExternalShow::Released
     }
 
     /// 同步隐藏记录里的窗口标题；`NO_TITLE` 不参与。返回是否有记录被更新。
@@ -471,7 +537,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                     continue;
                 }
             }
-            // 任务栏与桌面带 WS_EX_TOOLWINDOW，不在枚举结果里，须先补上身份。
+            // 枚举不到的窗口只带句柄，白名单判定前须先补上身份。
             if t.process_path.is_empty() && !whitelist.is_empty() {
                 t.process_path = self.wm.process_path(t.pid);
             }
@@ -594,6 +660,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                 self.wm.minimize(t.hwnd);
             }
             self.wm.hide(t.hwnd);
+            self.recent_hides.insert(t.hwnd, Instant::now());
+            self.parked.remove(&t.hwnd);
         }
 
         for r in &plan.mute {
@@ -638,11 +706,27 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
     /// 剔除已不成立的隐藏记录：句柄失效、句柄被别的进程复用（PID 不符）、
     /// 或窗口已重新可见（被外部恢复显示或句柄复用）。
+    /// 停在最小化的窗口（[`Self::parked`]）可见但屏幕上不可见，不算恢复。
     fn prune_stale(&mut self) {
         let wm = &self.wm;
+        let parked = &self.parked;
         self.hidden.retain(|t| {
-            wm.is_window(t.hwnd) && wm.window_pid(t.hwnd) == t.pid && !wm.is_visible(t.hwnd)
+            wm.is_window(t.hwnd)
+                && wm.window_pid(t.hwnd) == t.pid
+                && (!wm.is_visible(t.hwnd)
+                    || (parked.contains(&t.hwnd) && wm.restore_mode(t.hwnd) == Restore::Minimized))
         });
+        let alive: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
+        self.recent_hides.retain(|hwnd, _| alive.contains(hwnd));
+        self.parked.retain(|hwnd| alive.contains(hwnd));
+    }
+
+    /// 把最近隐藏时刻整体拨早，供测试模拟宽限期已过。
+    #[cfg(test)]
+    fn backdate_recent_hides(&mut self, by: Duration) {
+        for at in self.recent_hides.values_mut() {
+            *at = at.checked_sub(by).unwrap_or(*at);
+        }
     }
 
     /// 记录进程身份；创建时刻查不到时记 0，恢复侧对 0 不做校验。
@@ -693,6 +777,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
 
         let hidden = std::mem::take(&mut self.hidden);
+        self.recent_hides.clear();
+        self.parked.clear();
         let mut stale: Vec<&Target> = Vec::new();
         for t in &hidden {
             // 本程序没动过它的可见性，恢复时也不得把它弹出来。
@@ -799,6 +885,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             if t.restore != Restore::Skip && self.wm.is_window(t.hwnd) {
                 self.wm.restore(t.hwnd, t.restore);
             }
+            self.recent_hides.remove(&t.hwnd);
+            self.parked.remove(&t.hwnd);
         }
         self.hidden = keep;
 
@@ -874,6 +962,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
     /// 从崩溃前的快照恢复；逐条身份校验由 [`Self::show`] 完成。
     pub fn restore_from(&mut self, snapshot: Snapshot) -> ShowOutcome {
+        self.recent_hides.clear();
+        self.parked.clear();
         self.hidden = snapshot.hidden;
         self.frozen = snapshot.frozen;
         self.muted = snapshot.muted;
@@ -889,6 +979,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 一个窗口都没接管成功时，这轮隐藏已经失效，把还活着的进程解冻、取消静音、
     /// 清除效率模式，免得它们一直挂在那儿。
     pub fn adopt_from(&mut self, snapshot: Snapshot) -> AdoptOutcome {
+        self.recent_hides.clear();
+        self.parked.clear();
         let mut outcome = AdoptOutcome::default();
         let mut kept = Vec::with_capacity(snapshot.hidden.len());
         for t in snapshot.hidden {
@@ -1601,6 +1693,125 @@ mod tests {
         assert!(controller.wm.is_visible(10));
     }
 
+    /// 自我显示型悬浮窗（桌面歌词等）：SW_HIDE 后被程序拉回来，应升级为
+    /// 最小化压制并继续跟踪，恢复时按真实形态还原。
+    #[test]
+    fn self_reshowing_window_is_parked_minimized_and_still_restores() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule(
+            "桌面歌词",
+            10,
+            "cloudmusic.exe",
+            "C:\\cloudmusic.exe",
+        )];
+
+        let wm = MockWm::new(
+            vec![win("桌面歌词", 10, "cloudmusic.exe", "C:\\cloudmusic.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+        assert!(!controller.wm.is_visible(10));
+
+        // 程序把窗口拉回来（非最小化）→ 升级压制。
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Rehidden);
+        assert!(!controller.wm.is_visible(10), "应被再次隐藏");
+        assert_eq!(controller.wm.shape_of(10), Restore::Minimized, "应先最小化");
+        assert!(controller.tracks_window(10), "跟踪不应丢");
+
+        // 程序再 SW_SHOW：窗口以最小化形态现身，屏幕上看不见，继续跟踪。
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::KeptMinimized);
+        assert!(controller.tracks_window(10));
+
+        // 下一轮 plan 的 prune 不得把停在最小化的记录当成已恢复剔掉。
+        let plan = controller.plan_hide(&config.setting, &[], &[], &[], &[], &[]);
+        controller.commit_hide(plan);
+        assert!(controller.tracks_window(10));
+
+        // 恢复：按升级时记下的形态（Normal → SW_RESTORE）回到屏幕。
+        let outcome = controller.show();
+        assert_eq!(outcome.shown, 1);
+        assert!(controller.wm.is_visible(10));
+        assert_eq!(controller.wm.shape_of(10), Restore::Normal);
+    }
+
+    /// 升级压制后窗口被真正还原（非最小化现身）→ 视为外部恢复，放弃跟踪。
+    #[test]
+    fn parked_window_restored_for_real_is_released() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule(
+            "桌面歌词",
+            10,
+            "cloudmusic.exe",
+            "C:\\cloudmusic.exe",
+        )];
+
+        let wm = MockWm::new(
+            vec![win("桌面歌词", 10, "cloudmusic.exe", "C:\\cloudmusic.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Rehidden);
+
+        // 用户 / 程序把它从最小化还原成正常形态。
+        controller.wm.restore(10, Restore::Normal);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Released);
+        assert!(!controller.tracks_window(10));
+    }
+
+    /// 宽限期外的外部显示维持原语义：放弃跟踪，不与用户抢窗口。
+    #[test]
+    fn external_show_after_the_grace_period_releases_the_window() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        controller.backdate_recent_hides(REHIDE_GRACE + Duration::from_secs(1));
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Released);
+        assert!(!controller.tracks_window(10));
+        assert!(controller.wm.is_visible(10), "不得再去动窗口");
+    }
+
+    /// 升级前窗口是最大化的，恢复时应回到最大化。
+    #[test]
+    fn parked_maximized_window_comes_back_maximized() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule(
+            "桌面歌词",
+            10,
+            "cloudmusic.exe",
+            "C:\\cloudmusic.exe",
+        )];
+
+        let wm = MockWm::new(
+            vec![win("桌面歌词", 10, "cloudmusic.exe", "C:\\cloudmusic.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        controller.wm.set_shape(10, Restore::Maximized);
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Rehidden);
+
+        let outcome = controller.show();
+        assert_eq!(outcome.shown, 1);
+        assert_eq!(controller.wm.shape_of(10), Restore::Maximized);
+    }
+
     #[test]
     fn foreground_target_takes_the_visible_foreground_window() {
         let windows = vec![
@@ -1620,7 +1831,7 @@ mod tests {
         assert_eq!(
             foreground_target(&windows, 99),
             None,
-            "枚举不到的窗口（如工具窗口）不作为目标"
+            "枚举不到的窗口（如附属窗口）不作为目标"
         );
     }
 

@@ -252,10 +252,7 @@ async fn run_freeze(
         // 配置程序不再受内置保护，冻结前须把本进程连同 WebView2 子进程摘出去：
         // 挂起自己就再也醒不过来了。核心那边冻结配置程序不受此限。
         let own: Vec<u32> = if suspend {
-            zonedeck_core::hide::expand_descendants(
-                &[std::process::id()],
-                &freeze::process_tree(),
-            )
+            zonedeck_core::hide::expand_descendants(&[std::process::id()], &freeze::process_tree())
         } else {
             Vec::new()
         };
