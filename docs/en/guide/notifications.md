@@ -35,11 +35,11 @@ Defaults:
 | Click | Default action |
 | --- | --- |
 | Single click | Hide / show windows |
-| Double click | Do nothing |
+| Double click | Open the settings window |
 | Right click | Open the tray menu |
 
 ::: tip Binding the double click makes single clicks a beat slower
-Windows cannot tell on the first click whether a second one is coming. So as soon as the double click has an action bound, a single click has to wait out the system double-click time (adjustable in the Windows mouse settings) before it runs. With the double click left on "Do nothing" there is no conflict and single clicks respond immediately.
+Windows cannot tell on the first click whether a second one is coming. So as soon as the double click has an action bound, a single click has to wait out the system double-click time (adjustable in the Windows mouse settings) before it runs. Set the double click back to "Do nothing" and single clicks respond immediately again.
 :::
 
 ## Controllable events

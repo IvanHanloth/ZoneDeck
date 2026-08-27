@@ -49,14 +49,13 @@ File Explorer *is* the desktop and the taskbar: hiding it takes your desktop ico
 
 ## Built-in entries: ZoneDeck itself
 
-Two locked entries sit at the top of the list. They **cannot be edited or removed**:
+One locked entry sits at the top of the list. It **cannot be edited or removed**:
 
 | Entry | Image names covered |
 | --- | --- |
 | ZoneDeck core | `ZoneDeck.exe`, `core.exe` |
-| ZoneDeck settings | `config.exe`, `zonedeck-config.exe` |
 
-Both are permanently set to "Skip freezing". Here is why: the core is usually launched by File Explorer, which makes it a child process of `explorer.exe`, and the settings app is in turn a child of the core. Freeze File Explorer with the [scope](/en/guide/freeze#scope) set to "Target process and all its children" and the entire tree — ZoneDeck included — is suspended. Hotkeys stop responding, the settings window will not open, and windows you already hid become **unrecoverable**.
+It is permanently set to "Skip freezing". The core is usually launched by File Explorer, which makes it a child process of `explorer.exe`. Freeze File Explorer with the [scope](/en/guide/freeze#scope) set to "Target process and all its children" and the entire tree — the core included — is suspended. Hotkeys stop responding and windows you already hid become **unrecoverable**.
 
 Manual freezing from the [window recovery tool](/en/guide/recovery) respects it too.
 

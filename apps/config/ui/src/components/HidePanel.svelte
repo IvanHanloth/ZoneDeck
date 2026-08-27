@@ -9,6 +9,7 @@
   import IconPause from "~icons/lucide/pause";
   import IconPlay from "~icons/lucide/play";
   import IconMinimize from "~icons/lucide/minimize-2";
+  import IconSlidersHorizontal from "~icons/lucide/sliders-horizontal";
   import IconCircleHelp from "~icons/lucide/circle-help";
   import IconPanelBottom from "~icons/lucide/panel-bottom";
   import { app, toast } from "../lib/state.svelte.js";
@@ -50,6 +51,13 @@
     disabled={trayOff}
   >
     {#snippet control()}<ToggleSwitch bind:checked={s.hide_icon_after_hide} disabled={trayOff} />{/snippet}
+  </SettingsCard>
+  <SettingsCard
+    icon={IconSlidersHorizontal}
+    label={t("hide.hideConfig")}
+    description={t("hide.hideConfigDesc")}
+  >
+    {#snippet control()}<ToggleSwitch bind:checked={s.hide_config_after_hide} />{/snippet}
   </SettingsCard>
   <SettingsExpander
     bind:open={pauseExpanded}

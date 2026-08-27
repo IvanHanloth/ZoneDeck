@@ -413,7 +413,7 @@ pub fn normalize_tray_action(value: &str) -> String {
 }
 
 fn default_tray_double() -> String {
-    TRAY_ACTION_NONE.to_string()
+    TRAY_ACTION_SETTINGS.to_string()
 }
 fn default_tray_right() -> String {
     TRAY_ACTION_MENU.to_string()
@@ -432,7 +432,7 @@ pub struct TrayClicks {
     pub right: String,
 }
 
-/// 全新安装的默认：单击切换隐藏、双击不做事、右键出菜单。
+/// 全新安装的默认：单击切换隐藏、双击开配置界面、右键出菜单。
 impl Default for TrayClicks {
     fn default() -> Self {
         Self {
@@ -481,6 +481,10 @@ pub struct Setting {
     pub click_to_hide: bool,
     #[serde(default)]
     pub hide_icon_after_hide: bool,
+    /// 隐藏时把 ZoneDeck 配置窗口一并藏起，恢复时随其余窗口一起显示。
+    /// 只对触发那一刻可见的配置窗口生效。
+    #[serde(default = "default_true")]
+    pub hide_config_after_hide: bool,
     /// 是否显示托盘图标。关闭后图标上的点击、悬浮名称与状态角标一并失效；通知走
     /// Toast，不受影响。
     #[serde(default = "default_true")]
@@ -569,6 +573,7 @@ impl Default for Setting {
             hide_current: true,
             click_to_hide: false,
             hide_icon_after_hide: false,
+            hide_config_after_hide: true,
             tray_enabled: true,
             tray_clicks: TrayClicks::default(),
             tray_badges: TrayBadges::default(),
@@ -1469,12 +1474,13 @@ mod tests {
     fn tray_clicks_default_bindings() {
         let d = TrayClicks::default();
         assert_eq!(d.left, TRAY_ACTION_TOGGLE, "单击默认切换隐藏");
-        assert_eq!(
-            d.double, TRAY_ACTION_NONE,
-            "双击默认不做事：绑上动作后单击就得等双击判定，手感变迟钝"
-        );
+        assert_eq!(d.double, TRAY_ACTION_SETTINGS, "双击默认开配置界面");
         assert_eq!(d.right, TRAY_ACTION_MENU, "右键默认出菜单");
         assert!(Setting::default().tray_enabled, "托盘图标默认显示");
+        assert!(
+            Setting::default().hide_config_after_hide,
+            "配置窗口默认跟着一起藏"
+        );
     }
 
     #[test]

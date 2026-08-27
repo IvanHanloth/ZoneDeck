@@ -37,6 +37,14 @@ Once the tray icon is hidden you cannot click it to restore or open the settings
 Windows itself controls which tray icons are visible: you can choose which icons appear in the taskbar corner by hand. For detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the `ms-settings:taskbar` link works only on Windows; the browser asks for confirmation first).
 :::
 
+## Also hide the ZoneDeck settings window
+
+When hiding is triggered, the ZoneDeck settings window is **hidden along with everything else** if it happens to be open, and comes back with the rest on restore.
+
+- **On** by default.
+- [Open the settings window](/en/guide/notifications#tray-icon-click-actions) on the tray releases it first, so the settings window is always one click away while the icon is there.
+- With [process freezing](/en/guide/freeze) enabled, the settings window is frozen once hidden.
+
 ## Pause playback as well
 
 Tries to pause any playing media as the windows are hidden.

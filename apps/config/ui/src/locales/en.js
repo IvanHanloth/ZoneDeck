@@ -129,9 +129,8 @@ export default {
   "whitelist.ignoreFreeze": "Skip freezing: never suspend this program's processes",
   "whitelist.ignoreMute": "Skip muting: never mute this program's processes",
   "whitelist.builtinCore": "ZoneDeck core",
-  "whitelist.builtinConfig": "ZoneDeck settings",
   "whitelist.builtinLocked":
-    "Built-in protection: freezing ZoneDeck itself kills the hotkeys and leaves hidden windows unrecoverable, so this cannot be turned off or removed.",
+    "Built-in protection: freezing the ZoneDeck core kills the hotkeys and leaves hidden windows unrecoverable, so this cannot be turned off or removed. The settings window is not covered — it can be frozen once hidden.",
 
   "broadRegex.title": "This regex may be too broad",
   "broadRegex.lead":
@@ -276,6 +275,9 @@ export default {
   "hide.hideIcon": "Also hide ZoneDeck's tray icon",
   "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
+  "hide.hideConfig": "Also hide the ZoneDeck settings window",
+  "hide.hideConfigDesc":
+    "When hiding is triggered, hide the settings window too if it is open, and bring it back with everything else; if it is not open, nothing happens.",
   "hide.sendPause": "Pause playback as well",
   "hide.sendPauseDesc": "Try to pause any playing media as the windows are hidden.",
   "hide.resumeMedia": "Resume playback on restore",
