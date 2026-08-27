@@ -686,10 +686,13 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接；仅放行 https/mailto。
+/// 可交给系统默认程序打开的 URL 前缀。
+const ALLOWED_URL_PREFIXES: [&str; 3] = ["https://", "mailto:", "ms-settings:"];
+
+/// 用系统默认程序打开外部链接；仅放行 [`ALLOWED_URL_PREFIXES`] 中的协议。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("mailto:") {
+    if !ALLOWED_URL_PREFIXES.iter().any(|p| url.starts_with(p)) {
         return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
     blocking(move || zonedeck_core::shell::open(&url)).await

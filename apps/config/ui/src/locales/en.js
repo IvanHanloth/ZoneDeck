@@ -285,6 +285,12 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
+  "hide.supportCard": "Related support",
+  "hide.helpOtherIcons": "Want to hide other apps' tray icons?",
+  "hide.helpOtherIconsUrl":
+    "https://zonedeck.ivan-hanloth.cn/en/guide/hiding#also-hide-zonedeck-s-tray-icon",
+  "hide.taskbarSettings": "Windows taskbar settings",
+
   "power.statsCard": "Efficiency report",
   "power.statsCo2Label": "CO₂ avoided",
   "power.statsCo2Desc": "Estimated from the energy saved, at an average grid emission factor.",
