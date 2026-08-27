@@ -7,6 +7,7 @@
     addProcessRules,
     addWindowRules,
     applyListFilters,
+    hasProcessIdentity,
     newProcessRegexRule,
     newWindowRegexRule,
   } from "../lib/grouping.js";
@@ -36,8 +37,10 @@
   function addProcesses() {
     const picked = pickedWindows();
     if (picked.length === 0) return toast(t("binding.pickProcessesFirst"), true);
+    const unknown = picked.filter((w) => !hasProcessIdentity(w)).length;
     app.config.process_rules = addProcessRules(app.config.process_rules, picked);
     selectedAvail = [];
+    if (unknown) toast(t("binding.processUnidentified", { count: unknown }), true);
   }
 
   // 新正则规则预填一条「包含式」正则，种子取自选中窗口。

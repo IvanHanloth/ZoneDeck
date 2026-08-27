@@ -296,6 +296,58 @@ mod tests {
         assert!(PipeSecurity::from_sddl("这不是 SDDL").is_none());
     }
 
+    /// SDDL 会把知名 SID 缩写成两个字母（内置管理员账户写作 `LA`），而
+    /// [`current_user_sid`] 拿到的是完整的 `S-1-5-21-…`。把期望的 SID 过一遍同样的
+    /// 转换，得到它在 SDDL 文本里实际会被写成的样子。
+    fn sddl_trustee_of(sid: &str) -> String {
+        use windows::Win32::Security::Authorization::ConvertSecurityDescriptorToStringSecurityDescriptorW;
+        use windows::Win32::Security::{DACL_SECURITY_INFORMATION, OBJECT_SECURITY_INFORMATION};
+        use windows::core::PWSTR;
+
+        let source = to_wide_null(&format!("D:(A;;GA;;;{sid})"));
+        let mut psd = PSECURITY_DESCRIPTOR::default();
+        let mut text = PWSTR::null();
+        let written = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                PCWSTR(source.as_ptr()),
+                SDDL_REVISION_1,
+                &mut psd,
+                None,
+            )
+            .expect("给定的 SID 应能组成合法 SDDL");
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                psd,
+                SDDL_REVISION_1,
+                OBJECT_SECURITY_INFORMATION(DACL_SECURITY_INFORMATION.0),
+                &mut text,
+                None,
+            )
+            .expect("应能把描述符转回 SDDL");
+            let written = text.to_string().unwrap();
+            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+            let _ = LocalFree(Some(HLOCAL(psd.0)));
+            written
+        };
+        // `D:(A;;GA;;;LA)`：`;;;` 之后到 `)` 之前的就是受让者。
+        written
+            .rsplit_once(";;;")
+            .and_then(|(_, tail)| tail.strip_suffix(')'))
+            .unwrap_or(sid)
+            .to_string()
+    }
+
+    #[test]
+    fn well_known_sids_show_up_under_their_sddl_alias() {
+        // 内置管理员组写作 BA，CI 上跑测试的内置管理员账户写作 LA；
+        // 拿原始的 S-1-… 去比对 SDDL 文本必然落空。
+        assert_eq!(sddl_trustee_of("S-1-5-32-544"), "BA");
+        // 普通账户没有别名，原样写出。
+        assert_eq!(
+            sddl_trustee_of("S-1-5-21-1-2-3-1001"),
+            "S-1-5-21-1-2-3-1001"
+        );
+    }
+
     /// 真造一个管道，把 Windows 实际存下的安全描述符读回来比对。
     #[test]
     fn the_created_pipe_really_carries_the_intended_acl() {
@@ -358,9 +410,10 @@ mod tests {
             let _ = windows::Win32::Foundation::CloseHandle(handle);
         }
 
+        let trustee = sddl_trustee_of(&sid);
         assert!(
-            readback.contains(&sid),
-            "管道上实际生效的 DACL 应授权给当前用户 SID: {readback}"
+            readback.contains(&format!(";{trustee})")),
+            "管道上实际生效的 DACL 应授权给当前用户（SDDL 写作 {trustee}）: {readback}"
         );
         assert!(
             !readback.contains(";WD)"),

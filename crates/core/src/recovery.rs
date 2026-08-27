@@ -34,6 +34,18 @@ impl ProcRecord {
     }
 }
 
+/// 静音记录。除进程身份外还带映像路径：静音波及的是同映像的全部会话，
+/// 目标进程即使已退出，那些会话仍须解除，靠路径才找得回来。
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MuteRecord {
+    pub pid: u32,
+    #[serde(default)]
+    pub created_at: i64,
+    /// 静音时该进程的映像路径；查不到时为空，那时只能按 PID 解除。
+    #[serde(default)]
+    pub path: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snapshot {
     /// 快照格式版本；与 [`SCHEMA_CURRENT`] 不符即丢弃。
@@ -44,7 +56,7 @@ pub struct Snapshot {
     pub boot_time_ms: i64,
     pub hidden: Vec<Target>,
     pub frozen: Vec<ProcRecord>,
-    pub muted: Vec<ProcRecord>,
+    pub muted: Vec<MuteRecord>,
     /// 被降到效率模式的进程；旧快照没有这一项，缺省为空。
     #[serde(default)]
     pub efficiency: Vec<ProcRecord>,
@@ -166,10 +178,38 @@ mod tests {
                 pid: 100,
                 created_at: 111,
             }],
-            muted: vec![ProcRecord::bare(200)],
+            muted: vec![MuteRecord {
+                pid: 200,
+                ..Default::default()
+            }],
             enhanced: true,
             ..Default::default()
         }
+    }
+
+    /// 旧快照的静音记录没有 `path` 字段。schema 版本没跟着变，这类文件仍要能读，
+    /// 缺的路径留空——那时只能按 PID 解除静音。
+    #[test]
+    fn snapshot_without_mute_paths_still_loads() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(RECOVERY_FILE_NAME);
+        let json = format!(
+            r#"{{"schema":{},"boot_time_ms":{},"hidden":[],"frozen":[],
+               "muted":[{{"pid":200,"created_at":123}}],"enhanced":false}}"#,
+            SCHEMA_CURRENT,
+            current_boot_time_ms()
+        );
+        std::fs::write(&path, json).unwrap();
+
+        let loaded = load(&path).expect("旧格式快照应能读出来");
+        assert_eq!(loaded.muted.len(), 1);
+        assert_eq!(loaded.muted[0].pid, 200);
+        assert_eq!(loaded.muted[0].created_at, 123);
+        assert!(
+            loaded.muted[0].path.is_empty(),
+            "缺字段应留空而不是解析失败"
+        );
+        assert!(loaded.is_restorable(current_boot_time_ms()));
     }
 
     #[test]

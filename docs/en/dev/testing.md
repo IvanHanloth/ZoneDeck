@@ -51,8 +51,9 @@ Integration tests of system behaviour (mostly creating real resources and verify
 | Named pipe | Server send/receive; the back-to-back reconnect race (a client that connects before `ConnectNamedPipe` must still be served) |
 | Process freezing | Suspending / resuming a real child process |
 | Power stats | A real child process taken through freezing / efficiency mode, checked against the file on disk; reset over IPC |
-| Muting | The Core Audio COM path |
-| HideController | Mock injection verifying the muting / freezing / pause-key orchestration |
+| Muting | The Core Audio COM path; session matching and bookkeeping decisions |
+| Media pausing | Matching an SMTC AUMID against an image path |
+| HideController | Mock injection verifying the muting / freezing / media-pausing orchestration |
 | Startup | Plain registry-key logic + a real `schtasks` accepting the task XML |
 | Crash logs | Writing / rotation / the panic hook |
 | Crash recovery | Snapshot persistence round trip + mock recovery orchestration |

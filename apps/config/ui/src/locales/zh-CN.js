@@ -66,6 +66,7 @@ export default {
   "binding.pickWindowsFirst": "请先在左侧勾选要隐藏的窗口",
   "binding.pickProcessesFirst": "请先在左侧勾选要隐藏的进程",
   "binding.windowsRefreshed": "窗口列表已刷新",
+  "binding.processUnidentified": "已跳过 {count} 个查不到所属程序的窗口（多为反作弊保护），改用「窗口隐藏」即可",
   "binding.regexSeedKeyword": "关键词",
   "binding.regexSeedProcess": "程序名.exe",
 
@@ -215,6 +216,8 @@ export default {
   "notify.onHideDesc": "每次触发隐藏时弹出通知",
   "notify.onShow": "显示窗口时通知",
   "notify.onShowDesc": "每次恢复显示时弹出通知",
+  "notify.onRecoveryMismatch": "隐藏记录失效时通知",
+  "notify.onRecoveryMismatchDesc": "核心异常退出后，仍藏着的窗口会继续保持隐藏；若有记录与当初对不上（窗口已关闭、句柄被复用或已被显示出来），弹出通知告知。",
 
   "notify.badgeRed": "红色",
   "notify.badgeGreen": "绿色",
@@ -261,8 +264,11 @@ export default {
   "hide.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "hide.hideIconDesc":
     "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
-  "hide.sendPause": "隐藏前发送暂停键",
-  "hide.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
+  "hide.sendPause": "同时暂停播放",
+  "hide.sendPauseDesc": "隐藏同时尝试暂停正在播放的媒体。",
+  "hide.resumeMedia": "恢复时继续播放",
+  "hide.resumeMediaDesc": "恢复显示时，继续播放被暂停的媒体",
+  "hide.needPauseFirst": "需先开启「同时暂停播放」",
   "hide.minimizeBeforeHide": "隐藏前先最小化窗口",
   "hide.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",

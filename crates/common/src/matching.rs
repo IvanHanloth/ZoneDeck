@@ -435,6 +435,23 @@ mod tests {
     }
 
     #[test]
+    fn process_rule_falls_back_to_name_when_the_path_is_unavailable() {
+        // 反作弊进程拒绝 OpenProcess，枚举只拿得到映像名。
+        let rule = ProcessRule::from_window(&win("魔兽世界", 1, "Wow.exe", 100, ""));
+        assert!(rule.by_name, "查不到路径时应自动按映像名匹配");
+        let windows = vec![
+            win("魔兽世界", 1, "Wow.exe", 100, ""),
+            win("聊天", 2, "Wow.exe", 100, ""),
+            win("记事本", 3, "notepad.exe", 3, "C:\\notepad.exe"),
+        ];
+        assert_eq!(
+            match_process_rule(&rule, &windows).len(),
+            2,
+            "应命中同一进程的两个窗口"
+        );
+    }
+
+    #[test]
     fn process_rule_empty_path_matches_nothing() {
         let orphan = win("无路径窗口", 1, "", 1, "");
         let rule = ProcessRule::from_window(&orphan);

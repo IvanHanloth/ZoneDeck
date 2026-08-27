@@ -194,12 +194,13 @@ impl Eq for ProcessRule {}
 
 impl ProcessRule {
     /// 由现有窗口构造一条初级精确进程规则（按其可执行文件路径）。
+    /// 路径查不到时（反作弊进程拒绝 `OpenProcess`）退回按映像名匹配。
     pub fn from_window(w: &WindowInfo) -> Self {
         Self {
             process: w.process.clone(),
             path: w.path.clone(),
             regex: None,
-            by_name: false,
+            by_name: w.path.is_empty(),
             include_untitled: true,
             include_background: false,
         }

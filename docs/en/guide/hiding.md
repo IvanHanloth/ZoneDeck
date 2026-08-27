@@ -12,6 +12,7 @@ The **Hiding** tab of the settings window gathers the extra behaviours applied w
 
 - **On** by default.
 - Based on Windows Core Audio session muting: only the target process is muted; other system sounds are unaffected.
+- Only mutes set by ZoneDeck are lifted: a program you had already muted yourself in the volume mixer stays muted after restoring.
 
 ## Also hide the active window
 
@@ -36,15 +37,23 @@ Once the tray icon is hidden you cannot click it to restore or open the settings
 Windows itself controls which tray icons are visible: you can choose which icons appear in the taskbar corner by hand. For detailed steps see Microsoft's guide [Customize the taskbar in Windows · System tray](https://support.microsoft.com/en-us/windows/experience/personalization/customize-the-taskbar-in-windows#system-tray), or open the [taskbar settings](ms-settings:taskbar) directly (the `ms-settings:taskbar` link works only on Windows; the browser asks for confirmation first).
 :::
 
-## Send the pause key before hiding
+## Pause playback as well
 
-When on, ZoneDeck sends the **media pause key** to the window **before** hiding it, to try to pause any video or music playing inside.
+Tries to pause any playing media as the windows are hidden.
 
 - **Off** by default.
+- Only the hidden program is affected: ZoneDeck goes through the system media controls to pause that program's own media session.
+- Programs that never register a media session with the system fall back to sending the media pause key.
 - It differs from "mute after hiding": muting only silences the audio, whereas the pause key actually stops playback.
 - ZoneDeck's **process freezing** has the same pausing effect while also cutting resource usage — see [Process freezing](/en/guide/freeze).
 
-## Minimise windows before hiding
+### Resume playback on restore
+
+Carries on playing the media this round paused when the windows come back. Requires "Pause playback as well".
+
+- **Off** by default: playback stays paused after restoring.
+- Only media this program paused, and that is still paused, is resumed — if you pressed play yourself or moved on to something else while hidden, nothing interrupts it.
+- Only programs paused through the system media controls are resumed precisely; those that fell back to the pause key are not.
 
 When on, each window is **minimised** before it is hidden, and restored to the size it had beforehand when you bring it back.
 

@@ -142,15 +142,25 @@ describe("规则构造与去重", () => {
     expect(existing).toHaveLength(1, "入参不应被修改");
   });
 
-  it("addProcessRules 按路径去重", () => {
+  it("addProcessRules 按匹配依据去重", () => {
     const existing = [processRuleFromWindow(win("窗口一", 1, "game.exe", "C:\\game.exe"))];
     const picked = [
-      win("窗口二", 2, "game.exe", "C:\\game.exe"), // 同路径，跳过
+      win("窗口二", 2, "game.exe", "c:\\GAME.exe"), // 同路径（忽略大小写），跳过
       win("微信", 3, "WeChat.exe", "C:\\WeChat.exe"),
-      win("无路径", 4, "x.exe", ""), // 空路径，跳过
+      win("身份不明", 4, "", ""), // 名字与路径都查不到，跳过
     ];
     const result = addProcessRules(existing, picked);
     expect(result.map((r) => r.path)).toEqual(["C:\\game.exe", "C:\\WeChat.exe"]);
+  });
+
+  it("addProcessRules 对查不到路径的窗口退回按文件名匹配", () => {
+    const picked = [
+      win("魔兽世界", 1, "Wow.exe", ""),
+      win("魔兽世界", 2, "Wow.exe", ""), // 同名，跳过
+    ];
+    const result = addProcessRules([], picked);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({ process: "Wow.exe", path: "", by_name: true });
   });
 
   it("正则进程规则不参与路径去重种子", () => {

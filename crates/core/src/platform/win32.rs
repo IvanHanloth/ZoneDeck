@@ -116,6 +116,21 @@ fn process_name_from_path(path: &str) -> String {
         .to_string()
 }
 
+/// 用系统进程快照补上 `OpenProcess` 拿不到的映像名。
+/// 反作弊等会削掉自身进程对象的 DACL，查路径必被拒（如魔兽世界），
+/// 但快照不需要进程句柄，仍能给出映像名，按文件名匹配的规则据此可用。
+fn fill_missing_names(windows: &mut [WindowInfo]) {
+    if !windows.iter().any(|w| w.process.is_empty() && w.pid != 0) {
+        return;
+    }
+    let names = crate::freeze::process_names();
+    for w in windows.iter_mut().filter(|w| w.process.is_empty()) {
+        if let Some(name) = names.get(&w.pid) {
+            w.process = name.clone();
+        }
+    }
+}
+
 /// 是否把该顶层窗口列入进程列表；类 Alt+Tab 过滤，排除工具窗口。
 fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
     if ex_style & WS_EX_TOOLWINDOW.0 != 0 {
@@ -159,6 +174,7 @@ impl WindowManager for WindowsWindowManager {
                 LPARAM(&mut result as *mut Vec<WindowInfo> as isize),
             );
         }
+        fill_missing_names(&mut result);
         result.sort_by(|a, b| a.title.cmp(&b.title));
         result
     }
@@ -228,6 +244,16 @@ impl WindowManager for WindowsWindowManager {
 
     fn process_path(&self, pid: u32) -> String {
         process_path(pid)
+    }
+
+    fn process_name(&self, pid: u32) -> String {
+        let name = process_name_from_path(&process_path(pid));
+        if !name.is_empty() || pid == 0 {
+            return name;
+        }
+        crate::freeze::process_names()
+            .remove(&pid)
+            .unwrap_or_default()
     }
 
     fn window_title(&self, hwnd: i64) -> String {

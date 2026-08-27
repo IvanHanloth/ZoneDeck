@@ -26,6 +26,8 @@ pub enum Msg {
     ConfigExeMissingBody,
     RecoveryPersistFailedTitle,
     RecoveryPersistFailedBody,
+    RecoveryMismatchTitle,
+    RecoveryMismatchBody,
     AutostartOffTitle,
     AutostartOffBody,
     AutostartOnTitle,
@@ -89,6 +91,10 @@ impl Msg {
             Msg::ConfigExeMissingBody => "请确认配置程序与核心位于同一目录，或重新安装",
             Msg::RecoveryPersistFailedTitle => "无法写入崩溃恢复文件",
             Msg::RecoveryPersistFailedBody => "核心若异常退出，隐藏的窗口将无法自动找回",
+            Msg::RecoveryMismatchTitle => "部分隐藏记录已失效",
+            Msg::RecoveryMismatchBody => {
+                "核心上次异常退出；{kept} 个窗口仍藏着并继续保持，另有 {lost} 条记录与当初对不上，已丢弃"
+            }
             Msg::AutostartOffTitle => "开机自启已关闭",
             Msg::AutostartOffBody => "核心将不再随系统启动",
             Msg::AutostartOnTitle => "开机自启已开启",
@@ -151,6 +157,10 @@ impl Msg {
             Msg::RecoveryPersistFailedTitle => "Cannot write the crash-recovery file",
             Msg::RecoveryPersistFailedBody => {
                 "If the core exits abnormally, hidden windows cannot be restored automatically"
+            }
+            Msg::RecoveryMismatchTitle => "Some hidden-window records went stale",
+            Msg::RecoveryMismatchBody => {
+                "The core exited abnormally last time; {kept} window(s) are still hidden and stay that way, while {lost} record(s) no longer match and were dropped"
             }
             Msg::AutostartOffTitle => "Startup disabled",
             Msg::AutostartOffBody => "The core will no longer start with Windows",
@@ -215,6 +225,10 @@ impl Msg {
             Msg::ConfigExeMissingBody => "請確認設定程式與核心位於同一資料夾，或重新安裝",
             Msg::RecoveryPersistFailedTitle => "無法寫入當機復原檔案",
             Msg::RecoveryPersistFailedBody => "核心若異常結束，隱藏的視窗將無法自動找回",
+            Msg::RecoveryMismatchTitle => "部分隱藏紀錄已失效",
+            Msg::RecoveryMismatchBody => {
+                "核心上次異常結束；{kept} 個視窗仍藏著並繼續保持，另有 {lost} 筆紀錄與當初對不上，已捨棄"
+            }
             Msg::AutostartOffTitle => "已關閉開機自動啟動",
             Msg::AutostartOffBody => "核心將不再隨系統啟動",
             Msg::AutostartOnTitle => "已開啟開機自動啟動",
@@ -312,7 +326,7 @@ mod tests {
     }
 
     /// 全部文案键；新增 Msg 变体后必须同步登记。
-    const ALL_MSGS: [Msg; 48] = [
+    const ALL_MSGS: [Msg; 50] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -329,6 +343,8 @@ mod tests {
         Msg::ConfigExeMissingBody,
         Msg::RecoveryPersistFailedTitle,
         Msg::RecoveryPersistFailedBody,
+        Msg::RecoveryMismatchTitle,
+        Msg::RecoveryMismatchBody,
         Msg::AutostartOffTitle,
         Msg::AutostartOffBody,
         Msg::AutostartOnTitle,

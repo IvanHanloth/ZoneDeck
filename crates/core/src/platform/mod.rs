@@ -47,6 +47,15 @@ pub trait WindowManager {
     /// 进程的可执行文件完整路径；查不到返回空串。
     /// 给「只拿到句柄」的目标补身份用（任务栏、桌面不在枚举结果里）。
     fn process_path(&self, pid: u32) -> String;
+    /// 进程映像名；查不到返回空串。反作弊进程拒绝 `OpenProcess`，
+    /// 完整路径无从查起，但映像名仍可由系统进程快照得到。
+    fn process_name(&self, pid: u32) -> String {
+        std::path::Path::new(&self.process_path(pid))
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string()
+    }
     /// 窗口当前标题；无标题或查不到时返回 `NO_TITLE` 占位。
     fn window_title(&self, hwnd: i64) -> String;
     /// 进程创建时刻（Unix 毫秒），用于识别 PID 复用；查不到返回 0。

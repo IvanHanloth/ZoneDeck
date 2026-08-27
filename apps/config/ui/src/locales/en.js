@@ -66,6 +66,7 @@ export default {
   "binding.pickWindowsFirst": "Select the windows to hide in the list on the left first",
   "binding.pickProcessesFirst": "Select the processes to hide in the list on the left first",
   "binding.windowsRefreshed": "Window list refreshed",
+  "binding.processUnidentified": "Skipped {count} window(s) whose program could not be identified (usually anti-cheat protection) — use window hiding instead",
   "binding.regexSeedKeyword": "keyword",
   "binding.regexSeedProcess": "program.exe",
 
@@ -222,6 +223,8 @@ export default {
   "notify.onHideDesc": "Show a notification each time hiding is triggered",
   "notify.onShow": "Notify when showing windows",
   "notify.onShowDesc": "Show a notification each time windows are restored",
+  "notify.onRecoveryMismatch": "Notify when hidden-window records go stale",
+  "notify.onRecoveryMismatchDesc": "After the core exits abnormally, windows that are still hidden stay hidden; if any record no longer matches what was recorded (the window is gone, the handle was reused, or something already showed it), a notification tells you.",
 
   "notify.badgeRed": "Red",
   "notify.badgeGreen": "Green",
@@ -273,8 +276,11 @@ export default {
   "hide.hideIcon": "Also hide ZoneDeck's tray icon",
   "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "hide.sendPause": "Send the pause key before hiding",
-  "hide.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "hide.sendPause": "Pause playback as well",
+  "hide.sendPauseDesc": "Try to pause any playing media as the windows are hidden.",
+  "hide.resumeMedia": "Resume playback on restore",
+  "hide.resumeMediaDesc": "Resume the paused media when the windows come back",
+  "hide.needPauseFirst": "Enable “Pause playback as well” first",
   "hide.minimizeBeforeHide": "Minimise windows before hiding",
   "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",

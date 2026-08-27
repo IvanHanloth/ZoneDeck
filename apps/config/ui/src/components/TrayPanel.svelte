@@ -17,6 +17,7 @@
   import IconPower from "~icons/lucide/power";
   import IconEyeOff from "~icons/lucide/eye-off";
   import IconEye from "~icons/lucide/eye";
+  import IconTriangleAlert from "~icons/lucide/triangle-alert";
   import { app } from "../lib/state.svelte.js";
   import { t } from "../lib/i18n.svelte.js";
 
@@ -59,13 +60,19 @@
     { value: "monitor_paused", labelKey: "notify.statusMonitorPaused" },
   ];
 
-  // 五个可逐项开关的通知事件。
+  // 可逐项开关的通知事件。
   const EVENTS = [
     { key: "on_start", labelKey: "notify.onStart", descKey: "notify.onStartDesc", icon: IconPlay },
     { key: "on_quit", labelKey: "notify.onQuit", descKey: "notify.onQuitDesc", icon: IconCircleStop },
     { key: "on_autostart", labelKey: "notify.onAutostart", descKey: "notify.onAutostartDesc", icon: IconPower },
     { key: "on_hide", labelKey: "notify.onHide", descKey: "notify.onHideDesc", icon: IconEyeOff },
     { key: "on_show", labelKey: "notify.onShow", descKey: "notify.onShowDesc", icon: IconEye },
+    {
+      key: "on_recovery_mismatch",
+      labelKey: "notify.onRecoveryMismatch",
+      descKey: "notify.onRecoveryMismatchDesc",
+      icon: IconTriangleAlert,
+    },
   ];
 
   const actionOptions = $derived(ACTIONS.map((a) => ({ value: a.value, label: t(a.labelKey) })));

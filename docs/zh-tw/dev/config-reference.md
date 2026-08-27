@@ -54,7 +54,8 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | 欄位 | 型別 | 預設 | 對應功能 |
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/hiding) |
-| `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/hiding) |
+| `send_before_hide` | bool | `false` | [同時暫停播放](/zh-tw/guide/hiding)：隱藏同時嘗試暫停正在播放的媒體 |
+| `resume_media_after_show` | bool | `false` | [復原時繼續播放](/zh-tw/guide/hiding)：依附於 `send_before_hide`，是否續播在隱藏那一刻定下 |
 | `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/hiding) |
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/hiding) |
 | `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/hiding) |
@@ -138,6 +139,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `on_autostart` | `true` | 開機自動啟動狀態變更通知 |
 | `on_hide` | `false` | 每次隱藏通知 |
 | `on_show` | `false` | 每次顯示通知 |
+| `on_recovery_mismatch` | `true` | 上次異常結束後接手隱藏紀錄時，有紀錄與當初對不上就通知 |
 
 ## `verhub`
 

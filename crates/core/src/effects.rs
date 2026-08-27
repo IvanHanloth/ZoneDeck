@@ -4,12 +4,22 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::stats::PowerStatsStore;
-use crate::{audio, efficiency, freeze, input, log_warn, logging};
+use crate::{audio, efficiency, freeze, input, log_warn, logging, media};
 
-/// 隐藏 / 恢复的副作用（静音、冻结、暂停键）。
+/// 一个要暂停媒体播放的目标。`path` 查不到时为空，那时只能按 PID 判断出声。
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PauseTarget {
+    pub pid: u32,
+    pub path: String,
+}
+
+/// 隐藏 / 恢复的副作用（静音、冻结、暂停媒体）。
 /// 实现可以是异步的，调用方只能依赖调用顺序与执行顺序一致（FIFO）。
 pub trait Effects {
-    fn mute(&self, pid: u32, mute: bool);
+    /// 静音进程及同映像的会话；`path` 为目标的映像路径。
+    fn mute(&self, pid: u32, path: &str);
+    /// 取消静音。`path` 是静音时记下的映像路径，目标进程已退出时靠它找回残留会话。
+    fn unmute(&self, pid: u32, path: &str);
     /// 冻结整批进程前静置一次，见 [`FREEZE_SETTLE_DELAY`]。
     fn settle_before_freeze(&self);
     fn suspend(&self, pid: u32, enhanced: bool);
@@ -21,14 +31,34 @@ pub trait Effects {
     fn set_efficiency(&self, pid: u32);
     /// 撤销效率模式。无状态，重复调用无副作用。
     fn clear_efficiency(&self, pid: u32);
-    /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。
-    fn send_pause(&self);
+    /// 暂停目标的媒体播放。优先逐个会话精确暂停，够不着的才回退全局媒体键，
+    /// 且仅在目标确实在出声时才发。
+    fn pause_media(&self, targets: &[PauseTarget]);
+    /// 续播隐藏时暂停过的媒体。只在隐藏那一刻就定下要续播时才调用，
+    /// 且只动本程序暂停过、如今仍是暂停态的会话。
+    fn resume_media(&self, targets: &[PauseTarget]);
+    /// 丢掉暂停记账。这一轮不打算续播时调用，免得记录留到下一轮。
+    fn forget_paused_media(&self) {}
     /// 把攒下的能效统计落盘。由 [`crate::effects_worker::EffectsWorker`] 在队列排空后
     /// 调用：一次隐藏会连着上报十几个进程，合并成一次写盘。不记账的实现无事可做。
     fn flush_stats(&self) {}
 }
 
-/// 冻结前的静置时长：留给隐藏动作画完、媒体暂停键被目标程序处理掉。
+/// 目标里去重后的映像路径，空路径不计。
+fn distinct_paths(targets: &[PauseTarget]) -> Vec<String> {
+    let mut paths: Vec<String> = Vec::new();
+    for t in targets.iter().filter(|t| !t.path.is_empty()) {
+        if !paths
+            .iter()
+            .any(|p: &String| p.as_str().eq_ignore_ascii_case(&t.path))
+        {
+            paths.push(t.path.clone());
+        }
+    }
+    paths
+}
+
+/// 冻结前的静置时长：留给隐藏动作画完、媒体暂停命令被目标程序处理掉。
 const FREEZE_SETTLE_DELAY: Duration = Duration::from_millis(200);
 
 pub struct WinEffects {
@@ -67,8 +97,12 @@ impl WinEffects {
 }
 
 impl Effects for WinEffects {
-    fn mute(&self, pid: u32, mute: bool) {
-        audio::set_mute(pid, mute);
+    fn mute(&self, pid: u32, path: &str) {
+        audio::mute(pid, path);
+    }
+
+    fn unmute(&self, pid: u32, path: &str) {
+        audio::unmute(pid, path);
     }
 
     fn settle_before_freeze(&self) {
@@ -131,11 +165,55 @@ impl Effects for WinEffects {
         }
     }
 
-    fn send_pause(&self) {
-        // 没有音视频在播放时不发键。
-        if audio::is_audio_playing() {
+    fn pause_media(&self, targets: &[PauseTarget]) {
+        if targets.is_empty() {
+            return;
+        }
+        let paths = distinct_paths(targets);
+
+        // 先走 SMTC 精确暂停：只停目标自己的会话，不惊动别的播放器。
+        let paused = media::pause_sessions(&paths);
+
+        // 剩下的够不着 SMTC——没注册媒体会话，或 AUMID 与映像对不上。
+        // 只能回退全局媒体键，且仅在它们确实在出声时才发：那个键是播放/暂停
+        // 切换键，目标没在播时发过去反而会把它切成播放。
+        let rest: Vec<&PauseTarget> = targets
+            .iter()
+            .filter(|t| {
+                !paused
+                    .iter()
+                    .any(|p: &String| p.as_str().eq_ignore_ascii_case(&t.path))
+            })
+            .collect();
+        if rest.is_empty() {
+            return;
+        }
+        let rest_pids: Vec<u32> = rest.iter().map(|t| t.pid).collect();
+        let rest_paths: Vec<String> = rest
+            .iter()
+            .filter(|t| !t.path.is_empty())
+            .map(|t| t.path.clone())
+            .collect();
+        if audio::any_target_playing(&rest_pids, &rest_paths) {
             input::send_media_pause();
         }
+    }
+
+    fn resume_media(&self, targets: &[PauseTarget]) {
+        let paths = distinct_paths(targets);
+        if paths.is_empty() {
+            return;
+        }
+        // 只走 SMTC：全局媒体键既认不准目标，又可能把没在播的切成播放。
+        // 续播是锦上添花，不值得冒那个险，够不着就算了。
+        let resumed = media::resume_sessions(&paths);
+        if resumed > 0 {
+            logging::debug(&format!("已续播 {resumed} 个媒体会话"));
+        }
+    }
+
+    fn forget_paused_media(&self) {
+        media::forget_paused();
     }
 
     fn set_efficiency(&self, pid: u32) {
