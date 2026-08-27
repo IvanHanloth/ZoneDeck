@@ -1,5 +1,5 @@
 <script>
-  // 鼠标按键选择器；图形是下方内联的 SVG，各按键区域为独立可点击的 path。
+  // 鼠标按键选择器；各按键区域为独立可点击的 path。
   import ModifierRecorder from "./ModifierRecorder.svelte";
   import { MOUSE_PARTS, describeTrigger } from "../lib/pointer.js";
   import { t } from "../lib/i18n.svelte.js";
@@ -141,12 +141,12 @@
 
     /* 示意图走「浅色线稿」：轮廓是淡灰线，选中态是主色淡染 + 主色描边，
        避免整块深绿压在面板上。状态在右侧列表里还有圆点与文字重复表达。 */
-    --line: color-mix(in srgb, var(--text) 34%, var(--surface-2));
-    --face: var(--surface);
-    --face-hover: color-mix(in srgb, var(--text) 7%, var(--surface));
-    --face-on: color-mix(in srgb, var(--accent) 22%, var(--surface));
-    --face-on-hover: color-mix(in srgb, var(--accent) 34%, var(--surface));
-    --line-on: color-mix(in srgb, var(--accent) 60%, var(--surface));
+    --line: var(--illustration-line);
+    --face: var(--illustration);
+    --face-hover: color-mix(in srgb, var(--illustration-line) 14%, var(--illustration));
+    --face-on: color-mix(in srgb, var(--accent) 22%, var(--illustration));
+    --face-on-hover: color-mix(in srgb, var(--accent) 34%, var(--illustration));
+    --line-on: color-mix(in srgb, var(--accent) 60%, var(--illustration));
   }
 
   .mouse {
@@ -157,13 +157,12 @@
   }
 
   .shell {
-    fill: var(--surface-2);
+    fill: color-mix(in srgb, var(--illustration-edge) 45%, var(--illustration));
     stroke: var(--line);
     stroke-width: 18;
   }
 
   .part {
-    cursor: pointer;
     outline: none;
   }
   .hit {
@@ -177,8 +176,8 @@
     stroke-width: 18;
     stroke-linejoin: round;
     transition:
-      fill 0.15s,
-      stroke 0.15s;
+      fill var(--dur-fast) var(--ease-standard),
+      stroke var(--dur-fast) var(--ease-standard);
   }
   .part:hover :is(rect, path):not(.hit) {
     fill: var(--face-hover);
@@ -207,33 +206,36 @@
 
   .row {
     border: 1px solid transparent;
-    border-radius: 8px;
-    padding: 2px;
+    border-radius: var(--r-card);
   }
   .row.on {
-    border-color: var(--border);
-    background: var(--surface-2);
+    border-color: var(--stroke);
+    background: var(--card-2);
   }
 
   .name {
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 9px;
-    padding: 6px 8px;
-    border-radius: 6px;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--r-control);
     text-align: left;
+    transition: background var(--dur-fast) var(--ease-standard);
   }
   .name:hover {
-    background: var(--hover);
+    background: var(--subtle-hover);
+  }
+  .name:active {
+    background: var(--subtle-pressed);
   }
   .dot {
     flex: none;
     width: 9px;
     height: 9px;
     border-radius: 50%;
-    background: var(--muted);
-    transition: background 0.15s;
+    background: var(--text-3);
+    transition: background var(--dur-fast) var(--ease-standard);
   }
   .row.on .dot {
     background: var(--accent);
@@ -241,12 +243,11 @@
   .text {
     flex: 1;
     min-width: 0;
-    font-size: 13px;
   }
   .state {
     flex: none;
     font-size: 12px;
-    color: var(--muted);
+    color: var(--text-2);
   }
   .row.on .state {
     color: var(--accent);
@@ -257,27 +258,31 @@
     align-items: center;
     gap: 10px;
     flex-wrap: wrap;
-    padding: 0 8px 8px 26px;
+    padding: 0 10px 10px 29px;
   }
 
+  /* Win11 分段控件：整体一个圆角壳，选中段填 accent */
   .clicks {
     display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-    background: var(--surface);
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    border-radius: var(--r-control);
+    background: var(--control);
   }
   .seg {
-    padding: 4px 10px;
-    font-size: 12.5px;
-    color: var(--muted);
-    border-right: 1px solid var(--border);
-  }
-  .seg:last-child {
-    border-right: none;
+    padding: 3px 10px;
+    border-radius: 2px;
+    font-size: 12px;
+    color: var(--text-2);
+    transition:
+      background var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
   }
   .seg:hover {
-    background: var(--hover);
+    background: var(--subtle-hover);
+    color: var(--text);
   }
   .seg.sel {
     background: var(--accent);

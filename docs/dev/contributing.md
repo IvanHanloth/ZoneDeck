@@ -44,8 +44,8 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 
 # 3. 前端测试与构建
-npm --prefix apps/config/ui test
-npm --prefix apps/config/ui run build
+pnpm --dir apps/config/ui test
+pnpm --dir apps/config/ui run build
 
 # 4. Rust 测试
 cargo test --workspace

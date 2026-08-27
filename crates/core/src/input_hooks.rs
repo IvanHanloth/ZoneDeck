@@ -1,9 +1,7 @@
 //! 输入钩子专职线程：`WH_MOUSE_LL` 与 `WH_KEYBOARD_LL` 都挂在这条线程上。
 //!
-//! 低级钩子的回调由安装线程的消息泵派发，系统的输入线程要等钩子链返回才继续投递
-//! 事件。故不与代理窗口共用线程：枚举窗口、写恢复文件这类重活会卡住全局输入，
-//! 单次超过 `LowLevelHooksTimeout`（默认 300ms）时系统还会丢弃该事件。
-//! 两个钩子的回调都只做内存判定与 `PostMessageW`，互不阻塞，共用一条线程即可。
+//! 低级钩子的回调由安装线程的消息泵派发，系统要等钩子链返回才继续投递事件，
+//! 故不与代理窗口共用线程。
 
 use std::sync::atomic::{AtomicIsize, Ordering::Relaxed};
 use std::sync::mpsc::channel;
@@ -35,7 +33,7 @@ const HOOK_KEYBOARD: usize = 1;
 /// 代理窗口句柄，钩子命中后把触发投递给它。
 static AGENT_HWND: AtomicIsize = AtomicIsize::new(0);
 
-/// 钩子句柄只在钩子线程上创建与销毁，故存在该线程的 TLS 里。
+/// 钩子句柄只在钩子线程上创建与销毁，存在该线程的 TLS 里。
 #[derive(Default)]
 struct Installed {
     mouse: Option<MouseHook>,
@@ -122,7 +120,7 @@ pub struct InputHooks {
 }
 
 impl InputHooks {
-    /// 起线程并等它把仅消息窗口建好。窗口建不出来时返回 None，调用方须自行降级。
+    /// 起线程并等它把仅消息窗口建好；窗口建不出来时返回 None。
     pub fn spawn(agent_hwnd: HWND) -> Option<InputHooks> {
         AGENT_HWND.store(agent_hwnd.0 as isize, Relaxed);
         let (tx, rx) = channel::<isize>();
@@ -130,7 +128,7 @@ impl InputHooks {
             .name("zonedeck-input-hooks".into())
             .spawn(move || {
                 unsafe {
-                    // 不上 TIME_CRITICAL，避免把调度权从前台程序手里整体抢走。
+                    // 不上 TIME_CRITICAL，避免抢走前台程序的调度权。
                     let _ = SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
                 }
                 let hwnd = match create_hook_window() {
@@ -192,8 +190,7 @@ impl InputHooks {
         self.set(HOOK_KEYBOARD, on)
     }
 
-    /// 钩子线程从不阻塞、也从不回发消息给代理线程，故 `SendMessageW` 不会死锁，
-    /// 且能直接拿到安装结果。
+    /// 钩子线程从不阻塞、也从不回发消息给代理线程，故 `SendMessageW` 不会死锁。
     fn set(&self, kind: usize, on: bool) -> bool {
         unsafe {
             let hwnd = HWND(self.hwnd as *mut std::ffi::c_void);
@@ -229,7 +226,7 @@ mod tests {
     use windows::Win32::System::Threading::GetCurrentThreadId;
     use windows::Win32::UI::WindowsAndMessaging::GetWindowThreadProcessId;
 
-    /// 代理窗口句柄传 0：钩子照常装得上，命中时的 `PostMessageW` 会被 0 句柄挡掉。
+    /// 代理窗口句柄传 0：钩子照常装得上，命中时的 `PostMessageW` 会被挡掉。
     fn hooks() -> InputHooks {
         InputHooks::spawn(HWND(std::ptr::null_mut())).expect("输入钩子线程应能启动")
     }
@@ -248,8 +245,7 @@ mod tests {
         );
     }
 
-    /// 本测试线程没有消息循环，而低级钩子只能装在跑消息泵的线程上，
-    /// 故能装上本身即说明请求落到了钩子线程。
+    /// 低级钩子只能装在跑消息泵的线程上，能装上即说明请求落到了钩子线程。
     #[test]
     fn mouse_and_keyboard_hooks_arm_and_disarm_independently() {
         let hooks = hooks();
@@ -264,7 +260,7 @@ mod tests {
         assert!(!hooks.set_keyboard(false));
     }
 
-    /// 析构须让线程退出，否则热重载会让线程越积越多。
+    /// 析构须让线程退出。
     #[test]
     fn dropping_stops_the_thread_and_destroys_its_window() {
         let hwnd = {

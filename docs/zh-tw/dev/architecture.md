@@ -48,7 +48,7 @@ ZoneDeck v3 採用 **核心＋設定分離** 的**雙程序架構**，兩者透�
 | 能力 | 使用的 API | 說明 |
 | --- | --- | --- |
 | 全域快速鍵 | `RegisterHotKey` | 最規範、完善的觸發方式 |
-| 快速鍵不傳遞 | `WH_KEYBOARD_LL` | 僅在有快速鍵開啟「不傳遞」時才安裝 |
+| 快速鍵走掛鉤 | `WH_KEYBOARD_LL` | 僅在有快速鍵開啟「低階鍵盤掛鉤」、或用了純修飾鍵／多主鍵組合時才安裝 |
 | 滑鼠／四角 | `WH_MOUSE_LL` | 僅在啟用滑鼠／四角時才安裝 |
 | 閒置偵測 | `GetLastInputInfo` | 不需常駐監聽鍵盤 |
 
@@ -88,7 +88,7 @@ ZoneDeck/
 │           freeze.rs     NtSuspend/Resume + pssuspend64 增強凍結
 │           input_hooks.rs 輸入掛鉤專職執行緒（承載兩個低階掛鉤，優先權 above normal）
 │           mouse_hook.rs WH_MOUSE_LL（中鍵/側鍵/四角）
-│           keyboard_hook.rs WH_KEYBOARD_LL（「不傳遞」快速鍵攔截）
+│           keyboard_hook.rs WH_KEYBOARD_LL（走掛鉤的快速鍵：可選吞鍵、純修飾鍵、多主鍵）
 │           idle.rs       GetLastInputInfo 閒置 + 自動隱藏判定
 │           tray.rs       Shell_NotifyIcon 通知區域 + 通知
 │           ipc_server.rs 具名管道伺服端（建立失敗退避重試，不結束）
@@ -98,13 +98,18 @@ ZoneDeck/
 │           logging.rs    分級檔案記錄（按日切割 + 等級過濾 + 去識別化 + panic 掛鉤）
 │           recovery.rs   當機復原（意圖先行寫入 + 原子寫；快照帶開機時刻與
 │                         處理程序建立時刻，跨重新開機的快照會被丟棄）
+│           stats.rs      能效統計（凍結/效率模式/釋放記憶體的累計量，節流寫入 stats.json）
 │           icon.rs       程序圖示擷取（HICON → 手寫 PNG/base64 編碼）
 │           single_instance.rs  具名互斥鎖單一執行個體
 └── apps/config/                    設定介面（Tauri 2 + Svelte 5）
     ├── src-tauri/  Rust 後端命令 + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub 用戶端（版本／公告／回饋／日誌／專案連結，基於 verhub-sdk；
     │                      回饋可選轉為 GitHub Issue，由 Verhub 機器人建立，此時須填 GitHub 帳號；
-    │                      專案連結帶快取：記憶體 + 資料目錄下的 verhub_cache.json，有效期一天）
+    │                      版本說明／公告／專案資訊依介面語言取譯文，缺譯文時回落預設內容；
+    │                      專案連結帶快取：記憶體 + 資料目錄下的 verhub_cache.json，有效期一天，換語言即失效）
+    │   └── src/analytics.rs  匿名使用統計（啟動時回報一份功能採用快照 + 設定變更事件，
+    │                      事件名與屬性都有白名單，規則與白名單只回報條數；
+    │                      未獲授權前一位元組不採不寫，授權狀態存在 config 的 verhub.analytics）
     ├── ui/         前端原始碼（Vite + Svelte 5）
     │   └── src/    lib/（純邏輯 + vitest 測試）+ components/（Svelte 元件）
     │                + locales/（三語文案 catalog，以 zh-CN.js 為基準）
@@ -117,7 +122,7 @@ ZoneDeck/
 
 ## 資料目錄
 
-設定 `config.json`、記錄檔 `logs/`、復原檔 `recovery.json`、快取 `verhub_cache.json` 共處一個**資料目錄**，由 `crates/common/src/paths.rs` 定位。安裝版與可攜版分開對待：
+設定 `config.json`、記錄檔 `logs/`、復原檔 `recovery.json`、統計 `stats.json`、快取 `verhub_cache.json` 共處一個**資料目錄**，由 `crates/common/src/paths.rs` 定位。安裝版與可攜版分開對待：
 
 | 情形 | 資料目錄 | `DataDirKind` |
 | --- | --- | --- |
@@ -169,7 +174,7 @@ Tauri 按 `tauri.conf.json` 裡的 identifier 把 WebView2 使用者資料放在
 
 `WH_MOUSE_LL`／`WH_KEYBOARD_LL` 的回呼由**安裝執行緒的訊息幫浦**派送，且系統的輸入執行緒要等掛鉤鏈返回才繼續投遞事件。若與 agent 同執行緒，列舉視窗、寫入復原檔案、處理全系統視窗事件這類操作會直接拖慢全域滑鼠與鍵盤輸入，單次超過 `LowLevelHooksTimeout`（預設 300ms）時系統還會丟棄該事件。
 
-故 `input_hooks.rs` 單獨啟動一條只跑訊息幫浦的執行緒承載這兩個掛鉤，執行緒優先權提到 above normal，回呼裡只做純記憶體判定與 `PostMessageW`（滑鼠移動這條最熱的路徑上不加鎖，取樣存在不可分割變數裡）。agent 執行緒透過一個僅訊息視窗向它同步下達裝卸請求，並依返回值決定是否回退（鍵盤掛鉤裝不上時「不傳遞」快速鍵退化為 `RegisterHotKey`）。
+故 `input_hooks.rs` 單獨啟動一條只跑訊息幫浦的執行緒承載這兩個掛鉤，執行緒優先權提到 above normal，回呼裡只做純記憶體判定與 `PostMessageW`（滑鼠移動這條最熱的路徑上不加鎖，取樣存在不可分割變數裡）。agent 執行緒透過一個僅訊息視窗向它同步下達裝卸請求，並依返回值決定是否回退（鍵盤掛鉤裝不上時，走掛鉤的快速鍵退化為 `RegisterHotKey`，`RegisterHotKey` 表達不了的組合則本次不生效）。
 
 agent 執行緒本身**不**提優先權：它做的是列舉／凍結／寫入磁碟這類重活，抬高只會從前景程式手裡搶 CPU。
 
@@ -188,7 +193,7 @@ agent 執行緒本身**不**提優先權：它做的是列舉／凍結／寫入�
 ## 穩定性設計（當機自癒三層防線）
 
 1. **當機記錄**：關鍵事件與 panic 寫入[資料目錄](#資料目錄)下的 `logs/ZoneDeck-YYYY-MM-DD.log`（按日切割，依 `log_retention_days` 保留，0 表示不記錄；依 `log_level` 過濾，預設只記 WARN 及以上，詳見[記錄分級與去識別化](#記錄分級與去識別化)）。
-2. **當機復原**：隱藏動作執行前先把「將要隱藏／凍結／靜音什麼」寫入 `recovery.json`（tmp + rename 原子替換），異常結束後重新啟動自動找回；快照帶開機時刻與處理程序建立時刻，跨重新開機的過期快照直接丟棄，不會對無關視窗／處理程序做復原動作。
+2. **當機復原**：隱藏動作執行前先把「將要隱藏／凍結／靜音什麼」寫入 `recovery.json`（tmp + rename 原子替換）。異常結束後重新啟動走 `adopt_from`：逐筆核對控制代碼、PID、映像名稱與可見性，對得上的**繼續保持隱藏**（上一輪是核心被終止，使用者的隱藏意圖沒變），對不上的只捨棄紀錄並依 `notifications.on_recovery_mismatch` 通知使用者；一個視窗都沒接手成功時才解除凍結／取消靜音／撤銷效率模式。快照帶開機時刻與處理程序建立時刻，跨重新開機的過期快照直接丟棄。
 3. **監控程式**：排程工作 `RestartOnFailure`（當機後 1 分鐘內重新啟動，最多 3 次）。release 建置 `panic = "abort"`，panic 掛鉤寫完記錄後以非零碼結束，正好觸發排程工作重新啟動。
 
 使用者視角的說明見 [視窗復原與當機自癒](/zh-tw/guide/recovery)。

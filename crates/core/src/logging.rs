@@ -1,9 +1,7 @@
 //! 分级文件日志 + panic 钩子。
 //!
-//! 按天切割（`ZoneDeck-YYYY-MM-DD.log`）、按天保留，按用户所选的
-//! [输出等级](zonedeck_common::config::LOG_LEVELS)过滤。
-//!
-//! 写入前统一脱敏（见 [`redact_user_dir`]）；调用方不得把窗口标题一类的内容交给日志。
+//! 按天切割（`ZoneDeck-YYYY-MM-DD.log`）、按天保留，按用户所选的输出等级过滤。
+//! 写入前统一脱敏，见 [`redact_user_dir`]。
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -15,9 +13,9 @@ use windows::Win32::System::SystemInformation::GetLocalTime;
 use zonedeck_common::config;
 
 pub const LOG_DIR_NAME: &str = "logs";
-/// 日志文件名前缀；面向用户，用品牌大小写。
+/// 日志文件名前缀。
 const LOG_FILE_PREFIX: &str = "ZoneDeck-";
-/// 改名（Boss Key → ZoneDeck）前的日志文件前缀，仅用于识别旧文件。
+/// 改名前的日志文件前缀，仅用于识别旧文件。
 const LEGACY_LOG_FILE_PREFIX: &str = "BossKey-";
 const LOG_FILE_SUFFIX: &str = ".log";
 /// 用户目录在日志中的替代写法。
@@ -148,8 +146,7 @@ fn log_file_name(year: u16, month: u16, day: u16) -> String {
     format!("{LOG_FILE_PREFIX}{year:04}-{month:02}-{day:02}{LOG_FILE_SUFFIX}")
 }
 
-/// 从日志文件名解析出年月日；不符合命名规则时返回 `None`。
-/// 兼容改名前的旧前缀，保留天数清理与会话回溯因此继续覆盖旧文件。
+/// 从日志文件名解析出年月日，兼容旧前缀；不符合命名规则时返回 `None`。
 fn parse_log_date(name: &str) -> Option<(i64, u32, u32)> {
     let date = name
         .strip_prefix(LOG_FILE_PREFIX)
@@ -196,8 +193,8 @@ fn start_mark() -> String {
 /// 摘录里省略中间部分时插入的说明。
 const OMISSION_MARK: &str = "……（超出上报长度，已省略中间 {n} 行）";
 
-/// 最近一次会话在该文件中的部分：最后一个 `[START]` 行到文件末尾。
-/// 没有会话标记（如本次运行前的旧格式日志）时返回 `None`。
+/// 最近一次会话在该文件中的部分：最后一个 `[START]` 行到文件末尾；
+/// 没有会话标记时返回 `None`。
 fn session_excerpt(content: &str) -> Option<&str> {
     let mark = start_mark();
     let mut start = None;
@@ -211,15 +208,14 @@ fn session_excerpt(content: &str) -> Option<&str> {
     Some(&content[start?..])
 }
 
-/// 把摘录压到 `max_bytes` 以内：保留首行（会话标记，含版本与数据目录）与末尾若干行，
-/// 中间以 [`OMISSION_MARK`] 说明省略了多少行。`max_bytes` 为 0 时不做限制。
+/// 把摘录压到 `max_bytes` 以内：保留首行与末尾若干行，中间以 [`OMISSION_MARK`]
+/// 说明省略了多少行。`max_bytes` 为 0 时不做限制。
 fn fit_within(excerpt: &str, max_bytes: usize) -> String {
     if max_bytes == 0 || excerpt.len() <= max_bytes {
         return excerpt.to_string();
     }
     let lines: Vec<&str> = excerpt.lines().collect();
     let head = lines.first().copied().unwrap_or_default();
-    // 预留首行与省略说明的位置，其余预算留给末尾。
     let reserved = head.len() + OMISSION_MARK.len() + 2;
     let mut tail: Vec<&str> = Vec::new();
     let mut used = 0;
@@ -257,8 +253,7 @@ fn log_files_newest_first(dir: &std::path::Path) -> Vec<PathBuf> {
             Some((days_from_civil(y, m, d), name, e.path()))
         })
         .collect();
-    // 同日期时按文件名降序：改名当天迁来的旧前缀文件（BossKey- < ZoneDeck-）
-    // 必须排在新文件之后，否则升级当天的会话摘录会取到旧版本的日志。
+    // 同日期时按文件名降序，旧前缀文件排在新文件之后。
     files.sort_by(|a, b| (b.0, &b.1).cmp(&(a.0, &a.1)));
     files.into_iter().map(|(_, _, path)| path).collect()
 }
@@ -279,7 +274,7 @@ pub fn latest_session(dir: &std::path::Path, max_bytes: usize) -> String {
             parts.push(excerpt.to_string());
             return fit_within(&join_parts(parts), max_bytes);
         }
-        // 文件里没有起始标记：整个文件都属于更早开始的那次运行。
+        // 没有起始标记时整个文件都属于更早开始的那次运行。
         parts.push(content);
     }
     fit_within(&join_parts(parts), max_bytes)
@@ -296,14 +291,14 @@ fn join_parts(mut parts: Vec<String>) -> String {
         .join("\n")
 }
 
-/// 当前用户目录；取不到（或为空）时不做替换。
+/// 当前用户目录；取不到或为空时不做替换。
 fn user_dir() -> &'static str {
     static USER_DIR: OnceLock<String> = OnceLock::new();
     USER_DIR.get_or_init(|| std::env::var("USERPROFILE").unwrap_or_default())
 }
 
-/// 把消息里的用户目录换成 [`USER_DIR_PLACEHOLDER`]，避免日志上传时带出用户名。
-/// 大小写按 ASCII 规则忽略（Windows 路径的大小写差异只出现在 ASCII 部分）。
+/// 把消息里的用户目录换成 [`USER_DIR_PLACEHOLDER`]，避免带出用户名。
+/// 大小写按 ASCII 规则忽略。
 fn redact_user_dir(message: &str, user_dir: &str) -> String {
     if user_dir.is_empty() || message.len() < user_dir.len() {
         return message.to_string();
@@ -320,7 +315,6 @@ fn redact_user_dir(message: &str, user_dir: &str) -> String {
             i += needle.len();
             continue;
         }
-        // 按字符推进，命中位置必定落在字符边界上。
         let ch = message[i..].chars().next().unwrap_or('\u{fffd}');
         out.push(ch);
         i += ch.len_utf8();
@@ -340,7 +334,7 @@ fn format_timestamp(
 }
 
 static GLOBAL: OnceLock<Logger> = OnceLock::new();
-/// 当前输出等级，存 [`Level`] 的判别序号；默认与配置默认值一致。
+/// 当前输出等级，存 [`Level`] 的判别序号。
 static LEVEL: AtomicU8 = AtomicU8::new(Level::Warn as u8);
 
 /// 初始化全局日志；`retention_days == 0` 表示关闭日志。
@@ -380,7 +374,7 @@ pub fn session_start(message: &str) {
     }
 }
 
-/// 会话结束标记：不受输出等级影响。日志末尾没有它即上次未正常退出。
+/// 会话结束标记：不受输出等级影响；日志末尾没有它即上次未正常退出。
 pub fn session_exit(message: &str) {
     if let Some(logger) = GLOBAL.get() {
         logger.write(Marker::Exit.as_str(), message);
@@ -626,7 +620,7 @@ mod tests {
         );
     }
 
-    /// 修改全局等级的测试串行执行，避免相互干扰。
+    /// 修改全局等级的测试串行执行。
     fn with_level<T>(level: Level, body: impl FnOnce() -> T) -> T {
         static SERIAL: Mutex<()> = Mutex::new(());
         let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
@@ -705,7 +699,7 @@ mod tests {
              2026-07-28 23:59:30 [WARN] 零点前的警告\n",
         )
         .unwrap();
-        // 当天文件里没有起始标记：本次运行是昨晚开始的。
+        // 当天文件里没有起始标记，本次运行是昨晚开始的。
         fs::write(
             dir.join("ZoneDeck-2026-07-29.log"),
             "2026-07-29 00:00:10 [ERROR] 零点后的错误\n",
@@ -781,7 +775,7 @@ mod tests {
     fn logger_redacts_user_dir_on_disk() {
         let dir = temp_dir();
         let logger = Logger::new(dir.clone(), 7);
-        // 脱敏取真实环境变量，此处验证写盘路径上已调用脱敏。
+        // 验证写盘路径上已调用脱敏。
         let profile = user_dir().to_string();
         if profile.is_empty() {
             return;
@@ -800,7 +794,7 @@ mod tests {
     fn warn_at_appends_source_location() {
         let dir = temp_dir();
         let logger = Logger::new(dir.clone(), 7);
-        // 直接验证格式化结果（warn_at 走全局 logger，测试里用本地实例复刻其格式）。
+        // warn_at 走全局 logger，此处用本地实例复刻其格式。
         logger.log(
             Level::Warn,
             &format!("{} ({}:{})", "落盘失败", "agent.rs", 42),

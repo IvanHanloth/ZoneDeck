@@ -26,7 +26,7 @@ export function describeTrigger(button) {
   return button.modifiers ? `${button.modifiers} + ${clicks}` : clicks;
 }
 
-// cursor：该角在四角图示 viewBox(0 0 320 210) 中的光标停靠点。
+// cursor：该角在四角图示 viewBox 中的光标停靠点。
 export const CORNERS = [
   { key: "top_left_hide", labelKey: "corner.topLeft", cursor: [26, 26] },
   { key: "top_right_hide", labelKey: "corner.topRight", cursor: [294, 26] },
@@ -36,7 +36,7 @@ export const CORNERS = [
 
 export const CORNER_CENTER = [160, 92];
 
-/** 取出当前已启用的部件（保持 items 的原始顺序）。 */
+/** 取出当前已启用的部件，保持原始顺序。 */
 export function enabledParts(items, setting) {
   return items.filter((it) => Boolean(setting?.[it.key]));
 }

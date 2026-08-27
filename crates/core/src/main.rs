@@ -1,4 +1,4 @@
-// release 下以窗口子系统编译（无控制台）；debug 保留控制台便于开发。
+// release 下以窗口子系统编译（无控制台），debug 保留控制台。
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::time::Duration;
@@ -10,13 +10,12 @@ use zonedeck_core::logging;
 use zonedeck_core::single_instance::SingleInstance;
 
 const MUTEX_NAME: &str = "ZoneDeck_SingleInstance_Mutex";
-/// 改名（Boss Key → ZoneDeck）前的互斥体名，用于探测仍在运行的旧版核心。
+/// 改名前的互斥体名，用于探测仍在运行的旧版核心。
 const LEGACY_MUTEX_NAME: &str = "BossKey_SingleInstance_Mutex";
 /// 提权重启时等待前一个实例退出的上限。
 const ELEVATED_HANDOVER_WAIT: Duration = Duration::from_secs(4);
 
-/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用——初始化日志就要定位数据目录，
-/// 而定位会触发迁移，恰是此场景下必须避免的。语言跟随系统（配置同样还不能读）。
+/// 旧版核心仍在运行时弹窗提醒。此时日志尚不可用，语言跟随系统。
 fn warn_legacy_core_running() {
     use windows::Win32::UI::WindowsAndMessaging::{MB_ICONWARNING, MB_OK, MessageBoxW};
     use windows::core::PCWSTR;
@@ -39,9 +38,8 @@ fn warn_legacy_core_running() {
 }
 
 fn main() {
-    // 旧品牌核心还在运行时不得继续：两个核心会抢热键、双托盘，数据目录迁移还会把
-    // %APPDATA%\BossKey 从运行中的旧核心脚下搬走。探测必须先于 paths::locate()，
-    // 后者一执行就触发迁移。
+    // 旧品牌核心还在运行时不得继续：两个核心会抢热键，迁移还会搬走它的数据目录。
+    // 探测必须先于 paths::locate()，后者一执行就触发迁移。
     let legacy_probe = SingleInstance::acquire(LEGACY_MUTEX_NAME);
     let legacy_running = legacy_probe.already_running();
     drop(legacy_probe);
@@ -50,28 +48,22 @@ fn main() {
         return;
     }
 
-    // 数据目录只定位一次，配置、日志、恢复文件共用，避免两次定位得出不同结果。
+    // 数据目录只定位一次，配置、日志、恢复文件共用。
     let located = paths::locate();
     let data_dir = located.dir.clone();
     let config_path = data_dir.join(paths::CONFIG_FILE_NAME);
 
-    // 日志与 panic 钩子最先就位。保留天数与输出等级取自配置（0 天 = 关闭日志）。
-    let (retention_days, log_level) = zonedeck_common::Config::load(&config_path)
-        .map(|c| (c.setting.log_retention_days, c.setting.log_level))
-        .unwrap_or_else(|_| {
-            (
-                zonedeck_common::config::DEFAULT_LOG_RETENTION_DAYS,
-                zonedeck_common::config::DEFAULT_LOG_LEVEL.to_string(),
-            )
-        });
-    let log_level = logging::Level::from_config(&log_level);
+    // 配置只解析一次：这里取日志参数，随后原样交给 agent::run。
+    let startup = agent::StartupConfig::load(&config_path);
+    let retention_days = startup.config.setting.log_retention_days;
+    let log_level = logging::Level::from_config(&startup.config.setting.log_level);
     logging::init(
         data_dir.join(logging::LOG_DIR_NAME),
         retention_days,
         log_level,
     );
     logging::install_panic_hook();
-    // 会话起始标记：不受输出等级过滤，每次启动一条。
+    // 会话起始标记：不受输出等级过滤。
     logging::session_start(&format!(
         "核心启动 {}（配置 schema {}，日志等级 {}）｜数据目录: {}（{}）",
         zonedeck_common::APP_VERSION,
@@ -94,7 +86,7 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
 
-    // 以管理员身份重启时，等待旧实例释放互斥后再接管。
+    // 提权重启时等待旧实例释放互斥后再接管。
     let elevated_restart = args.iter().any(|a| a == "elevated");
     let instance = if elevated_restart {
         logging::debug("以管理员身份重启，等待前一个实例释放单实例互斥体");
@@ -107,13 +99,22 @@ fn main() {
             logging::warn(&format!(
                 "以管理员身份重启失败：等待 {ELEVATED_HANDOVER_WAIT:?} 后前一个实例仍在运行，本次启动退出，核心仍以原权限运行"
             ));
-        } else {
+        } else if args.iter().any(|a| a == "smoke") {
             logging::warn("已有核心实例在运行，本次启动退出");
+        } else {
+            // 重复双击本该毫无反馈，转为打开配置界面，让用户看见核心确实在跑。
+            logging::info("已有核心实例在运行，转为打开配置界面");
+            if !agent::forward_open_settings() {
+                logging::warn(
+                    "已有核心实例在运行，但打开配置界面失败：核心未应答且同目录下拉起配置程序未成功（可能缺失或被安全软件拦截）",
+                );
+            }
         }
         return;
     }
 
     let mut options = AgentOptions::standard(config_path);
+    options.preloaded = Some(startup);
     if args.iter().any(|a| a == "smoke") {
         let ms = args
             .iter()

@@ -1,7 +1,7 @@
 //! 崩溃恢复：隐藏状态落盘，核心异常退出后下次启动自动找回窗口。
 //!
-//! 写入在隐藏动作执行前发生（意图先行），走 tmp + rename 原子替换；
-//! 快照带开机时刻与进程创建时刻，跨重启后失效的快照在加载侧被丢弃。
+//! 写入在隐藏动作执行前发生，走 tmp + rename 原子替换；快照带开机时刻与进程
+//! 创建时刻，跨重启后失效的快照在加载侧被丢弃。
 
 use std::path::{Path, PathBuf};
 
@@ -13,13 +13,13 @@ use crate::log_warn;
 /// 恢复文件名（与 config.json 同目录）。
 pub const RECOVERY_FILE_NAME: &str = "recovery.json";
 
-/// 当前快照格式版本。旧版（无该字段，缺省 0）不含身份信息，加载时按不可信丢弃。
+/// 当前快照格式版本；缺省 0 的旧版快照不含身份信息，加载时丢弃。
 pub const SCHEMA_CURRENT: u32 = 1;
 
-/// 判定「同一次开机」的容差（GetTickCount64 精度约 10–16ms，另留时钟漂移余量）。
+/// 判定「同一次开机」的容差。
 const BOOT_TOLERANCE_MS: i64 = 5_000;
 
-/// 带创建时刻的进程记录（PID 会被系统回收复用，须配合创建时刻标识进程）。
+/// 带创建时刻的进程记录；PID 会被系统回收复用，须配合创建时刻标识进程。
 /// `created_at` 为 0 表示记录时查不到，恢复时不做身份校验。
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProcRecord {
@@ -36,22 +36,28 @@ impl ProcRecord {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Snapshot {
-    /// 快照格式版本；由 [`save`] 盖章，加载侧与 [`SCHEMA_CURRENT`] 不符即丢弃。
+    /// 快照格式版本；与 [`SCHEMA_CURRENT`] 不符即丢弃。
     #[serde(default)]
     pub schema: u32,
-    /// 写入时刻推算出的本次开机时刻（Unix 毫秒）；由 [`save`] 盖章。
+    /// 写入时刻推算出的本次开机时刻（Unix 毫秒）。
     #[serde(default)]
     pub boot_time_ms: i64,
     pub hidden: Vec<Target>,
     pub frozen: Vec<ProcRecord>,
     pub muted: Vec<ProcRecord>,
+    /// 被降到效率模式的进程；旧快照没有这一项，缺省为空。
+    #[serde(default)]
+    pub efficiency: Vec<ProcRecord>,
     pub enhanced: bool,
 }
 
 impl Snapshot {
     /// 没有任何需要恢复的内容。
     pub fn is_empty(&self) -> bool {
-        self.hidden.is_empty() && self.frozen.is_empty() && self.muted.is_empty()
+        self.hidden.is_empty()
+            && self.frozen.is_empty()
+            && self.muted.is_empty()
+            && self.efficiency.is_empty()
     }
 
     /// 快照是否可用于恢复：格式为当前版本，且写入时与现在处于同一次开机。
@@ -89,7 +95,6 @@ pub fn save(path: &Path, snapshot: &Snapshot) -> std::io::Result<()> {
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     let tmp = tmp_path(path);
     std::fs::write(&tmp, json)?;
-    // Windows 下 rename 走 MOVEFILE_REPLACE_EXISTING，同目录替换是原子的。
     std::fs::rename(&tmp, path)
 }
 
@@ -106,7 +111,6 @@ pub fn load(path: &Path) -> Option<Snapshot> {
         Ok(s) => s,
         Err(e) => {
             let corrupt = corrupt_path(path);
-            // 改名保留现场；改名失败时如实说明。
             let kept = match std::fs::rename(path, &corrupt) {
                 Ok(()) => format!("原文件已改名为 {}", corrupt.display()),
                 Err(rename_err) => format!(
@@ -131,8 +135,7 @@ fn corrupt_path(path: &Path) -> PathBuf {
     path.with_file_name(name)
 }
 
-/// 删除恢复文件（不存在时静默成功）。
-/// 除「文件本就不存在」外，删除失败都会记录。
+/// 删除恢复文件；不存在时静默成功，其余失败都会记录。
 pub fn clear(path: &Path) {
     if let Err(e) = std::fs::remove_file(path)
         && e.kind() != std::io::ErrorKind::NotFound
@@ -216,7 +219,7 @@ mod tests {
 
     #[test]
     fn legacy_snapshot_without_schema_is_not_restorable() {
-        // 旧版快照（frozen/muted 是裸 PID 数组）应能解析但不可恢复。
+        // 旧版快照应能解析但不可恢复。
         let json = r#"{"hidden":[{"hwnd":10,"pid":100}],"frozen":[],"muted":[],"enhanced":false}"#;
         let snapshot: Snapshot = serde_json::from_str(json).unwrap();
         assert_eq!(snapshot.schema, 0);

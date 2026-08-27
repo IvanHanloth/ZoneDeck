@@ -3,7 +3,13 @@ use std::sync::OnceLock;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
-use windows::Win32::System::Threading::{OpenProcess, PROCESS_SUSPEND_RESUME};
+use windows::Win32::System::Memory::{
+    SETPROCESSWORKINGSETSIZEEX_FLAGS, SetProcessWorkingSetSizeEx,
+};
+use windows::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+use windows::Win32::System::Threading::{
+    OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_QUOTA, PROCESS_SUSPEND_RESUME,
+};
 use windows::core::{PCSTR, s, w};
 
 pub const PSSUSPEND_EXE: &str = "pssuspend64.exe";
@@ -14,12 +20,14 @@ type NtProc = unsafe extern "system" fn(HANDLE) -> i32;
 pub enum FreezeError {
     #[error("ntdll 中未找到 {0}")]
     NtdllUnavailable(&'static str),
-    /// `OpenProcess` 失败。多为权限不足（目标为管理员进程 / 受保护进程），
-    /// 或进程已退出，故须带上系统错误码，仅说「无法打开进程」无从排查。
+    /// `OpenProcess` 失败，多为权限不足或进程已退出；带上系统错误码便于排查。
     #[error("OpenProcess 失败（需要 PROCESS_SUSPEND_RESUME 权限）: {0}")]
     OpenFailed(String),
     #[error("{call} 失败，NTSTATUS=0x{status:08X}")]
     NtFailed { call: &'static str, status: i32 },
+    /// 清空工作集失败，多为权限不足或进程已退出。
+    #[error("清空工作集失败: {0}")]
+    TrimFailed(String),
     #[error("未找到 pssuspend64.exe")]
     PssuspendMissing,
     #[error("pssuspend64 执行失败: {0}")]
@@ -64,52 +72,66 @@ pub fn resume_process(pid: u32) -> Result<(), FreezeError> {
     call_nt(pid, proc, "NtResumeProcess")
 }
 
+/// 清空进程工作集：把驻留物理内存的页赶到备用页表 / 页文件。
+/// 挂起不触碰内存管理器，冻结本身不会让内存下降，须显式做这一步。
+/// 只对已被挂起的进程调用；解冻时的硬缺页会让恢复变慢。
+pub fn trim_working_set(pid: u32) -> Result<(), FreezeError> {
+    unsafe {
+        let handle = OpenProcess(PROCESS_SET_QUOTA, false, pid)
+            .map_err(|e| FreezeError::OpenFailed(crate::util::win_err(&e)))?;
+        // 上下限同时取 usize::MAX 是 Windows 约定的哨兵值，表示清空工作集。
+        // flags 取 0，不启用硬性上下限。
+        let result = SetProcessWorkingSetSizeEx(
+            handle,
+            usize::MAX,
+            usize::MAX,
+            SETPROCESSWORKINGSETSIZEEX_FLAGS(0),
+        );
+        let _ = CloseHandle(handle);
+        result.map_err(|e| FreezeError::TrimFailed(crate::util::win_err(&e)))
+    }
+}
+
 pub fn pssuspend_available(exe_dir: &Path) -> bool {
     exe_dir.join(PSSUSPEND_EXE).exists()
 }
 
-/// 枚举系统全部进程，返回 `(pid, 父 pid)` 列表。用于把冻结目标展开到整棵子进程树。
-/// 失败（快照打不开）时返回空表，调用方据此退化为「只冻结目标自身」。
-pub fn process_tree() -> Vec<(u32, u32)> {
-    use windows::Win32::System::Diagnostics::ToolHelp::{
-        CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
-        TH32CS_SNAPPROCESS,
-    };
-
-    let mut edges = Vec::new();
+/// 读进程当前驻留物理内存的字节数；打不开或查不到时返回 None。
+/// 用来量出 [`trim_working_set`] 究竟换出去多少，只需查询权限。
+pub fn working_set(pid: u32) -> Option<u64> {
+    const SIZE: u32 = std::mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
     unsafe {
-        let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
-            return edges;
-        };
-        let mut entry = PROCESSENTRY32W {
-            dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut counters = PROCESS_MEMORY_COUNTERS {
+            cb: SIZE,
             ..Default::default()
         };
-        if Process32FirstW(snapshot, &mut entry).is_ok() {
-            loop {
-                edges.push((entry.th32ProcessID, entry.th32ParentProcessID));
-                if Process32NextW(snapshot, &mut entry).is_err() {
-                    break;
-                }
-            }
-        }
-        let _ = CloseHandle(snapshot);
+        let ok = GetProcessMemoryInfo(handle, &mut counters, SIZE).is_ok();
+        let _ = CloseHandle(handle);
+        ok.then_some(counters.WorkingSetSize as u64)
     }
-    edges
 }
 
-/// 枚举系统全部进程，返回 `pid → 映像名`（如 `cloudmusic.exe`）的映射。
-/// 供日志把冻结目标的进程名一并写出，便于定位。快照打不开时返回空表。
-pub fn process_names() -> std::collections::HashMap<u32, String> {
+/// 一次系统进程快照的全部产出。
+#[derive(Debug, Default, Clone)]
+pub struct ProcessSnapshot {
+    /// `pid → 映像名`。
+    pub names: std::collections::HashMap<u32, String>,
+    /// `(pid, 父 pid)` 列表。
+    pub edges: Vec<(u32, u32)>,
+}
+
+/// 枚举系统全部进程；快照打不开时返回空结果。
+pub fn process_snapshot() -> ProcessSnapshot {
     use windows::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW,
         TH32CS_SNAPPROCESS,
     };
 
-    let mut names = std::collections::HashMap::new();
+    let mut result = ProcessSnapshot::default();
     unsafe {
         let Ok(snapshot) = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) else {
-            return names;
+            return result;
         };
         let mut entry = PROCESSENTRY32W {
             dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
@@ -122,8 +144,13 @@ pub fn process_names() -> std::collections::HashMap<u32, String> {
                     .iter()
                     .position(|&c| c == 0)
                     .unwrap_or(entry.szExeFile.len());
-                let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
-                names.insert(entry.th32ProcessID, name);
+                result.names.insert(
+                    entry.th32ProcessID,
+                    String::from_utf16_lossy(&entry.szExeFile[..end]),
+                );
+                result
+                    .edges
+                    .push((entry.th32ProcessID, entry.th32ParentProcessID));
                 if Process32NextW(snapshot, &mut entry).is_err() {
                     break;
                 }
@@ -131,7 +158,19 @@ pub fn process_names() -> std::collections::HashMap<u32, String> {
         }
         let _ = CloseHandle(snapshot);
     }
-    names
+    result
+}
+
+/// 枚举系统全部进程，返回 `(pid, 父 pid)` 列表；快照打不开时返回空表。
+/// 两样都要时改用 [`process_snapshot`]。
+pub fn process_tree() -> Vec<(u32, u32)> {
+    process_snapshot().edges
+}
+
+/// 枚举系统全部进程，返回 `pid → 映像名` 的映射；快照打不开时返回空表。
+/// 两样都要时改用 [`process_snapshot`]。
+pub fn process_names() -> std::collections::HashMap<u32, String> {
+    process_snapshot().names
 }
 
 fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
@@ -142,8 +181,7 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if !exe.exists() {
         return Err(FreezeError::PssuspendMissing);
     }
-    // `-accepteula` 必不可少：未接受 EULA 时 pssuspend 会弹出许可对话框并阻塞，
-    // 增强冻结在这类机器上将永远失败。旗标须排在 PID 之前。
+    // `-accepteula` 必不可少，且旗标须排在 PID 之前。
     let output = std::process::Command::new(exe)
         .arg("-accepteula")
         .arg("-nobanner")
@@ -155,8 +193,7 @@ fn run_pssuspend(exe_dir: &Path, args: &[&str]) -> Result<(), FreezeError> {
     if output.status.success() {
         Ok(())
     } else {
-        // pssuspend 把失败原因打到 stdout 而非 stderr，两路都须收进来；
-        // 它按系统本地代码页输出，须按 ANSI 解码，否则中文乱码。
+        // pssuspend 把失败原因打到 stdout 而非 stderr，且按本地代码页输出。
         let mut detail = crate::util::from_ansi(&output.stdout).trim().to_string();
         let stderr = crate::util::from_ansi(&output.stderr);
         let stderr = stderr.trim();
@@ -216,7 +253,7 @@ mod tests {
 
     #[test]
     fn open_failure_reports_system_error_code() {
-        // 排查冻结问题时必须能分辨「权限不足」与「进程已退出」，故错误须带系统错误码。
+        // 错误须带系统错误码，以分辨「权限不足」与「进程已退出」。
         let Err(e) = suspend_process(0xFFFF_FFF0) else {
             panic!("无效 PID 应失败");
         };
@@ -242,5 +279,34 @@ mod tests {
             suspend_enhanced(dir.path(), 1234),
             Err(FreezeError::PssuspendMissing)
         ));
+    }
+
+    #[test]
+    fn trim_working_set_succeeds_on_our_own_process() {
+        // 对自己调用总是有权限的，此处只验证调用链通。
+        assert!(
+            trim_working_set(std::process::id()).is_ok(),
+            "对自身进程清空工作集应成功"
+        );
+    }
+
+    #[test]
+    fn trim_working_set_on_invalid_pid_fails_gracefully() {
+        let Err(e) = trim_working_set(0xFFFF_FFF0) else {
+            panic!("无效 PID 应失败");
+        };
+        assert!(matches!(e, FreezeError::OpenFailed(_)));
+        assert!(e.to_string().contains("0x"), "应带系统错误码: {e}");
+    }
+
+    #[test]
+    fn working_set_reads_our_own_process_and_tolerates_invalid_pid() {
+        let size = working_set(std::process::id()).expect("对自身进程应能读到工作集");
+        assert!(size > 0, "运行中的进程总有驻留内存");
+        assert_eq!(
+            working_set(0xFFFF_FFF0),
+            None,
+            "无效 PID 应返回 None 而非 panic"
+        );
     }
 }

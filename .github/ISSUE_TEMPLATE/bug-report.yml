@@ -21,8 +21,8 @@ body:
   - type: input
     attributes:
       label: 系统环境
-      description: 在哪个平台（Windows/Linux/MacOS）上运行？如果是直接使用Python运行，则尽量同时提供Python版本
-      placeholder: 如：Windows 11 Python 3.11.9
+      description: 在哪个平台（Windows/Linux/MacOS）上运行？
+      placeholder: 如：Windows 11
     validations:
       required: true
   - type: input

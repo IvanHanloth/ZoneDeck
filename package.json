@@ -1,4 +1,5 @@
 {
+  "packageManager": "pnpm@10.33.4",
   "scripts": {
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -10,5 +11,8 @@
   },
   "devDependencies": {
     "lucide-vue-next": "^1.0.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

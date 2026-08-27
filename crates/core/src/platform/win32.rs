@@ -7,13 +7,14 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     EnumWindows, GW_OWNER, GWL_EXSTYLE, GetForegroundWindow, GetWindow, GetWindowLongPtrW,
-    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsWindow, IsWindowVisible,
-    SW_HIDE, SW_SHOW, ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
+    GetWindowTextLengthW, GetWindowTextW, GetWindowThreadProcessId, IsIconic, IsWindow,
+    IsWindowVisible, IsZoomed, SW_HIDE, SW_RESTORE, SW_SHOW, SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE,
+    ShowWindow, WS_EX_APPWINDOW, WS_EX_TOOLWINDOW,
 };
 use windows::core::{BOOL, PWSTR};
 use zonedeck_common::{NO_TITLE, WindowInfo};
 
-use super::WindowManager;
+use super::{Restore, WindowManager};
 
 const PATH_BUF_LEN: usize = 1024;
 
@@ -115,7 +116,22 @@ fn process_name_from_path(path: &str) -> String {
         .to_string()
 }
 
-/// 是否把该顶层窗口列入进程列表（类 Alt+Tab 过滤）：排除工具窗口，只保留顶层应用窗口。
+/// 用系统进程快照补上 `OpenProcess` 拿不到的映像名。
+/// 反作弊等会削掉自身进程对象的 DACL，查路径必被拒（如魔兽世界），
+/// 但快照不需要进程句柄，仍能给出映像名，按文件名匹配的规则据此可用。
+fn fill_missing_names(windows: &mut [WindowInfo]) {
+    if !windows.iter().any(|w| w.process.is_empty() && w.pid != 0) {
+        return;
+    }
+    let names = crate::freeze::process_names();
+    for w in windows.iter_mut().filter(|w| w.process.is_empty()) {
+        if let Some(name) = names.get(&w.pid) {
+            w.process = name.clone();
+        }
+    }
+}
+
+/// 是否把该顶层窗口列入进程列表；类 Alt+Tab 过滤，排除工具窗口。
 fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
     if ex_style & WS_EX_TOOLWINDOW.0 != 0 {
         return false;
@@ -158,6 +174,7 @@ impl WindowManager for WindowsWindowManager {
                 LPARAM(&mut result as *mut Vec<WindowInfo> as isize),
             );
         }
+        fill_missing_names(&mut result);
         result.sort_by(|a, b| a.title.cmp(&b.title));
         result
     }
@@ -171,6 +188,41 @@ impl WindowManager for WindowsWindowManager {
     fn show(&self, hwnd: i64) {
         unsafe {
             let _ = ShowWindow(hwnd_from(hwnd), SW_SHOW);
+        }
+    }
+
+    fn minimize(&self, hwnd: i64) {
+        unsafe {
+            let _ = ShowWindow(hwnd_from(hwnd), SW_SHOWMINNOACTIVE);
+        }
+    }
+
+    fn restore_mode(&self, hwnd: i64) -> Restore {
+        unsafe {
+            let hwnd = hwnd_from(hwnd);
+            // 顺序要紧：最小化的最大化窗口两个判定都为真，应按最小化记。
+            if IsIconic(hwnd).as_bool() {
+                Restore::Minimized
+            } else if IsZoomed(hwnd).as_bool() {
+                Restore::Maximized
+            } else {
+                Restore::Normal
+            }
+        }
+    }
+
+    fn restore(&self, hwnd: i64, how: Restore) {
+        // SW_SHOW 与 SW_SHOWMINNOACTIVE 只改可见性；SW_RESTORE 与 SW_SHOWMAXIMIZED
+        // 对隐藏中的窗口也会一并显示出来，无须先 SW_SHOW。
+        let cmd = match how {
+            Restore::Skip => return,
+            Restore::Show => SW_SHOW,
+            Restore::Normal => SW_RESTORE,
+            Restore::Maximized => SW_SHOWMAXIMIZED,
+            Restore::Minimized => SW_SHOWMINNOACTIVE,
+        };
+        unsafe {
+            let _ = ShowWindow(hwnd_from(hwnd), cmd);
         }
     }
 
@@ -188,6 +240,20 @@ impl WindowManager for WindowsWindowManager {
 
     fn window_pid(&self, hwnd: i64) -> u32 {
         window_pid(hwnd_from(hwnd))
+    }
+
+    fn process_path(&self, pid: u32) -> String {
+        process_path(pid)
+    }
+
+    fn process_name(&self, pid: u32) -> String {
+        let name = process_name_from_path(&process_path(pid));
+        if !name.is_empty() || pid == 0 {
+            return name;
+        }
+        crate::freeze::process_names()
+            .remove(&pid)
+            .unwrap_or_default()
     }
 
     fn window_title(&self, hwnd: i64) -> String {
@@ -284,7 +350,6 @@ mod tests {
 
     #[test]
     fn filetime_epoch_maps_to_zero() {
-        // 1970-01-01 对应的 FILETIME 值应换算为 0 毫秒。
         let ft = FILETIME {
             dwLowDateTime: (116_444_736_000_000_000u64 & 0xFFFF_FFFF) as u32,
             dwHighDateTime: (116_444_736_000_000_000u64 >> 32) as u32,
@@ -335,5 +400,99 @@ mod tests {
         assert_eq!(t1, t2, "同一进程两次查询应一致");
         assert_eq!(wm.process_start_time(0), 0, "PID 0 应返回 0");
         assert_eq!(wm.process_start_time(0xFFFF_FFF0), 0, "无效 PID 应返回 0");
+    }
+
+    /// 创建一个测试窗口并交给 `body`，收尾销毁。
+    fn with_test_window(title: windows::core::PCWSTR, body: impl FnOnce(i64)) {
+        unsafe {
+            let hwnd = CreateWindowExW(
+                WINDOW_EX_STYLE(0),
+                w!("Static"),
+                title,
+                WS_OVERLAPPEDWINDOW,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                300,
+                200,
+                None,
+                None,
+                None,
+                None,
+            )
+            .expect("创建测试窗口失败");
+            body(hwnd_to_i64(hwnd));
+            let _ = DestroyWindow(hwnd);
+        }
+    }
+
+    #[test]
+    fn restore_mode_reports_the_three_window_shapes() {
+        with_test_window(w!("ZoneDeckPlacementTestWindow"), |id| {
+            let wm = WindowsWindowManager;
+            wm.show(id);
+            assert_eq!(wm.restore_mode(id), Restore::Normal, "普通窗口");
+
+            unsafe {
+                let _ = ShowWindow(hwnd_from(id), SW_SHOWMAXIMIZED);
+            }
+            assert_eq!(wm.restore_mode(id), Restore::Maximized, "最大化窗口");
+
+            wm.minimize(id);
+            assert_eq!(
+                wm.restore_mode(id),
+                Restore::Minimized,
+                "最小化的最大化窗口应按最小化记，恢复时不该替它还原成最大化"
+            );
+        });
+    }
+
+    #[test]
+    fn restore_brings_hidden_window_back_in_its_recorded_shape() {
+        with_test_window(w!("ZoneDeckRestoreTestWindow"), |id| {
+            let wm = WindowsWindowManager;
+
+            // 普通窗口：最小化 + 隐藏后应能一步恢复。
+            wm.show(id);
+            wm.minimize(id);
+            wm.hide(id);
+            assert!(!wm.is_visible(id));
+            wm.restore(id, Restore::Normal);
+            assert!(wm.is_visible(id), "恢复后应可见");
+            assert_eq!(wm.restore_mode(id), Restore::Normal, "应还原为普通大小");
+
+            // 最大化窗口：恢复后仍是最大化。
+            unsafe {
+                let _ = ShowWindow(hwnd_from(id), SW_SHOWMAXIMIZED);
+            }
+            wm.minimize(id);
+            wm.hide(id);
+            wm.restore(id, Restore::Maximized);
+            assert!(wm.is_visible(id));
+            assert_eq!(wm.restore_mode(id), Restore::Maximized, "应还原为最大化");
+
+            // 本就最小化的窗口：恢复后重新可见但保持最小化。
+            wm.minimize(id);
+            wm.hide(id);
+            wm.restore(id, Restore::Minimized);
+            assert!(wm.is_visible(id), "应重新可见");
+            assert_eq!(
+                wm.restore_mode(id),
+                Restore::Minimized,
+                "本就最小化的窗口不该被还原大小"
+            );
+        });
+    }
+
+    #[test]
+    fn restore_skip_leaves_the_window_alone() {
+        with_test_window(w!("ZoneDeckSkipTestWindow"), |id| {
+            let wm = WindowsWindowManager;
+            wm.hide(id);
+            wm.restore(id, Restore::Skip);
+            assert!(
+                !wm.is_visible(id),
+                "本程序没让它可见，恢复时也不得把它弹出来"
+            );
+        });
     }
 }

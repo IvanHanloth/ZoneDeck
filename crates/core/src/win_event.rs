@@ -1,6 +1,5 @@
 //! 窗口事件追踪：用 `SetWinEventHook` 订阅顶层窗口的销毁 / 显示 / 改标题事件，
-//! 转发给代理窗口，由 agent 实时维护隐藏记录与规则信息。
-//! 回调只做过滤与 `PostMessageW`，重活都在代理窗口的消息处理里。
+//! 转发给代理窗口。回调只做过滤与 `PostMessageW`。
 
 use std::sync::atomic::{AtomicIsize, Ordering::Relaxed};
 
@@ -59,7 +58,7 @@ pub struct WinEventHook {
 }
 
 impl WinEventHook {
-    /// 一次挂钩覆盖 DESTROY(0x8001)–NAMECHANGE(0x800C) 区间，回调里再过滤。
+    /// 一次挂钩覆盖 DESTROY–NAMECHANGE 区间，回调里再过滤。
     pub fn install(agent_hwnd: HWND) -> Option<WinEventHook> {
         HWND_RAW.store(agent_hwnd.0 as isize, Relaxed);
         let handle = unsafe {

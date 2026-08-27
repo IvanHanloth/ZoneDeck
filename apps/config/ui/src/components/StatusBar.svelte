@@ -6,6 +6,9 @@
   import IconRotateCw from "~icons/lucide/rotate-cw";
   import IconPower from "~icons/lucide/power";
   import IconPlay from "~icons/lucide/play";
+  import IconContrast from "~icons/lucide/contrast";
+  import IconSun from "~icons/lucide/sun";
+  import IconMoon from "~icons/lucide/moon";
   import { invoke } from "../lib/ipc.js";
   import { app, startCore, restartCore, quitCore, toast } from "../lib/state.svelte.js";
   import {
@@ -19,6 +22,9 @@
 
   const running = $derived(app.status.running);
   let themePref = $state(loadPreference());
+
+  const THEME_ICONS = { contrast: IconContrast, sun: IconSun, moon: IconMoon };
+  const ThemeIcon = $derived(THEME_ICONS[themeIcon(themePref)] ?? IconContrast);
 
   function cycleTheme() {
     themePref = nextTheme(themePref);
@@ -34,7 +40,7 @@
     }
   }
 
-  // 显示核心回报的真实监控状态（core_status.monitoring）。
+  // 显示核心回报的真实监控状态。
   const monitoring = $derived(app.status.monitoring);
   const monitorText = $derived(
     app.monitorPending
@@ -59,7 +65,7 @@
   <div class="left">
     <span class="status {statusClass}">
       {#if running && app.status.elevated}
-        <IconShield width="10" height="10" class="shield-dot" />
+        <IconShield width="11" height="11" class="shield-dot" />
       {:else}
         <i class="dot"></i>
       {/if}
@@ -68,7 +74,7 @@
 
     {#if running === false}
       <button
-        class="act icon-only ok"
+        class="act ok"
         onclick={() => startCore(false)}
         title={t("status.startCore")}
         aria-label={t("status.startCore")}
@@ -76,7 +82,7 @@
         <IconPlay width="14" height="14" />
       </button>
       <button
-        class="act icon-only blue"
+        class="act blue"
         onclick={() => startCore(true)}
         title={t("status.startAdmin")}
         aria-label={t("status.startAdmin")}
@@ -86,7 +92,7 @@
     {:else if running}
       {#if !app.status.elevated}
         <button
-          class="act icon-only blue"
+          class="act blue"
           onclick={() => restartCore(true)}
           title={t("status.restartAdmin")}
           aria-label={t("status.restartAdmin")}
@@ -95,26 +101,41 @@
         </button>
       {/if}
       <button
-        class="act icon-only warn"
+        class="act warn"
         onclick={() => restartCore(app.status.elevated)}
         title={t("status.restartCore")}
         aria-label={t("status.restartCore")}
       >
         <IconRotateCw width="14" height="14" />
       </button>
-      <button class="act icon-only danger" onclick={quitCore} title={t("status.quitCore")} aria-label={t("status.quitCore")}>
+      <button
+        class="act danger"
+        onclick={quitCore}
+        title={t("status.quitCore")}
+        aria-label={t("status.quitCore")}
+      >
         <IconPower width="14" height="14" />
       </button>
     {/if}
   </div>
 
   <div class="right">
-    <button class="act icon" onclick={openLog} title={t("status.openLogDir")} aria-label={t("status.openLogDir")}>
+    <button
+      class="act"
+      onclick={openLog}
+      title={t("status.openLogDir")}
+      aria-label={t("status.openLogDir")}
+    >
       <IconScrollText width="14" height="14" />
     </button>
 
-    <button class="act icon" onclick={cycleTheme} title={themeLabel(themePref)} aria-label={themeLabel(themePref)}>
-      {themeIcon(themePref)}
+    <button
+      class="act"
+      onclick={cycleTheme}
+      title={themeLabel(themePref)}
+      aria-label={themeLabel(themePref)}
+    >
+      <ThemeIcon width="14" height="14" />
     </button>
 
     {#if running}
@@ -124,44 +145,52 @@
       </span>
     {/if}
     <span class="save" class:saving={app.saving}>
-      {#if app.saving}{t("status.saving")}{:else}<IconCheck width="12" height="12" /> {t("status.saved")}{/if}
+      {#if app.saving}
+        {t("status.saving")}
+      {:else}
+        <IconCheck width="12" height="12" /> {t("status.saved")}
+      {/if}
     </span>
   </div>
 </footer>
 
 <style>
   .statusbar {
-    height: 30px;
+    height: var(--statusbar-h);
     flex: none;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 0 12px;
-    background: var(--surface);
-    border-top: 1px solid var(--border);
+    padding: 0 8px 0 16px;
+    background: var(--card);
+    border-top: 1px solid var(--divider);
     font-size: 12px;
+    line-height: 16px;
   }
   .left,
   .right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     min-width: 0;
+  }
+  .left {
+    gap: 8px;
   }
 
   .status {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    color: var(--muted);
+    color: var(--text-2);
     white-space: nowrap;
   }
   .dot {
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--muted);
+    background: var(--text-3);
   }
   .shield-dot {
     color: var(--ok);
@@ -179,81 +208,54 @@
     background: var(--danger);
   }
 
+  /* 状态栏按钮一律无底色，hover 才浮出，避免把细条塞满边框 */
   .act {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    padding: 3px 10px;
-    border-radius: 5px;
-    font-size: 12px;
-    color: var(--text);
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    justify-content: center;
+    width: 28px;
+    height: 24px;
+    border-radius: var(--r-control);
+    color: var(--text-2);
+    transition:
+      background var(--dur-fast) var(--ease-standard),
+      color var(--dur-fast) var(--ease-standard);
   }
   .act:hover {
-    background: var(--hover);
-    border-color: var(--accent);
-  }
-
-  .act.icon {
-    padding: 3px;
-    width: 24px;
-    height: 22px;
-    justify-content: center;
-    color: var(--muted);
-    position: relative;
-  }
-  .act.icon:hover {
+    background: var(--subtle-hover);
     color: var(--text);
   }
-  .act.icon.active {
-    color: var(--accent);
-    background: var(--hover);
-    border-color: var(--accent);
+  .act:active {
+    background: var(--subtle-pressed);
   }
 
-  .act.icon-only {
-    padding: 2px;
-    width: 24px;
-    height: 22px;
-    justify-content: center;
-    border: 1px solid transparent;
-  }
-  .act.icon-only:hover {
-    border-color: currentColor;
-  }
-
-  /* hover 底色一律由 currentColor 派生：各 .act 变体的 color 已经是权威来源，
-     再手写一份 rgba 只会在换主题时脱钩（暗主题的 --warn / --danger 与亮主题不同值）。 */
+  /* hover 底色由 currentColor 派生：手写 rgba 换主题时会与令牌脱钩 */
   .act.ok {
     color: var(--ok);
   }
-
   .act.blue {
     color: #3b82f6;
   }
-
   .act.warn {
     color: var(--warn);
   }
-
   .act.danger {
     color: var(--danger);
   }
-
   .act.ok:hover,
   .act.blue:hover,
   .act.warn:hover,
   .act.danger:hover {
-    background: color-mix(in srgb, currentColor 10%, transparent);
+    color: currentColor;
+    background: color-mix(in srgb, currentColor 12%, transparent);
   }
 
   .monitor {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    color: var(--muted);
+    margin-left: 4px;
+    color: var(--text-2);
     white-space: nowrap;
   }
   .monitor .dot {
@@ -276,7 +278,8 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
-    color: var(--muted);
+    margin-left: 4px;
+    color: var(--text-2);
     white-space: nowrap;
   }
   .save.saving {

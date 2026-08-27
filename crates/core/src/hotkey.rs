@@ -1,25 +1,48 @@
+use windows::Win32::Foundation::ERROR_HOTKEY_ALREADY_REGISTERED;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
+};
+
 pub const MOD_ALT: u32 = 0x0001;
 pub const MOD_CONTROL: u32 = 0x0002;
 pub const MOD_SHIFT: u32 = 0x0004;
 pub const MOD_WIN: u32 = 0x0008;
 pub const MOD_NOREPEAT: u32 = 0x4000;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// 一条热键最多带几个主键。
+pub const MAX_KEYS: usize = 4;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedHotkey {
     pub modifiers: u32,
-    pub vk: u16,
+    /// 主键，按虚拟键码升序去重；为空表示纯修饰键热键。
+    pub keys: Vec<u16>,
+}
+
+impl ParsedHotkey {
+    /// 只有低级键盘钩子能表达的组合：纯修饰键或多主键。
+    /// `RegisterHotKey` 只收「修饰键 + 单个主键」。
+    pub fn requires_hook(&self) -> bool {
+        self.keys.len() != 1
+    }
+
+    /// 唯一的主键；多主键或纯修饰键时为 None。
+    pub fn single(&self) -> Option<u16> {
+        match self.keys.as_slice() {
+            [vk] => Some(*vk),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum HotkeyParseError {
     #[error("热键为空")]
     Empty,
-    #[error("热键缺少主键（仅有修饰键）")]
-    NoKey,
     #[error("无法识别的按键: {0}")]
     UnknownKey(String),
-    #[error("热键包含多个主键")]
-    MultipleKeys,
+    #[error("热键的主键超过 {MAX_KEYS} 个")]
+    TooManyKeys,
 }
 
 fn modifier_bit(token: &str) -> Option<u32> {
@@ -50,6 +73,14 @@ fn key_to_vk(token: &str) -> Option<u16> {
     }
 
     let norm = upper.replace([' ', '_'], "");
+
+    if let Some(rest) = norm.strip_prefix("NUMPAD")
+        && let Ok(n) = rest.parse::<u16>()
+        && n <= 9
+    {
+        return Some(0x60 + n);
+    }
+
     let vk: u16 = match norm.as_str() {
         "ESC" | "ESCAPE" => 0x1B,
         "SPACE" => 0x20,
@@ -72,12 +103,135 @@ fn key_to_vk(token: &str) -> Option<u16> {
         "PRINTSCREEN" | "PRTSC" | "SNAPSHOT" => 0x2C,
         "PAUSE" => 0x13,
         "CLEAR" => 0x0C,
+        "APPS" => 0x5D,
+        "NUMPADMULTIPLY" => 0x6A,
+        "NUMPADADD" => 0x6B,
+        "NUMPADSEPARATOR" => 0x6C,
+        "NUMPADSUBTRACT" => 0x6D,
+        "NUMPADDECIMAL" => 0x6E,
+        "NUMPADDIVIDE" => 0x6F,
+        "VOLUMEMUTE" => 0xAD,
+        "VOLUMEDOWN" => 0xAE,
+        "VOLUMEUP" => 0xAF,
+        "MEDIANEXT" => 0xB0,
+        "MEDIAPREV" => 0xB1,
+        "MEDIASTOP" => 0xB2,
+        "MEDIAPLAYPAUSE" => 0xB3,
+        // OEM 键随键盘布局改变字面含义，故存位置名，界面另按当前布局显示实际字符。
+        "OEM1" => 0xBA,
+        "OEMPLUS" => 0xBB,
+        "OEMCOMMA" => 0xBC,
+        "OEMMINUS" => 0xBD,
+        "OEMPERIOD" => 0xBE,
+        "OEM2" => 0xBF,
+        "OEM3" => 0xC0,
+        "OEM4" => 0xDB,
+        "OEM5" => 0xDC,
+        "OEM6" => 0xDD,
+        "OEM7" => 0xDE,
+        "OEM8" => 0xDF,
+        "OEM102" => 0xE2,
         _ => return None,
     };
     Some(vk)
 }
 
-/// 热键是否置空。置空表示关闭该热键，而非配置错误。
+/// [`key_to_vk`] 的逆向：虚拟键码 → 热键字符串里的按键名。表外的键返回 None。
+pub fn vk_to_key(vk: u16) -> Option<String> {
+    if (0x30..=0x39).contains(&vk) || (0x41..=0x5A).contains(&vk) {
+        return Some((vk as u8 as char).to_string());
+    }
+    if (0x70..=0x87).contains(&vk) {
+        return Some(format!("F{}", vk - 0x70 + 1));
+    }
+    if (0x60..=0x69).contains(&vk) {
+        return Some(format!("Numpad{}", vk - 0x60));
+    }
+    let name = match vk {
+        0x1B => "Esc",
+        0x20 => "Space",
+        0x0D => "Enter",
+        0x09 => "Tab",
+        0x08 => "Backspace",
+        0x2E => "Delete",
+        0x2D => "Insert",
+        0x24 => "Home",
+        0x23 => "End",
+        0x21 => "PageUp",
+        0x22 => "PageDown",
+        0x26 => "Up",
+        0x28 => "Down",
+        0x25 => "Left",
+        0x27 => "Right",
+        0x14 => "CapsLock",
+        0x90 => "NumLock",
+        0x91 => "ScrollLock",
+        0x2C => "PrintScreen",
+        0x13 => "Pause",
+        0x0C => "Clear",
+        0x5D => "Apps",
+        0x6A => "NumpadMultiply",
+        0x6B => "NumpadAdd",
+        0x6C => "NumpadSeparator",
+        0x6D => "NumpadSubtract",
+        0x6E => "NumpadDecimal",
+        0x6F => "NumpadDivide",
+        0xAD => "VolumeMute",
+        0xAE => "VolumeDown",
+        0xAF => "VolumeUp",
+        0xB0 => "MediaNext",
+        0xB1 => "MediaPrev",
+        0xB2 => "MediaStop",
+        0xB3 => "MediaPlayPause",
+        0xBA => "OEM_1",
+        0xBB => "OEM_PLUS",
+        0xBC => "OEM_COMMA",
+        0xBD => "OEM_MINUS",
+        0xBE => "OEM_PERIOD",
+        0xBF => "OEM_2",
+        0xC0 => "OEM_3",
+        0xDB => "OEM_4",
+        0xDC => "OEM_5",
+        0xDD => "OEM_6",
+        0xDE => "OEM_7",
+        0xDF => "OEM_8",
+        0xE2 => "OEM_102",
+        _ => return None,
+    };
+    Some(name.to_string())
+}
+
+/// 修饰键位掩码 → `"Ctrl+Alt+Shift+Win"` 形式；顺序固定，无修饰键时为空串。
+pub fn format_modifiers(modifiers: u32) -> String {
+    let mut parts = Vec::new();
+    if modifiers & MOD_CONTROL != 0 {
+        parts.push("Ctrl");
+    }
+    if modifiers & MOD_ALT != 0 {
+        parts.push("Alt");
+    }
+    if modifiers & MOD_SHIFT != 0 {
+        parts.push("Shift");
+    }
+    if modifiers & MOD_WIN != 0 {
+        parts.push("Win");
+    }
+    parts.join("+")
+}
+
+/// 组装热键字符串；`keys` 为空时只输出修饰键（纯修饰键热键或录制中间态）。
+/// 表外的主键当作没按到，直接略去。
+pub fn format_hotkey(modifiers: u32, keys: &[u16]) -> String {
+    let mut parts = Vec::new();
+    let mods = format_modifiers(modifiers);
+    if !mods.is_empty() {
+        parts.push(mods);
+    }
+    parts.extend(keys.iter().copied().filter_map(vk_to_key));
+    parts.join("+")
+}
+
+/// 热键是否置空；置空表示关闭该热键。
 pub fn is_disabled(s: &str) -> bool {
     s.trim().is_empty()
 }
@@ -96,7 +250,7 @@ pub fn parse_hotkey(s: &str) -> Result<ParsedHotkey, HotkeyParseError> {
     }
 
     let mut modifiers = 0u32;
-    let mut vk: Option<u16> = None;
+    let mut keys: Vec<u16> = Vec::new();
 
     for part in s.split('+') {
         let token = part.trim();
@@ -109,21 +263,61 @@ pub fn parse_hotkey(s: &str) -> Result<ParsedHotkey, HotkeyParseError> {
         }
         let key =
             key_to_vk(token).ok_or_else(|| HotkeyParseError::UnknownKey(token.to_string()))?;
-        if vk.is_some() {
-            return Err(HotkeyParseError::MultipleKeys);
+        if !keys.contains(&key) {
+            keys.push(key);
         }
-        vk = Some(key);
     }
 
-    match vk {
-        Some(vk) => Ok(ParsedHotkey { modifiers, vk }),
-        None => Err(HotkeyParseError::NoKey),
+    if keys.len() > MAX_KEYS {
+        return Err(HotkeyParseError::TooManyKeys);
+    }
+    if modifiers == 0 && keys.is_empty() {
+        return Err(HotkeyParseError::Empty);
+    }
+    // 归一顺序，让 "Q+W" 与 "W+Q" 是同一条热键。
+    keys.sort_unstable();
+    Ok(ParsedHotkey { modifiers, keys })
+}
+
+/// 探测用的热键 ID。`RegisterHotKey` 的 hWnd 为 None 时，ID 须落在 0x0000–0xBFFF。
+const PROBE_ID: i32 = 0x5A44;
+
+/// 试注册一次再撤销，看这个组合是否已被别的程序占用。
+///
+/// 只有 `RegisterHotKey` 承载得了的组合才谈得上占用：纯修饰键与多主键走键盘钩子，
+/// 一律报空闲。调用方须确保此刻本进程与核心都没注册同一个组合，否则会自问自答。
+pub fn is_taken(hotkey: &ParsedHotkey) -> bool {
+    let Some(vk) = hotkey.single() else {
+        return false;
+    };
+    unsafe {
+        // hWnd 为 None 时热键挂在当前线程上，撤销后不留痕迹。
+        match RegisterHotKey(
+            None,
+            PROBE_ID,
+            HOT_KEY_MODIFIERS(hotkey.modifiers | MOD_NOREPEAT),
+            vk as u32,
+        ) {
+            Ok(()) => {
+                let _ = UnregisterHotKey(None, PROBE_ID);
+                false
+            }
+            // 只有 1409 是「被占用」；别的失败不冤枉这个组合。
+            Err(e) => e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult(),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn hk(modifiers: u32, keys: &[u16]) -> ParsedHotkey {
+        ParsedHotkey {
+            modifiers,
+            keys: keys.to_vec(),
+        }
+    }
 
     #[test]
     fn parse_modifiers_reads_only_modifier_tokens() {
@@ -136,46 +330,31 @@ mod tests {
 
     #[test]
     fn parses_default_hide_hotkey() {
-        assert_eq!(
-            parse_hotkey("Ctrl+Q"),
-            Ok(ParsedHotkey {
-                modifiers: MOD_CONTROL,
-                vk: 0x51,
-            })
-        );
+        assert_eq!(parse_hotkey("Ctrl+Q"), Ok(hk(MOD_CONTROL, &[0x51])));
     }
 
     #[test]
     fn parses_default_close_hotkey() {
-        assert_eq!(
-            parse_hotkey("Win+Esc"),
-            Ok(ParsedHotkey {
-                modifiers: MOD_WIN,
-                vk: 0x1B,
-            })
-        );
+        assert_eq!(parse_hotkey("Win+Esc"), Ok(hk(MOD_WIN, &[0x1B])));
     }
 
     #[test]
     fn parses_multiple_modifiers_and_function_key() {
         assert_eq!(
             parse_hotkey("Ctrl+Shift+F1"),
-            Ok(ParsedHotkey {
-                modifiers: MOD_CONTROL | MOD_SHIFT,
-                vk: 0x70,
-            })
+            Ok(hk(MOD_CONTROL | MOD_SHIFT, &[0x70]))
         );
     }
 
     #[test]
     fn f24_maps_to_correct_vk() {
-        assert_eq!(parse_hotkey("F24").unwrap().vk, 0x87);
+        assert_eq!(parse_hotkey("F24").unwrap().keys, vec![0x87]);
     }
 
     #[test]
     fn digits_and_letters_map_to_ascii_vk() {
-        assert_eq!(parse_hotkey("Alt+5").unwrap().vk, 0x35);
-        assert_eq!(parse_hotkey("Ctrl+A").unwrap().vk, 0x41);
+        assert_eq!(parse_hotkey("Alt+5").unwrap().keys, vec![0x35]);
+        assert_eq!(parse_hotkey("Ctrl+A").unwrap().keys, vec![0x41]);
     }
 
     #[test]
@@ -184,15 +363,27 @@ mod tests {
         let b = parse_hotkey("CTRL+SHIFT+Q").unwrap();
         assert_eq!(a, b);
         assert_eq!(a.modifiers, MOD_CONTROL | MOD_SHIFT);
-        assert_eq!(a.vk, 0x51);
+        assert_eq!(a.keys, vec![0x51]);
     }
 
     #[test]
     fn accepts_alternate_named_keys() {
-        assert_eq!(parse_hotkey("Ctrl+Page_Up").unwrap().vk, 0x21);
-        assert_eq!(parse_hotkey("Ctrl+PageUp").unwrap().vk, 0x21);
-        assert_eq!(parse_hotkey("Alt+Space").unwrap().vk, 0x20);
-        assert_eq!(parse_hotkey("Shift+Print Screen").unwrap().vk, 0x2C);
+        assert_eq!(parse_hotkey("Ctrl+Page_Up").unwrap().keys, vec![0x21]);
+        assert_eq!(parse_hotkey("Ctrl+PageUp").unwrap().keys, vec![0x21]);
+        assert_eq!(parse_hotkey("Alt+Space").unwrap().keys, vec![0x20]);
+        assert_eq!(parse_hotkey("Shift+Print Screen").unwrap().keys, vec![0x2C]);
+    }
+
+    #[test]
+    fn accepts_numpad_oem_and_media_keys() {
+        assert_eq!(parse_hotkey("Ctrl+Numpad0").unwrap().keys, vec![0x60]);
+        assert_eq!(parse_hotkey("Ctrl+Numpad9").unwrap().keys, vec![0x69]);
+        assert_eq!(parse_hotkey("Ctrl+NumpadAdd").unwrap().keys, vec![0x6B]);
+        assert_eq!(parse_hotkey("Ctrl+OEM_1").unwrap().keys, vec![0xBA]);
+        assert_eq!(parse_hotkey("Ctrl+OEM_102").unwrap().keys, vec![0xE2]);
+        assert_eq!(parse_hotkey("VolumeUp").unwrap().keys, vec![0xAF]);
+        assert_eq!(parse_hotkey("MediaPlayPause").unwrap().keys, vec![0xB3]);
+        assert_eq!(parse_hotkey("Shift+Apps").unwrap().keys, vec![0x5D]);
     }
 
     #[test]
@@ -200,17 +391,46 @@ mod tests {
         assert!(is_disabled(""));
         assert!(is_disabled("   "));
         assert!(!is_disabled("Ctrl+Q"));
-        assert!(!is_disabled("Ctrl+Shift"), "缺主键是错误配置，不算置空");
+        assert!(!is_disabled("Ctrl+Shift"));
     }
 
     #[test]
     fn empty_is_rejected() {
         assert_eq!(parse_hotkey("   "), Err(HotkeyParseError::Empty));
+        assert_eq!(parse_hotkey("+ + +"), Err(HotkeyParseError::Empty));
     }
 
     #[test]
-    fn only_modifiers_is_rejected() {
-        assert_eq!(parse_hotkey("Ctrl+Shift"), Err(HotkeyParseError::NoKey));
+    fn modifier_only_hotkeys_are_accepted() {
+        assert_eq!(
+            parse_hotkey("Ctrl+Shift"),
+            Ok(hk(MOD_CONTROL | MOD_SHIFT, &[]))
+        );
+        assert_eq!(parse_hotkey("Win"), Ok(hk(MOD_WIN, &[])));
+    }
+
+    #[test]
+    fn multiple_main_keys_are_accepted_and_sorted() {
+        assert_eq!(parse_hotkey("W+Q"), Ok(hk(0, &[0x51, 0x57])));
+        assert_eq!(
+            parse_hotkey("Q+W"),
+            parse_hotkey("W+Q"),
+            "主键顺序不影响热键身份"
+        );
+        assert_eq!(
+            parse_hotkey("Q+Q").unwrap().keys,
+            vec![0x51],
+            "重复主键去重"
+        );
+    }
+
+    #[test]
+    fn too_many_main_keys_is_rejected() {
+        assert_eq!(
+            parse_hotkey("Q+W+E+R+T"),
+            Err(HotkeyParseError::TooManyKeys)
+        );
+        assert!(parse_hotkey("Q+W+E+R").is_ok(), "MAX_KEYS 个仍然合法");
     }
 
     #[test]
@@ -222,10 +442,105 @@ mod tests {
     }
 
     #[test]
-    fn multiple_main_keys_is_rejected() {
+    fn requires_hook_only_when_the_main_key_count_is_not_one() {
+        assert!(!parse_hotkey("Ctrl+Q").unwrap().requires_hook());
+        assert!(!parse_hotkey("Ctrl+Numpad0").unwrap().requires_hook());
+        assert!(parse_hotkey("Ctrl+Shift").unwrap().requires_hook());
+        assert!(parse_hotkey("Q+W").unwrap().requires_hook());
+    }
+
+    #[test]
+    fn single_yields_the_key_only_for_register_hotkey_shaped_combos() {
+        assert_eq!(parse_hotkey("Ctrl+Q").unwrap().single(), Some(0x51));
+        assert_eq!(parse_hotkey("Ctrl+Shift").unwrap().single(), None);
+        assert_eq!(parse_hotkey("Q+W").unwrap().single(), None);
+    }
+
+    #[test]
+    fn format_modifiers_uses_the_same_order_as_the_recorder() {
+        assert_eq!(format_modifiers(0), "");
+        assert_eq!(format_modifiers(MOD_CONTROL), "Ctrl");
         assert_eq!(
-            parse_hotkey("Ctrl+Q+W"),
-            Err(HotkeyParseError::MultipleKeys)
+            format_modifiers(MOD_WIN | MOD_SHIFT | MOD_ALT | MOD_CONTROL),
+            "Ctrl+Alt+Shift+Win"
         );
+    }
+
+    #[test]
+    fn format_hotkey_without_a_main_key_yields_modifiers_only() {
+        assert_eq!(format_hotkey(MOD_CONTROL | MOD_SHIFT, &[]), "Ctrl+Shift");
+        assert_eq!(format_hotkey(0, &[]), "");
+        // 表外的主键当作还没按到主键。
+        assert_eq!(format_hotkey(MOD_ALT, &[0xFF]), "Alt");
+    }
+
+    #[test]
+    fn format_hotkey_without_modifiers_yields_the_bare_keys() {
+        assert_eq!(format_hotkey(0, &[0x70]), "F1");
+        assert_eq!(format_hotkey(0, &[0x51, 0x57]), "Q+W");
+    }
+
+    /// 录制出来的字符串必须能被 `parse_hotkey` 原样解回来。
+    #[test]
+    fn every_supported_vk_round_trips_through_parse_hotkey() {
+        let modifiers = MOD_CONTROL | MOD_SHIFT;
+        let mut count = 0;
+        for vk in 0..=0xFFu16 {
+            let Some(_) = vk_to_key(vk) else { continue };
+            count += 1;
+            let text = format_hotkey(modifiers, &[vk]);
+            assert_eq!(
+                parse_hotkey(&text),
+                Ok(hk(modifiers, &[vk])),
+                "{text} 解析结果与录制来源不符"
+            );
+        }
+        // 26 字母 + 10 数字 + 24 功能键 + 21 命名键 + 16 小键盘 + 13 OEM + 7 媒体键 + Apps
+        assert_eq!(count, 118, "支持的按键数量变了，确认改动是有意的");
+    }
+
+    /// 与 PROBE_ID 错开，免得探测把测试自己的占位注册当成 ID 冲突。
+    const HOLD_ID: i32 = 0x5A45;
+
+    #[test]
+    fn is_taken_only_speaks_for_combinations_register_hotkey_carries() {
+        assert!(
+            !is_taken(&parse_hotkey("Ctrl+Shift").unwrap()),
+            "纯修饰键走钩子，无所谓占用"
+        );
+        assert!(
+            !is_taken(&parse_hotkey("Q+W").unwrap()),
+            "多主键走钩子，无所谓占用"
+        );
+    }
+
+    /// 真注册一个冷门组合，验证探测确实看得见别处的占用。
+    #[test]
+    fn is_taken_sees_a_combination_somebody_else_holds() {
+        // Ctrl+Alt+Shift+F23，冷门到不会与真实热键或别的测试撞车。
+        let hk = parse_hotkey("Ctrl+Alt+Shift+F23").unwrap();
+        assert!(!is_taken(&hk), "没人占用时应报空闲");
+
+        unsafe {
+            RegisterHotKey(
+                None,
+                HOLD_ID,
+                HOT_KEY_MODIFIERS(hk.modifiers | MOD_NOREPEAT),
+                hk.single().unwrap() as u32,
+            )
+            .expect("测试占位注册失败");
+        }
+        assert!(is_taken(&hk), "别处已注册的组合应报被占用");
+
+        unsafe {
+            let _ = UnregisterHotKey(None, HOLD_ID);
+        }
+        assert!(!is_taken(&hk), "占用撤销后应回到空闲");
+    }
+
+    #[test]
+    fn vk_to_key_rejects_keys_outside_the_table() {
+        assert_eq!(vk_to_key(0xA2), None, "修饰键不是主键");
+        assert_eq!(vk_to_key(0xFF), None);
     }
 }

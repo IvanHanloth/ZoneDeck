@@ -112,9 +112,14 @@ describe("renderMarkdown 安全", () => {
     );
   });
 
-  it("非 http/mailto 协议的链接不生成 <a>", () => {
+  it("非 https/mailto 协议的链接不生成 <a>", () => {
     expect(renderMarkdown("[点我](javascript:alert(1))")).toBe("<p>[点我](javascript:alert(1))</p>");
     expect(renderMarkdown("[点我](data:text/html,<script>)")).toContain("[点我](data:text/html,");
+  });
+
+  it("明文 http 链接不生成 <a>", () => {
+    expect(renderMarkdown("[点我](http://example.com)")).toBe("<p>[点我](http://example.com)</p>");
+    expect(renderMarkdown("见 http://example.com 。")).toBe("<p>见 http://example.com 。</p>");
   });
 
   it("链接目标里的引号被转义，无法逃出属性", () => {

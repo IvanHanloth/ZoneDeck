@@ -1,33 +1,30 @@
 <script>
   import { t } from "../lib/i18n.svelte.js";
-  // 只录制修饰键（主键是鼠标按钮本身）。
+  // 只录制修饰键（主键是鼠标按钮本身）；录制期独占键盘。
   import { onDestroy } from "svelte";
-  import { modifiersFromEvent } from "../lib/hotkey.js";
+  import { startCapture, isBareEscape } from "../lib/capture.js";
   import { resumeMonitoring, suspendMonitoring } from "../lib/state.svelte.js";
 
   let { value = $bindable(""), compact = false } = $props();
 
-  // 每个录制器一个独立的停用理由（对象身份即标识）。
+  // 每个录制器一个独立的停用理由。
   const REASON = { recorder: "modifier" };
 
   let recording = $state(false);
-  let held = $state(""); // 录制过程中按住过的最大组合
+  let live = $state(""); // 此刻按住的组合
+  let best = ""; // 录制过程中按住过的最大组合
   let timer = null;
+  let stopCapture = null;
 
-  function onKeydown(e) {
-    if (e.key === "Escape") return stop();
-    e.preventDefault();
-    const mods = modifiersFromEvent(e);
-    // 取按下过的最长组合。
-    if (mods.split("+").filter(Boolean).length >= held.split("+").filter(Boolean).length) {
-      held = mods;
-    }
-  }
+  const size = (mods) => (mods ? mods.split("+").length : 0);
 
-  function onKeyup(e) {
-    e.preventDefault();
-    if (!e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey && held) {
-      value = held;
+  function onState(s) {
+    if (isBareEscape(s)) return stop();
+    live = s.modifiers;
+    if (size(s.modifiers) >= size(best)) best = s.modifiers;
+    // 全部松开即定稿。
+    if (!s.modifiers && best) {
+      value = best;
       stop();
     }
   }
@@ -35,20 +32,21 @@
   function start() {
     if (recording) return stop();
     recording = true;
-    held = "";
+    live = "";
+    best = "";
     suspendMonitoring(REASON);
-    window.addEventListener("keydown", onKeydown, true);
-    window.addEventListener("keyup", onKeyup, true);
+    stopCapture = startCapture({ onState, onLost: stop });
     timer = setTimeout(stop, 10_000);
   }
 
   function stop() {
     if (!recording) return;
     recording = false;
-    held = "";
+    live = "";
+    best = "";
     clearTimeout(timer);
-    window.removeEventListener("keydown", onKeydown, true);
-    window.removeEventListener("keyup", onKeyup, true);
+    stopCapture?.();
+    stopCapture = null;
     resumeMonitoring(REASON);
   }
 
@@ -63,7 +61,7 @@
 <div class="rec" class:compact>
   <kbd class="combo" class:recording>
     {#if recording}
-      {held || t("recorder.holdModifiers")}
+      {live || t("recorder.holdModifiers")}
     {:else}
       {value || t("recorder.none")}
     {/if}
@@ -87,11 +85,12 @@
     flex: 1;
     min-width: 5.5em;
     font-family: inherit;
-    font-size: 12.5px;
+    font-size: 12px;
     text-align: center;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
+    background: var(--control);
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    border-radius: var(--r-control);
     padding: 4px 8px;
     white-space: nowrap;
     overflow: hidden;
@@ -99,6 +98,7 @@
   }
   .combo.recording {
     border-color: var(--accent);
+    border-bottom-color: var(--accent);
     color: var(--accent);
     animation: pulse 1.2s ease-in-out infinite;
   }
@@ -108,7 +108,8 @@
     }
   }
   .rec .btn {
-    padding: 4px 9px;
-    font-size: 12.5px;
+    min-height: 26px;
+    padding: 3px 9px;
+    font-size: 12px;
   }
 </style>

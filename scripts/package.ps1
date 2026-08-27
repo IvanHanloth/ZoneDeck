@@ -33,11 +33,11 @@ $uiDir = Join-Path $root "apps\config\ui"
 if (-not $SkipFrontend) {
     Write-Host "==> 编译前端（Vite + Svelte）..." -ForegroundColor Cyan
     if (-not (Test-Path (Join-Path $uiDir "node_modules"))) {
-        Write-Host "    首次构建，安装依赖（npm install）..."
-        npm --prefix $uiDir install --no-audit --no-fund
-        if ($LASTEXITCODE -ne 0) { throw "npm install 失败" }
+        Write-Host "    首次构建，安装依赖（pnpm install）..."
+        pnpm --dir $uiDir install
+        if ($LASTEXITCODE -ne 0) { throw "pnpm install 失败" }
     }
-    npm --prefix $uiDir run build
+    pnpm --dir $uiDir run build
     if ($LASTEXITCODE -ne 0) { throw "前端构建失败" }
 }
 if (-not (Test-Path (Join-Path $root "apps\config\dist\index.html"))) {

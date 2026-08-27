@@ -1,46 +1,48 @@
-// 全局应用状态（Svelte 5 runes）：配置双向绑定的单一数据源 + 核心状态轮询。
+// 全局应用状态：配置双向绑定的单一数据源 + 核心状态轮询。
 
 import { invoke } from "./ipc.js";
-import { setLangPref, t } from "./i18n.svelte.js";
+import { lang, setLangPref, t } from "./i18n.svelte.js";
 import { iconPathsToFetch } from "./grouping.js";
 import { sanitizeConfig } from "./sanitize.js";
 import { createAutosave } from "./autosave.js";
+import { createBreadthGuard } from "./regexcheck.js";
 import * as verhub from "./verhub.js";
+import * as analytics from "./analytics.js";
 
 export const app = $state({
-  /** config.json 的完整内容；表单直接 bind 到它的字段（双向绑定）。 */
+  /** config.json 的完整内容；表单直接 bind 到它的字段。 */
   config: null,
-  /** 当前所有存活窗口（左侧「现有窗口」选择区数据源）。 */
+  /** 当前所有存活窗口。 */
   available: [],
   /** 进程列表搜索关键字。 */
   search: "",
   /** 现有窗口过滤开关：默认只显示有标题的可见窗口。 */
   showBackground: false,
   showUntitled: false,
-  /** exe 路径 → PNG data URI；null 表示查询过但无图标（负缓存）。 */
+  /** exe 路径 → PNG data URI；null 表示查询过但无图标。 */
   icons: {},
-  /** 核心状态；running 为 null 表示首次检测尚未返回。monitoring 由核心回报。 */
+  /** 核心状态；running 为 null 表示首次检测尚未返回。 */
   status: { running: null, hidden: false, elevated: false, monitoring: true, auto_hide_enabled: false },
   autostart: false,
-  /** 当前自启注册方式："task"｜"registry"｜null（未注册）。 */
+  /** 当前自启注册方式："task"｜"registry"｜null。 */
   autostartMethod: null,
   info: null,
-  /** Verhub 上的项目公开链接（主页 / 仓库 / 文档等）；null 时用内置回退链接。 */
+  /** Verhub 上的项目公开链接；null 时用内置回退链接。 */
   project: null,
   maximized: false,
   saving: false,
-  /** 程序目录下是否存在 pssuspend64.exe（增强冻结的前置条件）。 */
+  /** 程序目录下是否存在 pssuspend64.exe。 */
   pssuspend: false,
-  /** 当前分页；托盘「窗口恢复工具」会把它切到 options。 */
+  /** 当前分页。 */
   tab: "binding",
-  /** 窗口恢复工具弹窗（可由托盘菜单直接拉起，故提升到全局）。 */
+  /** 窗口恢复工具弹窗，可由托盘菜单直接拉起。 */
   restoreOpen: false,
-  /** 停用请求已发出、核心尚未确认的空档（状态栏据此显示「暂停中…」）。 */
+  /** 停用请求已发出、核心尚未确认的空档。 */
   monitorPending: false,
 
   /** check-update 的结果；required 为 true 即强制更新。 */
   update: null,
-  /** 更新弹窗是否打开。强制更新时它关不掉（见 UpdateModal）。 */
+  /** 更新弹窗是否打开；强制更新时关不掉。 */
   updateOpen: false,
   updateChecking: false,
   /** 公告列表（从新到旧）。 */
@@ -49,25 +51,37 @@ export const app = $state({
   pendingAnnouncement: null,
   /** 出错报告 { message, detail }；有值即弹出错误框。 */
   errorReport: null,
-  /** 数据目录 { dir, program_dir, kind }；kind 为 portable_fallback 时提示权限问题。 */
+  /** 数据目录 { dir, program_dir, kind }。 */
   dataLocation: null,
   /** 便携版回退提示弹窗是否打开。 */
   dataNoticeOpen: false,
+  /** 白名单里不可删除的内置项 [{ key, names }]。 */
+  whitelistBuiltins: [],
+  /** 待提示的过宽正则 [{ kind, pattern, hits }]；有值即弹窗。 */
+  broadRegex: null,
+  /** 判定为过宽且用户尚未确认的正则，界面据此标红。 */
+  broadPatterns: new Set(),
 });
 
 // 按「理由」计数暂停核心监控，最后一个理由撤销后才恢复。
-// 监控状态一律以核心回报的 status.monitoring 为准（见 refreshStatus）。
 
 const suspenders = new Set();
 let heartbeat = null;
-/** 请求序号：先发的慢应答不能覆盖后发的结果。 */
+/** 请求序号，防止慢应答覆盖后发的结果。 */
 let monitorSeq = 0;
 
-/** 以 reason 为名义请求停用监控；同名重复请求是幂等的。 */
+/** 最近一次停用请求的应答；探测热键占用要等它落地。 */
+let suspended = Promise.resolve();
+
+/**
+ * 以 reason 为名义请求停用监控；同名重复请求是幂等的。
+ * 返回的 promise 在核心确实撤掉热键后落定。
+ */
 export function suspendMonitoring(reason) {
   const first = suspenders.size === 0;
   suspenders.add(reason);
-  if (first) applyMonitoring(false);
+  if (first) suspended = applyMonitoring(false);
+  return suspended;
 }
 
 /** 撤销某个停用理由；所有理由都撤销后才真正恢复监控。 */
@@ -88,7 +102,7 @@ async function applyMonitoring(enabled) {
   }
   if (seq !== monitorSeq) return;
   app.monitorPending = false;
-  // 停用期间持续心跳续期（核心侧看门狗认心跳）。
+  // 停用期间持续心跳续期。
   if (!enabled) {
     heartbeat = setInterval(() => {
       invoke("set_hotkeys_enabled", { enabled: false }).catch(() => {});
@@ -97,16 +111,16 @@ async function applyMonitoring(enabled) {
   refreshStatus();
 }
 
-/** 心跳间隔，须显著小于核心 ipc.rs 的 SUSPEND_TIMEOUT_MS(15s)。 */
+/** 心跳间隔，须显著小于核心的 SUSPEND_TIMEOUT_MS。 */
 const SUSPEND_HEARTBEAT_MS = 4000;
 
-/** 打开「窗口恢复工具」并切到对应分页（供托盘直达使用）。 */
+/** 打开「窗口恢复工具」并切到对应分页。 */
 export function openRestoreTool() {
   app.tab = "options";
   app.restoreOpen = true;
 }
 
-/** 重新检测 pssuspend64.exe；放入文件后无需重启即可启用增强冻结。 */
+/** 重新检测 pssuspend64.exe。 */
 export async function refreshPssuspend() {
   try {
     app.pssuspend = !!(await invoke("pssuspend_available"));
@@ -116,7 +130,16 @@ export async function refreshPssuspend() {
   }
 }
 
-/** 切到「关于与反馈」分页（供托盘直达使用）。 */
+/** 打开程序目录，即 pssuspend64.exe 该放的位置。 */
+export async function openProgramDir() {
+  try {
+    await invoke("open_program_dir");
+  } catch (err) {
+    toast(t("state.openDirFailed", { err }), true);
+  }
+}
+
+/** 切到「关于与反馈」分页。 */
 export function openAboutTab() {
   app.tab = "about";
 }
@@ -137,11 +160,16 @@ export async function loadAll() {
   const tasks = [
     invoke("load_config").then((loaded) => {
       app.config = loaded.config;
-      // 界面语言先于首帧生效，避免加载后文案跳变。
+      // 界面语言先于首帧生效。
       setLangPref(loaded.config?.setting?.language);
-      // 配置损坏已回退默认值：原因（含备份去向）必须让用户看到，
-      // 否则规则凭空消失且第一次改动就会把默认值写回原文件。
+      // 配置损坏已回退默认值，原因与备份去向必须让用户看到。
       if (loaded.fallback) reportError(t("state.configFallback"), loaded.fallback);
+      // 配置来自更高版本：本次照常生效，但保存后新版设置项会丢。
+      if (loaded.schema_note) reportError(t("state.configSchemaNewer"), loaded.schema_note);
+      // 埋点的比较基线：启动时的配置不算「刚改过」。
+      trackedConfig = sanitizeConfig(structuredClone($state.snapshot(loaded.config)));
+      // 语言定下来之后再拉，项目信息才会是当前语言的译文。
+      loadProjectLinks();
       return refreshWindows();
     }),
     refreshAutostart(),
@@ -149,23 +177,29 @@ export async function loadAll() {
       app.info = info;
     }),
     invoke("pssuspend_available").then((v) => (app.pssuspend = !!v)),
+    invoke("whitelist_builtins").then((v) => {
+      app.whitelistBuiltins = v ?? [];
+    }),
     invoke("data_location").then((loc) => {
       app.dataLocation = loc;
-      // 回退即程序目录写不进去，须提示用户。
+      // 回退即程序目录写不进去。
       app.dataNoticeOpen = loc?.kind === "portable_fallback";
     }),
   ];
-  // 拉取失败静默：「关于」页有内置回退链接。
-  verhub
-    .projectLinks()
-    .then((p) => (app.project = p))
-    .catch(() => {});
   const results = await Promise.allSettled(tasks);
   const failed = results.find((r) => r.status === "rejected");
   if (failed) toast(t("state.partialLoadFailed", { reason: failed.reason }), true);
 }
 
-/** 回读开机自启真实状态（是否已注册 + 注册方式）。 */
+/** 项目公开链接；拉取失败静默，「关于」页有内置回退链接。 */
+function loadProjectLinks() {
+  verhub
+    .projectLinks()
+    .then((p) => (app.project = p))
+    .catch(() => {});
+}
+
+/** 回读开机自启真实状态。 */
 async function refreshAutostart() {
   const v = await invoke("autostart_status");
   app.autostart = !!v?.enabled;
@@ -193,11 +227,58 @@ async function loadIcons(windows) {
 
 // 自动保存：改动即存，带 debounce；关窗前由 flushSave 兜底。
 
+/** 正则过宽检查器；判定在后端。 */
+const breadthGuard = createBreadthGuard((patterns) =>
+  invoke("regex_breadth", { patterns }),
+);
+
+/** 弹窗关闭后要 resolve 的回调。 */
+let broadRegexResolve = null;
+
+function closeBroadRegex() {
+  app.broadRegex = null;
+  broadRegexResolve?.();
+  broadRegexResolve = null;
+}
+
+/** 「仍然保存」：此后不再提醒、不再标红。 */
+export function acknowledgeBroadRegex() {
+  const patterns = (app.broadRegex ?? []).map((i) => i.pattern);
+  breadthGuard.acknowledge(patterns);
+  app.broadPatterns = new Set([...app.broadPatterns].filter((p) => !patterns.includes(p)));
+  closeBroadRegex();
+}
+
+/** 「我知道了」：不再打断保存，但保留标红。 */
+export function dismissBroadRegex() {
+  breadthGuard.dismiss((app.broadRegex ?? []).map((i) => i.pattern));
+  closeBroadRegex();
+}
+
+/** 写盘前的过宽正则检查；不拦保存，只决定此后提不提醒、标不标红。 */
+async function warnOnBroadRegex(config) {
+  const { broad, toWarn } = await breadthGuard.inspect(config);
+  const patterns = new Set(broad.map((i) => i.pattern));
+  // 用户改好、删掉或确认无误的正则，红框跟着消失。
+  if (patterns.size > 0 || app.broadPatterns.size > 0) app.broadPatterns = patterns;
+  if (toWarn.length === 0) return;
+  app.broadRegex = toWarn;
+  await new Promise((resolve) => {
+    broadRegexResolve = resolve;
+  });
+}
+
+/** 上一次落盘的配置，用来算出这次改了哪些功能项。 */
+let trackedConfig = null;
+
 const autosave = createAutosave(async () => {
   if (!app.config) return true;
+  const config = sanitizeConfig($state.snapshot(app.config));
+  await warnOnBroadRegex(config);
   app.saving = true;
   try {
-    await invoke("save_config", { config: sanitizeConfig($state.snapshot(app.config)) });
+    await invoke("save_config", { config });
+    trackedConfig = analytics.trackConfigChanges(trackedConfig, config);
     return true;
   } catch (err) {
     reportError(t("state.saveFailed"), err);
@@ -217,7 +298,7 @@ export function flushSave() {
   return autosave.flush();
 }
 
-/** 是否还有未落盘的改动（排队中或写盘中）；状态回读不得覆盖它们。 */
+/** 是否还有未落盘的改动；状态回读不得覆盖它们。 */
 export function hasUnsavedChanges() {
   return autosave.dirty;
 }
@@ -226,6 +307,7 @@ export async function startCore(elevated) {
   try {
     const accepted = await invoke("start_core", { elevated });
     if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    analytics.track("core_action", { action: "start", elevated });
     toast(t(elevated ? "state.coreStartingAdmin" : "state.coreStarting"));
     setTimeout(refreshStatus, 1200);
   } catch (err) {
@@ -237,6 +319,7 @@ export async function restartCore(elevated) {
   try {
     const accepted = await invoke("restart_core", { elevated });
     if (accepted === false) return toast(t("state.elevationCancelled"), true);
+    analytics.track("core_action", { action: "restart", elevated });
     toast(t(elevated ? "state.coreRestartingAdmin" : "state.coreRestarting"));
     setTimeout(refreshStatus, 1500);
   } catch (err) {
@@ -247,6 +330,7 @@ export async function restartCore(elevated) {
 export async function quitCore() {
   try {
     await invoke("quit_core");
+    analytics.track("core_action", { action: "quit" });
     toast(t("state.coreQuitRequested"));
     setTimeout(refreshStatus, 800);
   } catch (err) {
@@ -258,7 +342,7 @@ export async function setAutostart(enabled, admin) {
   try {
     await invoke("set_autostart", { enabled, admin });
     app.autostart = enabled;
-    // 计划任务可能回退到注册表，回读真实注册方式。
+    // 计划任务可能回退到注册表。
     await refreshAutostart();
     toast(t(enabled ? "state.autostartOn" : "state.autostartOff"));
   } catch (err) {
@@ -267,16 +351,20 @@ export async function setAutostart(enabled, admin) {
   }
 }
 
-/**
- * 检查更新。`manual` 为 true 时无论结果都给出提示；
- * 自动检查仅在有更新时弹窗，失败静默。
- */
+/** 检查更新；`manual` 为 true 时无论结果都给出提示，自动检查失败静默。 */
 export async function checkForUpdate(manual = false) {
   if (app.updateChecking) return;
   app.updateChecking = true;
   try {
-    const result = await verhub.checkUpdate(app.config?.verhub?.include_preview ?? false);
+    const preview = app.config?.verhub?.include_preview ?? false;
+    const result = await verhub.checkUpdate(preview);
     app.update = result;
+    analytics.track("update_checked", {
+      manual,
+      preview,
+      should_update: !!result.should_update,
+      required: !!result.required,
+    });
     if (result.should_update) app.updateOpen = true;
     else if (manual) toast(t("state.upToDate"));
   } catch (err) {
@@ -287,14 +375,14 @@ export async function checkForUpdate(manual = false) {
   }
 }
 
-/** 拉公告；启动时顺带挑出「比已读那条更新」的一条弹给用户。 */
+/** 拉公告；启动时挑出比已读那条更新的一条弹给用户。 */
 export async function loadAnnouncements({ popNew = false } = {}) {
   try {
     const list = await verhub.announcements(20);
     app.announcements = list;
     if (!popNew) return;
     const seen = app.config?.verhub?.seen_announcement_id ?? "";
-    // 置顶公告优先，否则取最新一条；已读过的不再弹出。
+    // 置顶公告优先，否则取最新一条。
     const newest = list.find((a) => a.is_pinned) ?? list[0];
     if (newest && newest.id !== seen) app.pendingAnnouncement = newest;
   } catch {
@@ -302,7 +390,7 @@ export async function loadAnnouncements({ popNew = false } = {}) {
   }
 }
 
-/** 记住这条公告已读，下次启动不再弹出。 */
+/** 记住这条公告已读。 */
 export function markAnnouncementSeen(id) {
   app.pendingAnnouncement = null;
   if (!app.config || !id) return;
@@ -310,12 +398,67 @@ export function markAnnouncementSeen(id) {
   scheduleSave(0);
 }
 
+/** 界面语言切换后按新语言重取服务端下发的内容：项目信息、公告与更新说明。 */
+export async function refreshLocalizedContent() {
+  loadProjectLinks();
+  loadAnnouncements();
+  // 只重取已有的结果，免得换个语言就弹一次更新提示。
+  if (!app.update || app.updateChecking) return;
+  app.updateChecking = true;
+  try {
+    app.update = await verhub.checkUpdate(app.config?.verhub?.include_preview ?? false);
+  } catch {
+    /* 拉取失败时保留原语言的内容 */
+  } finally {
+    app.updateChecking = false;
+  }
+}
+
+/**
+ * 报一次功能采用快照。「多少人在用某个功能」只能这么算——变更事件算出来的是
+ * 改动次数，不是人数。管理员状态要等核心状态回读完才准。
+ */
+export async function trackFeatures() {
+  await refreshStatus();
+  analytics.trackFeatures(app.config, {
+    locale: lang(),
+    install: app.dataLocation?.kind ?? "unknown",
+    elevated: !!app.status.elevated,
+    autostart: !!app.autostart,
+  });
+}
+
+/** 用户还没就匿名统计表过态，须先征求同意。 */
+export function analyticsUnanswered() {
+  return !!app.config && app.config.verhub?.analytics == null;
+}
+
+/**
+ * 记下用户对匿名统计的选择；`source` 区分首次征询与设置页开关。
+ * 先落到 SDK 再埋点：撤回之后的事件本就不该发出去。
+ */
+export async function setAnalyticsConsent(granted, source) {
+  if (!app.config) return;
+  const v = (app.config.verhub ??= {});
+  v.analytics = granted;
+  // 同意只在这台设备上报一次，就在点下同意的那一刻；之后的启动与反复开关都不再报。
+  const firstYes = granted && !v.analytics_consent_sent;
+  if (firstYes) v.analytics_consent_sent = true;
+  scheduleSave(0);
+  // 退出是用户不想再被记录，那就一条也不发，包括退出这件事本身。
+  await analytics.setConsent(granted);
+  if (!granted) return;
+  if (firstYes) analytics.track("analytics_consent", { source });
+  // 首次征询排在启动埋点之后，同意了就把这次的快照补上。
+  if (source === "first_run") trackFeatures();
+}
+
 /** 报告一次失败：弹出错误框，由用户决定是否上报日志。 */
 export function reportError(message, detail = "") {
   app.errorReport = { message, detail: String(detail) };
 }
 
-/** 托盘菜单也能切换自动隐藏；以核心回报为准回读界面，但不覆盖用户尚未保存的改动。 */
+/** 以核心回报回读自动隐藏开关，但不覆盖用户尚未保存的改动。 */
 function syncAutoHideFromCore() {
   if (!app.config || !app.status.running) return;
   if (autosave.dirty) return;
@@ -332,11 +475,11 @@ export async function refreshStatus() {
     app.status = { running: false, hidden: false, elevated: false, monitoring: false, auto_hide_enabled: false };
   }
   syncAutoHideFromCore();
-  // 核心在停用期间重启过（新实例默认监听），重新按下停用。
+  // 核心在停用期间重启过，重新按下停用。
   if (suspenders.size > 0 && app.status.running && app.status.monitoring) {
     invoke("set_hotkeys_enabled", { enabled: false }).catch(() => {});
   }
-  // 回读开机自启真实状态，与托盘保持一致。
+  // 回读开机自启真实状态。
   try {
     await refreshAutostart();
   } catch {
@@ -344,7 +487,7 @@ export async function refreshStatus() {
   }
 }
 
-/** 启动轮询；返回停止函数。页面不可见时暂停，恢复可见立即刷新。 */
+/** 启动轮询，返回停止函数；页面不可见时暂停。 */
 export function startStatusPolling(intervalMs = 2000) {
   refreshStatus();
   const timer = setInterval(() => {

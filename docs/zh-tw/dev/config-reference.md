@@ -24,6 +24,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `verhub` | object | 更新／公告相關，見下 |
 | `window_rules` | object[] | 視窗規則（細粒度） |
 | `process_rules` | object[] | 程序規則（粗粒度） |
+| `whitelist` | object[] | 白名單：逐程序宣告略過隱藏／凍結／靜音 |
 | `hide_binding` | object[] | *v2 版*扁平綁定，僅用於移轉，移轉後清空、不再寫回 |
 
 ## `hotkey`
@@ -35,26 +36,38 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `hide_only_hotkey` | `""` | [僅隱藏視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
 | `show_only_hotkey` | `""` | [僅顯示視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
 | `hide_foreground_hotkey` | `""` | [隱藏前景視窗](/zh-tw/guide/hotkeys#單向快速鍵與隱藏前景視窗)，留空為關閉 |
-| `hide_intercept` | `false` | [隱藏快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
-| `close_intercept` | `false` | [關閉快速鍵不傳遞](/zh-tw/guide/hotkeys#快速鍵不傳遞)（鍵盤掛鉤攔截） |
+| `hide_hook` | `false` | [隱藏快速鍵改用低階鍵盤掛鉤觸發](/zh-tw/guide/hotkeys#低階鍵盤掛鉤與不傳遞) |
+| `close_hook` | `false` | 關閉快速鍵改用低階鍵盤掛鉤觸發 |
+| `hide_only_hook` | `false` | 僅隱藏快速鍵改用低階鍵盤掛鉤觸發 |
+| `show_only_hook` | `false` | 僅顯示快速鍵改用低階鍵盤掛鉤觸發 |
+| `hide_foreground_hook` | `false` | 隱藏前景視窗快速鍵改用低階鍵盤掛鉤觸發 |
+| `hide_intercept` | `false` | [隱藏快速鍵不傳遞](/zh-tw/guide/hotkeys#低階鍵盤掛鉤與不傳遞)；為真時 `hide_hook` 也會被設為真 |
+| `close_intercept` | `false` | 關閉快速鍵不傳遞 |
 | `hide_only_intercept` | `false` | 僅隱藏快速鍵不傳遞 |
 | `show_only_intercept` | `false` | 僅顯示快速鍵不傳遞 |
 | `hide_foreground_intercept` | `false` | 隱藏前景視窗快速鍵不傳遞 |
+
+快速鍵字串支援 [更豐富的組合](/zh-tw/guide/hotkeys#更豐富的組合)：多個主鍵以 `+` 相連（最多四個，如 `"Q+W"`），只有修飾鍵則是純修飾鍵快速鍵（如 `"Ctrl+Shift"`）。這兩類只有鍵盤掛鉤承載得了，設定裡對應的 `*_hook` 未開時核心也會自動走掛鉤。標點鍵存按鍵位置名（`OEM_1`、`OEM_PLUS` 等），不隨鍵盤配置變化。
 
 ## `setting`
 
 | 欄位 | 型別 | 預設 | 對應功能 |
 | --- | --- | --- | --- |
-| `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/options) |
-| `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/options) |
-| `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/options) |
-| `click_to_hide` | bool | `true` | [按一下通知區域圖示切換隱藏](/zh-tw/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/options) |
+| `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/hiding) |
+| `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/hiding) |
+| `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/hiding) |
+| `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/hiding) |
+| `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/hiding) |
+| `tray_enabled` | bool | `true` | [顯示通知區域圖示](/zh-tw/guide/notifications#顯示通知區域圖示)；為假時圖示一直不顯示，氣泡與角標一併失效 |
+| `tray_clicks` | object | 見下 | [通知區域圖示點擊行為](/zh-tw/guide/notifications#通知區域圖示點擊行為) |
 | `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
 | `tray_show_tooltip` | bool | `true` | [顯示圖示懸浮名稱](/zh-tw/guide/notifications#顯示圖示懸浮名稱) |
 | `freeze_after_hide` | bool | `false` | [程序凍結總開關](/zh-tw/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [增強凍結](/zh-tw/guide/freeze) |
-| `freeze_whole_tree` | bool | `false` | [凍結完整程序](/zh-tw/guide/freeze) |
+| `power_scope` | string | `"self"` | [凍結及記憶體控制範圍](/zh-tw/guide/freeze)：`self`（僅目標程序）｜`tree`（及所有子程序）｜`image`（同映像名稱的所有實例）；決定凍結與降低記憶體佔用的涵蓋面，未知取值歸一為 `self` |
+| `efficiency_after_hide` | bool | `false` | [效率模式](/zh-tw/guide/freeze)：隱藏後把程序降為 EcoQoS + 低優先權，與凍結相互獨立 |
+| `efficiency_scope` | string | `"self"` | [效率模式範圍](/zh-tw/guide/freeze)，取值同 `power_scope`，與凍結的範圍互不影響 |
+| `trim_memory_after_freeze` | bool | `false` | [降低記憶體佔用](/zh-tw/guide/freeze)（僅對被凍結的程序生效） |
 | `show_float_window` | bool | `false` | 浮動視窗（開發中） |
 | `mouse` | object | 見下 | [滑鼠按鍵隱藏](/zh-tw/guide/hotkeys) |
 | `auto_hide_enabled` | bool | `false` | [閒置自動隱藏](/zh-tw/guide/hotkeys) |
@@ -71,6 +84,24 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 `middle_button_hide`／`side_button1_hide`／`side_button2_hide` 僅用於還原序列化移轉，移轉後歸零、不再寫回檔案。請使用 `mouse` 結構。
 :::
 
+::: details 舊版「凍結完整程序」開關（已淘汰）
+`freeze_whole_tree` 僅用於還原序列化移轉：讀取時若設定檔裡沒有 `power_scope`，`true` 移轉為 `power_scope: "tree"`、`false` 移轉為 `"self"`，隨後歸零、不再寫回檔案。已明確設定過 `power_scope` 的檔案不受它影響。
+:::
+
+::: details 舊版「按一下通知區域圖示切換隱藏」開關（已淘汰）
+`click_to_hide` 僅用於還原序列化移轉：讀取時若設定檔裡沒有 `tray_clicks`，`true` 移轉為 `tray_clicks.left: "toggle"`、`false` 移轉為 `"none"`，隨後歸零、不再寫回檔案。舊設定檔完全沒有這個鍵時按 `true` 處理（舊版預設開啟）。已明確設定過 `tray_clicks` 的檔案不受它影響。
+:::
+
+### `setting.tray_clicks`
+
+[通知區域圖示點擊行為](/zh-tw/guide/notifications#通知區域圖示點擊行為)：三種點擊各綁一個動作，取值為 `none`（不做任何事）｜`toggle`（隱藏／顯示視窗）｜`menu`（顯示通知區域選單）｜`settings`（開啟設定介面），未知取值歸一為 `none`。
+
+| 欄位 | 預設 | 說明 |
+| --- | --- | --- |
+| `left` | `"toggle"` | 左鍵按一下 |
+| `double` | `"none"` | 左鍵按兩下。非 `none` 時按一下須等過系統連按判定時間才執行 |
+| `right` | `"menu"` | 右鍵按一下 |
+
 ### `setting.mouse`
 
 每顆按鍵為一個 `MouseButton`：`{ enabled: bool, clicks: 1..=3, modifiers: string }`。
@@ -82,7 +113,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `allow_click_restore` | `true` | 允許再按一次復原 |
 
 ::: info 全新安裝預設
-全新安裝預設開啟**中鍵按一下**（`middle.enabled = true`，`clicks = 1`），其餘四顆關閉。設定檔缺 `mouse` 一節的舊設定讀進來則**全關**。
+全新安裝預設開啟**中鍵連按兩下**（`middle.enabled = true`，`clicks = 2`），其餘四顆關閉。設定檔缺 `mouse` 一節的舊設定讀進來則**全關**。
 :::
 
 ### `setting.tray_badges`
@@ -107,6 +138,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `on_autostart` | `true` | 開機自動啟動狀態變更通知 |
 | `on_hide` | `false` | 每次隱藏通知 |
 | `on_show` | `false` | 每次顯示通知 |
+| `on_recovery_mismatch` | `true` | 上次異常結束後接手隱藏紀錄時，有紀錄與當初對不上就通知 |
 
 ## `verhub`
 
@@ -114,6 +146,8 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | --- | --- | --- |
 | `include_preview` | `false` | 更新檢查是否納入預覽版 |
 | `seen_announcement_id` | `""` | 已讀的最新公告 id |
+| `analytics` | `null` | 匿名使用統計的授權：`null` 表示還沒問過使用者，首次啟動時會跳出視窗徵求同意；`true` 同意，`false` 拒絕 |
+| `analytics_consent_sent` | `false` | 「同意參與」是否已回報過。同一台裝置只回報一次，反覆開關不再重複 |
 
 ## `window_rules`（視窗規則）
 
@@ -142,6 +176,26 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | `by_name` | `false` | 只按檔名比對，忽略路徑 |
 | `include_untitled` | `true` | 是否納入無標題視窗（程序規則預設納入） |
 | `include_background` | `false` | 是否納入背景視窗 |
+
+## `whitelist`（白名單）
+
+按程序宣告在哪些模式下略過，見[白名單](/zh-tw/guide/whitelist)。比對方式與 `process_rules` 同構，但**預設按檔名**比對；檔名與路徑的比較都不區分大小寫。
+
+| 欄位 | 預設 | 說明 |
+| --- | --- | --- |
+| `process` | | 程序名 |
+| `path` | | 執行檔路徑 |
+| `regex` | | 正規表示式（作用於路徑或檔名） |
+| `by_name` | `true` | 只按檔名比對，忽略路徑 |
+| `ignore_hide` | `false` | 隱藏時略過該程式的視窗 |
+| `ignore_freeze` | `false` | 隱藏後不凍結該程式的程序 |
+| `ignore_mute` | `false` | 隱藏後不靜音該程式的程序 |
+
+::: tip 鍵不存在 vs 空陣列
+`whitelist` **鍵不存在**（舊設定／全新設定）時會植入一條預設的 `explorer.exe`；寫成 `[]` 表示使用者清空了清單，不會再被植入。正規化後該欄位恆為陣列，不會是 `null`。
+:::
+
+ZoneDeck 自身的核心與設定程式（`ZoneDeck.exe` / `core.exe` / `config.exe` / `zonedeck-config.exe`）**恆被排除在凍結之外**。該保護寫死在 `crates/common/src/matching.rs` 的 `BUILTIN_FREEZE_GUARDS` 裡，不出現在設定檔中，手改設定也繞不過去。
 
 ## 相容與移轉
 

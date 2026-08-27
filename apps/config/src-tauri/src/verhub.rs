@@ -1,10 +1,8 @@
 //! Verhub 客户端：版本 / 公告 / 反馈 / 日志 / 项目链接，基于官方 verhub-sdk。
-//!
-//! 只用公开端点（无需凭据）。HTTP 由 SDK 完成；本模块把 SDK 的响应类型映射成
-//! 前端 IPC 契约所需的可序列化 DTO，字段名保持不变。
+//! 只用公开端点；本模块把 SDK 的响应类型映射成前端 IPC 契约所需的 DTO。
 
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
@@ -17,7 +15,7 @@ use verhub_sdk::models::{
 /// Verhub 基础路径。
 pub const BASE_URL: &str = "https://verhub.hanloth.cn/api/v1";
 pub const PROJECT_KEY: &str = "ivanhanloth-zonedeck";
-/// 客户端平台（本程序只发行 Windows 版）。
+/// 客户端平台。
 pub const PLATFORM: Platform = Platform::Windows;
 
 const TIMEOUT: Duration = Duration::from_secs(10);
@@ -27,14 +25,24 @@ pub const LOG_EXCERPT_MAX: usize = LOG_CONTENT_MAX * 3 / 5;
 
 type Result<T> = verhub_sdk::Result<T>;
 
-/// 构造公开接口客户端；User-Agent 追加 `ZoneDeck/{版本}` 以便服务端识别。
-fn client() -> Result<VerhubClient> {
-    VerhubClient::builder(BASE_URL)
+/// 进程内共享的客户端。事件采集的匿名标识与待发队列挂在客户端上，
+/// 每次调用新建一个会反复读写状态文件，也会把攒批的计时清零。
+static CLIENT: OnceLock<VerhubClient> = OnceLock::new();
+
+/// 取共享客户端；User-Agent 追加 `ZoneDeck/{版本}`。
+pub fn client() -> Result<VerhubClient> {
+    if let Some(client) = CLIENT.get() {
+        return Ok(client.clone());
+    }
+    let client = VerhubClient::builder(BASE_URL)
         .project_key(PROJECT_KEY)
         .platform(PLATFORM)
         .timeout(TIMEOUT)
         .app_identifier(concat!("ZoneDeck/", env!("CARGO_PKG_VERSION")))
-        .build()
+        .analytics(crate::analytics::options())
+        .build()?;
+    // 竞态下别的线程先放进去也无妨，两个客户端等价。
+    Ok(CLIENT.get_or_init(|| client).clone())
 }
 
 /// 把 `serde_json::Value` 收敛为 JSON 对象；非对象一律丢弃。
@@ -132,11 +140,17 @@ fn map_announcement(item: AnnouncementItem) -> Announcement {
 }
 
 /// 检查更新：把当前版本发给 Verhub，由服务端判断是否需要更新、是否强制。
-pub async fn check_update(current_version: &str, include_preview: bool) -> Result<CheckUpdate> {
+/// `locale` 命中项目注册的语言时版本说明返回对应译文，否则回落默认内容。
+pub async fn check_update(
+    current_version: &str,
+    include_preview: bool,
+    locale: Option<&str>,
+) -> Result<CheckUpdate> {
     let input = CheckUpdateInput {
         current_version: Some(current_version.to_string()),
         current_comparable_version: Some(current_version.to_string()),
         include_preview: Some(include_preview),
+        locale: locale.map(str::to_string),
     };
     let resp = client()?.public().check_update(&input).await?;
     Ok(CheckUpdate {
@@ -150,10 +164,18 @@ pub async fn check_update(current_version: &str, include_preview: bool) -> Resul
 }
 
 /// 公告列表（只要本平台 / 全平台的），从新到旧，并滤掉隐藏公告。
-pub async fn announcements(limit: u32) -> Result<Vec<Announcement>> {
+/// `current_version` 不传时，所有设了可见版本范围的公告都收不到；
+/// `locale` 命中项目注册的语言时公告返回对应译文，否则回落默认内容。
+pub async fn announcements(
+    limit: u32,
+    current_version: &str,
+    locale: Option<&str>,
+) -> Result<Vec<Announcement>> {
     let options = ListAnnouncementsOptions {
         limit: Some(limit),
         platform: Some(PLATFORM),
+        version: Some(current_version.to_string()),
+        locale: locale.map(str::to_string),
         ..Default::default()
     };
     let resp = client()?.public().list_announcements(&options).await?;
@@ -168,9 +190,9 @@ pub async fn announcements(limit: u32) -> Result<Vec<Announcement>> {
 /// 反馈提交选项：服务端决定本项目能否把反馈转换为 GitHub Issue。
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct FeedbackOptions {
-    /// 是否开放「转换为 Issue」。为假时前端不显示该选项。
+    /// 是否开放「转换为 Issue」。
     pub github_forward_available: bool,
-    /// 选择转换时联系方式是否必填；转换不可用时恒为假。
+    /// 选择转换时联系方式是否必填。
     pub contact_required_for_forward: bool,
 }
 
@@ -182,16 +204,14 @@ pub async fn feedback_options() -> Result<FeedbackOptions> {
     })
 }
 
-/// 规整联系方式：只有空白等同于未填写。
+/// 规整联系方式：只有空白视为未填写。
 pub fn normalize_contact(contact: &str) -> Option<String> {
     let trimmed = contact.trim();
     (!trimmed.is_empty()).then(|| trimmed.to_string())
 }
 
 /// 提交客户端反馈。`rating` 为 1..=5；`custom_data` 携带附加信息。
-///
-/// `forward_to_github` 为真时由 Verhub 侧的机器人把这条反馈建成 GitHub Issue：
-/// 联系方式必填（SDK 本地即拒绝），且 Issue 创建失败时整条反馈不会被记录。
+/// `forward_to_github` 为真时联系方式必填，且 Issue 创建失败会导致整条反馈丢失。
 pub async fn submit_feedback(
     content: String,
     rating: Option<u8>,
@@ -227,7 +247,7 @@ pub async fn upload_log(content: &str, device_info: serde_json::Value) -> Result
 /// 项目公开链接的缓存有效期。
 const PROJECT_CACHE_TTL_SECS: i64 = 24 * 60 * 60;
 
-/// 项目公开链接。所有字段都可能缺省（Verhub 上未填写）；前端须自备回退链接。
+/// 项目公开链接；所有字段都可能缺省，前端须自备回退链接。
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProjectLinks {
     pub name: Option<String>,
@@ -236,14 +256,17 @@ pub struct ProjectLinks {
     pub docs_url: Option<String>,
     pub author: Option<String>,
     pub author_homepage_url: Option<String>,
+    /// 拉取时请求的语言标签；与当前语言不一致时缓存不再直接复用。
+    #[serde(default)]
+    pub locale: Option<String>,
     /// 拉取时刻（Unix 秒），用于判断缓存新鲜度。
     pub fetched_at: i64,
 }
 
-/// 进程内缓存，避免每次都读盘。
+/// 进程内缓存。
 static PROJECT_CACHE: Mutex<Option<ProjectLinks>> = Mutex::new(None);
 
-fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
+fn map_project(item: ProjectItem, locale: Option<&str>, fetched_at: i64) -> ProjectLinks {
     ProjectLinks {
         name: Some(item.name),
         website_url: item.website_url,
@@ -251,13 +274,15 @@ fn map_project(item: ProjectItem, fetched_at: i64) -> ProjectLinks {
         docs_url: item.docs_url,
         author: item.author,
         author_homepage_url: item.author_homepage_url,
+        locale: locale.map(str::to_string),
         fetched_at,
     }
 }
 
-/// 缓存是否仍在有效期内。`fetched_at` 在未来（时钟回拨）按过期处理。
-fn cache_fresh(links: &ProjectLinks, now: i64) -> bool {
-    (0..PROJECT_CACHE_TTL_SECS).contains(&(now - links.fetched_at))
+/// 缓存可否直接复用：语言一致且仍在有效期内；`fetched_at` 在未来按过期处理。
+fn cache_fresh(links: &ProjectLinks, now: i64, locale: Option<&str>) -> bool {
+    links.locale.as_deref() == locale
+        && (0..PROJECT_CACHE_TTL_SECS).contains(&(now - links.fetched_at))
 }
 
 fn cache_get() -> Option<ProjectLinks> {
@@ -270,13 +295,13 @@ fn cache_put(links: ProjectLinks) {
     }
 }
 
-/// 读磁盘缓存；文件不存在或损坏一律当作没有缓存。
+/// 读磁盘缓存；文件不存在或损坏当作没有缓存。
 fn read_cache_file(path: &Path) -> Option<ProjectLinks> {
     let content = std::fs::read_to_string(path).ok()?;
     serde_json::from_str(&content).ok()
 }
 
-/// 写磁盘缓存；尽力而为，写失败只影响下次冷启动的命中率。
+/// 写磁盘缓存；尽力而为。
 fn write_cache_file(path: &Path, links: &ProjectLinks) {
     if let Ok(json) = serde_json::to_string_pretty(links) {
         let _ = std::fs::write(path, json);
@@ -290,24 +315,24 @@ fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// 项目公开链接：内存缓存 → 磁盘缓存（`cache_path`）→ Verhub API 逐级回退。
-/// API 拉取失败时退回过期缓存，完全没有缓存才报错。
-pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
+/// 项目公开链接：内存缓存 → 磁盘缓存 → Verhub API 逐级回退。
+/// API 拉取失败时退回过期缓存（可能是别的语言），完全没有缓存才报错。
+pub async fn project_links(cache_path: &Path, locale: Option<&str>) -> Result<ProjectLinks> {
     let now = unix_now();
     if let Some(cached) = cache_get()
-        && cache_fresh(&cached, now)
+        && cache_fresh(&cached, now, locale)
     {
         return Ok(cached);
     }
     if let Some(cached) = read_cache_file(cache_path)
-        && cache_fresh(&cached, now)
+        && cache_fresh(&cached, now, locale)
     {
         cache_put(cached.clone());
         return Ok(cached);
     }
-    match client()?.public().get_project().await {
+    match client()?.public().get_project(locale).await {
         Ok(item) => {
-            let links = map_project(item, now);
+            let links = map_project(item, locale, now);
             write_cache_file(cache_path, &links);
             cache_put(links.clone());
             Ok(links)
@@ -319,14 +344,14 @@ pub async fn project_links(cache_path: &Path) -> Result<ProjectLinks> {
     }
 }
 
-/// 截到上限以内，按字符边界切以避免切碎多字节字符。
+/// 截到上限以内，按字符边界切。
 fn truncate_log(content: &str) -> String {
     if content.len() <= LOG_CONTENT_MAX {
         return content.to_string();
     }
     const MARK: &str = "…（日志过长，已截断前半部分）\n";
     let budget = LOG_CONTENT_MAX - MARK.len();
-    // 保留末尾（出错现场）。
+    // 保留末尾的出错现场。
     let start = content.len() - budget;
     let start = (start..content.len())
         .find(|i| content.is_char_boundary(*i))
@@ -375,13 +400,30 @@ mod tests {
     #[test]
     fn cache_fresh_within_ttl_only() {
         let links = ProjectLinks {
+            locale: Some("zh-CN".into()),
             fetched_at: 1_000_000,
             ..Default::default()
         };
-        assert!(cache_fresh(&links, 1_000_000)); // 刚拉取
-        assert!(cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS - 1));
-        assert!(!cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS)); // 到期
-        assert!(!cache_fresh(&links, 999_999)); // 时钟回拨
+        let zh = Some("zh-CN");
+        assert!(cache_fresh(&links, 1_000_000, zh)); // 刚拉取
+        assert!(cache_fresh(
+            &links,
+            1_000_000 + PROJECT_CACHE_TTL_SECS - 1,
+            zh
+        ));
+        assert!(!cache_fresh(&links, 1_000_000 + PROJECT_CACHE_TTL_SECS, zh)); // 到期
+        assert!(!cache_fresh(&links, 999_999, zh)); // 时钟回拨
+    }
+
+    #[test]
+    fn cache_not_reused_across_locales() {
+        let links = ProjectLinks {
+            locale: Some("zh-CN".into()),
+            fetched_at: 1_000_000,
+            ..Default::default()
+        };
+        assert!(!cache_fresh(&links, 1_000_000, Some("en")));
+        assert!(!cache_fresh(&links, 1_000_000, None));
     }
 
     #[test]
@@ -391,6 +433,7 @@ mod tests {
         let links = ProjectLinks {
             name: Some("ZoneDeck".into()),
             website_url: Some("https://example.com/".into()),
+            locale: Some("en".into()),
             fetched_at: 42,
             ..Default::default()
         };
@@ -398,6 +441,7 @@ mod tests {
         let read = read_cache_file(&path).expect("缓存应可读回");
         assert_eq!(read.name.as_deref(), Some("ZoneDeck"));
         assert_eq!(read.website_url.as_deref(), Some("https://example.com/"));
+        assert_eq!(read.locale.as_deref(), Some("en"));
         assert_eq!(read.fetched_at, 42);
     }
 

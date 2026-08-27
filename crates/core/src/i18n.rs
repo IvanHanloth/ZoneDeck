@@ -1,6 +1,4 @@
-//! 核心的用户可见文案（托盘菜单、气泡通知、IPC 错误信息）。
-//!
-//! 日志不走此模块，一律使用中文。
+//! 核心的用户可见文案（托盘菜单、系统通知、IPC 错误信息）；日志不走此模块。
 
 use std::sync::RwLock;
 
@@ -18,9 +16,8 @@ pub enum Msg {
     MenuAutostart,
     MenuAbout,
     MenuQuit,
-    // 托盘气泡文案一律成对：`*Title` 是状态短语，`*Body` 是补充详情。正文不重复
-    // 应用名（Windows 通知自带 ZoneDeck 归属行），且不得为空——`szInfo` 为空时
-    // Shell_NotifyIcon 根本不弹气泡。
+    // 托盘气泡文案一律成对：`*Title` 是状态短语，`*Body` 是补充详情。
+    // 正文不得为空，`szInfo` 为空时 Shell_NotifyIcon 不弹气泡。
     HiddenTitle,
     HiddenBody,
     ShownTitle,
@@ -29,6 +26,8 @@ pub enum Msg {
     ConfigExeMissingBody,
     RecoveryPersistFailedTitle,
     RecoveryPersistFailedBody,
+    RecoveryMismatchTitle,
+    RecoveryMismatchBody,
     AutostartOffTitle,
     AutostartOffBody,
     AutostartOnTitle,
@@ -43,6 +42,14 @@ pub enum Msg {
     QuitBody,
     LegacyCoreRunningTitle,
     LegacyCoreRunningBody,
+    HotkeyConflictTitle,
+    HotkeyConflictBody,
+    // 热键功能名，与配置界面里的标题逐字一致，便于用户按名字找到对应开关。
+    HotkeyNameHideShow,
+    HotkeyNameCloseApp,
+    HotkeyNameHideOnly,
+    HotkeyNameShowOnly,
+    HotkeyNameHideForeground,
     ErrReloadConfig,
     ErrCoreExited,
     ErrNotifyCore,
@@ -53,6 +60,7 @@ pub enum Msg {
     ErrUrlSchemeNotAllowed,
     ErrFeedbackEmpty,
     ErrFeedbackContactRequired,
+    ErrKeyCaptureFailed,
 }
 
 impl Msg {
@@ -76,13 +84,17 @@ impl Msg {
             Msg::MenuAbout => "关于",
             Msg::MenuQuit => "退出",
             Msg::HiddenTitle => "已隐藏窗口",
-            Msg::HiddenBody => "可通过热键或托盘菜单「显示窗口」恢复",
+            Msg::HiddenBody => "按隐藏 / 显示热键即可恢复",
             Msg::ShownTitle => "已恢复显示窗口",
             Msg::ShownBody => "隐藏的窗口已重新出现在桌面上",
             Msg::ConfigExeMissingTitle => "未找到配置程序",
             Msg::ConfigExeMissingBody => "请确认配置程序与核心位于同一目录，或重新安装",
             Msg::RecoveryPersistFailedTitle => "无法写入崩溃恢复文件",
             Msg::RecoveryPersistFailedBody => "核心若异常退出，隐藏的窗口将无法自动找回",
+            Msg::RecoveryMismatchTitle => "部分隐藏记录已失效",
+            Msg::RecoveryMismatchBody => {
+                "核心上次异常退出；{kept} 个窗口仍藏着并继续保持，另有 {lost} 条记录与当初对不上，已丢弃"
+            }
             Msg::AutostartOffTitle => "开机自启已关闭",
             Msg::AutostartOffBody => "核心将不再随系统启动",
             Msg::AutostartOnTitle => "开机自启已开启",
@@ -92,13 +104,22 @@ impl Msg {
             Msg::AutostartFailTitle => "开机自启设置失败",
             Msg::AutostartFailBody => "计划任务与注册表方式均失败",
             Msg::StartTitle => "核心已启动",
-            Msg::StartBody => "可在通知区域找到托盘图标",
+            Msg::StartBody => "热键与鼠标触发已开始监听",
             Msg::QuitTitle => "核心已退出",
             Msg::QuitBody => "热键监控已停止，隐藏的窗口已恢复显示",
             Msg::LegacyCoreRunningTitle => "检测到旧版本正在运行",
             Msg::LegacyCoreRunningBody => {
                 "旧版本核心（Boss Key）仍在运行。请先退出旧版本（托盘图标，或任务管理器中的 Boss Key.exe），再启动 ZoneDeck。"
             }
+            Msg::HotkeyConflictTitle => "热键被其他程序占用",
+            Msg::HotkeyConflictBody => {
+                "「{name}」的热键 {hotkey} 已被其他程序注册，本次不生效。请退出占用它的程序或换一个组合，也可以在设置里为它开启「低级键盘钩子」绕开占用。"
+            }
+            Msg::HotkeyNameHideShow => "隐藏 / 显示窗口",
+            Msg::HotkeyNameCloseApp => "关闭核心",
+            Msg::HotkeyNameHideOnly => "仅隐藏窗口",
+            Msg::HotkeyNameShowOnly => "仅显示窗口",
+            Msg::HotkeyNameHideForeground => "隐藏前台窗口",
             Msg::ErrReloadConfig => "重载配置失败：{err}",
             Msg::ErrCoreExited => "核心已退出",
             Msg::ErrNotifyCore => "无法通知核心",
@@ -111,6 +132,7 @@ impl Msg {
             Msg::ErrUrlSchemeNotAllowed => "只允许打开 http/https/mailto 链接",
             Msg::ErrFeedbackEmpty => "请先填写反馈内容",
             Msg::ErrFeedbackContactRequired => "转换为 Issue 需要留下 GitHub 账号",
+            Msg::ErrKeyCaptureFailed => "无法独占键盘，录制期间的按键可能触发其他程序",
         }
     }
 
@@ -125,7 +147,7 @@ impl Msg {
             Msg::MenuAbout => "About",
             Msg::MenuQuit => "Exit",
             Msg::HiddenTitle => "Windows hidden",
-            Msg::HiddenBody => "Restore them with the hotkey or “Show Windows” in the tray menu",
+            Msg::HiddenBody => "Press the hide / show hotkey to bring them back",
             Msg::ShownTitle => "Windows restored",
             Msg::ShownBody => "The hidden windows are back on your desktop",
             Msg::ConfigExeMissingTitle => "Settings app not found",
@@ -136,6 +158,10 @@ impl Msg {
             Msg::RecoveryPersistFailedBody => {
                 "If the core exits abnormally, hidden windows cannot be restored automatically"
             }
+            Msg::RecoveryMismatchTitle => "Some hidden-window records went stale",
+            Msg::RecoveryMismatchBody => {
+                "The core exited abnormally last time; {kept} window(s) are still hidden and stay that way, while {lost} record(s) no longer match and were dropped"
+            }
             Msg::AutostartOffTitle => "Startup disabled",
             Msg::AutostartOffBody => "The core will no longer start with Windows",
             Msg::AutostartOnTitle => "Startup enabled",
@@ -145,13 +171,22 @@ impl Msg {
             Msg::AutostartFailTitle => "Could not configure startup",
             Msg::AutostartFailBody => "Both the scheduled task and the registry method failed",
             Msg::StartTitle => "The core is running",
-            Msg::StartBody => "Find the tray icon in the notification area",
+            Msg::StartBody => "Hotkey and mouse triggers are now being watched",
             Msg::QuitTitle => "The core has exited",
             Msg::QuitBody => "Hotkey monitoring stopped; hidden windows have been restored",
             Msg::LegacyCoreRunningTitle => "An old version is still running",
             Msg::LegacyCoreRunningBody => {
                 "The previous Boss Key core is still running. Quit it first (via its tray icon, or Boss Key.exe in Task Manager), then start ZoneDeck."
             }
+            Msg::HotkeyConflictTitle => "Hotkey taken by another program",
+            Msg::HotkeyConflictBody => {
+                "{hotkey} for \"{name}\" is already registered by another program and will not work. Quit that program or pick another combination, or turn on \"Low-level keyboard hook\" for it in the settings to bypass the clash."
+            }
+            Msg::HotkeyNameHideShow => "Hide / show windows",
+            Msg::HotkeyNameCloseApp => "Close the core",
+            Msg::HotkeyNameHideOnly => "Hide windows only",
+            Msg::HotkeyNameShowOnly => "Show windows only",
+            Msg::HotkeyNameHideForeground => "Hide foreground window",
             Msg::ErrReloadConfig => "Failed to reload configuration: {err}",
             Msg::ErrCoreExited => "The core has exited",
             Msg::ErrNotifyCore => "Cannot reach the core",
@@ -165,6 +200,9 @@ impl Msg {
             Msg::ErrFeedbackEmpty => "Please write your feedback first",
             Msg::ErrFeedbackContactRequired => {
                 "Converting feedback into an issue requires a GitHub account"
+            }
+            Msg::ErrKeyCaptureFailed => {
+                "Cannot capture the keyboard exclusively; keys pressed while recording may trigger other programs"
             }
         }
     }
@@ -180,13 +218,17 @@ impl Msg {
             Msg::MenuAbout => "關於",
             Msg::MenuQuit => "結束",
             Msg::HiddenTitle => "已隱藏視窗",
-            Msg::HiddenBody => "可透過熱鍵或通知區域選單「顯示視窗」復原",
+            Msg::HiddenBody => "按隱藏／顯示快速鍵即可復原",
             Msg::ShownTitle => "已復原顯示視窗",
             Msg::ShownBody => "隱藏的視窗已重新出現在桌面上",
             Msg::ConfigExeMissingTitle => "找不到設定程式",
             Msg::ConfigExeMissingBody => "請確認設定程式與核心位於同一資料夾，或重新安裝",
             Msg::RecoveryPersistFailedTitle => "無法寫入當機復原檔案",
             Msg::RecoveryPersistFailedBody => "核心若異常結束，隱藏的視窗將無法自動找回",
+            Msg::RecoveryMismatchTitle => "部分隱藏紀錄已失效",
+            Msg::RecoveryMismatchBody => {
+                "核心上次異常結束；{kept} 個視窗仍藏著並繼續保持，另有 {lost} 筆紀錄與當初對不上，已捨棄"
+            }
             Msg::AutostartOffTitle => "已關閉開機自動啟動",
             Msg::AutostartOffBody => "核心將不再隨系統啟動",
             Msg::AutostartOnTitle => "已開啟開機自動啟動",
@@ -196,13 +238,22 @@ impl Msg {
             Msg::AutostartFailTitle => "開機自動啟動設定失敗",
             Msg::AutostartFailBody => "排程工作與登錄檔方式均失敗",
             Msg::StartTitle => "核心已啟動",
-            Msg::StartBody => "可在通知區域找到圖示",
+            Msg::StartBody => "快速鍵與滑鼠觸發已開始監聽",
             Msg::QuitTitle => "核心已結束",
             Msg::QuitBody => "熱鍵監控已停止，隱藏的視窗已復原顯示",
             Msg::LegacyCoreRunningTitle => "偵測到舊版本正在執行",
             Msg::LegacyCoreRunningBody => {
                 "舊版本核心（Boss Key）仍在執行。請先結束舊版本（通知區域圖示，或工作管理員中的 Boss Key.exe），再啟動 ZoneDeck。"
             }
+            Msg::HotkeyConflictTitle => "快速鍵被其他程式佔用",
+            Msg::HotkeyConflictBody => {
+                "「{name}」的快速鍵 {hotkey} 已被其他程式註冊，本次不生效。請結束佔用它的程式或改用其他組合，也可以在設定中為它開啟「低階鍵盤掛鉤」繞開佔用。"
+            }
+            Msg::HotkeyNameHideShow => "隱藏 / 顯示視窗",
+            Msg::HotkeyNameCloseApp => "關閉核心",
+            Msg::HotkeyNameHideOnly => "僅隱藏視窗",
+            Msg::HotkeyNameShowOnly => "僅顯示視窗",
+            Msg::HotkeyNameHideForeground => "隱藏前景視窗",
             Msg::ErrReloadConfig => "重新載入設定失敗：{err}",
             Msg::ErrCoreExited => "核心已結束",
             Msg::ErrNotifyCore => "無法通知核心",
@@ -215,6 +266,7 @@ impl Msg {
             Msg::ErrUrlSchemeNotAllowed => "僅允許開啟 http/https/mailto 連結",
             Msg::ErrFeedbackEmpty => "請先填寫意見回饋內容",
             Msg::ErrFeedbackContactRequired => "轉換為 Issue 需要留下 GitHub 帳號",
+            Msg::ErrKeyCaptureFailed => "無法獨佔鍵盤，錄製期間的按鍵可能觸發其他程式",
         }
     }
 }
@@ -228,7 +280,7 @@ fn system_locale() -> Option<String> {
     if len <= 0 {
         return None;
     }
-    // 返回值含结尾的 NUL，截断后再转字符串。
+    // 返回值含结尾的 NUL。
     let tag = String::from_utf16_lossy(&buf[..(len as usize).saturating_sub(1)]);
     (!tag.is_empty()).then_some(tag)
 }
@@ -250,9 +302,8 @@ pub fn t(msg: Msg) -> &'static str {
     msg.text(lang())
 }
 
-/// 取当前语言下的文案，并把 `{名字}` 占位符替换为 `params` 中的同名值。
-///
-/// 与前端 `t(key, params)` 同构；未提供的占位符原样保留。
+/// 取当前语言下的文案，并把 `{名字}` 占位符替换为 `params` 中的同名值；
+/// 未提供的占位符原样保留。
 pub fn tf(msg: Msg, params: &[(&str, &str)]) -> String {
     let mut text = t(msg).to_string();
     for (name, value) in params {
@@ -263,10 +314,19 @@ pub fn tf(msg: Msg, params: &[(&str, &str)]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{Mutex, MutexGuard};
+
     use super::*;
 
-    /// 全部文案键；新增 Msg 变体后必须同步登记，否则跨语言校验会漏掉它。
-    const ALL_MSGS: [Msg; 40] = [
+    /// `LANG` 是进程级全局状态，改动它的测试须串行。
+    static LANG_LOCK: Mutex<()> = Mutex::new(());
+
+    fn lock_lang() -> MutexGuard<'static, ()> {
+        LANG_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    /// 全部文案键；新增 Msg 变体后必须同步登记。
+    const ALL_MSGS: [Msg; 50] = [
         Msg::MenuSettings,
         Msg::MenuShowWindows,
         Msg::MenuHideWindows,
@@ -283,6 +343,8 @@ mod tests {
         Msg::ConfigExeMissingBody,
         Msg::RecoveryPersistFailedTitle,
         Msg::RecoveryPersistFailedBody,
+        Msg::RecoveryMismatchTitle,
+        Msg::RecoveryMismatchBody,
         Msg::AutostartOffTitle,
         Msg::AutostartOffBody,
         Msg::AutostartOnTitle,
@@ -297,6 +359,13 @@ mod tests {
         Msg::QuitBody,
         Msg::LegacyCoreRunningTitle,
         Msg::LegacyCoreRunningBody,
+        Msg::HotkeyConflictTitle,
+        Msg::HotkeyConflictBody,
+        Msg::HotkeyNameHideShow,
+        Msg::HotkeyNameCloseApp,
+        Msg::HotkeyNameHideOnly,
+        Msg::HotkeyNameShowOnly,
+        Msg::HotkeyNameHideForeground,
         Msg::ErrReloadConfig,
         Msg::ErrCoreExited,
         Msg::ErrNotifyCore,
@@ -307,9 +376,10 @@ mod tests {
         Msg::ErrUrlSchemeNotAllowed,
         Msg::ErrFeedbackEmpty,
         Msg::ErrFeedbackContactRequired,
+        Msg::ErrKeyCaptureFailed,
     ];
 
-    /// 任一语言缺翻译都会退化成中英混排，故逐条校验三种语言均非空且互不相同。
+    /// 逐条校验三种语言均非空且互不相同。
     #[test]
     fn every_message_is_translated_in_all_languages() {
         for msg in ALL_MSGS {
@@ -320,7 +390,7 @@ mod tests {
         }
     }
 
-    /// 占位符跨语言必须一致，否则换语言后参数会静默丢失。
+    /// 占位符跨语言必须一致。
     #[test]
     fn placeholders_match_across_languages() {
         fn holders(text: &str) -> Vec<&str> {
@@ -344,12 +414,12 @@ mod tests {
 
     #[test]
     fn formats_placeholders() {
+        let _guard = lock_lang();
         set_from_pref("zh-CN");
         assert_eq!(
             tf(Msg::ErrFreezePartial, &[("failed", "2"), ("total", "5")]),
             "2/5 个进程冻结失败"
         );
-        // 未提供的占位符原样保留，便于发现漏传参数。
         assert_eq!(
             tf(Msg::ErrFreezePartial, &[]),
             "{failed}/{total} 个进程冻结失败"
@@ -369,6 +439,7 @@ mod tests {
 
     #[test]
     fn explicit_pref_takes_effect() {
+        let _guard = lock_lang();
         set_from_pref("en");
         assert_eq!(lang(), Lang::En);
         assert_eq!(t(Msg::MenuQuit), "Exit");

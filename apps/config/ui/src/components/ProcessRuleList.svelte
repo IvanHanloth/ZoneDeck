@@ -1,16 +1,43 @@
 <script>
-  // 「进程隐藏」规则（粗粒度）：按可执行文件路径隐藏该程序的所有窗口，而非单个窗口。
+  // 「进程隐藏」规则：按可执行文件路径隐藏该程序的所有窗口。
   import IconPlus from "~icons/lucide/plus";
   import IconTrash from "~icons/lucide/trash-2";
   import IconRegex from "~icons/lucide/regex";
   import IconBox from "~icons/lucide/box";
   import ScopeSelect from "./ScopeSelect.svelte";
+  import CheckBox from "./fluent/CheckBox.svelte";
+  import ComboBox from "./fluent/ComboBox.svelte";
   import { isRegexRule } from "../lib/grouping.js";
   import { t } from "../lib/i18n.svelte.js";
   import { app } from "../lib/state.svelte.js";
 
   let { rules = $bindable([]), onadd, onaddregex } = $props();
   let selected = $state([]);
+
+  // 行内的正则输入框、匹配方式与范围下拉自己处理点击，不参与选中
+  const CONTROLS = "input, select, button, textarea, label, a, [role='group']";
+
+  const byOptions = $derived([
+    { value: false, label: t("processRules.byPath") },
+    { value: true, label: t("processRules.byName") },
+  ]);
+
+  function toggle(i) {
+    selected = selected.includes(i) ? selected.filter((x) => x !== i) : [...selected, i];
+  }
+
+  function onRowClick(e, i) {
+    if (e.target.closest(CONTROLS)) return;
+    toggle(i);
+  }
+
+  function onRowKey(e, i) {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      toggle(i);
+    }
+  }
 
   function remove() {
     if (!selected.length) return;
@@ -36,17 +63,30 @@
     </div>
   </div>
 
-  <div class="rule-list" role="listbox" aria-label={t("processRules.aria")}>
+  <div
+    class="lv-body"
+    role="listbox"
+    aria-multiselectable="true"
+    aria-label={t("processRules.aria")}
+  >
     {#if rules.length === 0}
-      <p class="hint empty">{t("common.empty")}</p>
+      <p class="hint lv-empty">{t("common.empty")}</p>
     {:else}
       {#each rules as rule, i (i)}
-        <div class="rule-row">
-          <input
-            type="checkbox"
-            bind:group={selected}
-            value={i}
-            aria-label={t("windowRules.selectRule")}
+        <div
+          class="lv-row rule-row"
+          class:sel={selected.includes(i)}
+          role="option"
+          aria-selected={selected.includes(i)}
+          tabindex="0"
+          onclick={(e) => onRowClick(e, i)}
+          onkeydown={(e) => onRowKey(e, i)}
+        >
+          <CheckBox
+            small
+            checked={selected.includes(i)}
+            onchange={() => toggle(i)}
+            ariaLabel={t("windowRules.selectRule")}
           />
           {#if isRegexRule(rule)}
             <span class="regex-tag">
@@ -55,6 +95,8 @@
             </span>
             <input
               class="regex-input"
+              class:broad={app.broadPatterns.has(rule.regex)}
+              title={app.broadPatterns.has(rule.regex) ? t("broadRegex.inputTitle") : ""}
               placeholder={t(
                 rule.by_name
                   ? "processRules.nameRegexPlaceholder"
@@ -75,15 +117,13 @@
             </span>
           {/if}
 
-          <select
-            class="by"
+          <ComboBox
+            compact
             bind:value={rule.by_name}
+            options={byOptions}
             title={t("processRules.byTitle")}
-            aria-label={t("processRules.byAria")}
-          >
-            <option value={false}>{t("processRules.byPath")}</option>
-            <option value={true}>{t("processRules.byName")}</option>
-          </select>
+            ariaLabel={t("processRules.byAria")}
+          />
           <ScopeSelect
             bind:includeUntitled={rule.include_untitled}
             bind:includeBackground={rule.include_background}
@@ -95,114 +135,12 @@
 </div>
 
 <style>
-  .list-box {
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    min-width: 0;
-    flex: 1;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    overflow: hidden;
-  }
-  .list-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 12px;
-    font-weight: 600;
-    font-size: 13px;
-    color: var(--muted);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface-2);
-    flex: none;
-  }
-  .title-text {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    color: var(--text);
-  }
-  .count {
-    font-weight: 500;
-    font-size: 12px;
-    background: var(--hover);
-    border-radius: 99px;
-    padding: 1px 8px;
-  }
-  .tools {
-    margin-left: auto;
-    display: flex;
-    gap: 6px;
-  }
-  .mini {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 12px;
-    color: var(--text);
-    border: 1px solid var(--border);
-    background: var(--surface);
-  }
-  .mini:hover:not(:disabled) {
-    background: var(--hover);
-    border-color: var(--accent);
-  }
-  .mini.primary {
-    color: var(--on-accent);
-    background: var(--accent);
-    border-color: var(--accent);
-  }
-  .mini.primary:hover:not(:disabled) {
-    color: var(--on-accent);
-    background: var(--accent-strong);
-    border-color: var(--accent-strong);
-  }
-  .mini:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
-  }
-
-  .rule-list {
-    flex: 1;
-    overflow-y: auto;
-    padding: 6px;
-  }
-  .empty {
-    text-align: center;
-    padding: 20px 8px;
-  }
-
   .rule-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 5px 8px;
-    border-radius: 6px;
+    cursor: default;
   }
-  .rule-row:hover {
-    background: var(--hover);
-  }
-  .rule-row input[type="checkbox"] {
-    accent-color: var(--accent);
-    flex: none;
-    cursor: pointer;
-  }
-  .by {
-    flex: none;
-    padding: 2px 4px;
-    border-radius: 6px;
-    border: 1px solid var(--border);
-    background: var(--surface-2);
-    color: var(--muted);
-    font-size: 11.5px;
-  }
-  .by:focus {
-    outline: none;
-    border-color: var(--accent);
+  .rule-row:focus-visible {
+    outline: 2px solid var(--focus-outer);
+    outline-offset: -2px;
   }
   .ic {
     width: 16px;
@@ -219,9 +157,10 @@
     flex: none;
     font-weight: 500;
   }
+  /* 路径从右往左省略：末段的文件名比盘符更值钱 */
   .rpath {
     flex: 1;
-    color: var(--muted);
+    color: var(--text-2);
     font-size: 12px;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -240,16 +179,25 @@
   .regex-input {
     flex: 1;
     min-width: 0;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--surface-2);
+    border: 1px solid var(--stroke);
+    border-bottom-color: var(--stroke-strong);
+    border-radius: var(--r-control);
+    background: var(--control);
     color: var(--text);
-    padding: 3px 8px;
-    font-family: ui-monospace, monospace;
+    padding: 4px 8px;
+    font-family: var(--font-mono);
     font-size: 12px;
+    user-select: text;
+    cursor: text;
   }
   .regex-input:focus {
     outline: none;
-    border-color: var(--accent);
+    background: var(--control-focus);
+    border-bottom-color: var(--accent);
+  }
+  /* 保存时判定为「可能过宽」，见 BroadRegexModal */
+  .regex-input.broad {
+    border-color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 8%, var(--control));
   }
 </style>

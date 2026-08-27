@@ -5,10 +5,15 @@ export default {
   "app.loadingConfig": "Loading configuration…",
 
   "tab.binding": "Windows",
+  "tab.whitelist": "Whitelist",
   "tab.hotkeys": "Hotkeys & Mouse",
-  "tab.notify": "Alerts",
-  "tab.options": "Options",
+  "tab.hide": "Hiding",
+  "tab.power": "Power & Memory",
+  "tab.options": "General",
   "tab.about": "About & Feedback",
+
+  "nav.expand": "Expand navigation",
+  "nav.collapse": "Collapse navigation",
 
   "common.close": "Close",
   "common.cancel": "Cancel",
@@ -17,8 +22,16 @@ export default {
   "common.open": "Open",
   "common.empty": "(empty)",
   "common.search": "Search",
+  "common.on": "On",
+  "common.off": "Off",
+  "common.expand": "Expand",
+  "common.collapse": "Collapse",
   "common.unknownProcess": "(unknown process)",
   "common.noTitleWindow": "Untitled window",
+
+  "search.placeholder": "Find a setting",
+  "search.noResults": "No matching settings",
+  "search.resultsAria": "Search results",
 
   "titlebar.minimize": "Minimize",
   "titlebar.maximize": "Maximize",
@@ -53,6 +66,7 @@ export default {
   "binding.pickWindowsFirst": "Select the windows to hide in the list on the left first",
   "binding.pickProcessesFirst": "Select the processes to hide in the list on the left first",
   "binding.windowsRefreshed": "Window list refreshed",
+  "binding.processUnidentified": "Skipped {count} window(s) whose program could not be identified (usually anti-cheat protection) — use window hiding instead",
   "binding.regexSeedKeyword": "keyword",
   "binding.regexSeedProcess": "program.exe",
 
@@ -96,12 +110,38 @@ export default {
   "processRules.pathRegexTag": "Path regex",
   "processRules.nameRegexPlaceholder": "File name regex, e.g. .*WeChat\\.exe",
   "processRules.pathRegexPlaceholder": "Path regex, e.g. .*WeChat.*",
-  "processRules.anyDirectory": "(same file name in any folder)",
+  "processRules.anyDirectory": "(any application with same file name)",
   "processRules.byTitle":
     "Match on: the full path, or the executable file name only (matching that name in any folder)",
   "processRules.byAria": "Match on",
   "processRules.byPath": "Path",
   "processRules.byName": "File name",
+
+  "whitelist.title": "Whitelist",
+  "whitelist.aria": "Whitelist entries",
+  "whitelist.intro":
+    "The whitelist controls which steps a program skips when hiding.",
+  "whitelist.addTitle": "Add the processes owning the windows selected on the left",
+  "whitelist.add": "Add process",
+  "whitelist.addRegexTitle": "Add a whitelist regex entry",
+  "whitelist.pickFirst": "Select the processes to whitelist on the left first",
+  "whitelist.ignoreHide": "Skip hiding: leave this program's windows visible",
+  "whitelist.ignoreFreeze": "Skip freezing: never suspend this program's processes",
+  "whitelist.ignoreMute": "Skip muting: never mute this program's processes",
+  "whitelist.builtinCore": "ZoneDeck core",
+  "whitelist.builtinConfig": "ZoneDeck settings",
+  "whitelist.builtinLocked":
+    "Built-in protection: freezing ZoneDeck itself kills the hotkeys and leaves hidden windows unrecoverable, so this cannot be turned off or removed.",
+
+  "broadRegex.title": "This regex may be too broad",
+  "broadRegex.lead":
+    "These patterns matched more than half of {total} random samples, which usually means a mistake — they will also catch a lot of unrelated windows or processes.",
+  "broadRegex.hits": "matched {hits}/{total}",
+  "broadRegex.saved":
+    "Your changes are already saved. \"Save anyway\" confirms the pattern is intentional and stops the warning; \"Got it\" keeps the red marker so you can come back and fix it.",
+  "broadRegex.keep": "Save anyway",
+  "broadRegex.dismiss": "Got it",
+  "broadRegex.inputTitle": "This pattern matched more than half of the random samples and may be too broad",
 
   "hotkeys.keyboardCard": "Keyboard hotkeys",
   "hotkeys.hideShow": "Hide / show windows",
@@ -109,8 +149,11 @@ export default {
   "hotkeys.hideOnly": "Hide windows only",
   "hotkeys.showOnly": "Show windows only",
   "hotkeys.hideForeground": "Hide foreground window",
+  "hotkeys.hookShort": "Low-level keyboard hook",
+  "hotkeys.hookDesc": "Trigger this hotkey through a low-level keyboard hook instead of registering it with the system, so it never clashes with a combination another app has taken — and it can record modifier-only and multi-key combinations.",
   "hotkeys.interceptShort": "Don't pass through",
-  "hotkeys.interceptDesc": "With \"Don't pass through\" enabled, the key press never reaches the foreground app, so games or input boxes won't receive it.",
+  "hotkeys.interceptDesc": "With \"Don't pass through\" enabled, the key press never reaches the foreground app, so games or input boxes won't receive it. Requires the low-level keyboard hook.",
+  "hotkeys.interceptModifierOnly": "The keys in a modifier-only combination cannot be held back, so \"Don't pass through\" has no effect on it.",
   "hotkeys.mouseCard": "Hide with mouse buttons",
   "hotkeys.clickRestore": "Restore with the same button",
   "hotkeys.clickRestoreDesc": "Press the same button again to restore the hidden windows.",
@@ -132,7 +175,14 @@ export default {
   "hotkeys.idleTimeDesc": "Auto-hide triggers once there has been no input for this long.",
   "hotkeys.minutes": "min",
 
-  "recorder.pressCombo": "Press a key combination…",
+  "recorder.edit": "Change shortcut",
+  "recorder.dialogHint": "Press a key combination to change this shortcut. You can hold several main keys at once, or press modifiers only. While recording, keys are not passed on to other programs.",
+  "recorder.waiting": "Waiting for a key…",
+  "recorder.unsupportedKey": "That key cannot be used in a shortcut. Try another one.",
+  "recorder.hookAutoEnabled": "The low-level keyboard hook will be turned on for this hotkey automatically.",
+  "recorder.hotkeyTaken": "Another program has already taken this combination, so registering it will fail. Pick a different one, or save and then turn on the low-level keyboard hook for this hotkey.",
+  "recorder.captureFailed": "The keyboard could not be captured exclusively; keys pressed while recording may still trigger other programs. Anti-keylogger protection in security software blocks this app's keyboard hook — trusting ZoneDeck restores exclusive capture.",
+  "common.save": "Save",
   "recorder.disabled": "Disabled",
   "recorder.holdModifiers": "Hold the modifier keys…",
   "recorder.none": "None",
@@ -162,7 +212,6 @@ export default {
   "corner.windowRestored": "Window restored",
   "corner.restoreByHotkey": "Restore the window with a hotkey or the tray menu",
 
-  "notify.card": "Tray notifications",
   "notify.onStart": "Notify on startup",
   "notify.onStartDesc": "Show a notification when the core starts and begins running",
   "notify.onQuit": "Notify on exit",
@@ -174,8 +223,9 @@ export default {
   "notify.onHideDesc": "Show a notification each time hiding is triggered",
   "notify.onShow": "Notify when showing windows",
   "notify.onShowDesc": "Show a notification each time windows are restored",
+  "notify.onRecoveryMismatch": "Notify when hidden-window records go stale",
+  "notify.onRecoveryMismatchDesc": "After the core exits abnormally, windows that are still hidden stay hidden; if any record no longer matches what was recorded (the window is gone, the handle was reused, or something already showed it), a notification tells you.",
 
-  "notify.trayCard": "Tray icon status",
   "notify.badgeRed": "Red",
   "notify.badgeGreen": "Green",
   "notify.badgeYellow": "Yellow",
@@ -189,44 +239,126 @@ export default {
   "notify.statusMonitorPaused": "Hotkey monitoring is paused",
   "notify.trayPriorityNote":
     "When several states are active at once, they are shown in red > green > yellow > blue priority order",
-  "notify.trayTooltip": "Show the tray icon tooltip",
-  "notify.trayTooltipDesc":
+
+  "tray.card": "Tray & notifications",
+  "tray.enabled": "Show the tray icon",
+  "tray.enabledDesc":
+    "Show the ZoneDeck icon in the notification area. Turning it off is more discreet",
+  "tray.left": "Single click",
+  "tray.leftDesc": "What a left click on the tray icon does.",
+  "tray.double": "Double click",
+  "tray.doubleDesc":
+    "What a left double click on the tray icon does. Once enabled, single-click actions on the tray icon are delayed.",
+  "tray.right": "Right click",
+  "tray.rightDesc": "What a right click on the tray icon does.",
+  "tray.actionNone": "Do nothing",
+  "tray.actionToggle": "Hide / show windows",
+  "tray.actionMenu": "Open the tray menu",
+  "tray.actionSettings": "Open the settings window",
+  "tray.tooltip": "Show the tray icon tooltip",
+  "tray.tooltipDesc":
     "Show “ZoneDeck” when hovering over the tray icon; turn this off to show no text for extra discretion.",
+  "tray.badges": "Tray icon status",
+  "tray.badgesDesc":
+    "Overlay a coloured dot on the bottom-right of the tray icon to reflect the core’s current state.",
+  "tray.notify": "Notifications",
+  "tray.notifyDesc": "Choose which events raise a system notification.",
+  "tray.disabledNote":
+    "The tray icon is off: running ZoneDeck again still opens this window.",
 
-  "options.generalCard": "General",
-  "options.muteAfterHide": "Mute after hiding",
-  "options.muteAfterHideDesc":
+  "hide.generalCard": "General",
+  "hide.muteAfterHide": "Mute after hiding",
+  "hide.muteAfterHideDesc":
     "Mute the target process while hidden, and unmute it automatically when restored.",
-  "options.hideCurrent": "Also hide the active window",
-  "options.hideCurrentDesc":
+  "hide.hideCurrent": "Also hide the active window",
+  "hide.hideCurrentDesc":
     "When the hotkey is pressed, also hide the foreground window in addition to the bound windows.",
-  "options.clickToHide": "Toggle hiding by clicking the tray icon",
-  "options.clickToHideDesc": "Left-click the tray icon to hide / show without pressing a hotkey.",
-  "options.hideIcon": "Also hide ZoneDeck's tray icon",
-  "options.hideIconDesc":
+  "hide.hideIcon": "Also hide ZoneDeck's tray icon",
+  "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "options.sendPause": "Send the pause key before hiding",
-  "options.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "hide.sendPause": "Send the pause key before hiding",
+  "hide.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "hide.minimizeBeforeHide": "Minimise windows before hiding",
+  "hide.minimizeBeforeHideDesc":
+    "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
 
-  "options.freezeCard": "Process freezing",
-  "options.freezeAfterHide": "Freeze processes when hiding",
-  "options.freezeAfterHideDesc":
-    "Suspend the target process once hidden to lower its CPU and memory usage; it is resumed automatically when restored. May add some delay when hiding and restoring.",
-  "options.enhancedFreeze": "Use enhanced freezing",
-  "options.enhancedFreezeDesc":
+  "power.statsCard": "Efficiency report",
+  "power.statsCo2Label": "CO₂ avoided",
+  "power.statsCo2Desc": "Estimated from the energy saved, at an average grid emission factor.",
+  "power.statsCo2Hint": "Roughly what {trees} trees absorb in a day",
+  "power.statsEmpty": "Nothing tallied up yet",
+  "power.statsEmptyHint":
+    "Turn on process freezing or efficiency mode above — the tally starts the next time windows are hidden.",
+  "power.statsFreeze": "Processes frozen",
+  "power.statsFreezeDesc": "Counted per action; freezing the same process again counts again.",
+  "power.statsEfficiency": "Efficiency mode applied",
+  "power.statsEfficiencyDesc":
+    "Tallied separately from freezing; both can apply to the same process.",
+  "power.statsDuration": "Time spent frozen",
+  "power.statsDurationDesc":
+    "Every process's frozen time added up: three processes frozen for an hour each counts as three hours. Settled on resume.",
+  "power.statsMemory": "Memory released",
+  "power.statsMemoryDesc":
+    "Physical memory actually paged out by trimming working sets. Requires “Reduce memory usage” above.",
+  "power.statsEnergy": "Energy saved",
+  "power.statsEnergyDesc":
+    "Estimated from how long processes stayed frozen or throttled; settled when the windows come back.",
+  "power.statsUnitTimes": "times",
+  "power.statsUnitSeconds": "sec",
+  "power.statsUnitMinutes": "min",
+  "power.statsUnitHours": "hours",
+  "power.statsUnitDays": "days",
+  "power.statsSince": "Since {date}",
+  "power.statsSinceNever": "Not started yet",
+  "power.statsEstimate": "energy and CO₂ figures are estimates",
+  "power.statsReset": "Reset",
+  "power.statsResetTitle": "Reset efficiency report",
+  "power.statsResetBody":
+    "Every accumulated count, the released memory and the energy figures will be cleared. This cannot be undone. Continue?",
+  "power.statsResetDone": "Efficiency report reset",
+  "power.statsResetFailed": "Could not reset the efficiency report: {err}",
+
+  "power.efficiencyCard": "Efficiency mode",
+  "power.efficiencyAfterHide": "Enable efficiency mode when hiding",
+  "power.efficiencyAfterHideDesc":
+    "Drop the process into efficiency mode once hidden: it keeps running, but on efficiency cores at a lower clock, cutting power draw and heat. Independent of freezing and usable on its own — suited to background programs that must not be stopped. Works best on Windows 11.",
+
+  "power.scopeCard": "Scope",
+  "power.scope": "Scope",
+  "power.scopeDesc":
+    "Decides which processes freezing and efficiency mode each reach. A wider scope is more thorough, and more likely to affect other background work.",
+  "power.scopeFreeze": "Freezing & memory scope",
+  "power.scopeFreezeDesc": "Shared by process freezing and memory reduction.",
+  "power.scopeEfficiency": "Efficiency mode scope",
+  "power.scopeEfficiencyDesc": "Used by efficiency mode alone, independent of freezing.",
+  "power.scopeSelf": "Target process only",
+  "power.scopeTree": "Target process and all its children",
+  "power.scopeImage": "All instances of the same program",
+  "power.freezeCard": "Process freezing",
+  "power.freezeAfterHide": "Freeze processes when hiding",
+  "power.freezeAfterHideDesc":
+    "Suspend the target process once hidden so it stops using CPU; it is resumed automatically when restored. May add some delay when hiding and restoring.",
+  "power.enhancedFreeze": "Use enhanced freezing",
+  "power.enhancedFreezeDesc":
     "Freeze via pssuspend64.exe instead. Requires that file in the program folder and the core running as administrator. May add some delay when hiding and restoring.",
-  "options.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
-  "options.needFreezeFirst": "Enable “Freeze processes when hiding” first",
-  "options.blockedCoreStopped": "the core is not running",
-  "options.blockedNeedAdmin": "the core must run as administrator",
-  "options.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
-  "options.freezeWholeTree": "Freeze the whole process tree (beta)",
-  "options.freezeWholeTreeDesc":
-    "Recursively freeze the entire child-process tree of the matched program for a more thorough freeze; applies to both normal and enhanced freezing. May affect background tasks of those child processes and adds more delay when hiding and restoring.",
-  "options.freezeNoteBefore": "Enhanced freezing requires downloading",
-  "options.freezeNoteAfter":
-    "and placing pssuspend64.exe in the program folder, with the core running as administrator.",
-  "options.recheck": "Check again",
+  "power.enhancedFreezeBlocked": "Currently unavailable: {reasons}.",
+  "power.pssuspend": "pssuspend64.exe",
+  "power.pssuspendDesc":
+    "The component enhanced freezing needs. Download it yourself and drop it into the program folder.",
+  "power.pssuspendFound": "In place",
+  "power.pssuspendMissing": "Not found",
+  "power.openProgramDir": "Open program folder",
+  "power.downloadPstools": "Download PSTools",
+  "power.needFreezeFirst": "Enable “Freeze processes when hiding” first",
+  "power.needEfficiencyFirst": "Enable “Enable efficiency mode when hiding” first",
+  "power.blockedCoreStopped": "the core is not running",
+  "power.blockedNeedAdmin": "the core must run as administrator",
+  "power.blockedNoPssuspend": "pssuspend64.exe is missing from the program folder",
+  "power.memoryCard": "Memory usage",
+  "power.trimMemory": "Reduce memory usage (beta)",
+  "power.trimMemoryDesc":
+    "Page out a program's memory after freezing it, lowering its memory usage. Requires the process to be frozen first. May add some delay when restoring.",
+  "power.recheck": "Check again",
 
   "options.startupCard": "Startup & permissions",
   "options.autostart": "Start with Windows",
@@ -266,6 +398,10 @@ export default {
     "Language used by the settings window and by the core’s tray menu and notifications. “Follow system” uses the Windows display language.",
   "options.languageAuto": "Follow system",
 
+  "options.privacyCard": "Privacy",
+  "options.analytics": "Anonymous usage statistics",
+  "options.analyticsDesc": "Join the anonymous user experience programme and help make ZoneDeck better as you use it. Everything collected is anonymous and free of private data, and you can opt out of it at any time",
+
   "options.toolsCard": "Tools",
   "options.restoreTool": "Window recovery tool",
   "options.restoreToolDesc":
@@ -299,6 +435,13 @@ export default {
   "about.contactPlaceholder": "Contact (optional — email, QQ, etc.)",
   "about.contactPlaceholderGithub": "GitHub account (required — e.g. @IvanHanloth)",
   "about.contactNotice": "Without a contact there is no way for us to reply to your feedback directly.",
+  "about.issueGuideTitle": "Guide to forwarding feedback as a GitHub Issue",
+  "about.issueGuideScope": "Only bug reports, feature feedback and feature requests are suitable for forwarding as an Issue. Please do not submit content unrelated to the program — complaints and venting crowd the issue list and slow development down.",
+  "about.issueGuideBot": "The Issue is created on your behalf by the Verhub bot, which mentions the GitHub account you provide.",
+  "about.issueGuideContact": "When using this feature, enter your GitHub username in the contact field (for example @IvanHanloth) rather than an email address, otherwise you will not receive notifications from GitHub.",
+  "about.issueGuidePrivacy": "Note that GitHub Issues are visible to everyone, so avoid including personal or private information in your feedback. This feature is provided by Verhub and its privacy policy applies.",
+  "about.issueGuideWhy": "Forwarding to a GitHub Issue lets the developer manage and track it in one place.",
+  "about.issueGuideAgree": "Got it",
   "about.forwardToIssue": "Also convert into a GitHub issue",
   "about.forwardToIssueDesc": "Once submitted, the Verhub bot turns this feedback into a GitHub issue automatically — no special network setup and no GitHub sign-in needed. A GitHub account is required when you choose this, so the issue can be followed up with you.",
   "about.contactRequiredForIssue": "Converting into an issue requires a GitHub account",
@@ -328,7 +471,6 @@ export default {
   "restore.resumed": "Resumed {n} processes",
   "restore.actionFailed": "{action} failed: {err}",
 
-  "update.aria": "New version available",
   "update.forcedTitle": "You must update before continuing",
   "update.title": "New version available",
   "update.later": "Later",
@@ -345,6 +487,22 @@ export default {
   "announce.title": "Announcement",
   "announce.pinned": "Pinned",
   "announce.gotIt": "Got it",
+
+  "consent.title": "ZoneDeck anonymous usage statistics",
+  "consent.heading": "Help make ZoneDeck better as you use it!",
+  "consent.intro": "Would you like to share anonymous usage statistics? They help us understand how the app is actually used. Declining changes nothing about how ZoneDeck works, and you can opt out any time on the settings page",
+  "consent.collectTitle": "What is sent",
+  "consent.collectFeatures": "whether each feature switch is on or off;",
+  "consent.collectScale": "how many rules and whitelist entries there are, how many use a regex, and which hotkeys are commonly set;",
+  "consent.collectEnv": "the app version, the language, and how it is running;",
+  "consent.collectId": "a randomly generated anonymous id that carries no device characteristics.",
+  "consent.neverTitle": "What is never sent",
+  "consent.neverHide": "which windows were hidden, which processes are bound, or when any hide happened;",
+  "consent.neverContent": "window titles, process names, file paths, the regexes themselves and feedback text;",
+  "consent.neverIdentity": "your name, email or anything else that points back to you.",
+  "consent.control": "You can opt out any time under General → Privacy. Once it is off nothing further is ever sent, and the anonymous id on this device is deleted as well.",
+  "consent.agree": "Take part",
+  "consent.decline": "No thanks",
 
   "dataNotice.title": "Where your settings are stored",
   "dataNotice.heading": "The program folder is not writable",
@@ -374,9 +532,12 @@ export default {
   "state.pssuspendFound": "pssuspend64.exe detected",
   "state.pssuspendMissing": "pssuspend64.exe not found",
   "state.detectFailed": "Detection failed: {err}",
+  "state.openDirFailed": "Could not open the program folder: {err}",
   "state.partialLoadFailed": "Some data failed to load: {reason}",
   "state.saveFailed": "Could not save the configuration — your changes may not have been written to disk.",
   "state.configFallback": "The configuration file failed to parse; default settings have been restored. See the details for what happened to the original file.",
+  "state.configSchemaNewer":
+    "The configuration file comes from a newer version of ZoneDeck. Settings this version does not recognise will be lost the next time it is saved. See the details for where the backup was kept.",
   "state.elevationCancelled": "Elevation cancelled",
   "state.coreStartingAdmin": "The core is starting as administrator…",
   "state.coreStarting": "The core is starting…",

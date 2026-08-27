@@ -26,11 +26,13 @@ apps/config/ui/
 │       ├── state.svelte.js  Global state ($state) + actions
 │       ├── ipc.js           Calling Tauri commands / listening for events
 │       ├── hotkey.js        Hotkey parsing/formatting (with hotkey.test.js)
+│       ├── capture.js       Exclusive keyboard capture while recording (backend hook, DOM fallback)
 │       ├── pointer.js       Mouse click / interval constants (with pointer.test.js)
 │       ├── grouping.js      Adding, removing and filtering window/process rules (with grouping.test.js)
 │       ├── theme.js         Theme switching (with theme.test.js)
 │       ├── i18n.svelte.js   Display language: catalog lookup + language resolution (with i18n.test.js)
 │       ├── markdown.js      Markdown rendering for announcements/release notes (with markdown.test.js)
+│       ├── powerstats.js   Conversion and formatting for the power stats (with powerstats.test.js)
 │       └── verhub.js        Update checks / announcements / feedback (incl. issue conversion) / project links / opening external links
 ├── locales/                 Three-language catalogs (zh-CN.js / en.js / zh-TW.js)
 ├── vite.config.js
@@ -42,10 +44,13 @@ The settings window is organised as tabs, one panel component each:
 | Tab | Component | Contents |
 | --- | --- | --- |
 | Windows | `BindingPanel` | Window list + window/process rules |
+| Whitelist | `WhitelistPanel` | Which steps a program skips when hiding |
 | Hotkeys & Mouse | `HotkeysPanel` | Keyboard hotkeys, mouse clicks, corners, auto-hide on idle |
+| Hiding | `HidePanel` | Muting/pause key/tray icon/minimising |
+| Power & Memory | `PowerPanel` | Process freezing and memory usage |
 | Alerts | `NotificationsPanel` | Per-event notification switches and tray icon badges |
-| Options | `OptionsPanel` | Muting/pausing/freezing/privileges/logs/tools |
 | About & Feedback | `AboutPanel` | Version, updates, announcements, feedback (convertible into a GitHub issue) |
+| General | `OptionsPanel` | Startup/privileges/language/logs/tools |
 
 ## A frameless, self-drawn window
 

@@ -37,7 +37,7 @@ pub struct WindowInfo {
     pub pid: u32,
     #[serde(default, deserialize_with = "de_null_default")]
     pub path: String,
-    /// 枚举时该窗口是否可见；不参与窗口身份判定。
+    /// 枚举时该窗口是否可见；不参与身份判定。
     #[serde(default = "default_visible")]
     pub visible: bool,
 }
@@ -194,12 +194,13 @@ impl Eq for ProcessRule {}
 
 impl ProcessRule {
     /// 由现有窗口构造一条初级精确进程规则（按其可执行文件路径）。
+    /// 路径查不到时（反作弊进程拒绝 `OpenProcess`）退回按映像名匹配。
     pub fn from_window(w: &WindowInfo) -> Self {
         Self {
             process: w.process.clone(),
             path: w.path.clone(),
             regex: None,
-            by_name: false,
+            by_name: w.path.is_empty(),
             include_untitled: true,
             include_background: false,
         }
@@ -220,6 +221,83 @@ impl ProcessRule {
     /// 是否为高级（正则）规则。
     pub fn is_regex(&self) -> bool {
         self.regex.is_some()
+    }
+}
+
+/// 白名单条目：声明某个程序在哪些模式下应被跳过。
+/// 匹配方式与 [`ProcessRule`] 同构，但默认按文件名匹配。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WhitelistRule {
+    #[serde(default, deserialize_with = "de_null_default")]
+    pub process: String,
+    #[serde(default, deserialize_with = "de_null_default")]
+    pub path: String,
+    /// 高级模式：正则（作用于路径或文件名，取决于 `by_name`）。`None` 表示初级精确规则。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub regex: Option<String>,
+    /// 只按可执行文件名匹配，忽略路径；白名单默认开。
+    #[serde(default = "default_bool_true")]
+    pub by_name: bool,
+    /// 隐藏时跳过该程序的窗口。
+    #[serde(default)]
+    pub ignore_hide: bool,
+    /// 不冻结该程序的进程。
+    #[serde(default)]
+    pub ignore_freeze: bool,
+    /// 不静音该程序的进程。
+    #[serde(default)]
+    pub ignore_mute: bool,
+}
+
+impl PartialEq for WhitelistRule {
+    fn eq(&self, other: &Self) -> bool {
+        self.process == other.process
+            && self.path == other.path
+            && self.regex == other.regex
+            && self.by_name == other.by_name
+            && self.ignore_hide == other.ignore_hide
+            && self.ignore_freeze == other.ignore_freeze
+            && self.ignore_mute == other.ignore_mute
+    }
+}
+
+impl Eq for WhitelistRule {}
+
+impl WhitelistRule {
+    /// 由现有窗口构造一条精确条目；三个模式开关一律置假。
+    pub fn from_window(w: &WindowInfo) -> Self {
+        Self {
+            process: w.process.clone(),
+            path: w.path.clone(),
+            regex: None,
+            by_name: true,
+            ignore_hide: false,
+            ignore_freeze: false,
+            ignore_mute: false,
+        }
+    }
+
+    /// 由正则构造一条高级条目（默认作用于文件名）。
+    pub fn from_regex(regex: impl Into<String>) -> Self {
+        Self {
+            process: String::new(),
+            path: String::new(),
+            regex: Some(regex.into()),
+            by_name: true,
+            ignore_hide: false,
+            ignore_freeze: false,
+            ignore_mute: false,
+        }
+    }
+
+    /// 是否为高级（正则）条目。
+    pub fn is_regex(&self) -> bool {
+        self.regex.is_some()
+    }
+
+    /// 三个模式全关的条目不起任何作用。
+    pub fn is_inert(&self) -> bool {
+        !self.ignore_hide && !self.ignore_freeze && !self.ignore_mute
     }
 }
 
@@ -345,6 +423,56 @@ mod tests {
         let json = serde_json::to_string(&rule).unwrap();
         let back: ProcessRule = serde_json::from_str(&json).unwrap();
         assert_eq!(rule, back);
+        assert!(back.is_regex());
+    }
+
+    #[test]
+    fn whitelist_rule_from_window_defaults_to_name_matching() {
+        let w = WindowInfo::new(
+            "资源管理器",
+            1,
+            "explorer.exe",
+            9,
+            "C:\\Windows\\explorer.exe",
+        );
+        let rule = WhitelistRule::from_window(&w);
+        assert_eq!(rule.process, "explorer.exe");
+        assert_eq!(rule.path, "C:\\Windows\\explorer.exe");
+        assert!(rule.by_name, "白名单默认按文件名匹配，换安装目录仍然生效");
+        assert!(!rule.is_regex());
+        assert!(rule.is_inert(), "三个模式默认全关，由界面逐项勾选");
+    }
+
+    #[test]
+    fn whitelist_rule_modes_are_independent() {
+        let json = r#"{"process":"a.exe","ignore_freeze":true}"#;
+        let rule: WhitelistRule = serde_json::from_str(json).unwrap();
+        assert!(rule.ignore_freeze);
+        assert!(!rule.ignore_hide, "三个开关相互独立");
+        assert!(!rule.ignore_mute);
+        assert!(!rule.is_inert());
+    }
+
+    #[test]
+    fn whitelist_rule_by_name_defaults_true_when_absent() {
+        let rule: WhitelistRule = serde_json::from_str(r#"{"path":"C:\\a.exe"}"#).unwrap();
+        assert!(rule.by_name, "手改配置缺该键时按更宽的文件名匹配");
+    }
+
+    #[test]
+    fn whitelist_rule_round_trips_and_omits_regex_when_none() {
+        let mut rule =
+            WhitelistRule::from_window(&WindowInfo::new("t", 1, "p.exe", 2, "C:\\p.exe"));
+        rule.ignore_hide = true;
+        let json = serde_json::to_string(&rule).unwrap();
+        assert!(!json.contains("regex"), "精确条目不应序列化 regex: {json}");
+        let back: WhitelistRule = serde_json::from_str(&json).unwrap();
+        assert_eq!(rule, back);
+
+        let regex = WhitelistRule::from_regex("(?i)^wechat");
+        let back: WhitelistRule =
+            serde_json::from_str(&serde_json::to_string(&regex).unwrap()).unwrap();
+        assert_eq!(regex, back);
         assert!(back.is_regex());
     }
 }

@@ -61,6 +61,17 @@ Regex matching is an advanced mode. Make sure you are comfortable with regex syn
 If you are not familiar with regex, stick to the default exact matching.
 :::
 
+### Too-broad warning
+
+When saving, ZoneDeck tries every pattern against **200 random strings**. Matching more than half of them (100) means the pattern catches almost anything — `.*` is the classic case, and it would hide every window on your desktop.
+
+A warning appears and the input turns red:
+
+- **Save anyway**: the pattern is what you intended. The warning stops and the red marker clears.
+- **Got it**: dismisses the warning but keeps the red marker so you can come back and fix it.
+
+Neither choice **affects saving**; the warning is only a heads-up.
+
 ### Window regex rules
 
 The regex applies to the **window title**. Additional options:

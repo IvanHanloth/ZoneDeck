@@ -50,6 +50,7 @@ cargo test -p zonedeck-core -- --test-threads=1
 | 單一執行個體互斥鎖 | 具名互斥鎖 |
 | 具名管道 | 伺服端收發；連開連關的重連競態（用戶端搶在 `ConnectNamedPipe` 之前連上仍須正常應答） |
 | 程序凍結 | 真實子程序暫停／復原 |
+| 能效統計 | 真實子程序走一遍凍結／效率模式，核對寫入磁碟的成績單；經 IPC 重設歸零 |
 | 靜音 | Core Audio COM 鏈路 |
 | HideController | mock 注入驗證靜音／凍結／暫停鍵編排 |
 | 開機自動啟動 | 一般登錄檔機碼邏輯 + 真實 `schtasks` 接受工作 XML |

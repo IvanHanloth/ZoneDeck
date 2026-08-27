@@ -1,7 +1,8 @@
 <script>
-  import Modal from "./Modal.svelte";
+  import ContentDialog from "./fluent/ContentDialog.svelte";
   import WindowList from "./WindowList.svelte";
   import { invoke } from "../lib/ipc.js";
+  import { track } from "../lib/analytics.js";
   import { app, toast } from "../lib/state.svelte.js";
   import { applyListFilters } from "../lib/grouping.js";
   import { t } from "../lib/i18n.svelte.js";
@@ -15,7 +16,7 @@
   let showUntitled = $state(false);
   let busy = $state(false);
 
-  // 过滤在父层完成后再交给 WindowList（与 BindingPanel 一致），使搜索/后台过滤真正生效。
+  // 过滤在父层完成后再交给 WindowList。
   const shown = $derived(
     applyListFilters(windows, { showBackground, showUntitled, search }),
   );
@@ -31,7 +32,7 @@
     }
   });
 
-  /** 选中的句柄映射到去重后的 PID（冻结/解冻按进程粒度）。 */
+  /** 选中的句柄映射到去重后的 PID。 */
   function selectedPids() {
     const pids = windows
       .filter((w) => selected.includes(w.hwnd))
@@ -40,10 +41,10 @@
     return [...new Set(pids)];
   }
 
-  // 冻结/解冻跟随全局设置：增强冻结可用即用、遵循「冻结完整进程」。
+  // 冻结 / 解冻跟随「能效控制」里的设置。
   const freezeArgs = $derived({
     enhanced: !!(app.config?.setting?.enhanced_freeze && app.pssuspend),
-    whole_tree: !!app.config?.setting?.freeze_whole_tree,
+    scope: app.config?.setting?.power_scope ?? "self",
   });
 
   async function run(label, fn) {
@@ -63,6 +64,7 @@
     if (selected.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.showWindows"), async () => {
       await invoke("show_windows", { hwnds: selected });
+      track("restore_tool_action", { action: "show", count: selected.length });
       toast(t("restore.shown"));
     });
   }
@@ -71,6 +73,7 @@
     if (selected.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.hideWindows"), async () => {
       await invoke("hide_windows", { hwnds: selected });
+      track("restore_tool_action", { action: "hide", count: selected.length });
       toast(t("restore.hidden"));
     });
   }
@@ -80,6 +83,7 @@
     if (pids.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.freezeProcesses"), async () => {
       await invoke("freeze_pids", { pids, ...freezeArgs });
+      track("restore_tool_action", { action: "freeze", count: pids.length });
       toast(t("restore.frozen", { n: pids.length }));
     });
   }
@@ -89,12 +93,13 @@
     if (pids.length === 0) return toast(t("restore.pickFirst"), true);
     run(t("restore.resumeProcesses"), async () => {
       await invoke("resume_pids", { pids, ...freezeArgs });
+      track("restore_tool_action", { action: "resume", count: pids.length });
       toast(t("restore.resumed", { n: pids.length }));
     });
   }
 </script>
 
-<Modal title={t("restore.title")} bind:open>
+<ContentDialog title={t("restore.title")} bind:open>
   <p class="hint">
     {t("restore.hintLine1")}<br />
     {t("restore.hintLine2")}
@@ -119,11 +124,11 @@
     <button class="btn" disabled={busy} onclick={resumeSel}>{t("restore.resumeProcesses")}</button>
     <button class="btn primary" disabled={busy} onclick={showSel}>{t("restore.showWindows")}</button>
   {/snippet}
-</Modal>
+</ContentDialog>
 
 <style>
   .hint {
-    color: var(--muted);
+    color: var(--text-2);
     font-size: 12.5px;
     line-height: 1.6;
     margin-bottom: 10px;

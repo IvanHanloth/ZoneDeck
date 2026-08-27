@@ -1,5 +1,5 @@
 //! 进程图标提取：从可执行文件取图标，编码为 PNG data URI。
-//! PNG/base64 为手写最小实现（stored deflate 块，无压缩）。
+//! PNG/base64 为手写最小实现，deflate 用 stored 块不压缩。
 
 use std::ffi::c_void;
 
@@ -107,9 +107,12 @@ pub(crate) fn hicon_to_rgba(hicon: HICON) -> Option<IconRgba> {
                 DIB_RGB_COLORS,
             );
 
-            // 32bpp 图标不含 alpha 时（老式图标），用掩码位图补 alpha。
+            // 32bpp 图标不含 alpha 时用掩码位图补。
             let mut mask_bgra = None;
-            if lines != 0 && bgra.chunks_exact(4).all(|px| px[3] == 0) && !mask.is_invalid() {
+            if lines != 0
+                && bgra.as_chunks::<4>().0.iter().all(|px| px[3] == 0)
+                && !mask.is_invalid()
+            {
                 let mut buf = vec![0u8; (width * height * 4) as usize];
                 let mut mask_bmi = BITMAPINFO {
                     bmiHeader: header,
@@ -150,13 +153,13 @@ pub(crate) fn hicon_to_rgba(hicon: HICON) -> Option<IconRgba> {
     }
 }
 
-/// BGRA → RGBA。可选掩码（AND 掩码：非零 = 透明）用于补全缺失的 alpha 通道。
+/// BGRA → RGBA；可选 AND 掩码（非零 = 透明）用于补全缺失的 alpha 通道。
 fn bgra_to_rgba(bgra: &[u8], mask: Option<&[u8]>) -> Vec<u8> {
     let mut rgba = Vec::with_capacity(bgra.len());
-    for (i, px) in bgra.chunks_exact(4).enumerate() {
+    for (i, px) in bgra.as_chunks::<4>().0.iter().enumerate() {
         let alpha = match mask {
             Some(m) => {
-                // 掩码位图像素非零（白）表示透明，零（黑）表示不透明。
+                // 掩码位图像素非零表示透明。
                 if m[i * 4] == 0 { 255 } else { 0 }
             }
             None => px[3],
@@ -174,13 +177,13 @@ pub fn encode_png(width: u32, height: u32, rgba: &[u8]) -> Option<Vec<u8>> {
         return None;
     }
 
-    // IHDR：8 位深、颜色类型 6（真彩 + alpha）。
+    // IHDR：8 位深、颜色类型 6。
     let mut ihdr = Vec::with_capacity(13);
     ihdr.extend_from_slice(&width.to_be_bytes());
     ihdr.extend_from_slice(&height.to_be_bytes());
     ihdr.extend_from_slice(&[8, 6, 0, 0, 0]);
 
-    // 原始扫描线：每行前缀过滤器字节 0（None）。
+    // 原始扫描线：每行前缀过滤器字节 0。
     let stride = (width * 4) as usize;
     let mut raw = Vec::with_capacity(rgba.len() + height as usize);
     for row in rgba.chunks_exact(stride) {
@@ -218,7 +221,6 @@ fn zlib_stored(data: &[u8]) -> Vec<u8> {
     let mut blocks = data.chunks(MAX_BLOCK).peekable();
     loop {
         let Some(block) = blocks.next() else {
-            // data 为空时也要输出一个空的最终块。
             out.extend_from_slice(&[0x01, 0x00, 0x00, 0xFF, 0xFF]);
             break;
         };
@@ -321,7 +323,7 @@ mod tests {
         assert!(encode_png(0, 2, &[]).is_none());
     }
 
-    /// 测试用最小 PNG 解析：遍历块并校验 CRC，返回 (名称, 数据) 列表。
+    /// 遍历 PNG 块并校验 CRC，返回 (名称, 数据) 列表。
     fn parse_chunks(png: &[u8]) -> Vec<(String, Vec<u8>)> {
         assert_eq!(&png[..8], &PNG_SIGNATURE, "PNG 签名不正确");
         let mut chunks = Vec::new();
@@ -343,7 +345,7 @@ mod tests {
         chunks
     }
 
-    /// 测试用 stored-deflate 解压，只支持本模块产生的未压缩块。
+    /// stored-deflate 解压，只支持本模块产生的未压缩块。
     fn inflate_stored(zlib: &[u8]) -> Vec<u8> {
         assert_eq!(zlib[0], 0x78, "zlib CMF 头");
         let mut out = Vec::new();
@@ -420,7 +422,7 @@ mod tests {
         assert!(icon.width >= 16 && icon.height >= 16);
         assert_eq!(icon.pixels.len(), (icon.width * icon.height * 4) as usize);
         assert!(
-            icon.pixels.chunks_exact(4).any(|px| px[3] > 0),
+            icon.pixels.as_chunks::<4>().0.iter().any(|px| px[3] > 0),
             "图标应至少有一个不透明像素"
         );
 

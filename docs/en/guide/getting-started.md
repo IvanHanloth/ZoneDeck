@@ -16,9 +16,10 @@ The **first time** you open ZoneDeck after installing or updating, the **setting
 | --- | --- | --- |
 | **Windows** | Choose the windows / processes to hide | [Binding windows & processes](/en/guide/binding) |
 | **Hotkeys & Mouse** | Keyboard hotkeys, mouse clicks, corner gestures, auto-hide on idle | [Hotkeys & mouse gestures](/en/guide/hotkeys) |
+| **Hiding** | Muting, pause key, tray icon, minimising — the extra behaviours applied when hiding | [Hiding options](/en/guide/hiding) |
 | **Alerts** | Notifications and tray icon status badges | [Alerts](/en/guide/notifications) |
-| **Options** | Muting, pause key, freezing, privileges, logs, recovery tool, and more | [Other options](/en/guide/options) |
 | **About & Feedback** | Version information, update checks, announcements, feedback | [Updates & feedback](/en/guide/update) |
+| **General** | Start with Windows, privileges, display language, logs, recovery tool | [General settings](/en/guide/options) |
 
 ::: tip Settings save themselves
 Every change is **written to disk automatically and takes effect immediately** once you stop interacting. The core **hot-reloads** on configuration changes; no manual restart is needed.
@@ -77,7 +78,7 @@ Day to day, **right-click the tray icon** to open the menu. It offers:
 - **Exit**: end the core process.
 
 ::: info Clicking the tray icon
-With [“Toggle hiding by clicking the tray icon”](/en/guide/options) enabled, a left click on the tray icon hides / shows the windows.
+By default a **left click** on the icon hides / shows the windows. You can change what single click, double click and right click each do — see [Tray icon click actions](/en/guide/notifications#tray-icon-click-actions).
 :::
 
 ## Default hotkeys
@@ -89,7 +90,7 @@ ZoneDeck ships with two keyboard hotkeys, both customisable under [Hotkeys & mou
 | **Hide / show windows** | `Ctrl + Q` | Press once to hide the bound windows, again to restore them |
 | **Close the core** | `Win + Esc` | Immediately ends the ZoneDeck core process |
 
-A fresh installation also enables **hide on middle mouse button click** by default; you can adjust or disable it in the settings.
+A fresh installation also enables **hide on middle mouse button double click** by default; you can adjust or disable it in the settings.
 
 ## Basic workflow
 

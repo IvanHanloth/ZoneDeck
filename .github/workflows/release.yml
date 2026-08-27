@@ -146,18 +146,21 @@ jobs:
         shell: pwsh
         run: ./scripts/version.ps1 check "${{ steps.mode.outputs.tag }}"
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: apps/config/ui/package-lock.json
+          cache: pnpm
+          cache-dependency-path: apps/config/ui/pnpm-lock.yaml
 
       - name: Frontend install, test & build
         run: |
-          npm --prefix apps/config/ui ci
-          npm --prefix apps/config/ui test
-          npm --prefix apps/config/ui run build
+          pnpm --dir apps/config/ui install --frozen-lockfile
+          pnpm --dir apps/config/ui test
+          pnpm --dir apps/config/ui run build
 
       - name: Rust tests
         run: cargo test --workspace

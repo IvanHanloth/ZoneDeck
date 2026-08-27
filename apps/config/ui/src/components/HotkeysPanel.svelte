@@ -1,12 +1,14 @@
 <script>
   import { t } from "../lib/i18n.svelte.js";
   import { onDestroy, onMount } from "svelte";
-  import Card from "./Card.svelte";
+  import SettingsGroup from "./fluent/SettingsGroup.svelte";
+  import SettingsCard from "./fluent/SettingsCard.svelte";
+  import SettingsExpander from "./fluent/SettingsExpander.svelte";
+  import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
+  import TextBox from "./fluent/TextBox.svelte";
   import CornerPicker from "./CornerPicker.svelte";
   import HotkeyRecorder from "./HotkeyRecorder.svelte";
   import MousePicker from "./MousePicker.svelte";
-  import SettingRow from "./SettingRow.svelte";
-  import Toggle from "./Toggle.svelte";
   import IconRepeat from "~icons/lucide/repeat";
   import IconEyeOff from "~icons/lucide/eye-off";
   import IconEye from "~icons/lucide/eye";
@@ -30,7 +32,7 @@
 
   const s = $derived(app.config.setting);
 
-  // 数字输入框清空或越界时失焦归位，避免 null 留在配置里。
+  // 数字输入框清空或越界时失焦归位。
   function fixMultiClickMs() {
     s.mouse.multi_click_ms = clampInt(
       s.mouse.multi_click_ms,
@@ -51,148 +53,141 @@
   // 鼠标进入本页设置区时暂停核心监控，离开时恢复。
   const REASON = { area: "hotkeys-panel" };
 
-  // 窗口失焦时恢复监控（此时不会触发 pointerleave）。
+  // 窗口失焦时恢复监控，此时不会触发 pointerleave。
   onMount(() => {
     const onBlur = () => resumeMonitoring(REASON);
     window.addEventListener("blur", onBlur);
     return () => window.removeEventListener("blur", onBlur);
   });
   onDestroy(() => resumeMonitoring(REASON));
+
+  // 展开态由 SettingsExpander 的 autoExpand 负责联动，这里只存状态。
+  let idleOpen = $state(false);
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  class="panel-stack"
+  class="stack"
   onpointerenter={() => suspendMonitoring(REASON)}
   onpointerleave={() => resumeMonitoring(REASON)}
 >
-  <Card title={t("hotkeys.keyboardCard")}>
+  <SettingsGroup title={t("hotkeys.keyboardCard")}>
     <HotkeyRecorder
       icon={IconRepeat}
       label={t("hotkeys.hideShow")}
       bind:value={app.config.hotkey.hide_hotkey}
+      bind:hook={app.config.hotkey.hide_hook}
       bind:intercept={app.config.hotkey.hide_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconEyeOff}
       label={t("hotkeys.hideOnly")}
       bind:value={app.config.hotkey.hide_only_hotkey}
+      bind:hook={app.config.hotkey.hide_only_hook}
       bind:intercept={app.config.hotkey.hide_only_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconEye}
       label={t("hotkeys.showOnly")}
       bind:value={app.config.hotkey.show_only_hotkey}
+      bind:hook={app.config.hotkey.show_only_hook}
       bind:intercept={app.config.hotkey.show_only_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconAppWindow}
       label={t("hotkeys.hideForeground")}
       bind:value={app.config.hotkey.hide_foreground_hotkey}
+      bind:hook={app.config.hotkey.hide_foreground_hook}
       bind:intercept={app.config.hotkey.hide_foreground_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
     <HotkeyRecorder
       icon={IconPower}
       label={t("hotkeys.closeApp")}
       bind:value={app.config.hotkey.close_hotkey}
+      bind:hook={app.config.hotkey.close_hook}
       bind:intercept={app.config.hotkey.close_intercept}
-      interceptLabel={t("hotkeys.interceptShort")}
-      interceptTitle={t("hotkeys.interceptDesc")}
     />
-    <p class="card-hint">{t("hotkeys.interceptDesc")}</p>
-  </Card>
+  </SettingsGroup>
 
-  <Card title={t("hotkeys.mouseCard")}>
-    <MousePicker mouse={s.mouse} />
-    <SettingRow icon={IconUndo} label={t("hotkeys.clickRestore")} description={t("hotkeys.clickRestoreDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.mouse.allow_click_restore} />{/snippet}
-    </SettingRow>
-    <SettingRow
+  <SettingsGroup title={t("hotkeys.mouseCard")}>
+    <div class="surface pad"><MousePicker mouse={s.mouse} /></div>
+    <SettingsCard icon={IconUndo} label={t("hotkeys.clickRestore")} description={t("hotkeys.clickRestoreDesc")}>
+      {#snippet control()}<ToggleSwitch bind:checked={s.mouse.allow_click_restore} />{/snippet}
+    </SettingsCard>
+    <SettingsCard
       icon={IconTimer}
       label={t("hotkeys.multiClickWindow")}
       description={t("hotkeys.multiClickWindowDesc")}
     >
       {#snippet control()}
-        <div class="num-ctl">
-          <input
-            type="number"
-            min={MIN_MULTI_CLICK_MS}
-            max={MAX_MULTI_CLICK_MS}
-            step="50"
-            aria-label={t("hotkeys.multiClickWindowAria")}
-            bind:value={s.mouse.multi_click_ms}
-            onblur={fixMultiClickMs}
-          />
-          <span>{t("hotkeys.milliseconds")}</span>
-        </div>
+        <TextBox
+          type="number"
+          width="130px"
+          min={MIN_MULTI_CLICK_MS}
+          max={MAX_MULTI_CLICK_MS}
+          step={50}
+          suffix={t("hotkeys.milliseconds")}
+          ariaLabel={t("hotkeys.multiClickWindowAria")}
+          bind:value={s.mouse.multi_click_ms}
+          onblur={fixMultiClickMs}
+        />
       {/snippet}
-    </SettingRow>
-  </Card>
+    </SettingsCard>
+  </SettingsGroup>
 
-  <Card title={t("hotkeys.cornerCard")}>
-    <CornerPicker setting={s} />
-    <SettingRow
-      icon={IconZap}
-      label={t("hotkeys.fastOnly")}
-      description={t("hotkeys.fastOnlyDesc")}
+  <SettingsGroup title={t("hotkeys.cornerCard")}>
+    <div class="surface pad"><CornerPicker setting={s} /></div>
+    <SettingsCard icon={IconZap} label={t("hotkeys.fastOnly")} description={t("hotkeys.fastOnlyDesc")}>
+      {#snippet control()}<ToggleSwitch bind:checked={s.corner_fast_only} />{/snippet}
+    </SettingsCard>
+    <SettingsCard
+      icon={IconCornerUpLeft}
+      label={t("hotkeys.cornerRestore")}
+      description={t("hotkeys.cornerRestoreDesc")}
     >
-      {#snippet control()}<Toggle bind:checked={s.corner_fast_only} />{/snippet}
-    </SettingRow>
-    <SettingRow icon={IconCornerUpLeft} label={t("hotkeys.cornerRestore")} description={t("hotkeys.cornerRestoreDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.allow_move_restore} />{/snippet}
-    </SettingRow>
-  </Card>
+      {#snippet control()}<ToggleSwitch bind:checked={s.allow_move_restore} />{/snippet}
+    </SettingsCard>
+  </SettingsGroup>
 
-  <section class="fcard">
-    <h3>{t("hotkeys.idleCard")}</h3>
-    <SettingRow icon={IconHourglass} label={t("hotkeys.autoHide")} description={t("hotkeys.autoHideDesc")}>
-      {#snippet control()}<Toggle bind:checked={s.auto_hide_enabled} />{/snippet}
-    </SettingRow>
-    <SettingRow
-      icon={IconClock}
-      label={t("hotkeys.idleTime")}
-      description={t("hotkeys.idleTimeDesc")}
-      disabled={!s.auto_hide_enabled}
+  <SettingsGroup title={t("hotkeys.idleCard")}>
+    <SettingsExpander
+      bind:open={idleOpen}
+      autoExpand={s.auto_hide_enabled}
+      icon={IconHourglass}
+      label={t("hotkeys.autoHide")}
+      description={t("hotkeys.autoHideDesc")}
     >
-      {#snippet control()}
-        <div class="num-ctl">
-          <input
+      {#snippet control()}<ToggleSwitch bind:checked={s.auto_hide_enabled} />{/snippet}
+
+      <SettingsCard
+        variant="sub"
+        icon={IconClock}
+        label={t("hotkeys.idleTime")}
+        description={t("hotkeys.idleTimeDesc")}
+        disabled={!s.auto_hide_enabled}
+      >
+        {#snippet control()}
+          <TextBox
             type="number"
+            width="120px"
             min={MIN_AUTO_HIDE_TIME}
             max={MAX_AUTO_HIDE_TIME}
+            suffix={t("hotkeys.minutes")}
+            ariaLabel={t("hotkeys.idleTime")}
             bind:value={s.auto_hide_time}
             onblur={fixAutoHideTime}
             disabled={!s.auto_hide_enabled}
           />
-          <span>{t("hotkeys.minutes")}</span>
-        </div>
-      {/snippet}
-    </SettingRow>
-  </section>
+        {/snippet}
+      </SettingsCard>
+    </SettingsExpander>
+  </SettingsGroup>
 </div>
 
 <style>
-  .card-hint {
-    font-size: 12px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-  .num-ctl {
+  .stack {
     display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .num-ctl input {
-    width: 76px;
+    flex-direction: column;
+    gap: 24px;
   }
 </style>

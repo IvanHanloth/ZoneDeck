@@ -26,26 +26,31 @@ apps/config/ui/
 │       ├── state.svelte.js  全局状态（$state）+ 各类动作
 │       ├── ipc.js           调用 Tauri 命令 / 监听事件
 │       ├── hotkey.js        热键解析/格式化（配 hotkey.test.js）
+│       ├── capture.js       录制期独占键盘（后端钩子，失败回落 DOM 事件）
 │       ├── pointer.js       鼠标连击/连击窗口常量（配 pointer.test.js）
 │       ├── grouping.js      窗口/进程规则的增删与过滤（配 grouping.test.js）
 │       ├── theme.js         主题切换（配 theme.test.js）
 │       ├── i18n.svelte.js   界面语言：catalog 查表 + 语言解析（配 i18n.test.js）
 │       ├── markdown.js      公告/更新日志的 Markdown 渲染（配 markdown.test.js）
+│       ├── powerstats.js   能效统计的换算与格式化（配 powerstats.test.js）
 │       └── verhub.js        检查更新/公告/反馈（含转 Issue）/项目链接/打开外链
 ├── locales/                 三语文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
 └── svelte.config.js
 ```
 
-设置界面以标签页组织，对应五个面板组件：
+设置界面以标签页组织，每个标签页对应一个面板组件：
 
 | 标签 | 组件 | 内容 |
 | --- | --- | --- |
 | 窗口绑定 | `BindingPanel` | 窗口列表 + 窗口/进程规则 |
+| 白名单 | `WhitelistPanel` | 程序在隐藏时需要跳过的功能 |
 | 热键与鼠标 | `HotkeysPanel` | 键盘热键、鼠标连击、四角、空闲自动隐藏 |
+| 隐藏设置 | `HidePanel` | 静音/暂停键/托盘图标/最小化 |
+| 能效控制 | `PowerPanel` | 进程冻结与内存占用 |
 | 提示设置 | `NotificationsPanel` | 逐事件通知开关与图标状态角标 |
-| 其他选项 | `OptionsPanel` | 静音/暂停/冻结/权限/日志/工具 |
 | 关于与反馈 | `AboutPanel` | 版本、更新、公告、反馈（可转为 GitHub Issue） |
+| 通用设置 | `OptionsPanel` | 自启/权限/语言/日志/工具 |
 
 ## 无边框自绘窗口
 
@@ -110,8 +115,8 @@ Verhub 返回的内容不可信。`renderMarkdown()` 先整体转义 `& < > "` �
 
 最终产物中，前端在**编译期被内嵌**进 `zonedeck-config.exe`，静态运行，**不需要任何本地服务器**。
 
-- 开发前端 UI：`npm run dev` 在浏览器里预览（mock 数据、热重载）。
-- 验证 Tauri 集成：`npm run build` 后 `cargo run -p zonedeck-config`。
+- 开发前端 UI：`pnpm run dev` 在浏览器里预览（mock 数据、热重载）。
+- 验证 Tauri 集成：`pnpm run build` 后 `cargo run -p zonedeck-config`。
 
 ## 与核心的联动示例
 

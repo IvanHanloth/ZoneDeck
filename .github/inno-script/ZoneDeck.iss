@@ -25,6 +25,8 @@
 #define SourceDir "..\..\dist\ZoneDeck"
 ; 文件名须与 crates/common/src/paths.rs 的 INSTALLED_MARKER 一致
 #define InstalledMarker "installed.marker"
+; 须与 crates/core/src/toast.rs 的 AUMID 一致，见 [Icons]
+#define AppUserModelID "IvanHanloth.ZoneDeck"
 
 [Setup]
 AppId={{BA8E9784-B92D-48EE-B447-99709232260B}
@@ -75,6 +77,13 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Type: files; Name: "{app}\{#LegacyCoreExe}"
 Type: files; Name: "{autodesktop}\{#LegacyAppName}.lnk"
 Type: filesandordirs; Name: "{autoprograms}\{#LegacyAppName}"
+; 便携版首次弹通知时会在开始菜单根目录自建一个同名快捷方式（见 crates/core/src/toast.rs）。
+; 装过之后 {group} 下已有带同一 AppUserModelID 的那份，留着它只会让开始菜单出现两个入口。
+Type: files; Name: "{userprograms}\{#MyAppName}.lnk"
+
+[UninstallDelete]
+; 同上：卸载只会自动清掉 [Icons] 建的那些，便携版自建的这个得显式删。
+Type: files; Name: "{userprograms}\{#MyAppName}.lnk"
 
 [Files]
 Source: "{#SourceDir}\{#CoreExe}"; DestDir: "{app}"; Flags: ignoreversion
@@ -85,10 +94,13 @@ Source: "static\icon.ico"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#InstalledMarker}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"
+; AppUserModelID 是 Toast 通知的前提：未打包的 Win32 程序必须有一条带该属性的
+; 快捷方式，通知平台才认领它。取值须与 crates/core/src/toast.rs 的 AUMID 逐字相同，
+; 对不上时核心会认领这条快捷方式、把属性改成它认的值（见 ensure_registered）。
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; AppUserModelID: "{#AppUserModelID}"
 Name: "{group}\{#MyAppName} 设置"; Filename: "{app}\{#ConfigExe}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; AppUserModelID: "{#AppUserModelID}"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#CoreExe}"; Description: "{cm:LaunchProgram,{#StringChange(MyAppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent

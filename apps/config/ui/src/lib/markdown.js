@@ -1,8 +1,5 @@
-// 极简 Markdown 渲染，供公告与更新日志使用。只覆盖 GitHub 风格的常用子集，
-// 不引入任何依赖。
-//
-// 内容来自 Verhub 远端，因此这里**先转义再拼标签**：输出里出现的标签全部由本
-// 模块生成，源文本里的原始 HTML 只会被当成字面量显示，无需再过一遍消毒。
+// 极简 Markdown 渲染，供公告与更新日志使用，只覆盖常用子集。
+// 先转义再拼标签：输出里的标签全部由本模块生成，源文本里的 HTML 按字面量显示。
 
 const ESCAPE = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
 
@@ -13,17 +10,16 @@ const QUOTE = /^ {0,3}> ?(.*)$/;
 const ITEM = /^([ \t]*)(?:([-*+])|(\d{1,9})[.)])[ \t]+(.*)$/;
 const TASK = /^\[([ xX])\][ \t]+/;
 
-// 行内解析的占位符哨兵。NUL 不会出现在正文里，也不属于 \s，因此裸链接之类的
-// 规则不会越过它去改写已经成型的标签。
+// 行内解析的占位符哨兵；NUL 不会出现在正文里，也不属于 \s。
 const SENTINEL = String.fromCharCode(0);
 const PLACEHOLDER = new RegExp(`${SENTINEL}(\\d+)${SENTINEL}`, "g");
 
 const escapeHtml = (s) => s.replace(/[&<>"]/g, (c) => ESCAPE[c]);
 
-/** 只放行 http(s) 与 mailto：javascript: / data: 等一律按纯文本处理。 */
+/** 只放行 https 与 mailto，其余按纯文本处理；与后端 `open_external` 的白名单一致。 */
 function safeUrl(raw) {
   const url = raw.trim();
-  return /^(?:https?:\/\/|mailto:)/i.test(url) ? url : null;
+  return /^(?:https:\/\/|mailto:)/i.test(url) ? url : null;
 }
 
 const startsBlock = (line) =>
@@ -38,12 +34,12 @@ function inline(text) {
 
   s = s.replace(/(`+)([^`]+?)\1/g, (_, __, code) => hold(`<code>${code}</code>`));
 
-  // CSP 只允许 self / data: 图源，远端图片加载不出来，统一退化成链接。
+  // CSP 只允许 self / data: 图源，远端图片统一退化成链接。
   s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (m, alt, dest) => anchor(dest, alt, hold) ?? m);
   s = s.replace(/\[([^\]]*)\]\(([^)]+)\)/g, (m, label, dest) => anchor(dest, label, hold) ?? m);
 
-  // 裸链接。前面必须是行首/空白/左括号，因此紧挨占位符的文本不会被重复包裹。
-  s = s.replace(/(^|[\s(])(https?:\/\/\S+)/g, (_, pre, raw) => {
+  // 裸链接；前面必须是行首 / 空白 / 左括号。协议白名单同 safeUrl。
+  s = s.replace(/(^|[\s(])(https:\/\/\S+)/g, (_, pre, raw) => {
     const trailing = raw.match(/[.,;:!?)]+$/)?.[0] ?? "";
     const url = raw.slice(0, raw.length - trailing.length);
     return pre + hold(`<a href="${url}">`) + url + hold("</a>") + trailing;
@@ -59,7 +55,7 @@ function inline(text) {
   return s.replace(PLACEHOLDER, (_, i) => stash[+i]);
 }
 
-/** 拼一个链接；目标协议不安全时返回 null，交由调用方原样保留。 */
+/** 拼一个链接；目标协议不安全时返回 null。 */
 function anchor(dest, label, hold) {
   const url = safeUrl(dest.split(/[ \t]/)[0]);
   if (!url) return null;
@@ -194,7 +190,7 @@ function blocks(lines) {
       continue;
     }
 
-    // 段落。软换行按 GitHub 评论的习惯渲染成 <br>，而不是并成一行。
+    // 段落；软换行渲染成 <br>。
     const para = [];
     while (i < lines.length && lines[i].trim() && !startsBlock(lines[i])) {
       para.push(lines[i].trim());

@@ -1,9 +1,10 @@
 <script>
   // 出错弹框：日志仅在用户确认后才上报，默认不上报。
   import IconTriangleAlert from "~icons/lucide/triangle-alert";
-  import Modal from "./Modal.svelte";
+  import ContentDialog from "./fluent/ContentDialog.svelte";
   import { app, toast } from "../lib/state.svelte.js";
   import { currentSessionLog, uploadLog } from "../lib/verhub.js";
+  import { track } from "../lib/analytics.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const report = $derived(app.errorReport);
@@ -36,7 +37,10 @@
     open = !!report;
   });
   function onOpenChange(v) {
-    if (!v) app.errorReport = null;
+    if (!v) {
+      if (!sent) track("error_report", { uploaded: false });
+      app.errorReport = null;
+    }
     open = v;
   }
 
@@ -45,6 +49,7 @@
     try {
       await uploadLog(payload);
       sent = true;
+      track("error_report", { uploaded: true });
       toast(t("error.reportThanks"));
       setTimeout(() => (app.errorReport = null), 700);
     } catch (err) {
@@ -56,7 +61,7 @@
 </script>
 
 {#if report}
-  <Modal title={t("error.title")} bind:open={() => open, onOpenChange}>
+  <ContentDialog title={t("error.title")} bind:open={() => open, onOpenChange}>
     <div class="body">
       <p class="msg"><IconTriangleAlert width="15" height="15" /> {report.message}</p>
       {#if report.detail}<p class="detail">{report.detail}</p>{/if}
@@ -74,7 +79,7 @@
         {sending ? t("error.reporting") : sent ? t("error.reported") : t("error.report")}
       </button>
     {/snippet}
-  </Modal>
+  </ContentDialog>
 {/if}
 
 <style>
@@ -92,29 +97,31 @@
   }
   .detail {
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--text-2);
     word-break: break-word;
   }
   summary {
     font-size: 12.5px;
-    color: var(--muted);
+    color: var(--text-2);
     cursor: pointer;
   }
   .payload {
     margin: 8px 0 0;
     padding: 10px 12px;
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
+    background: var(--card-2);
+    border: 1px solid var(--stroke);
+    border-radius: var(--r-card);
+    font-family: var(--font-mono);
     font-size: 11.5px;
     line-height: 1.55;
     white-space: pre-wrap;
     word-break: break-word;
     max-height: 200px;
     overflow-y: auto;
+    user-select: text;
   }
   .hint {
     font-size: 12px;
-    color: var(--muted);
+    color: var(--text-2);
   }
 </style>

@@ -1,4 +1,6 @@
 <script>
+  import IconInfo from "~icons/lucide/info";
+  import IconError from "~icons/lucide/circle-x";
   import { toastState } from "../lib/state.svelte.js";
 </script>
 
@@ -9,35 +11,56 @@
   role="status"
   aria-live="polite"
 >
-  {toastState.message}
+  <span class="icon" aria-hidden="true">
+    {#if toastState.error}
+      <IconError width="16" height="16" />
+    {:else}
+      <IconInfo width="16" height="16" />
+    {/if}
+  </span>
+  <span class="msg">{toastState.message}</span>
 </div>
 
 <style>
   .toast {
     position: fixed;
     left: 50%;
-    bottom: 64px;
-    transform: translate(-50%, 12px);
+    bottom: 56px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
     max-width: min(80vw, 480px);
-    padding: 9px 18px;
-    border-radius: 8px;
-    background: var(--text);
-    color: var(--bg);
+    padding: 10px 16px;
+    border-radius: var(--r-overlay);
+    border: 1px solid var(--stroke);
+    background: color-mix(in srgb, var(--tint) 12%, var(--flyout-solid));
+    box-shadow: var(--shadow-flyout);
+    color: var(--text);
     font-size: 13px;
-    box-shadow: var(--shadow);
+    line-height: 18px;
     opacity: 0;
     pointer-events: none;
+    translate: -50% 12px;
     transition:
-      opacity 0.2s,
-      transform 0.2s;
+      opacity var(--dur-normal) var(--ease-standard),
+      translate var(--dur-normal) var(--ease-out);
     z-index: 900;
+    --tint: var(--accent);
   }
   .toast.show {
     opacity: 1;
-    transform: translate(-50%, 0);
+    translate: -50% 0;
   }
   .toast.error {
-    background: var(--danger);
-    color: #fff;
+    --tint: var(--danger);
+  }
+
+  .icon {
+    flex: none;
+    display: inline-flex;
+    color: var(--tint);
+  }
+  .msg {
+    min-width: 0;
   }
 </style>

@@ -19,7 +19,7 @@ use crate::util::to_wide_null;
 
 const PIPE_BUF_SIZE: u32 = 4096;
 
-/// 创建管道失败后的重试间隔：逐级退避，最后一档一直沿用，线程不退出。
+/// 创建管道失败后的重试间隔，逐级退避，最后一档一直沿用。
 const RETRY_DELAYS: [std::time::Duration; 3] = [
     std::time::Duration::from_secs(1),
     std::time::Duration::from_secs(5),
@@ -30,9 +30,64 @@ fn retry_delay(attempt: u32) -> std::time::Duration {
     RETRY_DELAYS[(attempt as usize).min(RETRY_DELAYS.len() - 1)]
 }
 
-/// 命名管道安全描述符（SDDL）：Everyone 可读写，完整性标签设为 Low，
-/// 使普通配置程序能连上以管理员运行的核心。
-const PIPE_SDDL: &str = "D:(A;;GRGW;;;WD)S:(ML;;NW;;;LW)";
+/// 命名管道的安全描述符（SDDL）：DACL 只授予当前用户，完整性标签定在 Medium。
+fn pipe_sddl(user_sid: &str) -> String {
+    format!("D:(A;;GRGW;;;{user_sid})S:(ML;;NW;;;ME)")
+}
+
+/// 进程令牌句柄，析构时关闭。
+struct TokenHandle(windows::Win32::Foundation::HANDLE);
+
+impl Drop for TokenHandle {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = windows::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+/// 当前进程所属用户的 SID 字符串（形如 `S-1-5-21-…-1001`）。
+fn current_user_sid() -> Option<String> {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
+    use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    use windows::core::PWSTR;
+
+    unsafe {
+        let mut raw = HANDLE::default();
+        OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut raw).ok()?;
+        let token = TokenHandle(raw);
+
+        // 先问长度。
+        let mut len = 0u32;
+        let _ = GetTokenInformation(token.0, TokenUser, None, 0, &mut len);
+        if len == 0 {
+            return None;
+        }
+        // TOKEN_USER 内含指针，缓冲区须按指针对齐。
+        let words = (len as usize).div_ceil(std::mem::size_of::<usize>());
+        let mut buf = vec![0usize; words.max(1)];
+        GetTokenInformation(
+            token.0,
+            TokenUser,
+            Some(buf.as_mut_ptr().cast()),
+            len,
+            &mut len,
+        )
+        .ok()?;
+
+        let user = &*(buf.as_ptr() as *const TOKEN_USER);
+        let mut text = PWSTR::null();
+        ConvertSidToStringSidW(user.User.Sid, &mut text).ok()?;
+        if text.is_null() {
+            return None;
+        }
+        let sid = text.to_string().ok();
+        let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+        sid
+    }
+}
 
 /// 持有由 SDDL 解析出的安全描述符，并在析构时释放其内存（`LocalFree`）。
 struct PipeSecurity {
@@ -42,7 +97,11 @@ struct PipeSecurity {
 
 impl PipeSecurity {
     fn new() -> Option<Self> {
-        let sddl = to_wide_null(PIPE_SDDL);
+        Self::from_sddl(&pipe_sddl(&current_user_sid()?))
+    }
+
+    fn from_sddl(sddl: &str) -> Option<Self> {
+        let sddl = to_wide_null(sddl);
         let mut psd = PSECURITY_DESCRIPTOR::default();
         unsafe {
             ConvertStringSecurityDescriptorToSecurityDescriptorW(
@@ -101,10 +160,11 @@ where
     F: Fn(Command) -> Response,
 {
     let wide_name = to_wide_null(pipe_name);
-    // 安全描述符构造一次，供所有管道实例复用。
     let security = PipeSecurity::new();
     if security.is_none() {
-        crate::logging::warn("命名管道安全描述符构造失败，管理员核心下普通配置程序可能无法连接");
+        crate::logging::warn(
+            "命名管道安全描述符构造失败，已回退系统默认；若核心以管理员运行，普通权限的配置程序将无法连接",
+        );
     }
     let sa_ptr = security.as_ref().map(PipeSecurity::as_ptr);
     let mut failures: u32 = 0;
@@ -203,6 +263,167 @@ mod tests {
     use super::*;
     use std::time::Duration;
     use windows::Win32::Foundation::{ERROR_BROKEN_PIPE, WIN32_ERROR};
+
+    #[test]
+    fn the_current_user_sid_is_a_real_sid() {
+        let sid = current_user_sid().expect("取当前用户 SID 失败");
+        assert!(
+            sid.starts_with("S-1-"),
+            "应是标准 SID 字符串形式，实际 {sid}"
+        );
+        assert_eq!(sid, current_user_sid().unwrap(), "同一进程内两次取应一致");
+    }
+
+    #[test]
+    fn the_pipe_is_scoped_to_the_current_user_not_everyone() {
+        let sddl = pipe_sddl(&current_user_sid().unwrap());
+        assert!(!sddl.contains(";WD)"), "DACL 不得再授予 Everyone: {sddl}");
+        assert!(sddl.contains(";S-1-"), "DACL 须按具体用户 SID 授权: {sddl}");
+    }
+
+    #[test]
+    fn the_integrity_label_stops_at_medium() {
+        let sddl = pipe_sddl("S-1-5-21-1-2-3-1001");
+        assert!(
+            sddl.contains("S:(ML;;NW;;;ME)"),
+            "完整性标签应为 Medium: {sddl}"
+        );
+        assert!(!sddl.contains(";LW)"), "不得再降到 Low 完整性: {sddl}");
+    }
+
+    #[test]
+    fn a_malformed_sddl_is_reported_rather_than_silently_ignored() {
+        assert!(PipeSecurity::from_sddl("这不是 SDDL").is_none());
+    }
+
+    /// SDDL 会把知名 SID 缩写成两个字母（内置管理员账户写作 `LA`），而
+    /// [`current_user_sid`] 拿到的是完整的 `S-1-5-21-…`。把期望的 SID 过一遍同样的
+    /// 转换，得到它在 SDDL 文本里实际会被写成的样子。
+    fn sddl_trustee_of(sid: &str) -> String {
+        use windows::Win32::Security::Authorization::ConvertSecurityDescriptorToStringSecurityDescriptorW;
+        use windows::Win32::Security::{DACL_SECURITY_INFORMATION, OBJECT_SECURITY_INFORMATION};
+        use windows::core::PWSTR;
+
+        let source = to_wide_null(&format!("D:(A;;GA;;;{sid})"));
+        let mut psd = PSECURITY_DESCRIPTOR::default();
+        let mut text = PWSTR::null();
+        let written = unsafe {
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                PCWSTR(source.as_ptr()),
+                SDDL_REVISION_1,
+                &mut psd,
+                None,
+            )
+            .expect("给定的 SID 应能组成合法 SDDL");
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                psd,
+                SDDL_REVISION_1,
+                OBJECT_SECURITY_INFORMATION(DACL_SECURITY_INFORMATION.0),
+                &mut text,
+                None,
+            )
+            .expect("应能把描述符转回 SDDL");
+            let written = text.to_string().unwrap();
+            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+            let _ = LocalFree(Some(HLOCAL(psd.0)));
+            written
+        };
+        // `D:(A;;GA;;;LA)`：`;;;` 之后到 `)` 之前的就是受让者。
+        written
+            .rsplit_once(";;;")
+            .and_then(|(_, tail)| tail.strip_suffix(')'))
+            .unwrap_or(sid)
+            .to_string()
+    }
+
+    #[test]
+    fn well_known_sids_show_up_under_their_sddl_alias() {
+        // 内置管理员组写作 BA，CI 上跑测试的内置管理员账户写作 LA；
+        // 拿原始的 S-1-… 去比对 SDDL 文本必然落空。
+        assert_eq!(sddl_trustee_of("S-1-5-32-544"), "BA");
+        // 普通账户没有别名，原样写出。
+        assert_eq!(
+            sddl_trustee_of("S-1-5-21-1-2-3-1001"),
+            "S-1-5-21-1-2-3-1001"
+        );
+    }
+
+    /// 真造一个管道，把 Windows 实际存下的安全描述符读回来比对。
+    #[test]
+    fn the_created_pipe_really_carries_the_intended_acl() {
+        use windows::Win32::Security::Authorization::{
+            ConvertSecurityDescriptorToStringSecurityDescriptorW, GetSecurityInfo, SE_KERNEL_OBJECT,
+        };
+        use windows::Win32::Security::{
+            DACL_SECURITY_INFORMATION, LABEL_SECURITY_INFORMATION, OBJECT_SECURITY_INFORMATION,
+        };
+        use windows::core::PWSTR;
+
+        let sid = current_user_sid().unwrap();
+        let security = PipeSecurity::new().expect("安全描述符应能构造");
+        let name = to_wide_null(r"\\.\pipe\zonedeck_test_acl_readback");
+        let handle = unsafe {
+            CreateNamedPipeW(
+                PCWSTR(name.as_ptr()),
+                PIPE_ACCESS_DUPLEX,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                1,
+                PIPE_BUF_SIZE,
+                PIPE_BUF_SIZE,
+                0,
+                Some(security.as_ptr()),
+            )
+        };
+        assert!(handle != INVALID_HANDLE_VALUE, "测试管道应能创建");
+
+        let wanted = DACL_SECURITY_INFORMATION.0 | LABEL_SECURITY_INFORMATION.0;
+        let mut psd = PSECURITY_DESCRIPTOR::default();
+        let rc = unsafe {
+            GetSecurityInfo(
+                handle,
+                SE_KERNEL_OBJECT,
+                OBJECT_SECURITY_INFORMATION(wanted),
+                None,
+                None,
+                None,
+                None,
+                Some(&mut psd),
+            )
+        };
+        assert!(rc.is_ok(), "应能读回管道的安全描述符: {rc:?}");
+
+        let mut text = PWSTR::null();
+        let converted = unsafe {
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                psd,
+                SDDL_REVISION_1,
+                OBJECT_SECURITY_INFORMATION(wanted),
+                &mut text,
+                None,
+            )
+        };
+        assert!(converted.is_ok(), "应能把描述符转回 SDDL");
+        let readback = unsafe { text.to_string().unwrap() };
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+            let _ = LocalFree(Some(HLOCAL(psd.0)));
+            let _ = windows::Win32::Foundation::CloseHandle(handle);
+        }
+
+        let trustee = sddl_trustee_of(&sid);
+        assert!(
+            readback.contains(&format!(";{trustee})")),
+            "管道上实际生效的 DACL 应授权给当前用户（SDDL 写作 {trustee}）: {readback}"
+        );
+        assert!(
+            !readback.contains(";WD)"),
+            "管道上实际生效的 DACL 不得再包含 Everyone: {readback}"
+        );
+        assert!(
+            readback.contains("(ML;;NW;;;ME)"),
+            "管道上实际生效的完整性标签应为 Medium: {readback}"
+        );
+    }
 
     fn connect_with_retry(pipe_name: &str) -> File {
         for _ in 0..50 {

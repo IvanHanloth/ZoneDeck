@@ -48,7 +48,7 @@ The core **cannot** be a Session 0 Windows service, or it could not enumerate an
 | Capability | API used | Notes |
 | --- | --- | --- |
 | Global hotkeys | `RegisterHotKey` | The most standard and complete trigger mechanism |
-| Hotkey interception | `WH_KEYBOARD_LL` | Installed only when a hotkey has "don't pass through" enabled |
+| Hooked hotkeys | `WH_KEYBOARD_LL` | Installed only when a hotkey enables the low-level keyboard hook, or uses a modifier-only / multi-key combination |
 | Mouse / corners | `WH_MOUSE_LL` | Installed only when mouse or corner triggers are enabled |
 | Idle detection | `GetLastInputInfo` | No need to monitor the keyboard continuously |
 
@@ -88,7 +88,7 @@ ZoneDeck/
 │           freeze.rs     NtSuspend/Resume + pssuspend64 enhanced freezing
 │           input_hooks.rs Dedicated input-hook thread (owns both low-level hooks, above-normal priority)
 │           mouse_hook.rs WH_MOUSE_LL (middle/side buttons, corners)
-│           keyboard_hook.rs WH_KEYBOARD_LL ("don't pass through" hotkey interception)
+│           keyboard_hook.rs WH_KEYBOARD_LL (hooked hotkeys: optional swallow, modifier-only, multi-key)
 │           idle.rs       GetLastInputInfo idle detection + auto-hide decision
 │           win_event.rs  SetWinEventHook window-event tracking (destroy/show/title change → live record upkeep)
 │           tray.rs       Shell_NotifyIcon tray + balloons
@@ -99,6 +99,7 @@ ZoneDeck/
 │           logging.rs    Levelled file logging (daily rotation + level filter + redaction + panic hook)
 │           recovery.rs   Crash recovery (intent persisted before acting + atomic writes; snapshots carry
 │                         boot time and process creation times, snapshots from a previous boot are discarded)
+│           stats.rs      Power stats (cumulative freezing/efficiency mode/memory released; throttled writes to stats.json)
 │           icon.rs       Process icon extraction (HICON → hand-written PNG/base64 encoding)
 │           single_instance.rs  Named-mutex single instance
 └── apps/config/                    Settings window (Tauri 2 + Svelte 5)
@@ -106,7 +107,14 @@ ZoneDeck/
     │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs/project links, built on verhub-sdk;
     │                      feedback may optionally be converted into a GitHub issue by the Verhub bot,
     │                      which makes the GitHub account mandatory;
-    │                      project links are cached: in memory + verhub_cache.json in the data folder, valid for one day)
+    │                      release notes / announcements / project info are fetched in the interface language,
+    │                      falling back to the default content when no translation exists;
+    │                      project links are cached: in memory + verhub_cache.json in the data folder,
+    │                      valid for one day and invalidated on a language change)
+    │   └── src/analytics.rs  anonymous usage statistics (a feature-adoption snapshot on launch
+    │                      plus setting-change events; event names and properties are both
+    │                      allow-listed and rules/whitelist are only counted; nothing is collected
+    │                      or written before consent, which lives in config's verhub.analytics)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)
@@ -119,7 +127,7 @@ ZoneDeck/
 
 ## Data folder
 
-The configuration (`config.json`), logs (`logs/`), the recovery snapshot (`recovery.json`) and the cache (`verhub_cache.json`) all live in a single **data folder**, resolved by `crates/common/src/paths.rs`. Installed and portable copies are treated differently:
+The configuration (`config.json`), logs (`logs/`), the recovery snapshot (`recovery.json`), the power stats (`stats.json`) and the cache (`verhub_cache.json`) all live in a single **data folder**, resolved by `crates/common/src/paths.rs`. Installed and portable copies are treated differently:
 
 | Case | Data folder | `DataDirKind` |
 | --- | --- | --- |
@@ -171,7 +179,7 @@ Message-loop state lives in a `RefCell`: the modal loops of the tray / floating-
 
 `WH_MOUSE_LL` / `WH_KEYBOARD_LL` callbacks are dispatched by the **installing thread's message pump**, and the system's input thread waits for the hook chain to return before delivering the event onward. Sharing a thread with the agent means enumerating windows, writing the recovery file, or handling system-wide window events would directly slow down global mouse and keyboard input; a single callback exceeding `LowLevelHooksTimeout` (300ms by default) also makes the system drop that event.
 
-`input_hooks.rs` therefore runs a dedicated thread that does nothing but pump messages for these two hooks, at above-normal priority. The callbacks only perform in-memory checks and `PostMessageW` (the hottest path, mouse movement, takes no lock — samples live in atomics). The agent thread issues install/uninstall requests synchronously through a message-only window and uses the return value to decide whether to fall back (when the keyboard hook cannot be installed, "do not pass through" hotkeys degrade to `RegisterHotKey`).
+`input_hooks.rs` therefore runs a dedicated thread that does nothing but pump messages for these two hooks, at above-normal priority. The callbacks only perform in-memory checks and `PostMessageW` (the hottest path, mouse movement, takes no lock — samples live in atomics). The agent thread issues install/uninstall requests synchronously through a message-only window and uses the return value to decide whether to fall back (when the keyboard hook cannot be installed, hooked hotkeys degrade to `RegisterHotKey`, and combinations `RegisterHotKey` cannot express do not take effect for that run).
 
 The agent thread's own priority is **not** raised: it does the heavy work — enumeration, freezing, persistence — and raising it would only steal CPU from foreground programs.
 
@@ -190,7 +198,7 @@ When restoring (showing), every record is validated first: the handle must still
 ## Stability (three layers of crash self-healing)
 
 1. **Crash logs**: key events and panics are written to `logs/ZoneDeck-YYYY-MM-DD.log` in the [data folder](#data-folder) (rotated daily, retained per `log_retention_days`; 0 disables logging; filtered by `log_level`, which defaults to WARN and above — see [Log levels and redaction](#log-levels-and-redaction)).
-2. **Crash recovery**: before any hide action executes, what is *about to be* hidden / frozen / muted is written to `recovery.json` (tmp + rename atomic replace); windows are recovered automatically on the next start after an abnormal exit. Snapshots carry the boot time and process creation times, so stale snapshots from a previous boot are discarded instead of acting on unrelated windows / processes.
+2. **Crash recovery**: before any hide action executes, what is *about to be* hidden / frozen / muted is written to `recovery.json` (tmp + rename atomic replace). After an abnormal exit the next start goes through `adopt_from`: every record is checked against the live handle, PID, image name and visibility; matching windows **stay hidden** (the core was killed, the user's intent did not change), records that no longer match are merely dropped and reported per `notifications.on_recovery_mismatch`; processes are only resumed / unmuted / un-throttled when not a single window could be taken over. Snapshots carry the boot time and process creation times, so stale snapshots from a previous boot are discarded instead of acting on unrelated windows / processes.
 3. **Watchdog**: the scheduled task's `RestartOnFailure` (restart within a minute of a crash, up to 3 times). Release builds use `panic = "abort"`, and the panic hook exits with a non-zero code once the log is written — exactly what triggers the scheduled-task restart.
 
 For the user-facing explanation see [Window recovery & crash self-healing](/en/guide/recovery).

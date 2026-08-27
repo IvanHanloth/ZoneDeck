@@ -1,18 +1,25 @@
 //! 副作用专职线程：把静音 / 冻结 / 暂停键等慢操作挪出窗口消息循环。
-//! 任务经 [`AsyncEffects`] 入队，由单线程按 FIFO 顺序执行；通道无界，事件不丢。
+//! 任务经 [`AsyncEffects`] 入队，由单线程按 FIFO 顺序执行。
 
-use std::sync::mpsc::{Sender, channel};
+use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crate::effects::Effects;
 use crate::{log_error, log_warn};
 
+/// 队列静置多久就把能效统计落盘。一次隐藏 / 恢复的十几个任务连着来，
+/// 排空后写一次即可；[`crate::stats`] 自己的节流会漏掉末尾那几笔，得有人补。
+const FLUSH_IDLE: Duration = Duration::from_secs(2);
+
 enum Task {
     Mute { pid: u32, mute: bool },
     SettleBeforeFreeze,
     Suspend { pid: u32, enhanced: bool },
     Resume { pid: u32, enhanced: bool },
+    TrimWorkingSet { pid: u32 },
+    SetEfficiency { pid: u32 },
+    ClearEfficiency { pid: u32 },
     SendPause,
     Quit,
 }
@@ -26,34 +33,63 @@ impl Task {
             Task::SettleBeforeFreeze => "冻结前静置".to_string(),
             Task::Suspend { pid, enhanced } => format!("冻结 (pid={pid}, 增强={enhanced})"),
             Task::Resume { pid, enhanced } => format!("解冻 (pid={pid}, 增强={enhanced})"),
+            Task::TrimWorkingSet { pid } => format!("清空工作集 (pid={pid})"),
+            Task::SetEfficiency { pid } => format!("开启效率模式 (pid={pid})"),
+            Task::ClearEfficiency { pid } => format!("撤销效率模式 (pid={pid})"),
             Task::SendPause => "发送媒体暂停键".to_string(),
             Task::Quit => "结束副作用线程".to_string(),
         }
     }
 }
 
-/// 副作用线程句柄。`shutdown` 排干队列后退出，保证退出前解冻 / 取消静音已生效。
+/// 副作用线程句柄；`shutdown` 排干队列后退出。
 pub struct EffectsWorker {
     tx: Sender<Task>,
     handle: Option<JoinHandle<()>>,
 }
 
 impl EffectsWorker {
-    /// 启动专职线程；`inner` 是真正执行副作用的实现（生产为 `WinEffects`）。
+    /// 启动专职线程；`inner` 是真正执行副作用的实现。
     pub fn spawn<E: Effects + Send + 'static>(inner: E) -> Self {
         let (tx, rx) = channel::<Task>();
         let handle = std::thread::Builder::new()
             .name("zonedeck-effects".into())
             .spawn(move || {
-                while let Ok(task) = rx.recv() {
+                // 干过活才等超时，否则一直阻塞在 recv 上：空闲时线程完全不醒。
+                let mut worked = false;
+                loop {
+                    let task = if worked {
+                        match rx.recv_timeout(FLUSH_IDLE) {
+                            Ok(task) => task,
+                            Err(RecvTimeoutError::Timeout) => {
+                                inner.flush_stats();
+                                worked = false;
+                                continue;
+                            }
+                            Err(RecvTimeoutError::Disconnected) => break,
+                        }
+                    } else {
+                        match rx.recv() {
+                            Ok(task) => task,
+                            Err(_) => break,
+                        }
+                    };
                     match task {
                         Task::Mute { pid, mute } => inner.mute(pid, mute),
                         Task::SettleBeforeFreeze => inner.settle_before_freeze(),
                         Task::Suspend { pid, enhanced } => inner.suspend(pid, enhanced),
                         Task::Resume { pid, enhanced } => inner.resume(pid, enhanced),
+                        Task::TrimWorkingSet { pid } => inner.trim_working_set(pid),
+                        Task::SetEfficiency { pid } => inner.set_efficiency(pid),
+                        Task::ClearEfficiency { pid } => inner.clear_efficiency(pid),
                         Task::SendPause => inner.send_pause(),
                         Task::Quit => break,
                     }
+                    worked = true;
+                }
+                // 收到 Quit 或发送端全没了都会走到这里，末尾那批统计不能烂在内存里。
+                if worked {
+                    inner.flush_stats();
                 }
             })
             .expect("创建副作用线程失败");
@@ -90,7 +126,7 @@ impl EffectsWorker {
     }
 }
 
-/// 把每个副作用调用转成任务入队的 [`Effects`] 实现。克隆廉价。
+/// 把每个副作用调用转成任务入队的 [`Effects`] 实现。
 #[derive(Clone)]
 pub struct AsyncEffects {
     tx: Sender<Task>,
@@ -120,6 +156,15 @@ impl Effects for AsyncEffects {
     fn resume(&self, pid: u32, enhanced: bool) {
         self.send(Task::Resume { pid, enhanced });
     }
+    fn trim_working_set(&self, pid: u32) {
+        self.send(Task::TrimWorkingSet { pid });
+    }
+    fn set_efficiency(&self, pid: u32) {
+        self.send(Task::SetEfficiency { pid });
+    }
+    fn clear_efficiency(&self, pid: u32) {
+        self.send(Task::ClearEfficiency { pid });
+    }
     fn send_pause(&self) {
         self.send(Task::SendPause);
     }
@@ -130,7 +175,7 @@ mod tests {
     use super::*;
     use std::sync::{Arc, Mutex};
 
-    /// 线程安全的记录用 Effects：按调用顺序记下每个动作。
+    /// 按调用顺序记下每个动作。
     #[derive(Clone, Default)]
     struct Recorder {
         calls: Arc<Mutex<Vec<String>>>,
@@ -152,9 +197,65 @@ mod tests {
         fn resume(&self, pid: u32, _enhanced: bool) {
             self.calls.lock().unwrap().push(format!("resume:{pid}"));
         }
+        fn trim_working_set(&self, pid: u32) {
+            self.calls.lock().unwrap().push(format!("trim:{pid}"));
+        }
+        fn set_efficiency(&self, pid: u32) {
+            self.calls.lock().unwrap().push(format!("eco_on:{pid}"));
+        }
+        fn clear_efficiency(&self, pid: u32) {
+            self.calls.lock().unwrap().push(format!("eco_off:{pid}"));
+        }
         fn send_pause(&self) {
             self.calls.lock().unwrap().push("pause".into());
         }
+        fn flush_stats(&self) {
+            self.calls.lock().unwrap().push("flush".into());
+        }
+    }
+
+    impl Recorder {
+        fn calls(&self) -> Vec<String> {
+            self.calls.lock().unwrap().clone()
+        }
+    }
+
+    /// 队列排空静置后要主动落盘：核心不退出也可能几小时不再有动作，
+    /// 末尾那几笔统计不能一直烂在内存里。
+    #[test]
+    fn stats_are_flushed_once_the_queue_goes_idle() {
+        let recorder = Recorder::default();
+        let worker = EffectsWorker::spawn(recorder.clone());
+        let effects = worker.effects();
+
+        effects.set_efficiency(100);
+        std::thread::sleep(FLUSH_IDLE + Duration::from_millis(500));
+        assert_eq!(
+            recorder.calls(),
+            vec!["eco_on:100", "flush"],
+            "静置一轮之后该落一次盘"
+        );
+
+        // 落过盘就该回到完全阻塞，没有新任务时不再重复写。
+        std::thread::sleep(FLUSH_IDLE + Duration::from_millis(500));
+        assert_eq!(
+            recorder.calls(),
+            vec!["eco_on:100", "flush"],
+            "空闲时不该反复落盘"
+        );
+
+        worker.shutdown(Duration::from_secs(5));
+    }
+
+    /// 退出时队列里还压着任务，排干之后同样要落盘。
+    #[test]
+    fn shutdown_flushes_what_the_last_batch_recorded() {
+        let recorder = Recorder::default();
+        let worker = EffectsWorker::spawn(recorder.clone());
+        worker.effects().clear_efficiency(100);
+        worker.shutdown(Duration::from_secs(5));
+
+        assert_eq!(recorder.calls(), vec!["eco_off:100", "flush"]);
     }
 
     #[test]
@@ -163,23 +264,35 @@ mod tests {
         let worker = EffectsWorker::spawn(recorder.clone());
         let effects = worker.effects();
 
-        // 暂停键必须先于冻结执行（冻结后的进程收不到按键）；静置须紧挨在冻结前。
+        // 暂停键先于冻结、静置紧挨冻结前、清空工作集排在冻结之后。
         effects.send_pause();
         effects.mute(100, true);
+        effects.set_efficiency(100);
         effects.settle_before_freeze();
         effects.suspend(100, false);
+        effects.trim_working_set(100);
         effects.resume(100, false);
+        effects.clear_efficiency(100);
 
         worker.shutdown(Duration::from_secs(5));
 
+        // 落盘不是入队的任务，本例只看副作用的先后，另有用例专管它。
+        let order: Vec<String> = recorder
+            .calls()
+            .into_iter()
+            .filter(|c| c != "flush")
+            .collect();
         assert_eq!(
-            *recorder.calls.lock().unwrap(),
+            order,
             vec![
                 "pause",
                 "mute:100:true",
+                "eco_on:100",
                 "settle",
                 "suspend:100",
-                "resume:100"
+                "trim:100",
+                "resume:100",
+                "eco_off:100"
             ],
             "任务应按入队顺序全部执行完毕（shutdown 排干队列）"
         );
@@ -190,7 +303,7 @@ mod tests {
         let worker = EffectsWorker::spawn(Recorder::default());
         let effects = worker.effects();
         worker.shutdown(Duration::from_secs(5));
-        // 线程已退出，入队应静默失败（记日志）而非 panic。
+        // 线程已退出，入队应静默失败而非 panic。
         effects.mute(1, true);
         effects.send_pause();
     }

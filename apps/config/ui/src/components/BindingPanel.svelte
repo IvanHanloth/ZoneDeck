@@ -7,6 +7,7 @@
     addProcessRules,
     addWindowRules,
     applyListFilters,
+    hasProcessIdentity,
     newProcessRegexRule,
     newWindowRegexRule,
   } from "../lib/grouping.js";
@@ -36,8 +37,10 @@
   function addProcesses() {
     const picked = pickedWindows();
     if (picked.length === 0) return toast(t("binding.pickProcessesFirst"), true);
+    const unknown = picked.filter((w) => !hasProcessIdentity(w)).length;
     app.config.process_rules = addProcessRules(app.config.process_rules, picked);
     selectedAvail = [];
+    if (unknown) toast(t("binding.processUnidentified", { count: unknown }), true);
   }
 
   // 新正则规则预填一条「包含式」正则，种子取自选中窗口。
@@ -96,7 +99,9 @@
 </div>
 
 <style>
+  /* 容器查询而非媒体查询：左侧导航会吃掉窗口宽度，按整窗算断点会切错 */
   .binding {
+    container-type: inline-size;
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -127,7 +132,7 @@
     min-width: 0;
   }
 
-  @media (max-width: 720px) {
+  @container (max-width: 520px) {
     .grid {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr 1fr;

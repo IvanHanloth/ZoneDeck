@@ -4,7 +4,7 @@
   "identifier": "cn.hanloth.zonedeck.config",
   "build": {
     "frontendDist": "../dist",
-    "beforeBuildCommand": "npm --prefix ui run build"
+    "beforeBuildCommand": "pnpm --dir ui run build"
   },
   "app": {
     "withGlobalTauri": false,
@@ -12,14 +12,15 @@
       {
         "label": "main",
         "title": "ZoneDeck",
-        "width": 920,
-        "height": 660,
+        "width": 1120,
+        "height": 760,
         "minWidth": 720,
         "minHeight": 520,
         "resizable": true,
         "center": true,
         "decorations": false,
-        "visible": false
+        "transparent": true,
+        "windowEffects": { "effects": ["mica"] }
       }
     ],
     "security": {

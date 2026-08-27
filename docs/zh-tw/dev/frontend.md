@@ -26,26 +26,31 @@ apps/config/ui/
 │       ├── state.svelte.js  全域狀態（$state）+ 各類動作
 │       ├── ipc.js           呼叫 Tauri 命令／監聽事件
 │       ├── hotkey.js        快速鍵解析/格式化（配 hotkey.test.js）
+│       ├── capture.js       錄製期獨佔鍵盤（後端攔截，失敗回落 DOM 事件）
 │       ├── pointer.js       滑鼠連按/連按時間常數（配 pointer.test.js）
 │       ├── grouping.js      視窗/程序規則的增刪與篩選（配 grouping.test.js）
 │       ├── theme.js         佈景主題切換（配 theme.test.js）
 │       ├── i18n.svelte.js   介面語言：catalog 查表 + 語言解析（配 i18n.test.js）
 │       ├── markdown.js      公告/更新記錄的 Markdown 算繪（配 markdown.test.js）
+│       ├── powerstats.js   能效統計的換算與格式化（配 powerstats.test.js）
 │       └── verhub.js        檢查更新/公告/意見回饋（含轉 Issue）/專案連結/開啟外部連結
 ├── locales/                 三語文案 catalog（zh-CN.js / en.js / zh-TW.js）
 ├── vite.config.js
 └── svelte.config.js
 ```
 
-設定介面以標籤頁組織，對應五個面板元件：
+設定介面以標籤頁組織，每個標籤頁對應一個面板元件：
 
 | 標籤 | 元件 | 內容 |
 | --- | --- | --- |
 | 視窗綁定 | `BindingPanel` | 視窗清單 + 視窗/程序規則 |
+| 白名單 | `WhitelistPanel` | 程式在隱藏時需要略過的功能 |
 | 快速鍵與滑鼠 | `HotkeysPanel` | 鍵盤快速鍵、滑鼠連按、四角、閒置自動隱藏 |
+| 隱藏設定 | `HidePanel` | 靜音/暫停鍵/通知區域圖示/最小化 |
+| 能效控制 | `PowerPanel` | 程序凍結與記憶體佔用 |
 | 提示設定 | `NotificationsPanel` | 逐事件通知開關與圖示狀態角標 |
-| 其他選項 | `OptionsPanel` | 靜音/暫停/凍結/權限/記錄檔/工具 |
 | 關於與意見回饋 | `AboutPanel` | 版本、更新、公告、意見回饋（可轉為 GitHub Issue） |
+| 通用設定 | `OptionsPanel` | 自動啟動/權限/語言/記錄檔/工具 |
 
 ## 無邊框自繪視窗
 

@@ -15,7 +15,7 @@ use zonedeck_core::agent::{self, AgentOptions};
 use zonedeck_core::hide::Target;
 use zonedeck_core::recovery::{self, Snapshot};
 
-/// 在带消息循环的独立线程上创建一个“已被隐藏”的窗口。
+/// 在带消息循环的独立线程上创建一个已被隐藏的窗口。
 fn spawn_hidden_window() -> (i64, u32, std::thread::JoinHandle<()>) {
     let (tx, rx) = std::sync::mpsc::channel::<(i64, u32)>();
     let handle = std::thread::spawn(move || unsafe {
@@ -54,8 +54,9 @@ fn is_visible(hwnd: i64) -> bool {
     unsafe { IsWindowVisible(HWND(hwnd as isize as *mut std::ffi::c_void)).as_bool() }
 }
 
+/// 上一轮异常退出时窗口还藏着：核心接手后应继续藏，不把它弹出来。
 #[test]
-fn agent_restores_hidden_windows_left_by_a_crash() {
+fn agent_keeps_windows_that_a_crash_left_hidden() {
     let (hwnd, window_tid, window_thread) = spawn_hidden_window();
     assert!(!is_visible(hwnd), "测试前提：窗口已隐藏");
 
@@ -66,8 +67,7 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
         .unwrap();
 
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
-    // save 会盖上版本与本次开机时刻，等价于核心崩溃前留下的真实快照。
-    // 测试窗口属于本进程，pid 须如实填写，否则恢复侧的身份校验会拦下它。
+    // 测试窗口属于本进程，pid 须如实填写以通过恢复侧的身份校验。
     recovery::save(
         &recovery_path,
         &Snapshot {
@@ -89,17 +89,22 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
     };
     let agent_thread = std::thread::spawn(move || agent::run(options));
 
-    // 能应答 IPC 即代表启动流程已完成。
     let client = PipeClient::new(pipe);
     let state = client.send(&Command::GetState).unwrap();
     assert_eq!(
         state,
-        Response::State { hidden: false },
-        "恢复完成后核心应处于未隐藏状态"
+        Response::State { hidden: true },
+        "接管之后核心应处于隐藏状态"
     );
 
-    assert!(is_visible(hwnd), "崩溃前被隐藏的窗口应在核心启动时被找回");
-    assert!(!recovery_path.exists(), "恢复完成后 recovery.json 应被清除");
+    assert!(
+        !is_visible(hwnd),
+        "崩溃前藏着的窗口应继续藏着，核心接手不得把它弹出来"
+    );
+    assert!(
+        recovery_path.exists(),
+        "接管后的记录须重新落盘，以防再次异常退出"
+    );
 
     let quit = client.send(&Command::Quit).unwrap();
     assert_eq!(quit, Response::Ok);
@@ -110,6 +115,8 @@ fn agent_restores_hidden_windows_left_by_a_crash() {
         std::thread::sleep(Duration::from_millis(50));
     }
     agent_thread.join().unwrap();
+
+    assert!(is_visible(hwnd), "核心正常退出时应把接管的窗口还回来");
 
     unsafe {
         let _ = PostThreadMessageW(window_tid, WM_QUIT, WPARAM(0), LPARAM(0));
@@ -129,7 +136,7 @@ fn agent_discards_snapshot_from_a_previous_boot() {
         .save(&config_path)
         .unwrap();
 
-    // 手工构造「上一次开机」留下的快照：boot_time_ms 远早于本次开机。
+    // 手工构造「上一次开机」留下的快照。
     let recovery_path = dir.path().join(recovery::RECOVERY_FILE_NAME);
     let stale = Snapshot {
         schema: recovery::SCHEMA_CURRENT,
@@ -137,6 +144,7 @@ fn agent_discards_snapshot_from_a_previous_boot() {
         hidden: vec![Target::bare(hwnd, std::process::id())],
         frozen: vec![],
         muted: vec![],
+        efficiency: vec![],
         enhanced: false,
     };
     std::fs::write(&recovery_path, serde_json::to_string(&stale).unwrap()).unwrap();

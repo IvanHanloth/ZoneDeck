@@ -24,6 +24,7 @@ The settings window reads and writes the configuration automatically. This page 
 | `verhub` | object | Updates / announcements; see below |
 | `window_rules` | object[] | Window rules (fine-grained) |
 | `process_rules` | object[] | Process rules (coarse-grained) |
+| `whitelist` | object[] | Whitelist: per-process opt-out of hiding / freezing / muting |
 | `hide_binding` | object[] | *v2* flat bindings, used only for migration; cleared afterwards and never written back |
 
 ## `hotkey`
@@ -35,26 +36,38 @@ The settings window reads and writes the configuration automatically. This page 
 | `hide_only_hotkey` | `""` | [Hide windows only](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
 | `show_only_hotkey` | `""` | [Show windows only](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
 | `hide_foreground_hotkey` | `""` | [Hide foreground window](/en/guide/hotkeys#one-way-hotkeys-and-hiding-the-foreground-window); empty means disabled |
-| `hide_intercept` | `false` | [Don't pass the hide hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
-| `close_intercept` | `false` | [Don't pass the close hotkey through](/en/guide/hotkeys#keeping-hotkeys-from-other-apps) (keyboard-hook interception) |
+| `hide_hook` | `false` | [Trigger the hide hotkey through the low-level keyboard hook](/en/guide/hotkeys#the-keyboard-hook-and-keeping-keys-from-other-apps) |
+| `close_hook` | `false` | Trigger the close hotkey through the low-level keyboard hook |
+| `hide_only_hook` | `false` | Trigger the hide-only hotkey through the low-level keyboard hook |
+| `show_only_hook` | `false` | Trigger the show-only hotkey through the low-level keyboard hook |
+| `hide_foreground_hook` | `false` | Trigger the hide-foreground hotkey through the low-level keyboard hook |
+| `hide_intercept` | `false` | [Don't pass the hide hotkey through](/en/guide/hotkeys#the-keyboard-hook-and-keeping-keys-from-other-apps); when true, `hide_hook` is forced true as well |
+| `close_intercept` | `false` | Don't pass the close hotkey through |
 | `hide_only_intercept` | `false` | Don't pass the hide-only hotkey through |
 | `show_only_intercept` | `false` | Don't pass the show-only hotkey through |
 | `hide_foreground_intercept` | `false` | Don't pass the hide-foreground hotkey through |
+
+Hotkey strings support [richer combinations](/en/guide/hotkeys#richer-combinations): several main keys joined with `+` (up to four, e.g. `"Q+W"`), or modifiers alone for a modifier-only hotkey (e.g. `"Ctrl+Shift"`). Only the keyboard hook can carry those two kinds, so the core routes them through it even when the matching `*_hook` is off. Punctuation keys are stored by key position (`OEM_1`, `OEM_PLUS` and so on) and do not shift with the keyboard layout.
 
 ## `setting`
 
 | Field | Type | Default | Feature |
 | --- | --- | --- | --- |
-| `mute_after_hide` | bool | `true` | [Mute after hiding](/en/guide/options) |
-| `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/options) |
-| `hide_current` | bool | `true` | [Also hide the active window](/en/guide/options) |
-| `click_to_hide` | bool | `true` | [Toggle hiding by clicking the tray icon](/en/guide/options) |
-| `hide_icon_after_hide` | bool | `false` | [Also hide ZoneDeck's tray icon](/en/guide/options) |
+| `mute_after_hide` | bool | `true` | [Mute after hiding](/en/guide/hiding) |
+| `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/hiding) |
+| `minimize_before_hide` | bool | `false` | [Minimise windows before hiding](/en/guide/hiding) |
+| `hide_current` | bool | `true` | [Also hide the active window](/en/guide/hiding) |
+| `hide_icon_after_hide` | bool | `false` | [Also hide ZoneDeck's tray icon](/en/guide/hiding) |
+| `tray_enabled` | bool | `true` | [Show the tray icon](/en/guide/notifications#show-the-tray-icon); when false the icon never appears and balloons / badges go with it |
+| `tray_clicks` | object | See below | [Tray icon click actions](/en/guide/notifications#tray-icon-click-actions) |
 | `tray_badges` | object | See below | [Tray icon status](/en/guide/notifications#tray-icon-status) |
 | `tray_show_tooltip` | bool | `true` | [Tray icon tooltip](/en/guide/notifications#tray-icon-tooltip) |
 | `freeze_after_hide` | bool | `false` | [Freezing master switch](/en/guide/freeze) |
 | `enhanced_freeze` | bool | `false` | [Enhanced freezing](/en/guide/freeze) |
-| `freeze_whole_tree` | bool | `false` | [Freeze the whole process tree](/en/guide/freeze) |
+| `power_scope` | string | `"self"` | [Freezing & memory scope](/en/guide/freeze): `self` (target process only) ｜ `tree` (and all its children) ｜ `image` (all instances of the same image name); governs freezing and memory trimming, unknown values normalise to `self` |
+| `efficiency_after_hide` | bool | `false` | [Efficiency mode](/en/guide/freeze): drop hidden processes to EcoQoS + low priority; independent of freezing |
+| `efficiency_scope` | string | `"self"` | [Efficiency mode scope](/en/guide/freeze), same values as `power_scope`, independent of the freezing scope |
+| `trim_memory_after_freeze` | bool | `false` | [Reduce memory usage](/en/guide/freeze) (frozen processes only) |
 | `show_float_window` | bool | `false` | Floating window (in development) |
 | `mouse` | object | See below | [Hiding with mouse buttons](/en/guide/hotkeys) |
 | `auto_hide_enabled` | bool | `false` | [Auto-hide when idle](/en/guide/hotkeys) |
@@ -71,6 +84,24 @@ The settings window reads and writes the configuration automatically. This page 
 `middle_button_hide` / `side_button1_hide` / `side_button2_hide` exist only for deserialisation and migration; they are cleared afterwards and never written back. Use the `mouse` structure instead.
 :::
 
+::: details Legacy "freeze the whole process tree" switch (deprecated)
+`freeze_whole_tree` exists only for deserialisation and migration: if a config has no `power_scope`, `true` migrates to `power_scope: "tree"` and `false` to `"self"`, after which the old key is cleared and never written back. Configs that already set `power_scope` explicitly are unaffected.
+:::
+
+::: details Legacy "toggle hiding by clicking the tray icon" switch (deprecated)
+`click_to_hide` exists only for deserialisation and migration: if a config has no `tray_clicks`, `true` migrates to `tray_clicks.left: "toggle"` and `false` to `"none"`, after which the old key is cleared and never written back. Configs that lack the key entirely are treated as `true` (the old default was on). Configs that already set `tray_clicks` explicitly are unaffected.
+:::
+
+### `setting.tray_clicks`
+
+[Tray icon click actions](/en/guide/notifications#tray-icon-click-actions): each of the three clicks gets one action, out of `none` (do nothing) ｜ `toggle` (hide / show windows) ｜ `menu` (open the tray menu) ｜ `settings` (open the settings window). Unknown values normalise to `none`.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `left` | `"toggle"` | Single click |
+| `double` | `"none"` | Double click. When it is not `none`, a single click waits out the system double-click time before running |
+| `right` | `"menu"` | Right click |
+
 ### `setting.mouse`
 
 Each button is a `MouseButton`: `{ enabled: bool, clicks: 1..=3, modifiers: string }`.
@@ -82,7 +113,7 @@ Each button is a `MouseButton`: `{ enabled: bool, clicks: 1..=3, modifiers: stri
 | `allow_click_restore` | `true` | Allow restoring by pressing again |
 
 ::: info Defaults for a fresh installation
-A fresh installation enables **a middle-button single click** (`middle.enabled = true`, `clicks = 1`) and leaves the other four off. An old configuration without a `mouse` section reads as **all off**.
+A fresh installation enables **a middle-button double click** (`middle.enabled = true`, `clicks = 2`) and leaves the other four off. An old configuration without a `mouse` section reads as **all off**.
 :::
 
 ### `setting.tray_badges`
@@ -107,6 +138,7 @@ Each field accepts `hidden` (windows are hidden) \| `auto_hide` (auto hide is en
 | `on_autostart` | `true` | Startup setting changed |
 | `on_hide` | `false` | Every hide |
 | `on_show` | `false` | Every show |
+| `on_recovery_mismatch` | `true` | Notify when, after an abnormal exit, some hidden-window records no longer match what was recorded |
 
 ## `verhub`
 
@@ -114,6 +146,8 @@ Each field accepts `hidden` (windows are hidden) \| `auto_hide` (auto hide is en
 | --- | --- | --- |
 | `include_preview` | `false` | Whether update checks include preview releases |
 | `seen_announcement_id` | `""` | The id of the newest announcement already read |
+| `analytics` | `null` | Consent for anonymous usage statistics: `null` means the user has not been asked yet and the first run prompts for it; `true` granted, `false` declined |
+| `analytics_consent_sent` | `false` | Whether the "took part" event has already been sent. One per device; toggling the switch again does not resend it |
 
 ## `window_rules`
 
@@ -142,6 +176,26 @@ Coarse-grained rules that hide every window of a program, matched by executable.
 | `by_name` | `false` | Match on the file name only, ignoring the path |
 | `include_untitled` | `true` | Whether to include untitled windows (process rules include them by default) |
 | `include_background` | `false` | Whether to include background windows |
+
+## `whitelist`
+
+Declares, per process, which modes to skip; see [Whitelist](/en/guide/whitelist). Matching mirrors `process_rules`, except it defaults to **file-name** matching, and both file names and paths compare case-insensitively.
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `process` | | Process name |
+| `path` | | Executable path |
+| `regex` | | Regex (applied to the path or the file name) |
+| `by_name` | `true` | Match on the file name only, ignoring the path |
+| `ignore_hide` | `false` | Never hide this program's windows |
+| `ignore_freeze` | `false` | Never freeze this program's processes after hiding |
+| `ignore_mute` | `false` | Never mute this program's processes after hiding |
+
+::: tip Missing key vs empty array
+When the `whitelist` **key is absent** (old or brand-new configs), a default `explorer.exe` entry is seeded. Writing `[]` means the user emptied the list and nothing is seeded again. After normalization the field is always an array, never `null`.
+:::
+
+ZoneDeck's own core and settings app (`ZoneDeck.exe` / `core.exe` / `config.exe` / `zonedeck-config.exe`) are **always excluded from freezing**. That guard lives in `BUILTIN_FREEZE_GUARDS` in `crates/common/src/matching.rs`, never appears in the config file, and cannot be bypassed by editing it.
 
 ## Compatibility and migration
 

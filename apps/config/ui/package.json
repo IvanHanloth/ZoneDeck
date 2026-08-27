@@ -2,6 +2,7 @@
   "name": "zonedeck-config-ui",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.33.4",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -19,5 +20,8 @@
     "unplugin-icons": "^23.0.1",
     "vite": "^7",
     "vitest": "^3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
   }
 }

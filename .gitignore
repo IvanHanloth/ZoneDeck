@@ -28,6 +28,10 @@ apps/config/src-tauri/gen/
 ZoneDeck-*.log
 recovery.json
 
+# 静态分析产物
+qodana.sarif.json
+.qodana/
+
 docs/.vitepress/dist
 docs/.vitepress/cache
 

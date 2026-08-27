@@ -17,14 +17,14 @@ export function groupByProcess(windows) {
   );
 }
 
-/** 需要请求图标的去重路径列表（跳过已缓存的，含"无图标"负缓存）。 */
+/** 需要请求图标的去重路径列表，跳过已缓存的。 */
 export function iconPathsToFetch(windows, cache) {
   return [...new Set(windows.map((w) => w.path))].filter(
     (p) => p && !(p in cache),
   );
 }
 
-/** 按标题 / 进程名 / 路径模糊搜索（不区分大小写）。空查询返回全部。 */
+/** 按标题 / 进程名 / 路径模糊搜索，不区分大小写；空查询返回全部。 */
 export function filterWindows(windows, query) {
   const q = (query || "").trim().toLowerCase();
   if (!q) return windows;
@@ -35,7 +35,7 @@ export function filterWindows(windows, query) {
   );
 }
 
-/** 拆成「可见」与「后台（不可见）」两组。visible 缺省视为 true（兼容旧数据）。 */
+/** 拆成「可见」与「后台」两组；visible 缺省视为 true。 */
 export function splitByVisibility(windows) {
   const visible = [];
   const hidden = [];
@@ -45,12 +45,7 @@ export function splitByVisibility(windows) {
   return { visible, hidden };
 }
 
-/**
- * 与核心 `zonedeck_common::NO_TITLE` 一致的占位标题。
- *
- * 它是跨进程、写进配置文件的哨兵值，不随界面语言变化；展示时用
- * `t("common.noTitleWindow")` 翻译。
- */
+/** 与核心 `zonedeck_common::NO_TITLE` 一致的占位标题；不随界面语言变化。 */
 export const NO_TITLE = "无标题窗口";
 
 /** 转义正则元字符。 */
@@ -76,12 +71,17 @@ export function windowRuleFromWindow(w) {
   };
 }
 
-/** 由现有窗口构造一条「进程」精确规则（按可执行文件路径）。 */
+/** 能否据此窗口构造按进程匹配的规则：映像名与完整路径至少要有一个。 */
+export function hasProcessIdentity(w) {
+  return !!(w?.process || w?.path);
+}
+
+/** 由现有窗口构造一条「进程」精确规则；查不到完整路径时退回按文件名匹配。 */
 export function processRuleFromWindow(w) {
   return {
     process: w.process,
     path: w.path,
-    by_name: false,
+    by_name: !w.path,
     include_untitled: false,
     include_background: false,
   };
@@ -114,11 +114,58 @@ export function newProcessRegexRule(seedProcess) {
   };
 }
 
+/** 由现有窗口构造一条白名单条目；三个忽略开关置假，默认按文件名匹配。 */
+export function whitelistRuleFromWindow(w) {
+  return {
+    process: w.process,
+    path: w.path,
+    by_name: true,
+    ignore_hide: false,
+    ignore_freeze: false,
+    ignore_mute: false,
+  };
+}
+
+/** 新的白名单正则条目（默认作用于文件名）。 */
+export function newWhitelistRegexRule(seedProcess) {
+  return {
+    process: "",
+    path: "",
+    regex: containsPattern(seedProcess || t("binding.regexSeedProcess")),
+    by_name: true,
+    ignore_hide: false,
+    ignore_freeze: false,
+    ignore_mute: false,
+  };
+}
+
+/** 精确规则的去重键：按文件名匹配看进程名，否则看路径。 */
+function ruleKey(rule) {
+  return (rule.by_name ? rule.process : rule.path)?.toLowerCase() || "";
+}
+
+/** 追加为白名单条目，跳过已有的同一目标，返回新数组。 */
+export function addWhitelistRules(existing, pickedWindows) {
+  const result = existing.slice();
+  const seen = new Set(
+    result.filter((r) => !isRegexRule(r)).map(ruleKey).filter(Boolean),
+  );
+  for (const w of pickedWindows) {
+    if (!hasProcessIdentity(w)) continue;
+    const rule = whitelistRuleFromWindow(w);
+    const key = ruleKey(rule);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(rule);
+  }
+  return result;
+}
+
 export function isRegexRule(rule) {
   return rule && rule.regex != null;
 }
 
-/** 一条窗口规则是否与某窗口指向同一目标（用于去重，仅针对精确规则）。 */
+/** 一条精确窗口规则是否与某窗口指向同一目标，用于去重。 */
 function windowRuleCoversWindow(rule, w) {
   if (isRegexRule(rule)) return false;
   if (rule.hwnd && rule.hwnd === w.hwnd) return true;
@@ -135,14 +182,19 @@ export function addWindowRules(existing, pickedWindows) {
   return result;
 }
 
-/** 按可执行文件路径去重后追加为进程规则，返回新数组。 */
+/** 按匹配依据去重后追加为进程规则，跳过身份不明的窗口，返回新数组。 */
 export function addProcessRules(existing, pickedWindows) {
   const result = existing.slice();
-  const seen = new Set(result.filter((r) => !isRegexRule(r)).map((r) => r.path));
+  const seen = new Set(
+    result.filter((r) => !isRegexRule(r)).map(ruleKey).filter(Boolean),
+  );
   for (const w of pickedWindows) {
-    if (!w.path || seen.has(w.path)) continue;
-    seen.add(w.path);
-    result.push(processRuleFromWindow(w));
+    if (!hasProcessIdentity(w)) continue;
+    const rule = processRuleFromWindow(w);
+    const key = ruleKey(rule);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(rule);
   }
   return result;
 }
