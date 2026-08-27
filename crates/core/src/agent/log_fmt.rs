@@ -101,9 +101,14 @@ fn summarize(items: impl Iterator<Item = String>) -> String {
     }
 }
 
+/// 注册失败是否为「组合已被别的程序占用」（错误码 1409）。
+pub(super) fn is_hotkey_taken(e: &windows::core::Error) -> bool {
+    e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult()
+}
+
 /// 热键注册失败的日志文案；只在错误码为 1409 时断言被占用。
 pub(super) fn hotkey_failure_message(label: &str, raw: &str, e: &windows::core::Error) -> String {
-    if e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult() {
+    if is_hotkey_taken(e) {
         format!("{label}热键注册失败，已被其他程序占用，该热键不生效: {raw}")
     } else {
         format!(

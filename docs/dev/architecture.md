@@ -106,7 +106,11 @@ ZoneDeck/
     ├── src-tauri/  Rust 后端命令 + tauri.conf.json + capabilities
     │   └── src/verhub.rs  Verhub 客户端（版本/公告/反馈/日志/项目链接，基于 verhub-sdk；
     │                      反馈可选转为 GitHub Issue，由 Verhub 机器人创建，此时须填 GitHub 账号；
-    │                      项目链接带缓存：内存 + 数据目录下的 verhub_cache.json，有效期一天）
+    │                      版本说明 / 公告 / 项目信息按界面语言取译文，缺译文时回落默认内容；
+    │                      项目链接带缓存：内存 + 数据目录下的 verhub_cache.json，有效期一天，换语言即失效）
+    │   └── src/analytics.rs  匿名使用统计（启动时报一份功能采用快照 + 设置改动事件，
+    │                      事件名与属性都有白名单，规则与白名单只报条数；
+    │                      未获授权前一字节不采不写，授权状态存在 config 的 verhub.analytics）
     ├── ui/         前端源码（Vite + Svelte 5）
     │   └── src/    lib/（纯逻辑 + vitest 测试）+ components/（Svelte 组件）
     │                + locales/（三语文案 catalog，以 zh-CN.js 为基准）

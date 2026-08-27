@@ -147,6 +147,8 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | --- | --- | --- |
 | `include_preview` | `false` | 更新检查是否纳入预览版 |
 | `seen_announcement_id` | `""` | 已读的最新公告 id |
+| `analytics` | `null` | 匿名使用统计的授权：`null` 表示还没问过用户，首次启动时弹窗征求同意；`true` 同意，`false` 拒绝 |
+| `analytics_consent_sent` | `false` | 「同意参与」是否已上报过。同一台设备只报一次，反复开关不再重复 |
 
 ## `window_rules`（窗口规则）
 

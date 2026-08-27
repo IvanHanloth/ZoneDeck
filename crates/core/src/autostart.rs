@@ -559,8 +559,11 @@ mod tests {
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(&bytes[..2], &[0xFF, 0xFE], "应带 UTF-16LE BOM");
         let units: Vec<u16> = bytes[2..]
-            .chunks_exact(2)
-            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .copied()
+            .map(u16::from_le_bytes)
             .collect();
         assert_eq!(String::from_utf16(&units).unwrap(), "<Task>测试</Task>");
     }

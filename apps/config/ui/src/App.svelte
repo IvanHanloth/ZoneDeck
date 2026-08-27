@@ -16,15 +16,10 @@
   import AnnouncementModal from "./components/AnnouncementModal.svelte";
   import ErrorReportModal from "./components/ErrorReportModal.svelte";
   import DataNoticeModal from "./components/DataNoticeModal.svelte";
+  import AnalyticsConsentModal from "./components/AnalyticsConsentModal.svelte";
   import BroadRegexModal from "./components/BroadRegexModal.svelte";
   import Toast from "./components/Toast.svelte";
-  import IconAppWindow from "~icons/lucide/app-window";
-  import IconShieldCheck from "~icons/lucide/shield-check";
-  import IconKeyboard from "~icons/lucide/keyboard";
-  import IconEyeOff from "~icons/lucide/eye-off";
-  import IconZap from "~icons/lucide/zap";
-  import IconSettings from "~icons/lucide/settings";
-  import IconInfo from "~icons/lucide/info";
+  import { NAV, navItem } from "./lib/nav.js";
   import { invoke, onAppEvent, win } from "./lib/ipc.js";
   import {
     app,
@@ -35,33 +30,22 @@
     loadAnnouncements,
     openAboutTab,
     openRestoreTool,
+    refreshLocalizedContent,
     refreshStatus,
     scheduleSave,
     startCore,
     startStatusPolling,
+    trackFeatures,
   } from "./lib/state.svelte.js";
-  import { setLangPref, t } from "./lib/i18n.svelte.js";
+  import { flush as flushAnalytics } from "./lib/analytics.js";
+  import { resolve, setLangPref, t } from "./lib/i18n.svelte.js";
   import { applyTheme, loadPreference } from "./lib/theme.js";
-
-  const NAV = [
-    { id: "binding", labelKey: "tab.binding", icon: IconAppWindow },
-    { id: "whitelist", labelKey: "tab.whitelist", icon: IconShieldCheck },
-    { id: "hotkeys", labelKey: "tab.hotkeys", icon: IconKeyboard },
-    { id: "hide", labelKey: "tab.hide", icon: IconEyeOff },
-    { id: "power", labelKey: "tab.power", icon: IconZap },
-    { id: "about", labelKey: "tab.about", icon: IconInfo, footer: true },
-    { id: "options", labelKey: "tab.options", icon: IconSettings, footer: true },
-  ];
 
   // 双栏页要撑满可用高度，其余页按内容自然增高后滚动。
   const FILL_TABS = ["binding", "whitelist"];
 
-  const pageTitle = $derived(
-    t(NAV.find((n) => n.id === app.tab)?.labelKey ?? "tab.binding"),
-  );
-  const PageIcon = $derived(
-    NAV.find((n) => n.id === app.tab)?.icon ?? IconAppWindow,
-  );
+  const pageTitle = $derived(t(navItem(app.tab).labelKey));
+  const PageIcon = $derived(navItem(app.tab).icon);
   const fill = $derived(FILL_TABS.includes(app.tab));
 
   // 导航折叠：窄窗口自动收起，点汉堡后以用户意愿为准。
@@ -70,9 +54,16 @@
   const navCollapsed = $derived(navOverride ?? innerWidth < 820);
 
   // 语言偏好改动后立即换文案；核心侧由 save_config 触发的重载配置跟进。
+  // 首次由 loadAll 拉取，之后每次真的换了语言才按新语言重取服务端内容。
+  let appliedLang = null;
   $effect(() => {
     const pref = app.config?.setting?.language;
-    if (pref) setLangPref(pref);
+    if (!pref) return;
+    setLangPref(pref);
+    const applied = resolve(pref, globalThis.navigator?.language);
+    if (appliedLang === applied) return;
+    if (appliedLang !== null) refreshLocalizedContent();
+    appliedLang = applied;
   });
 
   // 加载阶段不自动保存；loadAll 完成后才武装。
@@ -94,18 +85,20 @@
     const onSystemTheme = () => applyTheme(loadPreference());
     media.addEventListener("change", onSystemTheme);
 
-    loadAll().then(() => {
-      autoSaveReady = true;
-      checkForUpdate();
-      loadAnnouncements({ popNew: true });
-    });
-    const stopPolling = startStatusPolling(2000);
-
     // 托盘直达：冷启动时从启动参数读，已在运行时由单实例插件发来事件。
     invoke("startup_action").then((a) => {
       if (a === "restore") openRestoreTool();
       else if (a === "about") openAboutTab();
     });
+
+    loadAll().then(() => {
+      autoSaveReady = true;
+      // 配置读完才知道用户授权没有，埋点一律排在它后面。
+      trackFeatures();
+      checkForUpdate();
+      loadAnnouncements({ popNew: true });
+    });
+    const stopPolling = startStatusPolling(2000);
     const stopRestoreEvent = onAppEvent("open-restore", openRestoreTool);
     const stopAboutEvent = onAppEvent("open-about", openAboutTab);
 
@@ -121,10 +114,17 @@
     });
 
     // 关窗前把未落盘的改动写完；写盘失败时留在窗口，再次关闭不再阻拦。
+    // 收尾走完之后自己调 close，那一次不能再拦，否则关不掉。
+    let closing = false;
     const closeReg = win.onCloseRequested(async (e) => {
-      if (!hasUnsavedChanges()) return;
+      if (closing) return;
       e.preventDefault();
-      if (await flushSave()) win.close();
+      // 攒着的埋点要赶在进程消失前送出去。
+      await flushAnalytics();
+      // 写盘失败就留在窗口里，再次关闭时重来一遍。
+      if (hasUnsavedChanges() && !(await flushSave())) return;
+      closing = true;
+      win.close();
     });
 
     return () => {
@@ -192,6 +192,7 @@
   <RestoreWindowsModal bind:open={app.restoreOpen} />
   <AnnouncementModal />
   <DataNoticeModal />
+  <AnalyticsConsentModal />
   <BroadRegexModal />
   <ErrorReportModal />
   <!-- 放最后，强制更新的遮罩层级最高 -->

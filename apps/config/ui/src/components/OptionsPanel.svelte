@@ -12,7 +12,15 @@
   import IconCalendarClock from "~icons/lucide/calendar-clock";
   import IconGauge from "~icons/lucide/gauge";
   import IconLifeBuoy from "~icons/lucide/life-buoy";
-  import { app, openRestoreTool, restartCore, startCore, setAutostart } from "../lib/state.svelte.js";
+  import IconChartNoAxesColumn from "~icons/lucide/chart-no-axes-column";
+  import {
+    app,
+    openRestoreTool,
+    restartCore,
+    setAnalyticsConsent,
+    setAutostart,
+    startCore,
+  } from "../lib/state.svelte.js";
   import { LANGS, LANG_AUTO, LANG_NAMES, t } from "../lib/i18n.svelte.js";
 
   let elevating = $state(false);
@@ -158,6 +166,23 @@
         options={logLevelOptions}
         disabled={logDisabled}
         ariaLabel={t("options.logLevel")}
+      />
+    {/snippet}
+  </SettingsCard>
+</SettingsGroup>
+
+<SettingsGroup title={t("options.privacyCard")}>
+  <SettingsCard
+    icon={IconChartNoAxesColumn}
+    label={t("options.analytics")}
+    description={t("options.analyticsDesc")}
+  >
+    {#snippet control()}
+      <ToggleSwitch
+        bind:checked={
+          () => app.config.verhub?.analytics === true,
+          (v) => setAnalyticsConsent(v, "settings")
+        }
       />
     {/snippet}
   </SettingsCard>

@@ -5,11 +5,13 @@ use std::time::Duration;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 use zonedeck_common::Config;
+use zonedeck_common::i18n::Lang;
 use zonedeck_common::ipc::{Command, PipeClient, Response};
 use zonedeck_common::model::WindowInfo;
 use zonedeck_core::i18n::{self, Msg};
 use zonedeck_core::key_capture::{KeyCapture, KeyEvent};
 
+mod analytics;
 mod verhub;
 
 const CORE_EXE: &str = "ZoneDeck.exe";
@@ -105,6 +107,8 @@ fn load_config() -> Result<LoadedConfig, String> {
     use zonedeck_common::LoadNote;
     let (config, note) = Config::load_reporting(&config_path()).map_err(|e| e.to_string())?;
     i18n::set_from_pref(&config.setting.language);
+    // 采集的开闸状态不落盘，每次读配置都要重新对齐一次。
+    analytics::apply_consent(config.verhub.analytics);
     let (fallback, schema_note) = match note {
         None => (None, None),
         Some(LoadNote::Corrupt(s)) => (Some(s), None),
@@ -124,6 +128,7 @@ async fn save_config(config: serde_json::Value) -> Result<(), String> {
     blocking(move || {
         let config = Config::from_value(config).map_err(|e| e.to_string())?;
         i18n::set_from_pref(&config.setting.language);
+        analytics::apply_consent(config.verhub.analytics);
         config.save(&config_path()).map_err(|e| e.to_string())?;
         // 通知核心热重载；核心未运行时忽略错误。
         let _ = notify_core(&Command::ReloadConfig);
@@ -461,6 +466,13 @@ fn capture_payload(ev: &KeyEvent) -> KeyCapturePayload {
     }
 }
 
+/// 该组合是否已被别的程序注册为全局热键。录制期核心的热键已停用，
+/// 探到的占用一定来自别的程序。走键盘钩子的组合不受占用影响，一律报空闲。
+#[tauri::command]
+fn hotkey_taken(combo: String) -> bool {
+    zonedeck_core::hotkey::parse_hotkey(&combo).is_ok_and(|hk| zonedeck_core::hotkey::is_taken(&hk))
+}
+
 /// 扩展主键在当前键盘布局下的实际字符，供界面显示；配置里存的仍是位置名。
 #[tauri::command]
 fn key_labels() -> std::collections::HashMap<String, String> {
@@ -683,26 +695,64 @@ async fn open_external(url: String) -> Result<(), String> {
     blocking(move || zonedeck_core::shell::open(&url)).await
 }
 
+/// 记一次功能使用事件；未获授权、或事件名没在 [`analytics::EVENTS`] 登记时直接丢弃。
+#[tauri::command]
+async fn analytics_track(event: String, props: Option<serde_json::Value>) {
+    analytics::track(&event, props).await;
+}
+
+/// 应用采集授权：界面首次征求同意、以及设置页开关变动时调用。
+#[tauri::command]
+async fn analytics_set_consent(granted: bool) {
+    analytics::apply_consent(Some(granted));
+}
+
+/// 把攒着的事件发出去；界面关窗前调一次，否则最后一批要等下次启动补发。
+#[tauri::command]
+async fn analytics_flush() {
+    analytics::flush().await;
+}
+
+/// 服务端下发内容（版本说明 / 公告 / 项目信息）要用的语言标签：
+/// 界面传什么用什么，缺省或无法识别时回落到当前生效语言。
+fn content_locale(locale: Option<String>) -> String {
+    locale
+        .as_deref()
+        .and_then(Lang::from_tag)
+        .unwrap_or_else(i18n::lang)
+        .tag()
+        .to_string()
+}
+
 /// 项目公开链接（主页 / 仓库 / 文档等），带内存 + 磁盘缓存，有效期一天。
 #[tauri::command]
-async fn verhub_project_links() -> Result<verhub::ProjectLinks, String> {
-    verhub::project_links(&data_dir().join("verhub_cache.json"))
+async fn verhub_project_links(locale: Option<String>) -> Result<verhub::ProjectLinks, String> {
+    let locale = content_locale(locale);
+    verhub::project_links(&data_dir().join("verhub_cache.json"), Some(&locale))
         .await
         .map_err(|e| e.to_string())
 }
 
 /// 检查更新；`required=true` 即强制更新，界面须阻断使用。
 #[tauri::command]
-async fn verhub_check_update(include_preview: bool) -> Result<verhub::CheckUpdate, String> {
-    verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview)
+async fn verhub_check_update(
+    include_preview: bool,
+    locale: Option<String>,
+) -> Result<verhub::CheckUpdate, String> {
+    let locale = content_locale(locale);
+    verhub::check_update(env!("CARGO_PKG_VERSION"), include_preview, Some(&locale))
         .await
         .map_err(|e| e.to_string())
 }
 
-/// 公告列表（本平台可见的，从新到旧）。
+/// 公告列表（本平台、本版本可见的，从新到旧）。
 #[tauri::command]
-async fn verhub_announcements(limit: u32) -> Result<Vec<verhub::Announcement>, String> {
-    verhub::announcements(limit.clamp(1, 50))
+async fn verhub_announcements(
+    limit: u32,
+    locale: Option<String>,
+) -> Result<Vec<verhub::Announcement>, String> {
+    let locale = content_locale(locale);
+    verhub::announcements(limit.clamp(1, 50), env!("CARGO_PKG_VERSION"), Some(&locale))
         .await
         .map_err(|e| e.to_string())
 }
@@ -856,6 +906,7 @@ pub fn run() {
             start_key_capture,
             stop_key_capture,
             key_labels,
+            hotkey_taken,
             pssuspend_available,
             power_stats,
             reset_power_stats,
@@ -873,6 +924,9 @@ pub fn run() {
             verhub_submit_feedback,
             verhub_upload_log,
             current_session_log,
+            analytics_track,
+            analytics_set_consent,
+            analytics_flush,
         ])
         .run(tauri::generate_context!())
         .expect("运行 ZoneDeck 配置程序时出错");

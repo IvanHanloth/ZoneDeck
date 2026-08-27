@@ -16,7 +16,7 @@ thiserror = "2.0.18"
 regex = "1.11.1"
 windows = "0.62.2"
 tempfile = "3.27.0"
-verhub-sdk = { version = "0.2.7", default-features = false, features = ["native-tls"] }
+verhub-sdk = { version = "0.2.9", default-features = false, features = ["native-tls"] }
 
 [profile.release]
 opt-level = "z"

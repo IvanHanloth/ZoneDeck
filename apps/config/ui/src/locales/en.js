@@ -179,6 +179,7 @@ export default {
   "recorder.waiting": "Waiting for a key…",
   "recorder.unsupportedKey": "That key cannot be used in a shortcut. Try another one.",
   "recorder.hookAutoEnabled": "The low-level keyboard hook will be turned on for this hotkey automatically.",
+  "recorder.hotkeyTaken": "Another program has already taken this combination, so registering it will fail. Pick a different one, or save and then turn on the low-level keyboard hook for this hotkey.",
   "recorder.captureFailed": "The keyboard could not be captured exclusively; keys pressed while recording may still trigger other programs. Anti-keylogger protection in security software blocks this app's keyboard hook — trusting ZoneDeck restores exclusive capture.",
   "common.save": "Save",
   "recorder.disabled": "Disabled",
@@ -394,6 +395,10 @@ export default {
     "Language used by the settings window and by the core’s tray menu and notifications. “Follow system” uses the Windows display language.",
   "options.languageAuto": "Follow system",
 
+  "options.privacyCard": "Privacy",
+  "options.analytics": "Anonymous usage statistics",
+  "options.analyticsDesc": "Join the anonymous user experience programme and help make ZoneDeck better as you use it. Everything collected is anonymous and free of private data, and you can opt out of it at any time",
+
   "options.toolsCard": "Tools",
   "options.restoreTool": "Window recovery tool",
   "options.restoreToolDesc":
@@ -479,6 +484,22 @@ export default {
   "announce.title": "Announcement",
   "announce.pinned": "Pinned",
   "announce.gotIt": "Got it",
+
+  "consent.title": "ZoneDeck anonymous usage statistics",
+  "consent.heading": "Help make ZoneDeck better as you use it!",
+  "consent.intro": "Would you like to share anonymous usage statistics? They help us understand how the app is actually used. Declining changes nothing about how ZoneDeck works, and you can opt out any time on the settings page",
+  "consent.collectTitle": "What is sent",
+  "consent.collectFeatures": "whether each feature switch is on or off;",
+  "consent.collectScale": "how many rules and whitelist entries there are, how many use a regex, and which hotkeys are commonly set;",
+  "consent.collectEnv": "the app version, the language, and how it is running;",
+  "consent.collectId": "a randomly generated anonymous id that carries no device characteristics.",
+  "consent.neverTitle": "What is never sent",
+  "consent.neverHide": "which windows were hidden, which processes are bound, or when any hide happened;",
+  "consent.neverContent": "window titles, process names, file paths, the regexes themselves and feedback text;",
+  "consent.neverIdentity": "your name, email or anything else that points back to you.",
+  "consent.control": "You can opt out any time under General → Privacy. Once it is off nothing further is ever sent, and the anonymous id on this device is deleted as well.",
+  "consent.agree": "Take part",
+  "consent.decline": "No thanks",
 
   "dataNotice.title": "Where your settings are stored",
   "dataNotice.heading": "The program folder is not writable",

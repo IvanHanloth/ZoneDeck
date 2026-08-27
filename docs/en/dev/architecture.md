@@ -107,7 +107,14 @@ ZoneDeck/
     │   └── src/verhub.rs  Verhub client (versions/announcements/feedback/logs/project links, built on verhub-sdk;
     │                      feedback may optionally be converted into a GitHub issue by the Verhub bot,
     │                      which makes the GitHub account mandatory;
-    │                      project links are cached: in memory + verhub_cache.json in the data folder, valid for one day)
+    │                      release notes / announcements / project info are fetched in the interface language,
+    │                      falling back to the default content when no translation exists;
+    │                      project links are cached: in memory + verhub_cache.json in the data folder,
+    │                      valid for one day and invalidated on a language change)
+    │   └── src/analytics.rs  anonymous usage statistics (a feature-adoption snapshot on launch
+    │                      plus setting-change events; event names and properties are both
+    │                      allow-listed and rules/whitelist are only counted; nothing is collected
+    │                      or written before consent, which lives in config's verhub.analytics)
     ├── ui/         Frontend source (Vite + Svelte 5)
     │   └── src/    lib/ (pure logic + vitest tests) + components/ (Svelte components)
     │                + locales/ (three-language catalogs; zh-CN.js is the source of truth)

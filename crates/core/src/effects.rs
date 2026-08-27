@@ -23,6 +23,9 @@ pub trait Effects {
     fn clear_efficiency(&self, pid: u32);
     /// 发送媒体「播放/暂停」键，仅在检测到有音视频正在播放时才发送。
     fn send_pause(&self);
+    /// 把攒下的能效统计落盘。由 [`crate::effects_worker::EffectsWorker`] 在队列排空后
+    /// 调用：一次隐藏会连着上报十几个进程，合并成一次写盘。不记账的实现无事可做。
+    fn flush_stats(&self) {}
 }
 
 /// 冻结前的静置时长：留给隐藏动作画完、媒体暂停键被目标程序处理掉。
@@ -154,5 +157,9 @@ impl Effects for WinEffects {
             }
             Err(e) => log_warn!("撤销效率模式失败 (pid={pid}): {e}"),
         }
+    }
+
+    fn flush_stats(&self) {
+        self.stats.flush();
     }
 }

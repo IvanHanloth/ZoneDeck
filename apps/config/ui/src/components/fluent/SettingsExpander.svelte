@@ -165,4 +165,8 @@
     overflow: hidden;
     background: var(--card-2);
   }
+  /* 展开区里非卡片的内容（如 InfoBar）跟着子项一起缩进 */
+  .body > :global(:not(.card)) {
+    margin: 12px var(--sub-pad-end) 12px var(--sub-pad-start);
+  }
 </style>

@@ -52,7 +52,7 @@ Expand any hotkey and you'll find two independent switches, both off by default:
 The switches are independent per hotkey. Older versions had a single "don't pass through" switch that meant both things at once; upgrading turns it into both switches enabled, so behaviour is unchanged.
 
 ::: info About global hotkeys
-By default ZoneDeck registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration may fail — pick a different one, or turn on the low-level keyboard hook for that hotkey.
+By default ZoneDeck registers global hotkeys through the system's `RegisterHotKey`. If a combination is already taken by another program, registration fails and the hotkey does not work for that run. The recorder flags a taken combination on the spot; for a hotkey that is already saved, the core raises a notification instead (once per combination, until the clash goes away). Either way the fix is the same: quit the program holding it, pick a different combination, or turn on the low-level keyboard hook for that hotkey to bypass the clash.
 
 If installing the hook fails, combinations that `RegisterHotKey` can express fall back to normal registration: they still work, but the keys can no longer be withheld from other apps. Modifier-only and multi-key combinations have no fallback and do not take effect for that run; the log records it. A few programs that read Raw Input directly bypass keyboard hooks and may still observe the keys.
 :::

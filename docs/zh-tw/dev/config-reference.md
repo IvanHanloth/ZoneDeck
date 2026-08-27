@@ -145,6 +145,8 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | --- | --- | --- |
 | `include_preview` | `false` | 更新檢查是否納入預覽版 |
 | `seen_announcement_id` | `""` | 已讀的最新公告 id |
+| `analytics` | `null` | 匿名使用統計的授權：`null` 表示還沒問過使用者，首次啟動時會跳出視窗徵求同意；`true` 同意，`false` 拒絕 |
+| `analytics_consent_sent` | `false` | 「同意參與」是否已回報過。同一台裝置只回報一次，反覆開關不再重複 |
 
 ## `window_rules`（視窗規則）
 

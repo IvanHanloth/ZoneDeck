@@ -1,3 +1,8 @@
+use windows::Win32::Foundation::ERROR_HOTKEY_ALREADY_REGISTERED;
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
+};
+
 pub const MOD_ALT: u32 = 0x0001;
 pub const MOD_CONTROL: u32 = 0x0002;
 pub const MOD_SHIFT: u32 = 0x0004;
@@ -274,6 +279,35 @@ pub fn parse_hotkey(s: &str) -> Result<ParsedHotkey, HotkeyParseError> {
     Ok(ParsedHotkey { modifiers, keys })
 }
 
+/// 探测用的热键 ID。`RegisterHotKey` 的 hWnd 为 None 时，ID 须落在 0x0000–0xBFFF。
+const PROBE_ID: i32 = 0x5A44;
+
+/// 试注册一次再撤销，看这个组合是否已被别的程序占用。
+///
+/// 只有 `RegisterHotKey` 承载得了的组合才谈得上占用：纯修饰键与多主键走键盘钩子，
+/// 一律报空闲。调用方须确保此刻本进程与核心都没注册同一个组合，否则会自问自答。
+pub fn is_taken(hotkey: &ParsedHotkey) -> bool {
+    let Some(vk) = hotkey.single() else {
+        return false;
+    };
+    unsafe {
+        // hWnd 为 None 时热键挂在当前线程上，撤销后不留痕迹。
+        match RegisterHotKey(
+            None,
+            PROBE_ID,
+            HOT_KEY_MODIFIERS(hotkey.modifiers | MOD_NOREPEAT),
+            vk as u32,
+        ) {
+            Ok(()) => {
+                let _ = UnregisterHotKey(None, PROBE_ID);
+                false
+            }
+            // 只有 1409 是「被占用」；别的失败不冤枉这个组合。
+            Err(e) => e.code() == ERROR_HOTKEY_ALREADY_REGISTERED.to_hresult(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -463,6 +497,45 @@ mod tests {
         }
         // 26 字母 + 10 数字 + 24 功能键 + 21 命名键 + 16 小键盘 + 13 OEM + 7 媒体键 + Apps
         assert_eq!(count, 118, "支持的按键数量变了，确认改动是有意的");
+    }
+
+    /// 与 PROBE_ID 错开，免得探测把测试自己的占位注册当成 ID 冲突。
+    const HOLD_ID: i32 = 0x5A45;
+
+    #[test]
+    fn is_taken_only_speaks_for_combinations_register_hotkey_carries() {
+        assert!(
+            !is_taken(&parse_hotkey("Ctrl+Shift").unwrap()),
+            "纯修饰键走钩子，无所谓占用"
+        );
+        assert!(
+            !is_taken(&parse_hotkey("Q+W").unwrap()),
+            "多主键走钩子，无所谓占用"
+        );
+    }
+
+    /// 真注册一个冷门组合，验证探测确实看得见别处的占用。
+    #[test]
+    fn is_taken_sees_a_combination_somebody_else_holds() {
+        // Ctrl+Alt+Shift+F23，冷门到不会与真实热键或别的测试撞车。
+        let hk = parse_hotkey("Ctrl+Alt+Shift+F23").unwrap();
+        assert!(!is_taken(&hk), "没人占用时应报空闲");
+
+        unsafe {
+            RegisterHotKey(
+                None,
+                HOLD_ID,
+                HOT_KEY_MODIFIERS(hk.modifiers | MOD_NOREPEAT),
+                hk.single().unwrap() as u32,
+            )
+            .expect("测试占位注册失败");
+        }
+        assert!(is_taken(&hk), "别处已注册的组合应报被占用");
+
+        unsafe {
+            let _ = UnregisterHotKey(None, HOLD_ID);
+        }
+        assert!(!is_taken(&hk), "占用撤销后应回到空闲");
     }
 
     #[test]

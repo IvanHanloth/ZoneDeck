@@ -4,6 +4,7 @@
   import ContentDialog from "./fluent/ContentDialog.svelte";
   import { app, toast } from "../lib/state.svelte.js";
   import { currentSessionLog, uploadLog } from "../lib/verhub.js";
+  import { track } from "../lib/analytics.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const report = $derived(app.errorReport);
@@ -36,7 +37,10 @@
     open = !!report;
   });
   function onOpenChange(v) {
-    if (!v) app.errorReport = null;
+    if (!v) {
+      if (!sent) track("error_report", { uploaded: false });
+      app.errorReport = null;
+    }
     open = v;
   }
 
@@ -45,6 +49,7 @@
     try {
       await uploadLog(payload);
       sent = true;
+      track("error_report", { uploaded: true });
       toast(t("error.reportThanks"));
       setTimeout(() => (app.errorReport = null), 700);
     } catch (err) {

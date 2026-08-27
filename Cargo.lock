@@ -4180,9 +4180,9 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "verhub-sdk"
-version = "0.2.7"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a3a64a0d678e12dd4f6e80aa815230c0f6e74bb506babfc04d71cdc561154b3"
+checksum = "31606bec590b4eccaab3ed285999a6aa58f395f13dcb8530a382868f095976a2"
 dependencies = [
  "log",
  "os_info",

@@ -96,7 +96,7 @@ Source: "{#InstalledMarker}"; DestDir: "{app}"; Flags: ignoreversion
 [Icons]
 ; AppUserModelID 是 Toast 通知的前提：未打包的 Win32 程序必须有一条带该属性的
 ; 快捷方式，通知平台才认领它。取值须与 crates/core/src/toast.rs 的 AUMID 逐字相同，
-; 否则核心会在开始菜单里另建一条自己的。
+; 对不上时核心会认领这条快捷方式、把属性改成它认的值（见 ensure_registered）。
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; AppUserModelID: "{#AppUserModelID}"
 Name: "{group}\{#MyAppName} 设置"; Filename: "{app}\{#ConfigExe}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
