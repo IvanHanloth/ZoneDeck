@@ -52,7 +52,8 @@ cargo test -p zonedeck-core -- --test-threads=1
 | 程序凍結 | 真實子程序暫停／復原 |
 | 能效統計 | 真實子程序走一遍凍結／效率模式，核對寫入磁碟的成績單；經 IPC 重設歸零 |
 | 靜音 | Core Audio COM 鏈路 |
-| HideController | mock 注入驗證靜音／凍結／暫停鍵編排 |
+| 媒體暫停 | SMTC 的 AUMID 與映像路徑比對 |
+| HideController | mock 注入驗證靜音／凍結／暫停媒體編排 |
 | 開機自動啟動 | 一般登錄檔機碼邏輯 + 真實 `schtasks` 接受工作 XML |
 | 當機記錄 | 寫入／輪換／panic 掛鉤 |
 | 當機復原 | 快照寫入磁碟來回 + mock 復原編排 |

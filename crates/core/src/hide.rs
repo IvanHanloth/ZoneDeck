@@ -6,9 +6,9 @@ use zonedeck_common::matching::{
 };
 use zonedeck_common::{Config, NO_TITLE, Setting, WhitelistRule, WindowInfo, WindowRule};
 
-use crate::effects::Effects;
+use crate::effects::{Effects, PauseTarget};
 use crate::platform::{Restore, WindowManager};
-use crate::recovery::{ProcRecord, Snapshot};
+use crate::recovery::{MuteRecord, ProcRecord, Snapshot};
 
 /// 一条隐藏记录。`title` 仅供日志，进程路径与映像名还用于白名单判定。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -271,17 +271,31 @@ pub struct HidePlan {
     /// 本次新增的隐藏目标；带 [`Restore::Skip`] 的不改动可见性，但副作用照常施加。
     pub fresh: Vec<Target>,
     /// 本次新增的静音进程。
-    pub mute: Vec<ProcRecord>,
+    pub mute: Vec<MuteRecord>,
     /// 本次新增的冻结进程。
     pub freeze: Vec<ProcRecord>,
     /// 本次新增的效率模式进程。与冻结相互独立，两份名单可以不重合。
     pub efficiency: Vec<ProcRecord>,
-    /// 是否发送媒体暂停键。
-    pub send_pause: bool,
+    /// 本次要暂停媒体播放的目标；空表示不暂停。
+    pub pause: Vec<PauseTarget>,
+    /// 恢复时要不要把这些目标的媒体续播。隐藏那一刻就定下，
+    /// 中途改设置不影响这一轮——恢复须还原隐藏时的意图。
+    pub resume_media: bool,
     /// 本轮冻结方式；首轮跟随设置，之后沿用。
     pub enhanced: bool,
     /// 冻结后是否清空这些进程的工作集。
     pub trim: bool,
+}
+
+/// 收集一个暂停目标；PID 已经在列表里就跳过。
+fn push_pause(list: &mut Vec<PauseTarget>, pid: u32, path: &str) {
+    if pid == 0 || list.iter().any(|t| t.pid == pid) {
+        return;
+    }
+    list.push(PauseTarget {
+        pid,
+        path: path.to_string(),
+    });
 }
 
 /// [`HideController::show`] 的执行结果。
@@ -330,7 +344,10 @@ pub struct HideController<W: WindowManager, E: Effects> {
     effects: E,
     hidden: Vec<Target>,
     frozen: Vec<ProcRecord>,
-    muted: Vec<ProcRecord>,
+    muted: Vec<MuteRecord>,
+    /// 本轮暂停过媒体的目标，连同当时定下的续播意图。
+    paused: Vec<PauseTarget>,
+    resume_media: bool,
     efficiency: Vec<ProcRecord>,
     used_enhanced: bool,
 }
@@ -343,6 +360,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             hidden: Vec::new(),
             frozen: Vec::new(),
             muted: Vec::new(),
+            paused: Vec::new(),
+            resume_media: false,
             efficiency: Vec::new(),
             used_enhanced: false,
         }
@@ -469,7 +488,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             fresh.push(t);
         }
 
-        let mut mute: Vec<ProcRecord> = Vec::new();
+        let mut mute: Vec<MuteRecord> = Vec::new();
         if setting.mute_after_hide {
             for t in fresh.iter().filter(|t| mute_pids.contains(&t.pid)) {
                 if !self.muted.iter().any(|r| r.pid == t.pid)
@@ -481,7 +500,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                         IgnoreMode::Mute,
                     )
                 {
-                    mute.push(self.proc_record(t.pid));
+                    mute.push(self.mute_record(t));
                 }
             }
         }
@@ -510,10 +529,23 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             }
         }
 
+        let mut pause: Vec<PauseTarget> = Vec::new();
+        if setting.send_before_hide {
+            for t in fresh.iter().filter(|t| t.restore != Restore::Skip) {
+                let path = self.target_path(t);
+                push_pause(&mut pause, t.pid, &path);
+            }
+            // 窗口原本就不可见、这一轮只做冻结的目标同样要停：进程一挂起，
+            // 声音就卡在最后一帧了。
+            for r in &freeze {
+                let path = self.wm.process_path(r.pid);
+                push_pause(&mut pause, r.pid, &path);
+            }
+        }
+
         HidePlan {
-            // 全是「不改动可见性」的目标时不发暂停键。
-            send_pause: setting.send_before_hide
-                && (fresh.iter().any(|t| t.restore != Restore::Skip) || !freeze.is_empty()),
+            resume_media: setting.send_before_hide && setting.resume_media_after_show,
+            pause,
             // 解冻方式必须与冻结时一致。
             enhanced: if self.frozen.is_empty() {
                 setting.enhanced_freeze
@@ -531,9 +563,15 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 执行计划：同步隐藏窗口（必要时先 `SW_SHOWMINNOACTIVE` 再 `SW_HIDE`），
     /// 副作用经 [`Effects`] 施加。生产实现为异步队列，入队顺序即执行顺序。
     pub fn commit_hide(&mut self, plan: HidePlan) {
-        // 暂停键须排在冻结之前。
-        if plan.send_pause {
-            self.effects.send_pause();
+        // 暂停须排在冻结之前：进程一旦挂起，就再也处理不了暂停命令。
+        if !plan.pause.is_empty() {
+            self.effects.pause_media(&plan.pause);
+            self.resume_media = plan.resume_media;
+            for t in &plan.pause {
+                if !self.paused.iter().any(|p| p.pid == t.pid) {
+                    self.paused.push(t.clone());
+                }
+            }
         }
 
         for t in &plan.fresh {
@@ -548,8 +586,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
 
         for r in &plan.mute {
-            self.effects.mute(r.pid, true);
-            self.muted.push(*r);
+            self.effects.mute(r.pid, &r.path);
+            self.muted.push(r.clone());
         }
         self.muted.sort_unstable_by_key(|r| r.pid);
 
@@ -604,6 +642,24 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
     }
 
+    /// 目标的映像路径；记录里没带就现查一次。
+    fn target_path(&self, t: &Target) -> String {
+        if t.process_path.is_empty() {
+            self.wm.process_path(t.pid)
+        } else {
+            t.process_path.clone()
+        }
+    }
+
+    /// 记录静音目标的身份与映像路径；路径查不到时留空，那时只能按 PID 解除。
+    fn mute_record(&self, t: &Target) -> MuteRecord {
+        MuteRecord {
+            pid: t.pid,
+            created_at: self.wm.process_start_time(t.pid),
+            path: self.target_path(t),
+        }
+    }
+
     /// 进程记录是否仍指向当初那个进程（PID 会被系统回收复用，须比对创建时刻）。
     fn proc_alive(&self, r: &ProcRecord) -> bool {
         let now = self.wm.process_start_time(r.pid);
@@ -644,11 +700,11 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
         outcome.refound = self.refind_stale(&hidden, &stale);
 
+        // 不做存活校验：静音波及的是同映像的全部会话，目标进程即使已经退出，
+        // 同 exe 的其他会话仍得解除。误伤由会话级记账挡着，见 [`crate::audio::unmute`]。
         let muted = std::mem::take(&mut self.muted);
         for r in &muted {
-            if self.proc_alive(r) {
-                self.effects.mute(r.pid, false);
-            }
+            self.effects.unmute(r.pid, &r.path);
         }
 
         // 排在解冻之后：先让进程跑起来，再把它的调度待遇还回去。
@@ -656,6 +712,19 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         for r in &efficiency {
             if self.proc_alive(r) {
                 self.effects.clear_efficiency(r.pid);
+            }
+        }
+
+        // 续播排在最末：挂起的进程收不到播放命令，得等它先跑起来。
+        // 要不要续播看隐藏那一刻定下的意图，不看当前设置。
+        let paused = std::mem::take(&mut self.paused);
+        let resume = std::mem::replace(&mut self.resume_media, false);
+        if !paused.is_empty() {
+            if resume {
+                self.effects.resume_media(&paused);
+            } else {
+                // 不续播就把记账丢掉，免得留到下一轮被误播。
+                self.effects.forget_paused_media();
             }
         }
         outcome
@@ -722,15 +791,13 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
         self.hidden = keep;
 
-        let (unmute, keep): (Vec<ProcRecord>, Vec<ProcRecord>) = self
+        let (unmute, keep): (Vec<MuteRecord>, Vec<MuteRecord>) = self
             .muted
             .iter()
-            .copied()
+            .cloned()
             .partition(|r| pids.contains(&r.pid));
         for r in &unmute {
-            if self.proc_alive(r) {
-                self.effects.mute(r.pid, false);
-            }
+            self.effects.unmute(r.pid, &r.path);
         }
         self.muted = keep;
 
@@ -788,7 +855,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         let mut snapshot = self.snapshot();
         snapshot.hidden.extend(plan.fresh.iter().cloned());
         snapshot.frozen.extend(plan.freeze.iter().copied());
-        snapshot.muted.extend(plan.mute.iter().copied());
+        snapshot.muted.extend(plan.mute.iter().cloned());
         snapshot.efficiency.extend(plan.efficiency.iter().copied());
         snapshot.enhanced = plan.enhanced;
         snapshot
@@ -838,10 +905,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             }
         }
         for r in &snapshot.muted {
-            if self.proc_alive(r) {
-                self.effects.mute(r.pid, false);
-                outcome.released += 1;
-            }
+            self.effects.unmute(r.pid, &r.path);
+            outcome.released += 1;
         }
         // 排在解冻之后：先让进程跑起来，再把调度待遇还回去。
         for r in &snapshot.efficiency {
@@ -1303,14 +1368,21 @@ mod tests {
         eco_on: RefCell<Vec<u32>>,
         eco_off: RefCell<Vec<u32>>,
         pauses: RefCell<u32>,
+        /// 最后一次暂停请求的目标。
+        pause_targets: RefCell<Vec<PauseTarget>>,
+        /// 续播请求的目标；`None` 表示这一轮改为丢弃记账。
+        resumed_media: RefCell<Vec<Option<Vec<PauseTarget>>>>,
         settles: RefCell<u32>,
         /// 冻结相关动作的调用顺序。
         order: RefCell<Vec<String>>,
     }
 
     impl Effects for MockEffects {
-        fn mute(&self, pid: u32, mute: bool) {
-            self.mutes.borrow_mut().push((pid, mute));
+        fn mute(&self, pid: u32, _path: &str) {
+            self.mutes.borrow_mut().push((pid, true));
+        }
+        fn unmute(&self, pid: u32, _path: &str) {
+            self.mutes.borrow_mut().push((pid, false));
         }
         fn settle_before_freeze(&self) {
             *self.settles.borrow_mut() += 1;
@@ -1335,8 +1407,15 @@ mod tests {
             self.eco_off.borrow_mut().push(pid);
             self.order.borrow_mut().push(format!("eco_off:{pid}"));
         }
-        fn send_pause(&self) {
+        fn pause_media(&self, targets: &[PauseTarget]) {
             *self.pauses.borrow_mut() += 1;
+            *self.pause_targets.borrow_mut() = targets.to_vec();
+        }
+        fn resume_media(&self, targets: &[PauseTarget]) {
+            self.resumed_media.borrow_mut().push(Some(targets.to_vec()));
+        }
+        fn forget_paused_media(&self) {
+            self.resumed_media.borrow_mut().push(None);
         }
     }
 
@@ -1565,10 +1644,12 @@ mod tests {
         );
         assert_eq!(
             snapshot.muted,
-            vec![ProcRecord {
+            vec![MuteRecord {
                 pid: 10,
-                created_at: start_of(10)
-            }]
+                created_at: start_of(10),
+                path: "C:\\WeChat.exe".into(),
+            }],
+            "静音记录须带映像路径，目标进程退出后才找得回同 exe 的会话"
         );
 
         controller.show();
@@ -1614,9 +1695,10 @@ mod tests {
                 pid: 10,
                 created_at: start_of(10),
             }],
-            muted: vec![ProcRecord {
+            muted: vec![MuteRecord {
                 pid: 10,
                 created_at: start_of(10),
+                path: "C:\\WeChat.exe".into(),
             }],
             enhanced: false,
             ..Default::default()
@@ -1655,9 +1737,10 @@ mod tests {
                 pid: 10,
                 created_at: start_of(10),
             }],
-            muted: vec![ProcRecord {
+            muted: vec![MuteRecord {
                 pid: 10,
                 created_at: start_of(10),
+                path: "C:\\WeChat.exe".into(),
             }],
             enhanced: false,
             ..Default::default()
@@ -1883,6 +1966,216 @@ mod tests {
         assert!(
             controller.effects.resumes.borrow().is_empty(),
             "身份不符或已退出的进程不得解冻，避免干扰无关进程"
+        );
+    }
+
+    /// 静音的目标在隐藏期间被关掉，恢复时仍要取消静音。静音波及的是同映像的
+    /// 全部会话，它们未必随目标进程一起消失；误伤由会话级记账挡着，不靠存活校验。
+    #[test]
+    fn unmute_still_runs_after_the_target_process_exits() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(100, true)]);
+
+        // 进程已退出。
+        controller.wm.start_overrides.borrow_mut().insert(100, 0);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(100, true), (100, false)],
+            "目标进程已退出也要取消静音，同 exe 的其他会话还等着解除"
+        );
+    }
+
+    /// 部分释放同样不看存活：道理与 [`unmute_still_runs_after_the_target_process_exits`] 一致。
+    #[test]
+    fn release_pids_unmutes_even_if_the_process_is_gone() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+        controller.wm.start_overrides.borrow_mut().insert(100, 0);
+
+        controller.release_pids(&[100]);
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(100, true), (100, false)]
+        );
+    }
+
+    /// 暂停目标要带上被隐藏进程的身份，而不是只给一个「发不发」的布尔：
+    /// 发之前得先确认是这些进程在出声，别把无关的后台播放器一起停了。
+    #[test]
+    fn pause_targets_carry_the_hidden_processes() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        let plan = controller.plan_hide(&setting, &[Target::bare(10, 100)], &[], &[], &[], &[]);
+
+        assert_eq!(
+            plan.pause,
+            vec![PauseTarget {
+                pid: 100,
+                path: "C:\\WeChat.exe".into()
+            }],
+            "暂停目标须带映像路径，SMTC 靠它认出是哪个程序的媒体会话"
+        );
+    }
+
+    /// 开了续播时，恢复要把暂停过的目标交回去续播。
+    #[test]
+    fn resume_media_plays_back_what_this_round_paused() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            resume_media_after_show: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid(
+                "网易云",
+                10,
+                "cloudmusic.exe",
+                100,
+                "C:\\cloudmusic.exe",
+            )],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+        assert_eq!(*controller.effects.pauses.borrow(), 1);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.resumed_media.borrow(),
+            vec![Some(vec![PauseTarget {
+                pid: 100,
+                path: "C:\\cloudmusic.exe".into()
+            }])],
+            "开了续播就该把这一轮暂停过的目标交回去"
+        );
+    }
+
+    /// 默认不续播：恢复时只丢掉暂停记账，不替用户重新播放。
+    #[test]
+    fn without_resume_media_the_bookkeeping_is_dropped_instead() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid(
+                "网易云",
+                10,
+                "cloudmusic.exe",
+                100,
+                "C:\\cloudmusic.exe",
+            )],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        assert!(
+            !setting.resume_media_after_show,
+            "续播须默认关闭：替用户擅自恢复播放比不恢复更扰人"
+        );
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.resumed_media.borrow(),
+            vec![None],
+            "不续播时该丢掉记账，免得留到下一轮被误播"
+        );
+    }
+
+    /// 续播与否在隐藏那一刻定下：隐藏期间把设置关掉，这一轮仍按当时的意图续播。
+    #[test]
+    fn resume_media_intent_is_fixed_at_hide_time() {
+        let mut setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            resume_media_after_show: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid(
+                "网易云",
+                10,
+                "cloudmusic.exe",
+                100,
+                "C:\\cloudmusic.exe",
+            )],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+
+        // 隐藏期间用户改了设置，本轮恢复不受影响。
+        setting.resume_media_after_show = false;
+
+        controller.show();
+        assert!(
+            matches!(
+                controller.effects.resumed_media.borrow().as_slice(),
+                [Some(_)]
+            ),
+            "恢复须还原隐藏时的意图，不看改过的设置"
+        );
+    }
+
+    /// 窗口原本就不可见、这一轮只做冻结时照样要暂停：进程一挂起，声音就卡住了。
+    #[test]
+    fn freeze_only_round_still_pauses_media() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        wm.hide(10); // 隐藏前就不可见，本程序不动它的可见性。
+        let mut controller = HideController::new(wm, MockEffects::default());
+        let plan = controller.plan_hide(&setting, &[Target::bare(10, 100)], &[100], &[], &[], &[]);
+
+        assert!(
+            plan.fresh.iter().all(|t| t.restore == Restore::Skip),
+            "窗口本来就不可见，应记为 Skip"
+        );
+        assert_eq!(
+            plan.pause,
+            vec![PauseTarget {
+                pid: 100,
+                path: "C:\\WeChat.exe".into()
+            }],
+            "只做冻结的一轮同样要暂停"
         );
     }
 

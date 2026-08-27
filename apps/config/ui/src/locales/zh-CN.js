@@ -264,8 +264,11 @@ export default {
   "hide.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "hide.hideIconDesc":
     "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
-  "hide.sendPause": "隐藏前发送暂停键",
-  "hide.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
+  "hide.sendPause": "同时暂停播放",
+  "hide.sendPauseDesc": "隐藏同时尝试暂停正在播放的媒体。",
+  "hide.resumeMedia": "恢复时继续播放",
+  "hide.resumeMediaDesc": "恢复显示时，继续播放被暂停的媒体",
+  "hide.needPauseFirst": "需先开启「同时暂停播放」",
   "hide.minimizeBeforeHide": "隐藏前先最小化窗口",
   "hide.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",

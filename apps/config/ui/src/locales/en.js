@@ -276,8 +276,11 @@ export default {
   "hide.hideIcon": "Also hide ZoneDeck's tray icon",
   "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "hide.sendPause": "Send the pause key before hiding",
-  "hide.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "hide.sendPause": "Pause playback as well",
+  "hide.sendPauseDesc": "Try to pause any playing media as the windows are hidden.",
+  "hide.resumeMedia": "Resume playback on restore",
+  "hide.resumeMediaDesc": "Resume the paused media when the windows come back",
+  "hide.needPauseFirst": "Enable “Pause playback as well” first",
   "hide.minimizeBeforeHide": "Minimise windows before hiding",
   "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",

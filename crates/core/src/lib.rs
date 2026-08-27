@@ -18,6 +18,7 @@ pub mod ipc_server;
 pub mod key_capture;
 pub mod keyboard_hook;
 pub mod logging;
+pub mod media;
 pub mod modifiers;
 pub mod monitor;
 pub mod mouse_hook;

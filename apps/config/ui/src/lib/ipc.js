@@ -31,6 +31,7 @@ const mockConfig = {
   setting: {
     mute_after_hide: true,
     send_before_hide: false,
+    resume_media_after_show: false,
     minimize_before_hide: false,
     hide_current: true,
     hide_icon_after_hide: false,

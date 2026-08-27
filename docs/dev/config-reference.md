@@ -54,7 +54,8 @@ ZoneDeck 的配置保存在 `config.json` 中，便携版存在程序目录，�
 | 字段 | 类型 | 默认 | 对应功能 |
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [隐藏后静音](/guide/hiding#隐藏窗口后静音) |
-| `send_before_hide` | bool | `false` | [隐藏前发送暂停键](/guide/hiding#隐藏前发送暂停键) |
+| `send_before_hide` | bool | `false` | [同时暂停播放](/guide/hiding#同时暂停播放)：隐藏同时尝试暂停正在播放的媒体 |
+| `resume_media_after_show` | bool | `false` | [恢复时继续播放](/guide/hiding#恢复时继续播放)：依附于 `send_before_hide`，是否续播在隐藏那一刻定下 |
 | `minimize_before_hide` | bool | `false` | [隐藏前先最小化窗口](/guide/hiding#隐藏前先最小化窗口) |
 | `hide_current` | bool | `true` | [同时隐藏当前活动窗口](/guide/hiding#同时隐藏当前活动窗口) |
 | `hide_icon_after_hide` | bool | `false` | [同时隐藏 ZoneDeck 托盘图标](/guide/hiding#同时隐藏-zonedeck-托盘图标) |

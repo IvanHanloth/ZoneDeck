@@ -17,6 +17,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 windows = { workspace = true, features = [
     "Data_Xml_Dom",
+    "Media_Control",
     "UI_Notifications",
     "Win32_Foundation",
     "Win32_Globalization",

@@ -5,7 +5,7 @@ use std::sync::mpsc::{RecvTimeoutError, Sender, channel};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use crate::effects::Effects;
+use crate::effects::{Effects, PauseTarget};
 use crate::{log_error, log_warn};
 
 /// 队列静置多久就把能效统计落盘。一次隐藏 / 恢复的十几个任务连着来，
@@ -13,14 +13,17 @@ use crate::{log_error, log_warn};
 const FLUSH_IDLE: Duration = Duration::from_secs(2);
 
 enum Task {
-    Mute { pid: u32, mute: bool },
+    Mute { pid: u32, path: String },
+    Unmute { pid: u32, path: String },
     SettleBeforeFreeze,
     Suspend { pid: u32, enhanced: bool },
     Resume { pid: u32, enhanced: bool },
     TrimWorkingSet { pid: u32 },
     SetEfficiency { pid: u32 },
     ClearEfficiency { pid: u32 },
-    SendPause,
+    PauseMedia { targets: Vec<PauseTarget> },
+    ResumeMedia { targets: Vec<PauseTarget> },
+    ForgetPausedMedia,
     Quit,
 }
 
@@ -28,15 +31,17 @@ impl Task {
     /// 日志里指代该任务的写法，含目标进程。
     fn describe(&self) -> String {
         match self {
-            Task::Mute { pid, mute: true } => format!("静音 (pid={pid})"),
-            Task::Mute { pid, mute: false } => format!("取消静音 (pid={pid})"),
+            Task::Mute { pid, .. } => format!("静音 (pid={pid})"),
+            Task::Unmute { pid, .. } => format!("取消静音 (pid={pid})"),
             Task::SettleBeforeFreeze => "冻结前静置".to_string(),
             Task::Suspend { pid, enhanced } => format!("冻结 (pid={pid}, 增强={enhanced})"),
             Task::Resume { pid, enhanced } => format!("解冻 (pid={pid}, 增强={enhanced})"),
             Task::TrimWorkingSet { pid } => format!("清空工作集 (pid={pid})"),
             Task::SetEfficiency { pid } => format!("开启效率模式 (pid={pid})"),
             Task::ClearEfficiency { pid } => format!("撤销效率模式 (pid={pid})"),
-            Task::SendPause => "发送媒体暂停键".to_string(),
+            Task::PauseMedia { targets } => format!("暂停媒体播放 ({} 个目标)", targets.len()),
+            Task::ResumeMedia { targets } => format!("续播媒体 ({} 个目标)", targets.len()),
+            Task::ForgetPausedMedia => "丢弃媒体暂停记账".to_string(),
             Task::Quit => "结束副作用线程".to_string(),
         }
     }
@@ -75,14 +80,17 @@ impl EffectsWorker {
                         }
                     };
                     match task {
-                        Task::Mute { pid, mute } => inner.mute(pid, mute),
+                        Task::Mute { pid, path } => inner.mute(pid, &path),
+                        Task::Unmute { pid, path } => inner.unmute(pid, &path),
                         Task::SettleBeforeFreeze => inner.settle_before_freeze(),
                         Task::Suspend { pid, enhanced } => inner.suspend(pid, enhanced),
                         Task::Resume { pid, enhanced } => inner.resume(pid, enhanced),
                         Task::TrimWorkingSet { pid } => inner.trim_working_set(pid),
                         Task::SetEfficiency { pid } => inner.set_efficiency(pid),
                         Task::ClearEfficiency { pid } => inner.clear_efficiency(pid),
-                        Task::SendPause => inner.send_pause(),
+                        Task::PauseMedia { targets } => inner.pause_media(&targets),
+                        Task::ResumeMedia { targets } => inner.resume_media(&targets),
+                        Task::ForgetPausedMedia => inner.forget_paused_media(),
                         Task::Quit => break,
                     }
                     worked = true;
@@ -144,8 +152,17 @@ impl AsyncEffects {
 }
 
 impl Effects for AsyncEffects {
-    fn mute(&self, pid: u32, mute: bool) {
-        self.send(Task::Mute { pid, mute });
+    fn mute(&self, pid: u32, path: &str) {
+        self.send(Task::Mute {
+            pid,
+            path: path.to_string(),
+        });
+    }
+    fn unmute(&self, pid: u32, path: &str) {
+        self.send(Task::Unmute {
+            pid,
+            path: path.to_string(),
+        });
     }
     fn settle_before_freeze(&self) {
         self.send(Task::SettleBeforeFreeze);
@@ -165,8 +182,18 @@ impl Effects for AsyncEffects {
     fn clear_efficiency(&self, pid: u32) {
         self.send(Task::ClearEfficiency { pid });
     }
-    fn send_pause(&self) {
-        self.send(Task::SendPause);
+    fn pause_media(&self, targets: &[PauseTarget]) {
+        self.send(Task::PauseMedia {
+            targets: targets.to_vec(),
+        });
+    }
+    fn resume_media(&self, targets: &[PauseTarget]) {
+        self.send(Task::ResumeMedia {
+            targets: targets.to_vec(),
+        });
+    }
+    fn forget_paused_media(&self) {
+        self.send(Task::ForgetPausedMedia);
     }
 }
 
@@ -182,11 +209,17 @@ mod tests {
     }
 
     impl Effects for Recorder {
-        fn mute(&self, pid: u32, mute: bool) {
+        fn mute(&self, pid: u32, path: &str) {
             self.calls
                 .lock()
                 .unwrap()
-                .push(format!("mute:{pid}:{mute}"));
+                .push(format!("mute:{pid}:{path}"));
+        }
+        fn unmute(&self, pid: u32, path: &str) {
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("unmute:{pid}:{path}"));
         }
         fn settle_before_freeze(&self) {
             self.calls.lock().unwrap().push("settle".into());
@@ -206,8 +239,19 @@ mod tests {
         fn clear_efficiency(&self, pid: u32) {
             self.calls.lock().unwrap().push(format!("eco_off:{pid}"));
         }
-        fn send_pause(&self) {
-            self.calls.lock().unwrap().push("pause".into());
+        fn pause_media(&self, targets: &[PauseTarget]) {
+            let pids: Vec<String> = targets.iter().map(|t| t.pid.to_string()).collect();
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("pause:{}", pids.join(",")));
+        }
+        fn resume_media(&self, targets: &[PauseTarget]) {
+            let pids: Vec<String> = targets.iter().map(|t| t.pid.to_string()).collect();
+            self.calls
+                .lock()
+                .unwrap()
+                .push(format!("resume_media:{}", pids.join(",")));
         }
         fn flush_stats(&self) {
             self.calls.lock().unwrap().push("flush".into());
@@ -264,15 +308,19 @@ mod tests {
         let worker = EffectsWorker::spawn(recorder.clone());
         let effects = worker.effects();
 
-        // 暂停键先于冻结、静置紧挨冻结前、清空工作集排在冻结之后。
-        effects.send_pause();
-        effects.mute(100, true);
+        // 暂停媒体先于冻结、静置紧挨冻结前、清空工作集排在冻结之后。
+        effects.pause_media(&[PauseTarget {
+            pid: 100,
+            path: "C:/a.exe".into(),
+        }]);
+        effects.mute(100, "C:/a.exe");
         effects.set_efficiency(100);
         effects.settle_before_freeze();
         effects.suspend(100, false);
         effects.trim_working_set(100);
         effects.resume(100, false);
         effects.clear_efficiency(100);
+        effects.unmute(100, "C:/a.exe");
 
         worker.shutdown(Duration::from_secs(5));
 
@@ -285,14 +333,15 @@ mod tests {
         assert_eq!(
             order,
             vec![
-                "pause",
-                "mute:100:true",
+                "pause:100",
+                "mute:100:C:/a.exe",
                 "eco_on:100",
                 "settle",
                 "suspend:100",
                 "trim:100",
                 "resume:100",
-                "eco_off:100"
+                "eco_off:100",
+                "unmute:100:C:/a.exe"
             ],
             "任务应按入队顺序全部执行完毕（shutdown 排干队列）"
         );
@@ -304,7 +353,7 @@ mod tests {
         let effects = worker.effects();
         worker.shutdown(Duration::from_secs(5));
         // 线程已退出，入队应静默失败而非 panic。
-        effects.mute(1, true);
-        effects.send_pause();
+        effects.mute(1, "");
+        effects.pause_media(&[PauseTarget::default()]);
     }
 }

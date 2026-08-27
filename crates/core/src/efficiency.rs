@@ -14,10 +14,11 @@ use std::sync::{Mutex, MutexGuard};
 
 use windows::Win32::Foundation::CloseHandle;
 use windows::Win32::System::Threading::{
-    GetPriorityClass, IDLE_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, OpenProcess,
-    PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
-    PROCESS_POWER_THROTTLING_STATE, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION,
-    ProcessPowerThrottling, SetPriorityClass, SetProcessInformation,
+    GetPriorityClass, GetProcessInformation, IDLE_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS,
+    OpenProcess, PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+    PROCESS_POWER_THROTTLING_EXECUTION_SPEED, PROCESS_POWER_THROTTLING_STATE,
+    PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SET_INFORMATION, ProcessPowerThrottling,
+    SetPriorityClass, SetProcessInformation,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -71,13 +72,43 @@ unsafe fn set_eco(
     }
 }
 
-/// 本次运行施加过效率模式的进程 → 当时有没有顺带把优先级压到 Idle。
-/// [`disable`] 据此决定抬不抬，免得把用户自己设成低优先级的进程抬成普通。
-static LOWERED: Mutex<BTreeMap<u32, bool>> = Mutex::new(BTreeMap::new());
+/// [`enable`] 施加效率模式前，进程原本是什么样。[`disable`] 照着还原。
+#[derive(Clone, Copy)]
+struct Prior {
+    /// 当时有没有顺带把优先级压到 Idle。据此决定抬不抬，
+    /// 免得把用户自己设成低优先级的进程抬成普通。
+    lowered: bool,
+    /// 原本就被显式设过 EcoQoS。这种进程撤销时不动它，
+    /// 否则会把别人（用户、任务管理器、其他工具）设的效率模式一并清掉。
+    eco: bool,
+}
+
+/// 本次运行施加过效率模式的进程 → 施加前的原貌。
+static PRIOR: Mutex<BTreeMap<u32, Prior>> = Mutex::new(BTreeMap::new());
 
 /// 记账失败不该拖垮效率模式，锁中毒后照常沿用里面的数据。
-fn lowered() -> MutexGuard<'static, BTreeMap<u32, bool>> {
-    LOWERED.lock().unwrap_or_else(|e| e.into_inner())
+fn prior() -> MutexGuard<'static, BTreeMap<u32, Prior>> {
+    PRIOR.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// 进程当前是不是被显式设过 EcoQoS。ControlMask 带上 EXECUTION_SPEED 才算显式，
+/// 两个掩码全 0 是「交给系统托管」——系统自己给后台进程加的节流不算数。
+/// 读不到（老系统、权限不足）按「没设过」处理，退回原先的无条件撤销。
+unsafe fn eco_explicit(handle: windows::Win32::Foundation::HANDLE) -> bool {
+    let mut state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ..Default::default()
+    };
+    unsafe {
+        GetProcessInformation(
+            handle,
+            ProcessPowerThrottling,
+            &mut state as *mut _ as *mut c_void,
+            size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        )
+        .is_ok()
+            && state.ControlMask & PROCESS_POWER_THROTTLING_EXECUTION_SPEED != 0
+    }
 }
 
 /// 开启效率模式。
@@ -87,11 +118,12 @@ fn lowered() -> MutexGuard<'static, BTreeMap<u32, bool>> {
 pub fn enable(pid: u32) -> Result<(), EfficiencyError> {
     unsafe {
         let handle = open(pid)?;
+        let eco = eco_explicit(handle);
         let result = set_eco(handle, true);
         if result.is_ok() {
             let lower = GetPriorityClass(handle) == NORMAL_PRIORITY_CLASS.0;
             let done = lower && SetPriorityClass(handle, IDLE_PRIORITY_CLASS).is_ok();
-            lowered().insert(pid, done);
+            prior().insert(pid, Prior { lowered: done, eco });
         }
         let _ = CloseHandle(handle);
         result
@@ -100,14 +132,20 @@ pub fn enable(pid: u32) -> Result<(), EfficiencyError> {
 
 /// 关闭效率模式，并把 [`enable`] 压下去的优先级抬回普通。
 ///
-/// 本次运行压过的照记录还原；没有记录的只可能来自崩溃恢复（记账随进程一起没了），
-/// 那时只剩「当前是 Idle 就抬」这一条可依。
+/// 只撤销本程序施加的部分：进程原本就被显式设过 EcoQoS 的，那份留着不动。
+/// 没有记录的只可能来自崩溃恢复（记账随进程一起没了），那时只剩
+/// 「当前是 Idle 就抬」这一条可依，EcoQoS 一律撤销。
 pub fn disable(pid: u32) -> Result<(), EfficiencyError> {
     unsafe {
         let handle = open(pid)?;
-        let result = set_eco(handle, false);
-        let restore = match lowered().remove(&pid) {
-            Some(lowered) => lowered,
+        let record = prior().remove(&pid);
+        let result = if record.is_some_and(|r| r.eco) {
+            Ok(())
+        } else {
+            set_eco(handle, false)
+        };
+        let restore = match record {
+            Some(r) => r.lowered,
             None => GetPriorityClass(handle) == IDLE_PRIORITY_CLASS.0,
         };
         if restore {
@@ -229,6 +267,29 @@ mod tests {
             );
             set_priority(PROCESS_CREATION_FLAGS(original));
         }
+
+        // 情形四：进程原本就被显式设过 EcoQoS 的，走一遍之后那份得留着——
+        // 撤销只该撤掉本程序加的，不能把别人设的效率模式一并清了。
+        let preset = unsafe {
+            let h = open(pid).expect("应能打开自身进程");
+            let ok = set_eco(h, true).is_ok();
+            let _ = CloseHandle(h);
+            ok
+        };
+        if preset {
+            enable(pid).expect("开启效率模式应当成功");
+            disable(pid).expect("关闭效率模式应当成功");
+            assert!(
+                eco_enabled(pid),
+                "原本就显式设过 EcoQoS 的进程，撤销后仍该保留它"
+            );
+            unsafe {
+                let h = open(pid).expect("应能打开自身进程");
+                let _ = set_eco(h, false);
+                let _ = CloseHandle(h);
+            }
+        }
+        set_priority(PROCESS_CREATION_FLAGS(original));
     }
 
     #[test]

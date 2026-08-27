@@ -7,6 +7,7 @@
 
 use std::ffi::c_void;
 use std::mem::size_of;
+use std::os::windows::process::CommandExt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -126,6 +127,9 @@ fn roundtrip(freeze: bool) -> [Probe; 3] {
     // 阻塞在读 stdin 上的子进程：零 CPU、不会自己退出，结束时显式杀掉。
     let mut child = std::process::Command::new("cmd.exe")
         .args(["/c", "set /p x="])
+        // 固定普通优先级：不指定就继承父进程，测试跑在被降过优先级的进程树里时
+        // 基线不是 Normal，效率模式便不会去压优先级。
+        .creation_flags(NORMAL_PRIORITY_CLASS.0)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -170,6 +174,10 @@ fn assert_round_trips(label: &str, [before, hidden, shown]: [Probe; 3]) {
     println!("{label}：基线 {before:?}｜隐藏后 {hidden:?}｜恢复后 {shown:?}");
 
     assert!(before.system_managed(), "基线：子进程应是系统托管的");
+    assert_eq!(
+        before.priority, NORMAL_PRIORITY_CLASS.0,
+        "基线：子进程应是普通优先级"
+    );
     assert!(hidden.eco(), "隐藏后子进程应带上 EcoQoS");
     assert_eq!(
         hidden.priority, IDLE_PRIORITY_CLASS.0,

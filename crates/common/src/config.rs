@@ -464,8 +464,13 @@ impl TrayClicks {
 pub struct Setting {
     #[serde(default = "default_true")]
     pub mute_after_hide: bool,
+    /// 隐藏时尝试暂停目标正在播放的媒体。
     #[serde(default)]
     pub send_before_hide: bool,
+    /// 恢复显示时把隐藏时暂停的媒体重新播放。依附于 `send_before_hide`。
+    /// 是否恢复在隐藏那一刻就定下，中途改设置不影响这一轮。
+    #[serde(default)]
+    pub resume_media_after_show: bool,
     /// 隐藏前先把窗口最小化，恢复时还原成隐藏前的形态；本就最小化的保持最小化。
     #[serde(default)]
     pub minimize_before_hide: bool,
@@ -559,6 +564,7 @@ impl Default for Setting {
         Self {
             mute_after_hide: true,
             send_before_hide: false,
+            resume_media_after_show: false,
             minimize_before_hide: false,
             hide_current: true,
             click_to_hide: false,

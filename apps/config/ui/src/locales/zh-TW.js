@@ -263,8 +263,11 @@ export default {
   "hide.hideIcon": "一併隱藏 ZoneDeck 通知區域圖示",
   "hide.hideIconDesc":
     "隱藏視窗時連 ZoneDeck 自身的通知區域圖示一起隱藏，更為隱密；不影響其他程式的通知區域圖示。再次觸發快速鍵即可復原。",
-  "hide.sendPause": "隱藏前傳送暫停鍵",
-  "hide.sendPauseDesc": "隱藏前先傳送媒體暫停鍵（暫停正在播放的影片／音樂）。",
+  "hide.sendPause": "同時暫停播放",
+  "hide.sendPauseDesc": "隱藏同時嘗試暫停正在播放的媒體。",
+  "hide.resumeMedia": "復原時繼續播放",
+  "hide.resumeMediaDesc": "復原顯示時，繼續播放被暫停的媒體",
+  "hide.needPauseFirst": "需先開啟「同時暫停播放」",
   "hide.minimizeBeforeHide": "隱藏前先最小化視窗",
   "hide.minimizeBeforeHideDesc":
     "隱藏前先把視窗最小化，復原時還原成原大小。此功能對降低部分遊戲引擎的背景佔用有效。",
