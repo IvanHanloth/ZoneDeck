@@ -9,8 +9,14 @@
   import IconPause from "~icons/lucide/pause";
   import IconPlay from "~icons/lucide/play";
   import IconMinimize from "~icons/lucide/minimize-2";
-  import { app } from "../lib/state.svelte.js";
+  import IconCircleHelp from "~icons/lucide/circle-help";
+  import IconPanelBottom from "~icons/lucide/panel-bottom";
+  import { app, toast } from "../lib/state.svelte.js";
+  import { openExternal } from "../lib/verhub.js";
   import { t } from "../lib/i18n.svelte.js";
+
+  // 系统设置的「任务栏」页，其他程序的托盘图标在那里逐个开关。
+  const TASKBAR_SETTINGS_URI = "ms-settings:taskbar";
 
   const s = $derived(app.config.setting);
   // 没有托盘图标就无所谓「一起隐藏」。
@@ -20,6 +26,14 @@
   // 主开关一开就把子项摊开。
   // 展开态由 SettingsExpander 的 autoExpand 负责联动，这里只存状态。
   let pauseExpanded = $state(false);
+
+  async function openLink(url) {
+    try {
+      await openExternal(url);
+    } catch (err) {
+      toast(t("options.openLinkFailed", { err }), true);
+    }
+  }
 </script>
 
 <SettingsGroup title={t("hide.generalCard")}>
@@ -73,3 +87,40 @@
     {#snippet control()}<ToggleSwitch bind:checked={s.show_float_window} />{/snippet}
   </SettingsCard> -->
 </SettingsGroup>
+
+<SettingsGroup title={t("hide.supportCard")}>
+  <div class="links">
+    <button class="link" type="button" onclick={() => openLink(t("hide.helpOtherIconsUrl"))}>
+      <IconCircleHelp width="16" height="16" />
+      <span class="label">{t("hide.helpOtherIcons")}</span>
+    </button>
+    <button class="link" type="button" onclick={() => openLink(TASKBAR_SETTINGS_URI)}>
+      <IconPanelBottom width="16" height="16" />
+      <span class="label">{t("hide.taskbarSettings")}</span>
+    </button>
+  </div>
+</SettingsGroup>
+
+<style>
+  /* 左缘对齐分组标题 */
+  .links {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 2px 1px;
+  }
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    color: var(--accent);
+  }
+  .link:hover .label {
+    text-decoration: underline;
+  }
+  .link:active {
+    color: var(--accent-pressed);
+  }
+</style>

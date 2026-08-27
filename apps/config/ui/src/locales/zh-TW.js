@@ -272,6 +272,12 @@ export default {
   "hide.minimizeBeforeHideDesc":
     "隱藏前先把視窗最小化，復原時還原成原大小。此功能對降低部分遊戲引擎的背景佔用有效。",
 
+  "hide.supportCard": "相關支援",
+  "hide.helpOtherIcons": "想要隱藏其他應用程式的通知區域圖示？",
+  "hide.helpOtherIconsUrl":
+    "https://zonedeck.ivan-hanloth.cn/zh-tw/guide/hiding#%E4%B8%80%E4%BD%B5%E9%9A%B1%E8%97%8F-zonedeck-%E9%80%9A%E7%9F%A5%E5%8D%80%E5%9F%9F%E5%9C%96%E7%A4%BA",
+  "hide.taskbarSettings": "Windows 工作列設定",
+
   "power.statsCard": "能效統計",
   "power.statsCo2Label": "減少碳排放",
   "power.statsCo2Desc": "由節省的電能按電網平均排放係數估算。",
