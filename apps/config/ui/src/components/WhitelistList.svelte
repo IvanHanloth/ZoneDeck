@@ -92,9 +92,7 @@
           <IconLock width="13" height="13" />
         </span>
         <span class="ic fallback"><IconShieldCheck width="14" height="14" /></span>
-        <span class="rproc">
-          {t(builtin.key === "core" ? "whitelist.builtinCore" : "whitelist.builtinConfig")}
-        </span>
+        <span class="rproc">{t("whitelist.builtinCore")}</span>
         <span class="rpath ltr" title={t("whitelist.builtinLocked")}>{builtin.names.join("、")}</span>
         <span class="by-placeholder"></span>
         <div class="modes">

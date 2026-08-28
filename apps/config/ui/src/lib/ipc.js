@@ -31,11 +31,13 @@ const mockConfig = {
   setting: {
     mute_after_hide: true,
     send_before_hide: false,
+    resume_media_after_show: false,
     minimize_before_hide: false,
     hide_current: true,
     hide_icon_after_hide: false,
+    hide_config_after_hide: true,
     tray_enabled: true,
-    tray_clicks: { left: "toggle", double: "none", right: "menu" },
+    tray_clicks: { left: "toggle", double: "settings", right: "menu" },
     tray_badges: { red: "hidden", green: "auto_hide", yellow: "hide_current", blue: "freeze" },
     tray_show_tooltip: true,
     freeze_after_hide: false,
@@ -190,10 +192,7 @@ function mockInvoke(cmd, args) {
     case "hotkey_taken":
       return false;
     case "whitelist_builtins":
-      return [
-        { key: "core", names: ["ZoneDeck.exe", "core.exe"] },
-        { key: "config", names: ["config.exe", "zonedeck-config.exe"] },
-      ];
+      return [{ key: "core", names: ["ZoneDeck.exe", "core.exe"] }];
     // 预览环境没有 regex crate，用 JS 近似；真实判定在后端。
     case "regex_breadth":
       return (args?.patterns ?? []).map((p) => {

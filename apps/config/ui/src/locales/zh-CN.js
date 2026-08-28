@@ -128,8 +128,7 @@ export default {
   "whitelist.ignoreFreeze": "忽略冻结：不冻结这个程序的进程",
   "whitelist.ignoreMute": "忽略静音：不静音这个程序的进程",
   "whitelist.builtinCore": "ZoneDeck 核心",
-  "whitelist.builtinConfig": "ZoneDeck 设置",
-  "whitelist.builtinLocked": "内置保护：冻结 ZoneDeck 自己会让热键失效、已隐藏的窗口再也无法恢复，故不可关闭、不可删除。",
+  "whitelist.builtinLocked": "内置保护：冻结 ZoneDeck 核心会让热键失效、已隐藏的窗口再也无法恢复，故不可关闭、不可删除。配置窗口不在此列，它被藏起来之后照常可冻结。",
 
   "broadRegex.title": "正则可能过宽",
   "broadRegex.lead": "以下正则命中了超过一半的随机样本（共 {total} 条），通常意味着写错了——它会连带命中大量无关窗口或进程。",
@@ -264,11 +263,24 @@ export default {
   "hide.hideIcon": "同时隐藏 ZoneDeck 托盘图标",
   "hide.hideIconDesc":
     "隐藏窗口时连 ZoneDeck 自身的托盘图标一起藏起，更隐蔽；不影响其他程序的托盘图标。再次触发热键可恢复。",
-  "hide.sendPause": "隐藏前发送暂停键",
-  "hide.sendPauseDesc": "隐藏前先发送媒体暂停键（暂停正在播放的视频 / 音乐）。",
+  "hide.hideConfig": "同时隐藏 ZoneDeck 配置窗口",
+  "hide.hideConfigDesc":
+    "触发隐藏时，配置窗口正开着就把它一起藏起来，恢复时一并显示；没开着则不去动它。",
+  "hide.sendPause": "同时暂停播放",
+  "hide.sendPauseDesc": "隐藏同时尝试暂停正在播放的媒体。",
+  "hide.resumeMedia": "恢复时继续播放",
+  "hide.resumeMediaDesc": "恢复显示时，继续播放被暂停的媒体",
+  "hide.needPauseFirst": "需先开启「同时暂停播放」",
   "hide.minimizeBeforeHide": "隐藏前先最小化窗口",
   "hide.minimizeBeforeHideDesc":
     "隐藏前先把窗口最小化，恢复时还原成原大小。此功能对降低部分游戏引擎的后台占用有效。",
+
+  "hide.supportCard": "相关支持",
+  "hide.helpOtherIcons": "想要隐藏其他应用的托盘图标？",
+  // 文档站按语言分目录，锚点也随标题译文变化，故逐语言写全
+  "hide.helpOtherIconsUrl":
+    "https://zonedeck.ivan-hanloth.cn/guide/hiding#%E5%90%8C%E6%97%B6%E9%9A%90%E8%97%8F-zonedeck-%E6%89%98%E7%9B%98%E5%9B%BE%E6%A0%87",
+  "hide.taskbarSettings": "Windows 任务栏设置",
 
   "power.statsCard": "能效统计",
   "power.statsCo2Label": "减少碳排放",

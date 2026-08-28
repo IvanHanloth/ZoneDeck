@@ -413,7 +413,7 @@ pub fn normalize_tray_action(value: &str) -> String {
 }
 
 fn default_tray_double() -> String {
-    TRAY_ACTION_NONE.to_string()
+    TRAY_ACTION_SETTINGS.to_string()
 }
 fn default_tray_right() -> String {
     TRAY_ACTION_MENU.to_string()
@@ -432,7 +432,7 @@ pub struct TrayClicks {
     pub right: String,
 }
 
-/// 全新安装的默认：单击切换隐藏、双击不做事、右键出菜单。
+/// 全新安装的默认：单击切换隐藏、双击开配置界面、右键出菜单。
 impl Default for TrayClicks {
     fn default() -> Self {
         Self {
@@ -464,8 +464,13 @@ impl TrayClicks {
 pub struct Setting {
     #[serde(default = "default_true")]
     pub mute_after_hide: bool,
+    /// 隐藏时尝试暂停目标正在播放的媒体。
     #[serde(default)]
     pub send_before_hide: bool,
+    /// 恢复显示时把隐藏时暂停的媒体重新播放。依附于 `send_before_hide`。
+    /// 是否恢复在隐藏那一刻就定下，中途改设置不影响这一轮。
+    #[serde(default)]
+    pub resume_media_after_show: bool,
     /// 隐藏前先把窗口最小化，恢复时还原成隐藏前的形态；本就最小化的保持最小化。
     #[serde(default)]
     pub minimize_before_hide: bool,
@@ -476,6 +481,10 @@ pub struct Setting {
     pub click_to_hide: bool,
     #[serde(default)]
     pub hide_icon_after_hide: bool,
+    /// 隐藏时把 ZoneDeck 配置窗口一并藏起，恢复时随其余窗口一起显示。
+    /// 只对触发那一刻可见的配置窗口生效。
+    #[serde(default = "default_true")]
+    pub hide_config_after_hide: bool,
     /// 是否显示托盘图标。关闭后图标上的点击、悬浮名称与状态角标一并失效；通知走
     /// Toast，不受影响。
     #[serde(default = "default_true")]
@@ -559,10 +568,12 @@ impl Default for Setting {
         Self {
             mute_after_hide: true,
             send_before_hide: false,
+            resume_media_after_show: false,
             minimize_before_hide: false,
             hide_current: true,
             click_to_hide: false,
             hide_icon_after_hide: false,
+            hide_config_after_hide: true,
             tray_enabled: true,
             tray_clicks: TrayClicks::default(),
             tray_badges: TrayBadges::default(),
@@ -1463,12 +1474,13 @@ mod tests {
     fn tray_clicks_default_bindings() {
         let d = TrayClicks::default();
         assert_eq!(d.left, TRAY_ACTION_TOGGLE, "单击默认切换隐藏");
-        assert_eq!(
-            d.double, TRAY_ACTION_NONE,
-            "双击默认不做事：绑上动作后单击就得等双击判定，手感变迟钝"
-        );
+        assert_eq!(d.double, TRAY_ACTION_SETTINGS, "双击默认开配置界面");
         assert_eq!(d.right, TRAY_ACTION_MENU, "右键默认出菜单");
         assert!(Setting::default().tray_enabled, "托盘图标默认显示");
+        assert!(
+            Setting::default().hide_config_after_hide,
+            "配置窗口默认跟着一起藏"
+        );
     }
 
     #[test]

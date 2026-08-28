@@ -129,9 +129,8 @@ export default {
   "whitelist.ignoreFreeze": "Skip freezing: never suspend this program's processes",
   "whitelist.ignoreMute": "Skip muting: never mute this program's processes",
   "whitelist.builtinCore": "ZoneDeck core",
-  "whitelist.builtinConfig": "ZoneDeck settings",
   "whitelist.builtinLocked":
-    "Built-in protection: freezing ZoneDeck itself kills the hotkeys and leaves hidden windows unrecoverable, so this cannot be turned off or removed.",
+    "Built-in protection: freezing the ZoneDeck core kills the hotkeys and leaves hidden windows unrecoverable, so this cannot be turned off or removed. The settings window is not covered — it can be frozen once hidden.",
 
   "broadRegex.title": "This regex may be too broad",
   "broadRegex.lead":
@@ -276,11 +275,23 @@ export default {
   "hide.hideIcon": "Also hide ZoneDeck's tray icon",
   "hide.hideIconDesc":
     "Hide ZoneDeck's own tray icon along with the windows for more discretion; other programs' tray icons are not affected. Press the hotkey again to restore it.",
-  "hide.sendPause": "Send the pause key before hiding",
-  "hide.sendPauseDesc": "Send the media pause key before hiding (pausing any playing video or music).",
+  "hide.hideConfig": "Also hide the ZoneDeck settings window",
+  "hide.hideConfigDesc":
+    "When hiding is triggered, hide the settings window too if it is open, and bring it back with everything else; if it is not open, nothing happens.",
+  "hide.sendPause": "Pause playback as well",
+  "hide.sendPauseDesc": "Try to pause any playing media as the windows are hidden.",
+  "hide.resumeMedia": "Resume playback on restore",
+  "hide.resumeMediaDesc": "Resume the paused media when the windows come back",
+  "hide.needPauseFirst": "Enable “Pause playback as well” first",
   "hide.minimizeBeforeHide": "Minimise windows before hiding",
   "hide.minimizeBeforeHideDesc":
     "Minimise each window before hiding it, then restore it to its original size. This helps cut the background usage of some game engines.",
+
+  "hide.supportCard": "Related support",
+  "hide.helpOtherIcons": "Want to hide other apps' tray icons?",
+  "hide.helpOtherIconsUrl":
+    "https://zonedeck.ivan-hanloth.cn/en/guide/hiding#also-hide-zonedeck-s-tray-icon",
+  "hide.taskbarSettings": "Windows taskbar settings",
 
   "power.statsCard": "Efficiency report",
   "power.statsCo2Label": "CO₂ avoided",

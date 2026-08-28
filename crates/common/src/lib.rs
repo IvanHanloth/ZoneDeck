@@ -13,9 +13,9 @@ pub use config::{
 pub use i18n::{LANG_AUTO, Lang};
 pub use ipc::{Command, Response};
 pub use matching::{
-    BUILTIN_FREEZE_GUARDS, BuiltinGuard, IgnoreMode, WindowResolution, is_builtin_freeze_guarded,
-    is_ignored, match_process_rule, regex_breadth, regex_is_broad, regex_is_valid,
-    resolve_window_rule, whitelist_needs_paths,
+    BUILTIN_FREEZE_GUARDS, BuiltinGuard, CONFIG_IMAGE_NAMES, IgnoreMode, WindowResolution,
+    is_builtin_freeze_guarded, is_config_image, is_ignored, match_process_rule, regex_breadth,
+    regex_is_broad, regex_is_valid, resolve_window_rule, whitelist_needs_paths,
 };
 pub use model::{ProcessRule, WhitelistRule, WindowInfo, WindowRule};
 

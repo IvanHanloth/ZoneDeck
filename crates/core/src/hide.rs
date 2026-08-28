@@ -1,14 +1,16 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use zonedeck_common::matching::{
-    IgnoreMode, WindowResolution, is_ignored, match_process_rule, resolve_window_rule,
+    IgnoreMode, WindowResolution, is_config_image, is_ignored, match_process_rule,
+    resolve_window_rule,
 };
 use zonedeck_common::{Config, NO_TITLE, Setting, WhitelistRule, WindowInfo, WindowRule};
 
-use crate::effects::Effects;
+use crate::effects::{Effects, PauseTarget};
 use crate::platform::{Restore, WindowManager};
-use crate::recovery::{ProcRecord, Snapshot};
+use crate::recovery::{MuteRecord, ProcRecord, Snapshot};
 
 /// 一条隐藏记录。`title` 仅供日志，进程路径与映像名还用于白名单判定。
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,10 +125,20 @@ pub fn resolve_targets(
     }
 
     if config.setting.hide_current && foreground != 0 {
-        // 枚举不到的前台窗口（如工具窗口）只带句柄，PID 由 plan_hide 补查。
+        // 枚举不到的前台窗口（如附属窗口）只带句柄，PID 由 plan_hide 补查。
         match windows.iter().find(|w| w.hwnd == foreground) {
             Some(w) => result.push(Target::from_window(w)),
             None => result.push(Target::bare(foreground, 0)),
+        }
+    }
+
+    // 配置窗口只在此刻可见时才纳入，本来就没开着的不去动它。
+    if config.setting.hide_config_after_hide {
+        for w in windows
+            .iter()
+            .filter(|w| w.visible && is_config_image(&w.process))
+        {
+            result.push(Target::from_window(w));
         }
     }
 
@@ -271,17 +283,31 @@ pub struct HidePlan {
     /// 本次新增的隐藏目标；带 [`Restore::Skip`] 的不改动可见性，但副作用照常施加。
     pub fresh: Vec<Target>,
     /// 本次新增的静音进程。
-    pub mute: Vec<ProcRecord>,
+    pub mute: Vec<MuteRecord>,
     /// 本次新增的冻结进程。
     pub freeze: Vec<ProcRecord>,
     /// 本次新增的效率模式进程。与冻结相互独立，两份名单可以不重合。
     pub efficiency: Vec<ProcRecord>,
-    /// 是否发送媒体暂停键。
-    pub send_pause: bool,
+    /// 本次要暂停媒体播放的目标；空表示不暂停。
+    pub pause: Vec<PauseTarget>,
+    /// 恢复时要不要把这些目标的媒体续播。隐藏那一刻就定下，
+    /// 中途改设置不影响这一轮——恢复须还原隐藏时的意图。
+    pub resume_media: bool,
     /// 本轮冻结方式；首轮跟随设置，之后沿用。
     pub enhanced: bool,
     /// 冻结后是否清空这些进程的工作集。
     pub trim: bool,
+}
+
+/// 收集一个暂停目标；PID 已经在列表里就跳过。
+fn push_pause(list: &mut Vec<PauseTarget>, pid: u32, path: &str) {
+    if pid == 0 || list.iter().any(|t| t.pid == pid) {
+        return;
+    }
+    list.push(PauseTarget {
+        pid,
+        path: path.to_string(),
+    });
 }
 
 /// [`HideController::show`] 的执行结果。
@@ -325,14 +351,37 @@ pub fn sync_rule_titles(rules: &mut [WindowRule], hwnd: i64, title: &str) -> boo
     changed
 }
 
+/// 隐藏后允许升级压制自我显示窗口的宽限期；超过它的外部显示视为真恢复。
+const REHIDE_GRACE: Duration = Duration::from_secs(3);
+
+/// [`HideController::on_external_show`] 的处理结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExternalShow {
+    /// 不在隐藏记录里，与我们无关。
+    NotTracked,
+    /// 窗口以最小化形态现身，屏幕上仍不可见；继续跟踪。
+    KeptMinimized,
+    /// 宽限期内被自我显示，已升级为「最小化 + 隐藏」再压一次。
+    Rehidden,
+    /// 视为被外部真恢复，已放弃跟踪。
+    Released,
+}
+
 pub struct HideController<W: WindowManager, E: Effects> {
     wm: W,
     effects: E,
     hidden: Vec<Target>,
     frozen: Vec<ProcRecord>,
-    muted: Vec<ProcRecord>,
+    muted: Vec<MuteRecord>,
+    /// 本轮暂停过媒体的目标，连同当时定下的续播意图。
+    paused: Vec<PauseTarget>,
+    resume_media: bool,
     efficiency: Vec<ProcRecord>,
     used_enhanced: bool,
+    /// 各窗口最近一次被本程序隐藏的时刻，界定升级压制的宽限期。运行期状态，不落盘。
+    recent_hides: HashMap<i64, Instant>,
+    /// 已压成（或自行停在）最小化、继续跟踪的窗口。带此标记的窗口即使可见也不算被外部恢复。
+    parked: HashSet<i64>,
 }
 
 impl<W: WindowManager, E: Effects> HideController<W, E> {
@@ -343,8 +392,12 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             hidden: Vec::new(),
             frozen: Vec::new(),
             muted: Vec::new(),
+            paused: Vec::new(),
+            resume_media: false,
             efficiency: Vec::new(),
             used_enhanced: false,
+            recent_hides: HashMap::new(),
+            parked: HashSet::new(),
         }
     }
 
@@ -387,7 +440,50 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     pub fn forget_window(&mut self, hwnd: i64) -> bool {
         let before = self.hidden.len();
         self.hidden.retain(|t| t.hwnd != hwnd);
+        self.recent_hides.remove(&hwnd);
+        self.parked.remove(&hwnd);
         self.hidden.len() != before
+    }
+
+    /// 处理隐藏记录里的窗口被外部重新显示。
+    ///
+    /// 部分悬浮窗（桌面歌词等）被 `SW_HIDE` 后会在毫秒级自我显示。宽限期内升级为
+    /// 「最小化 + 隐藏」再压一次：这类窗口通常只 `SW_SHOW` 不还原，最小化后便在
+    /// 屏幕上保持不可见。升级后仍被还原、或超出宽限期的，视为真被外部恢复，放弃跟踪。
+    pub fn on_external_show(&mut self, hwnd: i64) -> ExternalShow {
+        if !self.tracks_window(hwnd) {
+            return ExternalShow::NotTracked;
+        }
+        if self.wm.restore_mode(hwnd) == Restore::Minimized {
+            // 最小化形态的「显示」屏幕上看不见；SW_RESTORE 可回到最小化前的形态。
+            if let Some(t) = self.hidden.iter_mut().find(|t| t.hwnd == hwnd)
+                && t.restore == Restore::Show
+            {
+                t.restore = Restore::Normal;
+            }
+            self.parked.insert(hwnd);
+            return ExternalShow::KeptMinimized;
+        }
+        if !self.parked.contains(&hwnd)
+            && self
+                .recent_hides
+                .get(&hwnd)
+                .is_some_and(|at| at.elapsed() < REHIDE_GRACE)
+        {
+            // 此刻窗口可见且非最小化，形态可信，记下供恢复。
+            let shape = self.wm.restore_mode(hwnd);
+            if let Some(t) = self.hidden.iter_mut().find(|t| t.hwnd == hwnd)
+                && t.restore != Restore::Skip
+            {
+                t.restore = shape;
+            }
+            self.parked.insert(hwnd);
+            self.wm.minimize(hwnd);
+            self.wm.hide(hwnd);
+            return ExternalShow::Rehidden;
+        }
+        self.forget_window(hwnd);
+        ExternalShow::Released
     }
 
     /// 同步隐藏记录里的窗口标题；`NO_TITLE` 不参与。返回是否有记录被更新。
@@ -441,7 +537,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                     continue;
                 }
             }
-            // 任务栏与桌面带 WS_EX_TOOLWINDOW，不在枚举结果里，须先补上身份。
+            // 枚举不到的窗口只带句柄，白名单判定前须先补上身份。
             if t.process_path.is_empty() && !whitelist.is_empty() {
                 t.process_path = self.wm.process_path(t.pid);
             }
@@ -469,7 +565,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             fresh.push(t);
         }
 
-        let mut mute: Vec<ProcRecord> = Vec::new();
+        let mut mute: Vec<MuteRecord> = Vec::new();
         if setting.mute_after_hide {
             for t in fresh.iter().filter(|t| mute_pids.contains(&t.pid)) {
                 if !self.muted.iter().any(|r| r.pid == t.pid)
@@ -481,7 +577,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                         IgnoreMode::Mute,
                     )
                 {
-                    mute.push(self.proc_record(t.pid));
+                    mute.push(self.mute_record(t));
                 }
             }
         }
@@ -510,10 +606,23 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             }
         }
 
+        let mut pause: Vec<PauseTarget> = Vec::new();
+        if setting.send_before_hide {
+            for t in fresh.iter().filter(|t| t.restore != Restore::Skip) {
+                let path = self.target_path(t);
+                push_pause(&mut pause, t.pid, &path);
+            }
+            // 窗口原本就不可见、这一轮只做冻结的目标同样要停：进程一挂起，
+            // 声音就卡在最后一帧了。
+            for r in &freeze {
+                let path = self.wm.process_path(r.pid);
+                push_pause(&mut pause, r.pid, &path);
+            }
+        }
+
         HidePlan {
-            // 全是「不改动可见性」的目标时不发暂停键。
-            send_pause: setting.send_before_hide
-                && (fresh.iter().any(|t| t.restore != Restore::Skip) || !freeze.is_empty()),
+            resume_media: setting.send_before_hide && setting.resume_media_after_show,
+            pause,
             // 解冻方式必须与冻结时一致。
             enhanced: if self.frozen.is_empty() {
                 setting.enhanced_freeze
@@ -531,9 +640,15 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 执行计划：同步隐藏窗口（必要时先 `SW_SHOWMINNOACTIVE` 再 `SW_HIDE`），
     /// 副作用经 [`Effects`] 施加。生产实现为异步队列，入队顺序即执行顺序。
     pub fn commit_hide(&mut self, plan: HidePlan) {
-        // 暂停键须排在冻结之前。
-        if plan.send_pause {
-            self.effects.send_pause();
+        // 暂停须排在冻结之前：进程一旦挂起，就再也处理不了暂停命令。
+        if !plan.pause.is_empty() {
+            self.effects.pause_media(&plan.pause);
+            self.resume_media = plan.resume_media;
+            for t in &plan.pause {
+                if !self.paused.iter().any(|p| p.pid == t.pid) {
+                    self.paused.push(t.clone());
+                }
+            }
         }
 
         for t in &plan.fresh {
@@ -545,11 +660,13 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
                 self.wm.minimize(t.hwnd);
             }
             self.wm.hide(t.hwnd);
+            self.recent_hides.insert(t.hwnd, Instant::now());
+            self.parked.remove(&t.hwnd);
         }
 
         for r in &plan.mute {
-            self.effects.mute(r.pid, true);
-            self.muted.push(*r);
+            self.effects.mute(r.pid, &r.path);
+            self.muted.push(r.clone());
         }
         self.muted.sort_unstable_by_key(|r| r.pid);
 
@@ -589,11 +706,27 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
     /// 剔除已不成立的隐藏记录：句柄失效、句柄被别的进程复用（PID 不符）、
     /// 或窗口已重新可见（被外部恢复显示或句柄复用）。
+    /// 停在最小化的窗口（[`Self::parked`]）可见但屏幕上不可见，不算恢复。
     fn prune_stale(&mut self) {
         let wm = &self.wm;
+        let parked = &self.parked;
         self.hidden.retain(|t| {
-            wm.is_window(t.hwnd) && wm.window_pid(t.hwnd) == t.pid && !wm.is_visible(t.hwnd)
+            wm.is_window(t.hwnd)
+                && wm.window_pid(t.hwnd) == t.pid
+                && (!wm.is_visible(t.hwnd)
+                    || (parked.contains(&t.hwnd) && wm.restore_mode(t.hwnd) == Restore::Minimized))
         });
+        let alive: HashSet<i64> = self.hidden.iter().map(|t| t.hwnd).collect();
+        self.recent_hides.retain(|hwnd, _| alive.contains(hwnd));
+        self.parked.retain(|hwnd| alive.contains(hwnd));
+    }
+
+    /// 把最近隐藏时刻整体拨早，供测试模拟宽限期已过。
+    #[cfg(test)]
+    fn backdate_recent_hides(&mut self, by: Duration) {
+        for at in self.recent_hides.values_mut() {
+            *at = at.checked_sub(by).unwrap_or(*at);
+        }
     }
 
     /// 记录进程身份；创建时刻查不到时记 0，恢复侧对 0 不做校验。
@@ -601,6 +734,24 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         ProcRecord {
             pid,
             created_at: self.wm.process_start_time(pid),
+        }
+    }
+
+    /// 目标的映像路径；记录里没带就现查一次。
+    fn target_path(&self, t: &Target) -> String {
+        if t.process_path.is_empty() {
+            self.wm.process_path(t.pid)
+        } else {
+            t.process_path.clone()
+        }
+    }
+
+    /// 记录静音目标的身份与映像路径；路径查不到时留空，那时只能按 PID 解除。
+    fn mute_record(&self, t: &Target) -> MuteRecord {
+        MuteRecord {
+            pid: t.pid,
+            created_at: self.wm.process_start_time(t.pid),
+            path: self.target_path(t),
         }
     }
 
@@ -626,6 +777,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
 
         let hidden = std::mem::take(&mut self.hidden);
+        self.recent_hides.clear();
+        self.parked.clear();
         let mut stale: Vec<&Target> = Vec::new();
         for t in &hidden {
             // 本程序没动过它的可见性，恢复时也不得把它弹出来。
@@ -644,11 +797,11 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         }
         outcome.refound = self.refind_stale(&hidden, &stale);
 
+        // 不做存活校验：静音波及的是同映像的全部会话，目标进程即使已经退出，
+        // 同 exe 的其他会话仍得解除。误伤由会话级记账挡着，见 [`crate::audio::unmute`]。
         let muted = std::mem::take(&mut self.muted);
         for r in &muted {
-            if self.proc_alive(r) {
-                self.effects.mute(r.pid, false);
-            }
+            self.effects.unmute(r.pid, &r.path);
         }
 
         // 排在解冻之后：先让进程跑起来，再把它的调度待遇还回去。
@@ -656,6 +809,19 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         for r in &efficiency {
             if self.proc_alive(r) {
                 self.effects.clear_efficiency(r.pid);
+            }
+        }
+
+        // 续播排在最末：挂起的进程收不到播放命令，得等它先跑起来。
+        // 要不要续播看隐藏那一刻定下的意图，不看当前设置。
+        let paused = std::mem::take(&mut self.paused);
+        let resume = std::mem::replace(&mut self.resume_media, false);
+        if !paused.is_empty() {
+            if resume {
+                self.effects.resume_media(&paused);
+            } else {
+                // 不续播就把记账丢掉，免得留到下一轮被误播。
+                self.effects.forget_paused_media();
             }
         }
         outcome
@@ -719,18 +885,18 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             if t.restore != Restore::Skip && self.wm.is_window(t.hwnd) {
                 self.wm.restore(t.hwnd, t.restore);
             }
+            self.recent_hides.remove(&t.hwnd);
+            self.parked.remove(&t.hwnd);
         }
         self.hidden = keep;
 
-        let (unmute, keep): (Vec<ProcRecord>, Vec<ProcRecord>) = self
+        let (unmute, keep): (Vec<MuteRecord>, Vec<MuteRecord>) = self
             .muted
             .iter()
-            .copied()
+            .cloned()
             .partition(|r| pids.contains(&r.pid));
         for r in &unmute {
-            if self.proc_alive(r) {
-                self.effects.mute(r.pid, false);
-            }
+            self.effects.unmute(r.pid, &r.path);
         }
         self.muted = keep;
 
@@ -788,7 +954,7 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         let mut snapshot = self.snapshot();
         snapshot.hidden.extend(plan.fresh.iter().cloned());
         snapshot.frozen.extend(plan.freeze.iter().copied());
-        snapshot.muted.extend(plan.mute.iter().copied());
+        snapshot.muted.extend(plan.mute.iter().cloned());
         snapshot.efficiency.extend(plan.efficiency.iter().copied());
         snapshot.enhanced = plan.enhanced;
         snapshot
@@ -796,6 +962,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
     /// 从崩溃前的快照恢复；逐条身份校验由 [`Self::show`] 完成。
     pub fn restore_from(&mut self, snapshot: Snapshot) -> ShowOutcome {
+        self.recent_hides.clear();
+        self.parked.clear();
         self.hidden = snapshot.hidden;
         self.frozen = snapshot.frozen;
         self.muted = snapshot.muted;
@@ -811,6 +979,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
     /// 一个窗口都没接管成功时，这轮隐藏已经失效，把还活着的进程解冻、取消静音、
     /// 清除效率模式，免得它们一直挂在那儿。
     pub fn adopt_from(&mut self, snapshot: Snapshot) -> AdoptOutcome {
+        self.recent_hides.clear();
+        self.parked.clear();
         let mut outcome = AdoptOutcome::default();
         let mut kept = Vec::with_capacity(snapshot.hidden.len());
         for t in snapshot.hidden {
@@ -838,10 +1008,8 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
             }
         }
         for r in &snapshot.muted {
-            if self.proc_alive(r) {
-                self.effects.mute(r.pid, false);
-                outcome.released += 1;
-            }
+            self.effects.unmute(r.pid, &r.path);
+            outcome.released += 1;
         }
         // 排在解冻之后：先让进程跑起来，再把调度待遇还回去。
         for r in &snapshot.efficiency {
@@ -1135,6 +1303,31 @@ mod tests {
         assert_eq!(ids(&same), vec![(10, 10)], "前台与已命中窗口相同应去重");
     }
 
+    #[test]
+    fn the_config_window_joins_the_hide_only_while_it_is_on_screen() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let open = vec![
+            win("微信", 10, "WeChat.exe", "C:\\WeChat.exe"),
+            win("ZoneDeck", 30, "config.exe", "C:\\ZoneDeck\\config.exe"),
+        ];
+        let (targets, _) = resolve_targets(&mut config.clone(), &open, 0);
+        assert_eq!(ids(&targets), vec![(10, 10), (30, 30)], "开着就一起藏");
+
+        let closed: Vec<WindowInfo> = open
+            .iter()
+            .map(|w| w.clone().with_visibility(w.hwnd == 10))
+            .collect();
+        let (targets, _) = resolve_targets(&mut config.clone(), &closed, 0);
+        assert_eq!(ids(&targets), vec![(10, 10)], "没开着就不去动它");
+
+        config.setting.hide_config_after_hide = false;
+        let (targets, _) = resolve_targets(&mut config, &open, 0);
+        assert_eq!(ids(&targets), vec![(10, 10)], "关掉开关后不再纳入");
+    }
+
     struct MockWm {
         windows: Vec<WindowInfo>,
         foreground: i64,
@@ -1303,14 +1496,21 @@ mod tests {
         eco_on: RefCell<Vec<u32>>,
         eco_off: RefCell<Vec<u32>>,
         pauses: RefCell<u32>,
+        /// 最后一次暂停请求的目标。
+        pause_targets: RefCell<Vec<PauseTarget>>,
+        /// 续播请求的目标；`None` 表示这一轮改为丢弃记账。
+        resumed_media: RefCell<Vec<Option<Vec<PauseTarget>>>>,
         settles: RefCell<u32>,
         /// 冻结相关动作的调用顺序。
         order: RefCell<Vec<String>>,
     }
 
     impl Effects for MockEffects {
-        fn mute(&self, pid: u32, mute: bool) {
-            self.mutes.borrow_mut().push((pid, mute));
+        fn mute(&self, pid: u32, _path: &str) {
+            self.mutes.borrow_mut().push((pid, true));
+        }
+        fn unmute(&self, pid: u32, _path: &str) {
+            self.mutes.borrow_mut().push((pid, false));
         }
         fn settle_before_freeze(&self) {
             *self.settles.borrow_mut() += 1;
@@ -1335,8 +1535,15 @@ mod tests {
             self.eco_off.borrow_mut().push(pid);
             self.order.borrow_mut().push(format!("eco_off:{pid}"));
         }
-        fn send_pause(&self) {
+        fn pause_media(&self, targets: &[PauseTarget]) {
             *self.pauses.borrow_mut() += 1;
+            *self.pause_targets.borrow_mut() = targets.to_vec();
+        }
+        fn resume_media(&self, targets: &[PauseTarget]) {
+            self.resumed_media.borrow_mut().push(Some(targets.to_vec()));
+        }
+        fn forget_paused_media(&self) {
+            self.resumed_media.borrow_mut().push(None);
         }
     }
 
@@ -1486,6 +1693,125 @@ mod tests {
         assert!(controller.wm.is_visible(10));
     }
 
+    /// 自我显示型悬浮窗（桌面歌词等）：SW_HIDE 后被程序拉回来，应升级为
+    /// 最小化压制并继续跟踪，恢复时按真实形态还原。
+    #[test]
+    fn self_reshowing_window_is_parked_minimized_and_still_restores() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule(
+            "桌面歌词",
+            10,
+            "cloudmusic.exe",
+            "C:\\cloudmusic.exe",
+        )];
+
+        let wm = MockWm::new(
+            vec![win("桌面歌词", 10, "cloudmusic.exe", "C:\\cloudmusic.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+        assert!(!controller.wm.is_visible(10));
+
+        // 程序把窗口拉回来（非最小化）→ 升级压制。
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Rehidden);
+        assert!(!controller.wm.is_visible(10), "应被再次隐藏");
+        assert_eq!(controller.wm.shape_of(10), Restore::Minimized, "应先最小化");
+        assert!(controller.tracks_window(10), "跟踪不应丢");
+
+        // 程序再 SW_SHOW：窗口以最小化形态现身，屏幕上看不见，继续跟踪。
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::KeptMinimized);
+        assert!(controller.tracks_window(10));
+
+        // 下一轮 plan 的 prune 不得把停在最小化的记录当成已恢复剔掉。
+        let plan = controller.plan_hide(&config.setting, &[], &[], &[], &[], &[]);
+        controller.commit_hide(plan);
+        assert!(controller.tracks_window(10));
+
+        // 恢复：按升级时记下的形态（Normal → SW_RESTORE）回到屏幕。
+        let outcome = controller.show();
+        assert_eq!(outcome.shown, 1);
+        assert!(controller.wm.is_visible(10));
+        assert_eq!(controller.wm.shape_of(10), Restore::Normal);
+    }
+
+    /// 升级压制后窗口被真正还原（非最小化现身）→ 视为外部恢复，放弃跟踪。
+    #[test]
+    fn parked_window_restored_for_real_is_released() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule(
+            "桌面歌词",
+            10,
+            "cloudmusic.exe",
+            "C:\\cloudmusic.exe",
+        )];
+
+        let wm = MockWm::new(
+            vec![win("桌面歌词", 10, "cloudmusic.exe", "C:\\cloudmusic.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Rehidden);
+
+        // 用户 / 程序把它从最小化还原成正常形态。
+        controller.wm.restore(10, Restore::Normal);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Released);
+        assert!(!controller.tracks_window(10));
+    }
+
+    /// 宽限期外的外部显示维持原语义：放弃跟踪，不与用户抢窗口。
+    #[test]
+    fn external_show_after_the_grace_period_releases_the_window() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("微信", 10, "WeChat.exe", "C:\\WeChat.exe")];
+
+        let wm = MockWm::new(vec![win("微信", 10, "WeChat.exe", "C:\\WeChat.exe")], 0);
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        controller.backdate_recent_hides(REHIDE_GRACE + Duration::from_secs(1));
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Released);
+        assert!(!controller.tracks_window(10));
+        assert!(controller.wm.is_visible(10), "不得再去动窗口");
+    }
+
+    /// 升级前窗口是最大化的，恢复时应回到最大化。
+    #[test]
+    fn parked_maximized_window_comes_back_maximized() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule(
+            "桌面歌词",
+            10,
+            "cloudmusic.exe",
+            "C:\\cloudmusic.exe",
+        )];
+
+        let wm = MockWm::new(
+            vec![win("桌面歌词", 10, "cloudmusic.exe", "C:\\cloudmusic.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        do_hide(&mut controller, &mut config);
+
+        controller.wm.set_shape(10, Restore::Maximized);
+        controller.wm.show(10);
+        assert_eq!(controller.on_external_show(10), ExternalShow::Rehidden);
+
+        let outcome = controller.show();
+        assert_eq!(outcome.shown, 1);
+        assert_eq!(controller.wm.shape_of(10), Restore::Maximized);
+    }
+
     #[test]
     fn foreground_target_takes_the_visible_foreground_window() {
         let windows = vec![
@@ -1505,7 +1831,7 @@ mod tests {
         assert_eq!(
             foreground_target(&windows, 99),
             None,
-            "枚举不到的窗口（如工具窗口）不作为目标"
+            "枚举不到的窗口（如附属窗口）不作为目标"
         );
     }
 
@@ -1565,10 +1891,12 @@ mod tests {
         );
         assert_eq!(
             snapshot.muted,
-            vec![ProcRecord {
+            vec![MuteRecord {
                 pid: 10,
-                created_at: start_of(10)
-            }]
+                created_at: start_of(10),
+                path: "C:\\WeChat.exe".into(),
+            }],
+            "静音记录须带映像路径，目标进程退出后才找得回同 exe 的会话"
         );
 
         controller.show();
@@ -1614,9 +1942,10 @@ mod tests {
                 pid: 10,
                 created_at: start_of(10),
             }],
-            muted: vec![ProcRecord {
+            muted: vec![MuteRecord {
                 pid: 10,
                 created_at: start_of(10),
+                path: "C:\\WeChat.exe".into(),
             }],
             enhanced: false,
             ..Default::default()
@@ -1655,9 +1984,10 @@ mod tests {
                 pid: 10,
                 created_at: start_of(10),
             }],
-            muted: vec![ProcRecord {
+            muted: vec![MuteRecord {
                 pid: 10,
                 created_at: start_of(10),
+                path: "C:\\WeChat.exe".into(),
             }],
             enhanced: false,
             ..Default::default()
@@ -1883,6 +2213,216 @@ mod tests {
         assert!(
             controller.effects.resumes.borrow().is_empty(),
             "身份不符或已退出的进程不得解冻，避免干扰无关进程"
+        );
+    }
+
+    /// 静音的目标在隐藏期间被关掉，恢复时仍要取消静音。静音波及的是同映像的
+    /// 全部会话，它们未必随目标进程一起消失；误伤由会话级记账挡着，不靠存活校验。
+    #[test]
+    fn unmute_still_runs_after_the_target_process_exits() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+        assert_eq!(*controller.effects.mutes.borrow(), vec![(100, true)]);
+
+        // 进程已退出。
+        controller.wm.start_overrides.borrow_mut().insert(100, 0);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(100, true), (100, false)],
+            "目标进程已退出也要取消静音，同 exe 的其他会话还等着解除"
+        );
+    }
+
+    /// 部分释放同样不看存活：道理与 [`unmute_still_runs_after_the_target_process_exits`] 一致。
+    #[test]
+    fn release_pids_unmutes_even_if_the_process_is_gone() {
+        let setting = Setting {
+            hide_current: false,
+            mute_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+        controller.wm.start_overrides.borrow_mut().insert(100, 0);
+
+        controller.release_pids(&[100]);
+        assert_eq!(
+            *controller.effects.mutes.borrow(),
+            vec![(100, true), (100, false)]
+        );
+    }
+
+    /// 暂停目标要带上被隐藏进程的身份，而不是只给一个「发不发」的布尔：
+    /// 发之前得先确认是这些进程在出声，别把无关的后台播放器一起停了。
+    #[test]
+    fn pause_targets_carry_the_hidden_processes() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        let plan = controller.plan_hide(&setting, &[Target::bare(10, 100)], &[], &[], &[], &[]);
+
+        assert_eq!(
+            plan.pause,
+            vec![PauseTarget {
+                pid: 100,
+                path: "C:\\WeChat.exe".into()
+            }],
+            "暂停目标须带映像路径，SMTC 靠它认出是哪个程序的媒体会话"
+        );
+    }
+
+    /// 开了续播时，恢复要把暂停过的目标交回去续播。
+    #[test]
+    fn resume_media_plays_back_what_this_round_paused() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            resume_media_after_show: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid(
+                "网易云",
+                10,
+                "cloudmusic.exe",
+                100,
+                "C:\\cloudmusic.exe",
+            )],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+        assert_eq!(*controller.effects.pauses.borrow(), 1);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.resumed_media.borrow(),
+            vec![Some(vec![PauseTarget {
+                pid: 100,
+                path: "C:\\cloudmusic.exe".into()
+            }])],
+            "开了续播就该把这一轮暂停过的目标交回去"
+        );
+    }
+
+    /// 默认不续播：恢复时只丢掉暂停记账，不替用户重新播放。
+    #[test]
+    fn without_resume_media_the_bookkeeping_is_dropped_instead() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid(
+                "网易云",
+                10,
+                "cloudmusic.exe",
+                100,
+                "C:\\cloudmusic.exe",
+            )],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        assert!(
+            !setting.resume_media_after_show,
+            "续播须默认关闭：替用户擅自恢复播放比不恢复更扰人"
+        );
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+
+        controller.show();
+        assert_eq!(
+            *controller.effects.resumed_media.borrow(),
+            vec![None],
+            "不续播时该丢掉记账，免得留到下一轮被误播"
+        );
+    }
+
+    /// 续播与否在隐藏那一刻定下：隐藏期间把设置关掉，这一轮仍按当时的意图续播。
+    #[test]
+    fn resume_media_intent_is_fixed_at_hide_time() {
+        let mut setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            resume_media_after_show: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid(
+                "网易云",
+                10,
+                "cloudmusic.exe",
+                100,
+                "C:\\cloudmusic.exe",
+            )],
+            0,
+        );
+        let mut controller = HideController::new(wm, MockEffects::default());
+        controller.apply_hide(&setting, &[Target::bare(10, 100)], &[]);
+
+        // 隐藏期间用户改了设置，本轮恢复不受影响。
+        setting.resume_media_after_show = false;
+
+        controller.show();
+        assert!(
+            matches!(
+                controller.effects.resumed_media.borrow().as_slice(),
+                [Some(_)]
+            ),
+            "恢复须还原隐藏时的意图，不看改过的设置"
+        );
+    }
+
+    /// 窗口原本就不可见、这一轮只做冻结时照样要暂停：进程一挂起，声音就卡住了。
+    #[test]
+    fn freeze_only_round_still_pauses_media() {
+        let setting = Setting {
+            hide_current: false,
+            send_before_hide: true,
+            freeze_after_hide: true,
+            ..Setting::default()
+        };
+        let wm = MockWm::new(
+            vec![win_pid("微信", 10, "WeChat.exe", 100, "C:\\WeChat.exe")],
+            0,
+        );
+        wm.hide(10); // 隐藏前就不可见，本程序不动它的可见性。
+        let mut controller = HideController::new(wm, MockEffects::default());
+        let plan = controller.plan_hide(&setting, &[Target::bare(10, 100)], &[100], &[], &[], &[]);
+
+        assert!(
+            plan.fresh.iter().all(|t| t.restore == Restore::Skip),
+            "窗口本来就不可见，应记为 Skip"
+        );
+        assert_eq!(
+            plan.pause,
+            vec![PauseTarget {
+                pid: 100,
+                path: "C:\\WeChat.exe".into()
+            }],
+            "只做冻结的一轮同样要暂停"
         );
     }
 
@@ -2960,9 +3500,10 @@ mod tests {
         assert_eq!(got, vec![200, 300], "大小写不敏感；未知 PID 保留");
     }
 
-    /// 展开子进程树后，ZoneDeck 自己必须被内置保护挡下；白名单为空时同样生效。
+    /// 展开子进程树后，核心必须被内置保护挡下；白名单为空时同样生效。
+    /// 配置程序不在保护之列，跟着一起冻。
     #[test]
-    fn freeze_whitelist_protects_zonedeck_inside_an_expanded_tree() {
+    fn freeze_whitelist_protects_the_core_inside_an_expanded_tree() {
         // explorer(100) → 核心(200) → 配置程序(300)，另有普通子进程 400。
         let edges = [(200, 100), (300, 200), (400, 100)];
         let expanded = expand_descendants(&[100], &edges);
@@ -2975,7 +3516,7 @@ mod tests {
             (400, "helper.exe".to_string()),
         ]);
         let got = filter_freeze_whitelist(expanded, &names, &std::collections::HashMap::new(), &[]);
-        assert_eq!(got, vec![100, 400], "核心与配置程序必须留下");
+        assert_eq!(got, vec![100, 300, 400], "只有核心留下");
     }
 
     #[test]

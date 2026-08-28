@@ -129,7 +129,7 @@ impl Msg {
             }
             Msg::ErrFreezePartial => "{failed}/{total} 个进程冻结失败",
             Msg::ErrResumePartial => "{failed}/{total} 个进程解冻失败",
-            Msg::ErrUrlSchemeNotAllowed => "只允许打开 http/https/mailto 链接",
+            Msg::ErrUrlSchemeNotAllowed => "只允许打开 https/mailto/ms-settings 链接",
             Msg::ErrFeedbackEmpty => "请先填写反馈内容",
             Msg::ErrFeedbackContactRequired => "转换为 Issue 需要留下 GitHub 账号",
             Msg::ErrKeyCaptureFailed => "无法独占键盘，录制期间的按键可能触发其他程序",
@@ -196,7 +196,7 @@ impl Msg {
             }
             Msg::ErrFreezePartial => "Failed to freeze {failed} of {total} processes",
             Msg::ErrResumePartial => "Failed to resume {failed} of {total} processes",
-            Msg::ErrUrlSchemeNotAllowed => "Only http/https/mailto links may be opened",
+            Msg::ErrUrlSchemeNotAllowed => "Only https/mailto/ms-settings links may be opened",
             Msg::ErrFeedbackEmpty => "Please write your feedback first",
             Msg::ErrFeedbackContactRequired => {
                 "Converting feedback into an issue requires a GitHub account"
@@ -263,7 +263,7 @@ impl Msg {
             }
             Msg::ErrFreezePartial => "{failed}/{total} 個程序凍結失敗",
             Msg::ErrResumePartial => "{failed}/{total} 個程序解除凍結失敗",
-            Msg::ErrUrlSchemeNotAllowed => "僅允許開啟 http/https/mailto 連結",
+            Msg::ErrUrlSchemeNotAllowed => "僅允許開啟 https/mailto/ms-settings 連結",
             Msg::ErrFeedbackEmpty => "請先填寫意見回饋內容",
             Msg::ErrFeedbackContactRequired => "轉換為 Issue 需要留下 GitHub 帳號",
             Msg::ErrKeyCaptureFailed => "無法獨佔鍵盤，錄製期間的按鍵可能觸發其他程式",

@@ -54,10 +54,12 @@ Hotkey strings support [richer combinations](/en/guide/hotkeys#richer-combinatio
 | Field | Type | Default | Feature |
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [Mute after hiding](/en/guide/hiding) |
-| `send_before_hide` | bool | `false` | [Send the pause key before hiding](/en/guide/hiding) |
+| `send_before_hide` | bool | `false` | [Pause playback as well](/en/guide/hiding): tries to pause playing media as the windows are hidden |
+| `resume_media_after_show` | bool | `false` | [Resume playback on restore](/en/guide/hiding): depends on `send_before_hide`; the choice is fixed at hide time |
 | `minimize_before_hide` | bool | `false` | [Minimise windows before hiding](/en/guide/hiding) |
 | `hide_current` | bool | `true` | [Also hide the active window](/en/guide/hiding) |
 | `hide_icon_after_hide` | bool | `false` | [Also hide ZoneDeck's tray icon](/en/guide/hiding) |
+| `hide_config_after_hide` | bool | `true` | [Also hide the ZoneDeck settings window](/en/guide/hiding): only applies to a settings window visible at that moment |
 | `tray_enabled` | bool | `true` | [Show the tray icon](/en/guide/notifications#show-the-tray-icon); when false the icon never appears and balloons / badges go with it |
 | `tray_clicks` | object | See below | [Tray icon click actions](/en/guide/notifications#tray-icon-click-actions) |
 | `tray_badges` | object | See below | [Tray icon status](/en/guide/notifications#tray-icon-status) |
@@ -99,7 +101,7 @@ Hotkey strings support [richer combinations](/en/guide/hotkeys#richer-combinatio
 | Field | Default | Description |
 | --- | --- | --- |
 | `left` | `"toggle"` | Single click |
-| `double` | `"none"` | Double click. When it is not `none`, a single click waits out the system double-click time before running |
+| `double` | `"settings"` | Double click. When it is not `none`, a single click waits out the system double-click time before running |
 | `right` | `"menu"` | Right click |
 
 ### `setting.mouse`

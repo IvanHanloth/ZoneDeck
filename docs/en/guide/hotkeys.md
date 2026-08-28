@@ -39,7 +39,7 @@ The last three are unset by default; record them when you need them:
 Hiding is **cumulative**: no matter how a window was hidden, it goes into the same list and comes back with everything else. So windows hidden by these three hotkeys can only be brought back by **Show windows only**, **Hide / show windows** (which restores in that state), or another restore method such as the tray menu or a mouse gesture.
 
 ::: tip
-**Hide foreground window** targets the ordinary top-level window that currently has focus. If focus is elsewhere — on the desktop or on certain tool windows — the press does nothing and says so in the log.
+**Hide foreground window** targets the visible top-level window that currently has focus, floating widgets and other tool windows included. When focus sits on an owned window (a dialog or a drop-down panel) the press does nothing and says so in the log; the desktop and the taskbar belong to File Explorer, which the preset [whitelist](/en/guide/whitelist) entry keeps out of hiding.
 :::
 
 ### The keyboard hook and keeping keys from other apps

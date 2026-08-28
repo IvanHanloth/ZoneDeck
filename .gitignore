@@ -37,3 +37,5 @@ docs/.vitepress/cache
 
 __pycache__/
 /design/
+
+.claude

@@ -249,13 +249,21 @@ async fn run_freeze(
             }
             _ => pids,
         };
+        // 配置程序不再受内置保护，冻结前须把本进程连同 WebView2 子进程摘出去：
+        // 挂起自己就再也醒不过来了。核心那边冻结配置程序不受此限。
+        let own: Vec<u32> = if suspend {
+            zonedeck_core::hide::expand_descendants(&[std::process::id()], &freeze::process_tree())
+        } else {
+            Vec::new()
+        };
         let targets: Vec<u32> = targets
             .into_iter()
             .filter(|pid| {
                 !suspend
-                    || !zonedeck_common::is_builtin_freeze_guarded(
-                        names.get(pid).map(String::as_str).unwrap_or_default(),
-                    )
+                    || (!own.contains(pid)
+                        && !zonedeck_common::is_builtin_freeze_guarded(
+                            names.get(pid).map(String::as_str).unwrap_or_default(),
+                        ))
             })
             .collect();
         let mut failed = 0usize;
@@ -686,10 +694,13 @@ fn app_info() -> AppInfo {
     }
 }
 
-/// 用系统默认浏览器打开外部链接；仅放行 https/mailto。
+/// 可交给系统默认程序打开的 URL 前缀。
+const ALLOWED_URL_PREFIXES: [&str; 3] = ["https://", "mailto:", "ms-settings:"];
+
+/// 用系统默认程序打开外部链接；仅放行 [`ALLOWED_URL_PREFIXES`] 中的协议。
 #[tauri::command]
 async fn open_external(url: String) -> Result<(), String> {
-    if !url.starts_with("https://") && !url.starts_with("mailto:") {
+    if !ALLOWED_URL_PREFIXES.iter().any(|p| url.starts_with(p)) {
         return Err(i18n::t(Msg::ErrUrlSchemeNotAllowed).to_string());
     }
     blocking(move || zonedeck_core::shell::open(&url)).await

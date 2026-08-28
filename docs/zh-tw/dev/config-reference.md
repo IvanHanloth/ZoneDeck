@@ -54,10 +54,12 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | 欄位 | 型別 | 預設 | 對應功能 |
 | --- | --- | --- | --- |
 | `mute_after_hide` | bool | `true` | [隱藏後靜音](/zh-tw/guide/hiding) |
-| `send_before_hide` | bool | `false` | [隱藏前傳送暫停鍵](/zh-tw/guide/hiding) |
+| `send_before_hide` | bool | `false` | [同時暫停播放](/zh-tw/guide/hiding)：隱藏同時嘗試暫停正在播放的媒體 |
+| `resume_media_after_show` | bool | `false` | [復原時繼續播放](/zh-tw/guide/hiding)：依附於 `send_before_hide`，是否續播在隱藏那一刻定下 |
 | `minimize_before_hide` | bool | `false` | [隱藏前先最小化視窗](/zh-tw/guide/hiding) |
 | `hide_current` | bool | `true` | [同時隱藏目前使用中的視窗](/zh-tw/guide/hiding) |
 | `hide_icon_after_hide` | bool | `false` | [一併隱藏 ZoneDeck 通知區域圖示](/zh-tw/guide/hiding) |
+| `hide_config_after_hide` | bool | `true` | [一併隱藏 ZoneDeck 設定視窗](/zh-tw/guide/hiding)：只對觸發那一刻可見的設定視窗生效 |
 | `tray_enabled` | bool | `true` | [顯示通知區域圖示](/zh-tw/guide/notifications#顯示通知區域圖示)；為假時圖示一直不顯示，氣泡與角標一併失效 |
 | `tray_clicks` | object | 見下 | [通知區域圖示點擊行為](/zh-tw/guide/notifications#通知區域圖示點擊行為) |
 | `tray_badges` | object | 見下 | [圖示狀態提示](/zh-tw/guide/notifications#圖示狀態提示) |
@@ -99,7 +101,7 @@ ZoneDeck 的設定儲存在 `config.json` 中，可攜版存在程式資料夾�
 | 欄位 | 預設 | 說明 |
 | --- | --- | --- |
 | `left` | `"toggle"` | 左鍵按一下 |
-| `double` | `"none"` | 左鍵按兩下。非 `none` 時按一下須等過系統連按判定時間才執行 |
+| `double` | `"settings"` | 左鍵按兩下。非 `none` 時按一下須等過系統連按判定時間才執行 |
 | `right` | `"menu"` | 右鍵按一下 |
 
 ### `setting.mouse`
