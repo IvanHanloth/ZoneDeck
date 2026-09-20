@@ -17,6 +17,9 @@ powershell -File scripts/package.ps1 -Installer
 
 # 复用已有前端产物（前端没改时提速）
 powershell -File scripts/package.ps1 -SkipFrontend
+
+# 只用现有 dist/ZoneDeck 重打安装包（发版流程签完名后用）
+powershell -File scripts/package.ps1 -InstallerOnly
 ```
 
 `package.ps1` 的流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace（Tauri 构建脚本会把前端 `dist` 内嵌进 `zonedeck-config.exe`）→ 组装便携文件夹 → 可选生成安装包。
@@ -95,14 +98,16 @@ powershell -File scripts/version.ps1 show
 
 ### `release.yml` — 一键发版
 
-**触发**：手动（`workflow_dispatch`），输入要发布的版本号。**请从 `main` 触发**（待发布内容合并进 `main` 之后）。
+**触发**：手动（`workflow_dispatch`），输入要发布的版本号。**必须从 `main` 触发**（待发布内容合并进 `main` 之后）——签名凭据所在的
+`sign` 环境只放行 `main`，且要求人工批准。
 
 **做什么**：
 1. 用 `version.ps1 apply` 把版本号写入 `Cargo.toml` 并同步 `Cargo.lock`；
 2. 以 OIDC 身份向 [octo-sts](https://octo-sts.dev) 换取本仓库 `contents:write` 的短期 token；
 3. 经 GraphQL `createCommitOnBranch` 把版本号变更提交到触发分支，并打上 `v<版本>` 附注 tag——API 创建的提交由 GitHub 服务端签名，带 **Verified** 徽章；
 4. 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试；
-5. `package.ps1 -Installer` 组装 `dist/ZoneDeck` 与 `dist/installer` → 把 `dist/ZoneDeck` 压成便携 zip；
+5. `package.ps1 -SkipFrontend` 组装 `dist/ZoneDeck` → 给里面的两个 exe 加代码签名 → `package.ps1 -InstallerOnly` 把已签名的
+   exe 打进安装包 → 单独签安装包本身 → 把 `dist/ZoneDeck` 压成便携 zip；
 6. 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
 
 tag 已存在时跳过第 2、3 步，直接检出该 tag 重新构建——重跑 / 补发就是再次运行并填入同一版本号。
@@ -111,6 +116,11 @@ tag 已存在时跳过第 2、3 步，直接检出该 tag 重新构建——重�
 仓库不保存任何长期凭据。工作流用 GitHub Actions 的 OIDC 身份向 octo-sts 换取短期 token，放行条件由 `.github/chainguard/tag-release.sts.yaml` 声明（只允许 `main` / `dev` 上的运行），token 在 job 结束时自动吊销。Octo STS App 在分支保护的 bypass 名单中，因此版本号提交无需发版 PR。
 
 提交能带 Verified 徽章，是因为它经 GitHub API 创建、由 GitHub 服务端签名；tag 没有服务端签名机制，是普通附注 tag。
+
+代码签名走 [super-simply-sign](https://github.com/IvanHanloth/super-simply-sign)，证书是 Certum SimplySign（云端签名，无需硬件
+token）。账户邮箱与 TOTP 种子存在 `sign` 环境里（`CERTUM_EMAIL` / `CERTUM_OTP`），只有 release job 取得到。job 声明
+environment 后，OIDC 的 `sub` 尾段由 `ref:refs/heads/...` 变成 `environment:sign`，所以信任策略两种尾段都放行，分支限制改由
+`ref` claim 保证。
 :::
 
 ### `deploy-docs.yml` — 文档站部署
@@ -134,7 +144,8 @@ main ──① Release──▶ 版本号提交（Verified）+ v3.0.1 tag ──
 ```
 
 1. 功能开发完毕，照常把 `dev` 经 PR 合并进 `main`。
-2. 在 `main` 上运行 **"Release"**，填入版本号（如 `3.0.1`）。工作流把版本号提交与 tag 落在 `main`，随后完成生产构建，留下一个**草稿** Release。
+2. 在 `main` 上运行 **"Release"**，填入版本号（如 `3.0.1`）。`sign` 环境要求人工批准，去 Actions 页面点 **Review deployments
+   ** 放行后工作流才开跑；随后它把版本号提交与 tag 落在 `main`，完成生产构建，留下一个**草稿** Release。
 3. 检查产物与发布说明，点 **Publish release** 正式发布 —— 这一步同时会刷新文档站与 `releases.json`。
 4. 把 `main` 合回 `dev`（或在下次从 `dev` 开 PR 前先合并 `main`），让版本号提交回到 `dev`。
 

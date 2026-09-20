@@ -1,6 +1,6 @@
 name: Release
 
-# 一键发版：写版本号 → 经 GitHub API 创建带 Verified 签名的提交 → 打 tag → 构建 → 草稿 Release。
+# 一键发版：写版本号 → 经 GitHub API 创建带 Verified 签名的提交 → 打 tag → 构建 → 代码签名 → 草稿 Release。
 #
 # 推送凭据来自 octo-sts（https://octo-sts.dev）：工作流以 OIDC 身份向其换取一个
 # 只限本仓库、仅 contents:write 的短期 token，job 结束时自动吊销，仓库不保存
@@ -33,6 +33,8 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
+    # 代码签名凭据（CERTUM_EMAIL / CERTUM_OTP）存在 sign 环境里
+    environment: sign
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -165,12 +167,36 @@ jobs:
       - name: Rust tests
         run: cargo test --workspace
 
-      # 便携文件夹（dist/ZoneDeck/）+ InnoSetup 安装包（dist/installer/）。
+      # ---- 打包与签名 ----
+      - name: Package portable folder
+        shell: pwsh
+        run: ./scripts/package.ps1 -SkipFrontend
+
+      - name: Sign portable binaries
+        uses: IvanHanloth/super-simply-sign@864372ec0168da77453047998b13a00d2be195a7 # 0.1.0
+        with:
+          files: |
+            dist/ZoneDeck/ZoneDeck.exe
+            dist/ZoneDeck/config.exe
+          description: ZoneDeck
+          url: https://github.com/IvanHanloth/ZoneDeck
+          email: ${{ secrets.CERTUM_EMAIL }}
+          otp-seed: ${{ secrets.CERTUM_OTP }}
+
       # package.ps1 会调 install-inno.ps1 按需装 Inno Setup 7，
       # 版本号则由它从 Cargo.toml 读取，这里不用再传。
-      - name: Package portable folder & installer
+      - name: Build installer
         shell: pwsh
-        run: ./scripts/package.ps1 -SkipFrontend -Installer
+        run: ./scripts/package.ps1 -InstallerOnly
+
+      - name: Sign installer
+        uses: IvanHanloth/super-simply-sign@864372ec0168da77453047998b13a00d2be195a7 # 0.1.0
+        with:
+          files: dist/installer/ZoneDeck-*-Setup.exe
+          description: ZoneDeck Installer
+          url: https://github.com/IvanHanloth/ZoneDeck
+          email: ${{ secrets.CERTUM_EMAIL }}
+          otp-seed: ${{ secrets.CERTUM_OTP }}
 
       # 压 dist/ZoneDeck 文件夹本身（而非其中的文件），解压后得到一个 ZoneDeck 目录，
       # 不会把 exe 散落到用户的下载目录里。
@@ -188,21 +214,6 @@ jobs:
           subject-path: |
             dist/installer/ZoneDeck-*-Setup.exe
             ZoneDeck-${{ steps.mode.outputs.tag }}-portable.zip
-
-      # ---- 代码签名（可选，反杀软误报最有效的单项措施）----
-      # 取得 OV/EV 证书后：PFX 以 base64 存入 secrets.CODE_SIGN_PFX，
-      # 密码存入 secrets.CODE_SIGN_PASSWORD，再取消下方步骤注释。
-      # 注意：签名要拆成两步，且都得排在打包之前 —— 先签 dist/ZoneDeck 里的 exe，
-      # 再跑 package.ps1 -Installer 把已签名的 exe 装进安装包，最后单独签安装包本身，
-      # 否则 zip / 安装包里装的仍是未签名的二进制。
-      # - name: Sign binaries
-      #   shell: pwsh
-      #   run: |
-      #     [IO.File]::WriteAllBytes("cert.pfx", [Convert]::FromBase64String("${{ secrets.CODE_SIGN_PFX }}"))
-      #     $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Select-Object -Last 1
-      #     & $signtool sign /f cert.pfx /p "${{ secrets.CODE_SIGN_PASSWORD }}" `
-      #       /tr http://timestamp.digicert.com /td SHA256 /fd SHA256 `
-      #       "dist/ZoneDeck/ZoneDeck.exe" dist/ZoneDeck/config.exe dist/installer/ZoneDeck-*-Setup.exe
 
       # 发布说明 = GitHub 自动生成的更新日志 + 结尾的安全提示。
       # 创建 Release 时若同时传 body 和 generate_release_notes，自定义内容只会被
