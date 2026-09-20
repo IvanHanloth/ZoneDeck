@@ -89,12 +89,13 @@ function Join-SoftWraps([string[]]$lines)
         }
         # 接缝要不要空格：中文之间不该因源码折行多出一个，中英之间该有的那个要留住；
         # 折在开括号或开引号之后、闭标点之前的，两边也得贴紧。
-        $openEnd = $buf -match '([(\[（【「《]|[\s(\[]["''])$'
-        $closeStart = $trimmed -match '^["'']?[)\]）】」》,.;:!?]'
-        $bothCjk = ($buf -match "[$CJK]$") -and ($trimmed -match "^[$CJK]")
-        # 折行把 ** 拆成两半时接缝不能塞空格，否则粗体配不成对（列表项已在上面单独处理）
-        $splitMarker = ($buf -match '[*_]$') -or ($trimmed -match '^[*_]')
-        $joint = if ($openEnd -or $closeStart -or $bothCjk -or $splitMarker)
+        # 强调标记不是正文，判断前先剔掉，免得挡住两侧的中英文
+        $bufEnd = $buf -replace '[*_]+$', ''
+        $nextStart = $trimmed -replace '^[*_]+', ''
+        $openEnd = $bufEnd -match '([(\[（【「《]|[\s(\[]["''])$'
+        $closeStart = $nextStart -match '^["'']?[)\]）】」》,.;:!?]'
+        $bothCjk = ($bufEnd -match "[$CJK]$") -and ($nextStart -match "^[$CJK]")
+        $joint = if ($openEnd -or $closeStart -or $bothCjk)
         {
             ''
         }

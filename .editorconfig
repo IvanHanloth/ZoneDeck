@@ -7,7 +7,7 @@ root = true
 #     **
 # CommonMark 规定强调的闭合标记前不能有空白，于是整段强调失效，网页上直接渲染出
 # 裸的 **。隐私声明是要交给应用商店审核的页面，这种破绽不能留，见
-# scripts/gen-privacy.ps1 的 Assert-MarkersIntact。
+# scripts/check-md-markers.ps1。
 [*.md]
 max_line_length = off
 ij_markdown_wrap_text_if_long = false

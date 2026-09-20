@@ -92,9 +92,9 @@ on trusted third parties, and in specific circumstances we may disclose data:
   the [Verhub Privacy Policy](https://verhub.hanloth.cn/terms/privacy-policy).
 
 * **GitHub (only when you choose it)**: if you tick "Also convert to a GitHub Issue" when submitting feedback, your
-  feedback text and contact details are published automatically, via Verhub, to the ZoneDeck GitHub repository, where *
-  *the content will be publicly visible to everyone**. Please consider this carefully before ticking the box, and avoid
-  including anything private.
+  feedback text and contact details are published automatically, via Verhub, to the ZoneDeck GitHub repository, where
+  **the content will be publicly visible to everyone**. Please consider this carefully before ticking the box, and
+  avoid including anything private.
 
 * **Legality and safety**: we may process or retain limited data in order to comply with applicable law, or to protect
   the rights, property and safety of the developer and of users.
@@ -112,9 +112,9 @@ You have complete control over your own data and can manage it at any time:
   anonymous identifier from your device.
 
 * **Exercising other data rights**: for feedback or error log data already sent to the server, you may request access, a
-  copy, rectification or erasure, to the extent applicable law provides, by writing to our contact address (*
-  *ivan@hanloth.com**). Because the app creates no account, handling such a request normally requires you to supply the
-  submission time, a summary of the content or similar details so we can locate the record.
+  copy, rectification or erasure, to the extent applicable law provides, by writing to our contact address
+  (**ivan@hanloth.com**). Because the app creates no account, handling such a request normally requires you to supply
+  the submission time, a summary of the content or similar details so we can locate the record.
 
 ### Other important privacy information
 
