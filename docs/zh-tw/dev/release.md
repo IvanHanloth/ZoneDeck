@@ -17,6 +17,9 @@ powershell -File scripts/package.ps1 -Installer
 
 # 重複使用已有前端產物（前端沒改時提速）
 powershell -File scripts/package.ps1 -SkipFrontend
+
+# 只用現有 dist/ZoneDeck 重打安裝包（發版流程簽完章後用）
+powershell -File scripts/package.ps1 -InstallerOnly
 ```
 
 `package.ps1` 的流程：編譯前端（Vite + Svelte）→ 生產編譯 Rust workspace（Tauri 建置指令碼會把前端 `dist` 內嵌進 `zonedeck-config.exe`）→ 組裝可攜資料夾 → 選擇性產生安裝包。
@@ -95,14 +98,16 @@ powershell -File scripts/version.ps1 show
 
 ### `release.yml` — 一鍵發版
 
-**觸發**：手動（`workflow_dispatch`），輸入要發布的版本號。**請從 `main` 觸發**（待發布內容合併進 `main` 之後）。
+**觸發**：手動（`workflow_dispatch`），輸入要發布的版本號。**必須從 `main` 觸發**（待發布內容合併進 `main` 之後）——簽章憑證所在的
+`sign` 環境只放行 `main`，且要求人工核准。
 
 **做什麼**：
 1. 用 `version.ps1 apply` 把版本號寫入 `Cargo.toml` 並同步 `Cargo.lock`；
 2. 以 OIDC 身分向 [octo-sts](https://octo-sts.dev) 換取本儲存庫 `contents:write` 的短期 token；
 3. 經 GraphQL `createCommitOnBranch` 把版本號變更提交到觸發分支，並打上 `v<版本>` 附註 tag——API 建立的提交由 GitHub 伺服器端簽章，帶 **Verified** 徽章；
 4. 檢出該 tag → 驗證 tag 與程式碼版本一致 → 前端／Rust 測試；
-5. `package.ps1 -Installer` 組裝 `dist/ZoneDeck` 與 `dist/installer` → 把 `dist/ZoneDeck` 壓成可攜 zip；
+5. `package.ps1 -SkipFrontend` 組裝 `dist/ZoneDeck` → 為裡面的兩個 exe 加上程式碼簽章 → `package.ps1 -InstallerOnly`
+   把已簽章的 exe 打進安裝包 → 單獨簽安裝包本身 → 把 `dist/ZoneDeck` 壓成可攜 zip；
 6. 產生**建置來源證明**（Sigstore attestation）→ 產生發布說明（自動產生的更新日誌，結尾附安全提示）→ 建立**草稿** Release 並上傳 zip 與安裝包。
 
 tag 已存在時跳過第 2、3 步，直接檢出該 tag 重新建置——重跑／補發就是再次執行並填入同一版本號。
@@ -111,6 +116,11 @@ tag 已存在時跳過第 2、3 步，直接檢出該 tag 重新建置——重�
 儲存庫不保存任何長期憑證。工作流程用 GitHub Actions 的 OIDC 身分向 octo-sts 換取短期 token，放行條件由 `.github/chainguard/tag-release.sts.yaml` 宣告（只允許 `main`／`dev` 上的執行），token 在 job 結束時自動撤銷。Octo STS App 在分支保護的 bypass 名單中，因此版本號提交無需發版 PR。
 
 提交能帶 Verified 徽章，是因為它經 GitHub API 建立、由 GitHub 伺服器端簽章；tag 沒有伺服器端簽章機制，是普通附註 tag。
+
+程式碼簽章走 [super-simply-sign](https://github.com/IvanHanloth/super-simply-sign)，憑證是 Certum SimplySign（雲端簽章，不需硬體
+token）。帳戶信箱與 TOTP 種子存在 `sign` 環境裡（`CERTUM_EMAIL`／`CERTUM_OTP`），只有 release job 取得到。job 宣告 environment
+後，OIDC 的 `sub` 尾段由 `ref:refs/heads/...` 變成 `environment:sign`，所以信任策略兩種尾段都放行，分支限制改由 `ref` claim
+保證。
 :::
 
 ### `deploy-docs.yml` — 文件站部署
@@ -134,7 +144,8 @@ main ──① Release──▶ 版本號提交（Verified）+ v3.0.1 tag ──
 ```
 
 1. 功能開發完畢，照常把 `dev` 經 PR 合併進 `main`。
-2. 在 `main` 上執行 **「Release」**，填入版本號（如 `3.0.1`）。工作流程把版本號提交與 tag 落在 `main`，隨後完成生產建置，留下一個**草稿** Release。
+2. 在 `main` 上執行 **「Release」**，填入版本號（如 `3.0.1`）。`sign` 環境要求人工核准，去 Actions 頁面點 **Review deployments
+   ** 放行後工作流程才開跑；隨後它把版本號提交與 tag 落在 `main`，完成生產建置，留下一個**草稿** Release。
 3. 檢查產物與發布說明，點 **Publish release** 正式發布 —— 這一步同時會刷新文件站與 `releases.json`。
 4. 把 `main` 合回 `dev`（或在下次從 `dev` 開 PR 前先合併 `main`），讓版本號提交回到 `dev`。
 

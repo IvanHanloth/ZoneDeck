@@ -17,6 +17,9 @@ powershell -File scripts/package.ps1 -Installer
 
 # Reuse the existing frontend output (faster when the frontend is unchanged)
 powershell -File scripts/package.ps1 -SkipFrontend
+
+# Rebuild the installer from the existing dist/ZoneDeck (used after signing in the release flow)
+powershell -File scripts/package.ps1 -InstallerOnly
 ```
 
 What `package.ps1` does: build the frontend (Vite + Svelte) → release-build the Rust workspace (the Tauri build script embeds the frontend `dist` into `zonedeck-config.exe`) → assemble the portable folder → optionally produce the installer.
@@ -95,14 +98,18 @@ A new push on the same branch cancels the previous run automatically (`concurren
 
 ### `release.yml` — one-shot release
 
-**Trigger**: manual (`workflow_dispatch`), taking the version to release as input. **Run it from `main`** (after the release content has been merged into `main`).
+**Trigger**: manual (`workflow_dispatch`), taking the version to release as input. **It must be run from `main`** (after
+the release content has been merged into `main`) — the `sign` environment holding the signing credentials only allows
+`main`, and requires a manual approval.
 
 **What it does**:
 1. Writes the version into `Cargo.toml` and syncs `Cargo.lock` with `version.ps1 apply`;
 2. Federates the workflow's OIDC identity through [octo-sts](https://octo-sts.dev) into a short-lived `contents:write` token for this repository;
 3. Commits the version change onto the triggering branch via GraphQL `createCommitOnBranch` and creates the `v<version>` annotated tag — commits created through the API are signed by GitHub server-side and carry the **Verified** badge;
 4. Checks that tag out → verifies the tag matches the code version → frontend / Rust tests;
-5. `package.ps1 -Installer` to assemble `dist/ZoneDeck` and `dist/installer` → zip `dist/ZoneDeck` as the portable archive;
+5. `package.ps1 -SkipFrontend` to assemble `dist/ZoneDeck` → code-sign both executables in it →
+   `package.ps1 -InstallerOnly` to pack the signed executables into the installer → sign the installer itself → zip
+   `dist/ZoneDeck` as the portable archive;
 6. Generates **build provenance** (a Sigstore attestation) → composes the release notes (the auto-generated changelog with a security notice appended) → creates a **draft** Release and uploads the zip and the installer.
 
 If the tag already exists, steps 2 and 3 are skipped and that tag is checked out and rebuilt — rerunning / re-publishing is just running again with the same version.
@@ -111,6 +118,12 @@ If the tag already exists, steps 2 and 3 are skipped and that tag is checked out
 The repository stores no long-lived credentials. The workflow trades its GitHub Actions OIDC identity to octo-sts for a short-lived token; the conditions are declared in `.github/chainguard/tag-release.sts.yaml` (only runs on `main` / `dev` are allowed), and the token is revoked automatically when the job ends. The Octo STS App is on the branch protection bypass list, so the version commit needs no release PR.
 
 The commit carries the Verified badge because it is created through the GitHub API and signed by GitHub server-side; tags have no server-side signing mechanism and remain plain annotated tags.
+
+Code signing goes through [super-simply-sign](https://github.com/IvanHanloth/super-simply-sign) with a Certum SimplySign
+certificate (cloud signing, no hardware token). The account e-mail and the TOTP seed live in the `sign` environment (
+`CERTUM_EMAIL` / `CERTUM_OTP`), reachable only from the release job. Declaring an environment changes the tail of the
+OIDC `sub` from `ref:refs/heads/...` to `environment:sign`, so the trust policy accepts both tails and the branch
+restriction is carried by the `ref` claim instead.
 :::
 
 ### `deploy-docs.yml` — documentation site deployment
@@ -134,7 +147,9 @@ main ──① Release──▶ version commit (Verified) + v3.0.1 tag ──▶
 ```
 
 1. Once the features are done, merge `dev` into `main` through a PR as usual.
-2. Run **"Release"** from `main`, entering the version (for example `3.0.1`). The workflow lands the version commit and the tag on `main`, then runs the production build and leaves a **draft** Release behind.
+2. Run **"Release"** from `main`, entering the version (for example `3.0.1`). The `sign` environment requires a manual
+   approval — click **Review deployments** on the Actions page to let the run start; it then lands the version commit
+   and the tag on `main`, runs the production build and leaves a **draft** Release behind.
 3. Check the artefacts and the release notes, then click **Publish release** — this also refreshes the docs site and `releases.json`.
 4. Merge `main` back into `dev` (or merge `main` before the next PR from `dev`) so the version commit returns to `dev`.
 
