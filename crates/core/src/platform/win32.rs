@@ -132,7 +132,8 @@ fn fill_missing_names(windows: &mut [WindowInfo]) {
 }
 
 /// 是否把该顶层窗口列入枚举结果；只挡掉归属于某个主窗口的附属窗口
-/// （对话框、下拉面板等），它们跟着宿主一起显隐，不该单独成为隐藏目标。
+/// （对话框、浮动工具栏等），它们多半没有标题，单独列出来也匹配不上，
+/// 改由 [`WindowManager::owned_windows`] 跟着宿主一并带走。
 ///
 /// 工具窗口（`WS_EX_TOOLWINDOW`）照常列出：桌面歌词、悬浮球一类的悬浮窗大多
 /// 带这个样式，滤掉就再也匹配不到。
@@ -148,6 +149,41 @@ fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
 /// 再发形态命令即可。只改可见性的两个命令不受影响。
 fn needs_show_before_restore(how: Restore, visible: bool) -> bool {
     !visible && matches!(how, Restore::Normal | Restore::Maximized)
+}
+
+/// 把 `roots` 展开为归属于它们的全部附属窗口，不含 `roots` 自身。
+/// `pairs` 为 `(窗口, 它的 owner)`；逐层推进，覆盖「附属窗口自己又带附属窗口」。
+fn expand_owned(pairs: &[(i64, i64)], roots: &[i64]) -> Vec<i64> {
+    let mut hosts: std::collections::HashSet<i64> =
+        roots.iter().copied().filter(|h| *h != 0).collect();
+    let mut out: Vec<i64> = Vec::new();
+    loop {
+        let mut grew = false;
+        for &(hwnd, owner) in pairs {
+            if hwnd != 0 && hosts.contains(&owner) && hosts.insert(hwnd) {
+                out.push(hwnd);
+                grew = true;
+            }
+        }
+        if !grew {
+            break;
+        }
+    }
+    out
+}
+
+/// 收集可见顶层窗口的 `(窗口, 它的 owner)`；无 owner 的不收。
+unsafe extern "system" fn owner_pair_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
+    unsafe {
+        if IsWindowVisible(hwnd).as_bool()
+            && let Ok(owner) = GetWindow(hwnd, GW_OWNER)
+            && !owner.is_invalid()
+        {
+            let sink = &mut *(lparam.0 as *mut Vec<(i64, i64)>);
+            sink.push((hwnd_to_i64(hwnd), hwnd_to_i64(owner)));
+        }
+    }
+    BOOL(1)
 }
 
 unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
@@ -236,6 +272,20 @@ impl WindowManager for WindowsWindowManager {
         }
     }
 
+    fn owned_windows(&self, owners: &[i64]) -> Vec<i64> {
+        if owners.is_empty() {
+            return Vec::new();
+        }
+        let mut pairs: Vec<(i64, i64)> = Vec::new();
+        unsafe {
+            let _ = EnumWindows(
+                Some(owner_pair_proc),
+                LPARAM(&mut pairs as *mut Vec<(i64, i64)> as isize),
+            );
+        }
+        expand_owned(&pairs, owners)
+    }
+
     fn is_visible(&self, hwnd: i64) -> bool {
         unsafe { IsWindowVisible(hwnd_from(hwnd)).as_bool() }
     }
@@ -308,6 +358,25 @@ mod tests {
             is_listable_window(APP, true),
             "自称应用窗口的附属窗口仍列出"
         );
+    }
+
+    #[test]
+    fn expand_owned_walks_the_whole_ownership_chain() {
+        // 10 是宿主；11 归属 10，12 归属 11；20 属于别的窗口。
+        let pairs = [(11, 10), (12, 11), (20, 99)];
+        let mut got = expand_owned(&pairs, &[10]);
+        got.sort_unstable();
+        assert_eq!(got, vec![11, 12], "多级归属应逐层展开，且不含宿主自身");
+
+        assert!(
+            expand_owned(&pairs, &[]).is_empty(),
+            "没有宿主就没有附属窗口"
+        );
+        assert!(
+            expand_owned(&pairs, &[0]).is_empty(),
+            "owner 为 0 表示无归属，不得当成宿主"
+        );
+        assert_eq!(expand_owned(&pairs, &[99]), vec![20]);
     }
 
     #[test]

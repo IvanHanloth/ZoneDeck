@@ -503,6 +503,57 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
         changed
     }
 
+    /// 把一个目标加工成可执行的隐藏记录：已在记录里 / 本轮重复 / 句柄失效的返回
+    /// `None`，其余补齐身份，定下白名单判定与 [`Restore`]。
+    fn prepare_target(
+        &self,
+        t: &Target,
+        known: &HashSet<i64>,
+        fresh: &[Target],
+        setting: &Setting,
+        whitelist: &[WhitelistRule],
+    ) -> Option<Target> {
+        if known.contains(&t.hwnd)
+            || fresh.iter().any(|f| f.hwnd == t.hwnd)
+            || !self.wm.is_window(t.hwnd)
+        {
+            return None;
+        }
+        let mut t = t.clone();
+        if t.pid == 0 {
+            t.pid = self.wm.window_pid(t.hwnd);
+            if t.pid == 0 {
+                return None;
+            }
+        }
+        // 枚举不到的窗口只带句柄，白名单判定前须先补上身份。
+        if t.process_path.is_empty() && !whitelist.is_empty() {
+            t.process_path = self.wm.process_path(t.pid);
+        }
+        if t.process.is_empty() && t.process_path.is_empty() {
+            t.process = self.wm.process_name(t.pid);
+        }
+        if is_ignored(
+            whitelist,
+            &t.process_path,
+            t.process_name(),
+            IgnoreMode::Hide,
+        ) {
+            t.restore = Restore::Skip;
+        }
+        // 已判定为 Skip 的不再改写。
+        if t.restore != Restore::Skip {
+            t.restore = if !self.wm.is_visible(t.hwnd) {
+                Restore::Skip
+            } else if setting.minimize_before_hide {
+                self.wm.restore_mode(t.hwnd)
+            } else {
+                Restore::Show
+            };
+        }
+        Some(t)
+    }
+
     /// 计算一次隐藏的执行计划，不做任何窗口 / 副作用动作；顺带剪枝与 PID 补查。
     ///
     /// `freeze_pids` 须由调用方按作用范围展开并过好白名单（见
@@ -524,45 +575,23 @@ impl<W: WindowManager, E: Effects> HideController<W, E> {
 
         let mut fresh: Vec<Target> = Vec::new();
         for t in targets {
-            if known.contains(&t.hwnd)
-                || fresh.iter().any(|f| f.hwnd == t.hwnd)
-                || !self.wm.is_window(t.hwnd)
-            {
-                continue;
+            if let Some(t) = self.prepare_target(t, &known, &fresh, setting, whitelist) {
+                fresh.push(t);
             }
-            let mut t = t.clone();
-            if t.pid == 0 {
-                t.pid = self.wm.window_pid(t.hwnd);
-                if t.pid == 0 {
-                    continue;
-                }
+        }
+
+        // 附属窗口（浮动工具栏、对话框等）不随宿主的 SW_HIDE 一起消失，会独自留在
+        // 屏幕上，得跟着宿主一并藏起来。它们多半没有标题，指望规则匹配是够不着的。
+        let hosts: Vec<i64> = fresh
+            .iter()
+            .filter(|t| t.restore != Restore::Skip)
+            .map(|t| t.hwnd)
+            .collect();
+        for hwnd in self.wm.owned_windows(&hosts) {
+            let owned = Target::bare(hwnd, 0);
+            if let Some(t) = self.prepare_target(&owned, &known, &fresh, setting, whitelist) {
+                fresh.push(t);
             }
-            // 枚举不到的窗口只带句柄，白名单判定前须先补上身份。
-            if t.process_path.is_empty() && !whitelist.is_empty() {
-                t.process_path = self.wm.process_path(t.pid);
-            }
-            if t.process.is_empty() && t.process_path.is_empty() {
-                t.process = self.wm.process_name(t.pid);
-            }
-            if is_ignored(
-                whitelist,
-                &t.process_path,
-                t.process_name(),
-                IgnoreMode::Hide,
-            ) {
-                t.restore = Restore::Skip;
-            }
-            // 已判定为 Skip 的不再改写。
-            if t.restore != Restore::Skip {
-                t.restore = if !self.wm.is_visible(t.hwnd) {
-                    Restore::Skip
-                } else if setting.minimize_before_hide {
-                    self.wm.restore_mode(t.hwnd)
-                } else {
-                    Restore::Show
-                };
-            }
-            fresh.push(t);
         }
 
         let mut mute: Vec<MuteRecord> = Vec::new();
@@ -1344,6 +1373,8 @@ mod tests {
         shape: RefCell<HashMap<i64, Restore>>,
         /// 按调用顺序记下的 minimize / restore 动作。
         moves: RefCell<Vec<String>>,
+        /// 附属窗口的归属：`窗口 -> 它的 owner`。
+        owners: RefCell<HashMap<i64, i64>>,
     }
 
     impl MockWm {
@@ -1359,7 +1390,17 @@ mod tests {
                 paths: RefCell::new(HashMap::new()),
                 shape: RefCell::new(HashMap::new()),
                 moves: RefCell::new(Vec::new()),
+                owners: RefCell::new(HashMap::new()),
             }
+        }
+
+        /// 登记一个归属于 `owner` 的可见附属窗口（浮动工具栏、对话框等）。
+        fn add_owned(&self, hwnd: i64, owner: i64, pid: u32, path: &str) {
+            self.exists.borrow_mut().insert(hwnd);
+            self.visible.borrow_mut().insert(hwnd);
+            self.pid_overrides.borrow_mut().insert(hwnd, pid);
+            self.paths.borrow_mut().insert(pid, path.to_string());
+            self.owners.borrow_mut().insert(hwnd, owner);
         }
 
         /// 登记一个枚举不到、但按 PID 能查出身份的窗口。
@@ -1432,6 +1473,29 @@ mod tests {
                 Restore::Show | Restore::Skip => return,
             };
             self.shape.borrow_mut().insert(hwnd, shape);
+        }
+        fn owned_windows(&self, owners: &[i64]) -> Vec<i64> {
+            if owners.is_empty() {
+                return Vec::new();
+            }
+            let map = self.owners.borrow();
+            let visible = self.visible.borrow();
+            let mut hosts: HashSet<i64> = owners.iter().copied().filter(|h| *h != 0).collect();
+            let mut out: Vec<i64> = Vec::new();
+            loop {
+                let mut grew = false;
+                for (hwnd, owner) in map.iter() {
+                    if visible.contains(hwnd) && hosts.contains(owner) && hosts.insert(*hwnd) {
+                        out.push(*hwnd);
+                        grew = true;
+                    }
+                }
+                if !grew {
+                    break;
+                }
+            }
+            out.sort_unstable();
+            out
         }
         fn is_visible(&self, hwnd: i64) -> bool {
             self.visible.borrow().contains(&hwnd)
@@ -1691,6 +1755,71 @@ mod tests {
             "一次解冻即可"
         );
         assert!(controller.wm.is_visible(10));
+    }
+
+    /// 浮动工具栏一类的附属窗口不随宿主的 `SW_HIDE` 消失，得跟着宿主一并藏起来。
+    /// 它们没有标题、也不在枚举结果里，指望规则匹配是够不着的。
+    #[test]
+    fn owned_windows_are_hidden_and_restored_along_with_their_host() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("工作簿1 - Excel", 10, "EXCEL.EXE", "C:\\EXCEL.EXE")];
+
+        let wm = MockWm::new(
+            vec![win("工作簿1 - Excel", 10, "EXCEL.EXE", "C:\\EXCEL.EXE")],
+            0,
+        );
+        // 迷你工具栏：归属主窗口，无标题，枚举列表里没有它。
+        wm.add_owned(11, 10, 10, "C:\\EXCEL.EXE");
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        do_hide(&mut controller, &mut config);
+        assert!(!controller.wm.is_visible(10), "宿主应被隐藏");
+        assert!(!controller.wm.is_visible(11), "附属窗口应跟着藏起来");
+
+        let outcome = controller.show();
+        assert_eq!(outcome.shown, 2);
+        assert!(controller.wm.is_visible(11), "恢复时附属窗口也应回来");
+    }
+
+    /// 附属窗口自己又带附属窗口时逐层展开。
+    #[test]
+    fn owned_windows_are_expanded_through_multiple_levels() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("主窗口", 10, "app.exe", "C:\\app.exe")];
+
+        let wm = MockWm::new(vec![win("主窗口", 10, "app.exe", "C:\\app.exe")], 0);
+        wm.add_owned(11, 10, 10, "C:\\app.exe");
+        wm.add_owned(12, 11, 10, "C:\\app.exe");
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        do_hide(&mut controller, &mut config);
+        assert!(!controller.wm.is_visible(11), "一级附属窗口应被藏起来");
+        assert!(!controller.wm.is_visible(12), "二级附属窗口也应被藏起来");
+    }
+
+    /// 宿主被白名单挡下时，它的附属窗口一并不动。
+    #[test]
+    fn a_whitelisted_host_keeps_its_owned_windows() {
+        let mut config = Config::default();
+        config.setting.hide_current = false;
+        config.window_rules = vec![wrule("工作簿1 - Excel", 10, "EXCEL.EXE", "C:\\EXCEL.EXE")];
+        config.whitelist = Some(vec![allow("EXCEL.EXE", IgnoreMode::Hide)]);
+
+        let wm = MockWm::new(
+            vec![win("工作簿1 - Excel", 10, "EXCEL.EXE", "C:\\EXCEL.EXE")],
+            0,
+        );
+        wm.add_owned(11, 10, 10, "C:\\EXCEL.EXE");
+        let mut controller = HideController::new(wm, MockEffects::default());
+
+        do_hide(&mut controller, &mut config);
+        assert!(controller.wm.is_visible(10), "白名单宿主不该被隐藏");
+        assert!(
+            controller.wm.is_visible(11),
+            "白名单宿主的附属窗口也不该被动"
+        );
     }
 
     /// 自我显示型悬浮窗（桌面歌词等）：SW_HIDE 后被程序拉回来，应升级为

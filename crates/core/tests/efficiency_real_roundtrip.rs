@@ -99,6 +99,9 @@ impl WindowManager for OneWindow {
     fn restore(&self, _hwnd: i64, _how: Restore) {
         *self.visible.lock().unwrap() = true;
     }
+    fn owned_windows(&self, _owners: &[i64]) -> Vec<i64> {
+        Vec::new()
+    }
     fn is_visible(&self, _hwnd: i64) -> bool {
         *self.visible.lock().unwrap()
     }
