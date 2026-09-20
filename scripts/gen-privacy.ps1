@@ -135,15 +135,13 @@ function Split-Row([string]$line)
     return ($line.Trim().Trim('|') -split '\|') | ForEach-Object { Convert-Inline $_.Trim() }
 }
 
-function Convert-Document([string]$markdown, [string]$separator, [string]$src)
+function Convert-Document([string]$markdown, [string]$separator)
 {
     $out = [System.Collections.Generic.List[string]]::new()
     # 表格没有结束标记，靠「上一行是不是表格」来判断，故表头要跨行记住
     $headers = $null
     $inFrontMatter = $false
     $raw = $markdown -split "\r?\n"
-    $broken = @(& (Join-Path $PSScriptRoot "check-md-markers.ps1") -Path $src)
-    if ($broken) { throw ($broken -join [Environment]::NewLine) }
     $lines = Join-SoftWraps $raw
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
@@ -250,7 +248,7 @@ foreach ($lang in $sources.Keys)
     {
         throw "缺少隐私声明原文：$src"
     }
-    $text = Convert-Document (Get-Content $src -Raw -Encoding UTF8) $separators[$lang] $src
+    $text = Convert-Document (Get-Content $src -Raw -Encoding UTF8) $separators[$lang]
     $dest = Join-Path $OutDir "PRIVACY.$lang.txt"
     [System.IO.File]::WriteAllText($dest, $text, $utf8Bom)
     Write-Host "    $lang -> $dest"

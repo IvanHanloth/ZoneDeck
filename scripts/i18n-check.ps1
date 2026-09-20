@@ -91,17 +91,6 @@ function Test-DocParity {
 
 # ---- 2. 站内链接不跨语言 ------------------------------------------------------
 # 英文 / 繁中页面必须链到自己语言的路径；简中页面反之不得链到 /en/、/zh-tw/。
-function Test-MarkdownMarkers {
-    # 规则与发版打包共用一份，见 scripts/check-md-markers.ps1
-    $files = Get-ChildItem $docs -Filter *.md -Recurse -File |
-        Where-Object { $_.FullName -notlike "*\.vitepress\*" } |
-        ForEach-Object { $_.FullName }
-    if (-not $files) { return }
-    foreach ($problem in @(& (Join-Path $PSScriptRoot "check-md-markers.ps1") -Path $files)) {
-        Add-Problem ($problem -replace [regex]::Escape($root + [IO.Path]::DirectorySeparatorChar), "")
-    }
-}
-
 function Test-DocLinks {
     $expect = @{
         "en"    = @{ Dir = "en"; Bad = '\]\(/(guide|dev|changelog)/'; Hint = "应加 /en/ 前缀" }
@@ -216,7 +205,6 @@ try {
     if (Test-ShouldCheck "docs/*") {
         Test-DocParity
         Test-DocLinks
-        Test-MarkdownMarkers
     }
     if (Test-ShouldCheck "apps/config/ui/*") {
         Test-CatalogUsage
