@@ -52,6 +52,22 @@ dist/
 
 安裝包預設走**一般權限**安裝（`%LocalAppData%\Programs\ZoneDeck`），使用者可在精靈首頁改選「為所有使用者安裝」裝進 `Program Files`。兩種模式下資料都在 `%APPDATA%\ZoneDeck`，不在安裝資料夾裡。
 
+### 安裝精靈裡的隱私權聲明
+
+授權條款頁之後是一頁隱私權聲明（Inno 的 `InfoBeforeFile`，依安裝語言各取一份）。正文以文件站的三份 Markdown 為唯一真源：
+
+| 語言      | 原文                      | 產生的純文字                                                       |
+|---------|-------------------------|--------------------------------------------------------------|
+| 簡體中文    | `docs/privacy.md`       | `.github/inno-script/privacy/PRIVACY.chinesesimplified.txt`  |
+| 繁體中文    | `docs/zh-tw/privacy.md` | `.github/inno-script/privacy/PRIVACY.chinesetraditional.txt` |
+| English | `docs/en/privacy.md`    | `.github/inno-script/privacy/PRIVACY.english.txt`            |
+
+轉換由 `scripts/gen-privacy.ps1` 完成（`package.ps1` 在編譯安裝包前自動呼叫），產物不入庫。要改隱私權聲明只動文件站那三份，手抄一份到安裝腳本裡遲早和網站對不上。
+
+::: warning 直接呼叫 ISCC 會編譯失敗
+純文字不入庫，略過 `package.ps1` 直接跑 `ISCC` 時這三個檔案不存在。請先執行 `powershell -File scripts/gen-privacy.ps1`。
+:::
+
 ## 版本號管理
 
 ::: info 版本號唯一真實來源

@@ -13,6 +13,7 @@
   import IconGauge from "~icons/lucide/gauge";
   import IconLifeBuoy from "~icons/lucide/life-buoy";
   import IconChartNoAxesColumn from "~icons/lucide/chart-no-axes-column";
+  import IconFileText from "~icons/lucide/file-text";
   import {
     app,
     openRestoreTool,
@@ -21,6 +22,7 @@
     setAutostart,
     startCore,
   } from "../lib/state.svelte.js";
+  import {openPrivacy} from "../lib/links.js";
   import { LANGS, LANG_AUTO, LANG_NAMES, t } from "../lib/i18n.svelte.js";
 
   let elevating = $state(false);
@@ -186,6 +188,14 @@
       />
     {/snippet}
   </SettingsCard>
+
+    <SettingsCard
+            description={t("options.privacyPolicyDesc")}
+            external
+            icon={IconFileText}
+            label={t("options.privacyPolicy")}
+            onclick={openPrivacy}
+    />
 </SettingsGroup>
 
 <SettingsGroup title={t("options.toolsCard")}>

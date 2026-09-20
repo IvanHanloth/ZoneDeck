@@ -1,6 +1,10 @@
 <script>
   // Win11 SettingsCard：一项一卡。icon 传 unplugin-icons 组件本身。
   // variant="sub" 用于 Expander 内的子行：无独立卡面，靠分隔线区分。
+  // 传了 onclick 整张卡就是点击热区（同 Win11 的可点击卡片）；外链再加 external，
+  // 右侧出现外链图标，告诉用户这一下会离开程序。
+  import IconExternalLink from "~icons/lucide/external-link";
+
   let {
     icon: Icon = null,
     iconColor = "",
@@ -9,12 +13,25 @@
     control,
     disabled = false,
     variant = "card",
+      onclick = null,
+      external = false,
   } = $props();
 </script>
 
 <!-- data-setting 供顶部搜索定位到具体某一项，标题即锚点，无需逐个登记 id -->
 <div class="card {variant}" class:disabled data-setting={label}>
-  <div class="main">
+    <!-- 同 SettingsExpander：按钮铺满整卡垫在内容底下，正文与外链图标让出点击，
+         右侧控件浮在上面保持可操作。 -->
+    {#if onclick}
+        <button
+                class="hit"
+                aria-label={[label, description].filter(Boolean).join(" ")}
+                {disabled}
+                {onclick}
+        ></button>
+    {/if}
+    <!-- 可点击时正文已由按钮的 aria-label 完整念出，留在无障碍树里只会重复一遍 -->
+    <div aria-hidden={onclick ? "true" : null} class="main">
     {#if Icon}
       <span class="icon" style:color={iconColor || null} aria-hidden="true">
         <Icon width="20" height="20" />
@@ -26,12 +43,16 @@
     </div>
   </div>
   {#if control}<div class="control">{@render control()}</div>{/if}
+    {#if external}
+        <span class="ext" aria-hidden="true"><IconExternalLink width="16" height="16"/></span>
+    {/if}
 </div>
 
 <style>
   /* Win11 SettingsCard 规格：无副标题 52，有副标题 68，左右 16。
      控件列排不下时整列换到标题下一行，同 WinUI SettingsCard 的自适应 */
   .card {
+      position: relative;
     display: flex;
     flex-wrap: wrap;
     align-items: center;
@@ -59,6 +80,48 @@
   .card.disabled .label,
   .card.disabled .desc {
     color: var(--text-disabled);
+  }
+
+  /* 整卡热区。圆角跟着卡面，否则悬停底色会溢出卡片的圆角 */
+  .hit {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      transition: background var(--dur-fast) var(--ease-standard);
+  }
+
+  .card:hover .hit:not(:disabled) {
+      background: var(--subtle-hover);
+  }
+
+  .hit:active:not(:disabled) {
+      background: var(--subtle-pressed);
+  }
+
+  .hit:focus-visible {
+      outline-offset: -3px;
+  }
+
+  /* 垫在 .hit 之上只为盖住它的底色，点击一律穿透回 .hit */
+  .card:has(.hit) .main,
+  .ext {
+      position: relative;
+      pointer-events: none;
+  }
+
+  /* 控件同样要浮在 .hit 之上，但保持可操作 */
+  .card:has(.hit) .control {
+      position: relative;
+  }
+
+  .ext {
+      flex: none;
+      display: inline-flex;
+      color: var(--text-2);
+  }
+
+  .card.disabled .ext {
+      color: var(--text-disabled);
   }
 
   /* 标题列的下限：排不下时先让控件列换行，而不是一路把标题压没 */

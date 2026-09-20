@@ -412,6 +412,8 @@ export default {
   "options.privacyCard": "Privacy",
   "options.analytics": "Anonymous usage statistics",
   "options.analyticsDesc": "Join the anonymous user experience programme and help make ZoneDeck better as you use it. Everything collected is anonymous and free of private data, and you can opt out of it at any time",
+    "options.privacyPolicy": "Privacy statement",
+    "options.privacyPolicyDesc": "See how we collect, store and process your information",
 
   "options.toolsCard": "Tools",
   "options.restoreTool": "Window recovery tool",
@@ -512,6 +514,7 @@ export default {
   "consent.neverContent": "window titles, process names, file paths, the regexes themselves and feedback text;",
   "consent.neverIdentity": "your name, email or anything else that points back to you.",
   "consent.control": "You can opt out any time under General → Privacy. Once it is off nothing further is ever sent, and the anonymous id on this device is deleted as well.",
+    "consent.policy": "Read the full privacy statement",
   "consent.agree": "Take part",
   "consent.decline": "No thanks",
 

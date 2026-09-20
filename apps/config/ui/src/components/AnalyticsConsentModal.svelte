@@ -6,6 +6,7 @@
   import IconBan from "~icons/lucide/ban";
   import ContentDialog from "./fluent/ContentDialog.svelte";
   import { app, analyticsUnanswered, setAnalyticsConsent } from "../lib/state.svelte.js";
+  import {openPrivacy} from "../lib/links.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const open = $derived(analyticsUnanswered());
@@ -47,6 +48,9 @@
       </ul>
 
       <p class="hint">{t("consent.control")}</p>
+        <p>
+            <button class="link" onclick={openPrivacy}>{t("consent.policy")}</button>
+        </p>
     </div>
 
     {#snippet footer()}
@@ -93,5 +97,15 @@
   .hint {
     margin-top: 4px;
     color: var(--text-2);
+  }
+
+  .link {
+      color: var(--accent);
+      font: inherit;
+      padding: 0;
+  }
+
+  .link:hover {
+      text-decoration: underline;
   }
 </style>

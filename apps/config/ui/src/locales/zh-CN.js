@@ -395,6 +395,8 @@ export default {
   "options.privacyCard": "隐私",
   "options.analytics": "匿名使用统计",
   "options.analyticsDesc": "参与匿名用户体验计划，在使用中让 ZoneDeck 变得更好。所有数据均为匿名非隐私采集，您可随时退出此统计",
+  "options.privacyPolicy": "隐私声明",
+  "options.privacyPolicyDesc": "了解我们如何收集、存储、处理您的信息",
 
   "options.toolsCard": "工具",
   "options.restoreTool": "窗口恢复工具",
@@ -492,6 +494,7 @@ export default {
   "consent.neverContent": "窗口标题、进程名、文件路径、正则式本身与反馈正文；",
   "consent.neverIdentity": "姓名、邮箱等能指向你本人的信息。",
   "consent.control": "您随时可以在「通用设置 → 隐私」里退出此功能。关闭后不会再发出任何记录，本机的匿名标识也会一并删除。",
+  "consent.policy": "阅读完整的隐私声明",
   "consent.agree": "同意参与",
   "consent.decline": "不参与",
 

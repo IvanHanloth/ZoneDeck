@@ -19,6 +19,107 @@ function changelogSidebar(
   return items
 }
 
+// 使用文档侧边栏。末项的隐私声明不在 /guide/ 下，故该路径也挂同一份，
+// 从使用文档点进去不会丢掉导航。
+const guideSidebarZh: DefaultTheme.SidebarItem[] = [
+    {
+        text: '开始使用',
+        items: [
+            {text: '简介', link: '/guide/'},
+            {text: '安装与版本选择', link: '/guide/installation'},
+            {text: '快速上手', link: '/guide/getting-started'},
+        ],
+    },
+    {
+        text: '核心功能',
+        items: [
+            {text: '绑定窗口与进程', link: '/guide/binding'},
+            {text: '热键与鼠标手势', link: '/guide/hotkeys'},
+            {text: '隐藏设置', link: '/guide/hiding'},
+            {text: '进程冻结', link: '/guide/freeze'},
+            {text: '白名单', link: '/guide/whitelist'},
+            {text: '提示设置', link: '/guide/notifications'},
+            {text: '通用设置', link: '/guide/options'},
+            {text: '开机自启', link: '/guide/autostart'},
+        ],
+    },
+    {
+        text: '维护与排障',
+        items: [
+            {text: '检查更新与反馈', link: '/guide/update'},
+            {text: '窗口恢复与崩溃自愈', link: '/guide/recovery'},
+            {text: '常见问题', link: '/guide/faq'},
+        ],
+    },
+    {text: '隐私声明', link: '/privacy'},
+]
+
+const guideSidebarEn: DefaultTheme.SidebarItem[] = [
+    {
+        text: 'Getting started',
+        items: [
+            {text: 'Introduction', link: '/en/guide/'},
+            {text: 'Installation & editions', link: '/en/guide/installation'},
+            {text: 'Quick start', link: '/en/guide/getting-started'},
+        ],
+    },
+    {
+        text: 'Features',
+        items: [
+            {text: 'Binding windows & processes', link: '/en/guide/binding'},
+            {text: 'Hotkeys & mouse gestures', link: '/en/guide/hotkeys'},
+            {text: 'Hiding options', link: '/en/guide/hiding'},
+            {text: 'Process freezing', link: '/en/guide/freeze'},
+            {text: 'Whitelist', link: '/en/guide/whitelist'},
+            {text: 'Alerts', link: '/en/guide/notifications'},
+            {text: 'General settings', link: '/en/guide/options'},
+            {text: 'Start with Windows', link: '/en/guide/autostart'},
+        ],
+    },
+    {
+        text: 'Maintenance & troubleshooting',
+        items: [
+            {text: 'Updates & feedback', link: '/en/guide/update'},
+            {text: 'Window recovery & crash self-healing', link: '/en/guide/recovery'},
+            {text: 'FAQ', link: '/en/guide/faq'},
+        ],
+    },
+    {text: 'Privacy Statement', link: '/en/privacy'},
+]
+
+const guideSidebarTw: DefaultTheme.SidebarItem[] = [
+    {
+        text: '開始使用',
+        items: [
+            {text: '簡介', link: '/zh-tw/guide/'},
+            {text: '安裝與版本選擇', link: '/zh-tw/guide/installation'},
+            {text: '快速上手', link: '/zh-tw/guide/getting-started'},
+        ],
+    },
+    {
+        text: '核心功能',
+        items: [
+            {text: '綁定視窗與程序', link: '/zh-tw/guide/binding'},
+            {text: '快速鍵與滑鼠手勢', link: '/zh-tw/guide/hotkeys'},
+            {text: '隱藏設定', link: '/zh-tw/guide/hiding'},
+            {text: '程序凍結', link: '/zh-tw/guide/freeze'},
+            {text: '白名單', link: '/zh-tw/guide/whitelist'},
+            {text: '提示設定', link: '/zh-tw/guide/notifications'},
+            {text: '通用設定', link: '/zh-tw/guide/options'},
+            {text: '開機自動啟動', link: '/zh-tw/guide/autostart'},
+        ],
+    },
+    {
+        text: '維護與排障',
+        items: [
+            {text: '檢查更新與意見回饋', link: '/zh-tw/guide/update'},
+            {text: '視窗復原與當機自癒', link: '/zh-tw/guide/recovery'},
+            {text: '常見問題', link: '/zh-tw/guide/faq'},
+        ],
+    },
+    {text: '隱私權聲明', link: '/zh-tw/privacy'},
+]
+
 // https://vitepress.dev/reference/site-config
 export default defineConfig(async () => {
   const releases = await getReleases()
@@ -69,37 +170,8 @@ export default defineConfig(async () => {
             },
           ],
           sidebar: {
-            '/guide/': [
-              {
-                text: '开始使用',
-                items: [
-                  { text: '简介', link: '/guide/' },
-                  { text: '安装与版本选择', link: '/guide/installation' },
-                  { text: '快速上手', link: '/guide/getting-started' },
-                ],
-              },
-              {
-                text: '核心功能',
-                items: [
-                  { text: '绑定窗口与进程', link: '/guide/binding' },
-                  { text: '热键与鼠标手势', link: '/guide/hotkeys' },
-                  { text: '隐藏设置', link: '/guide/hiding' },
-                  { text: '进程冻结', link: '/guide/freeze' },
-                  { text: '白名单', link: '/guide/whitelist' },
-                  { text: '提示设置', link: '/guide/notifications' },
-                  { text: '通用设置', link: '/guide/options' },
-                  { text: '开机自启', link: '/guide/autostart' },
-                ],
-              },
-              {
-                text: '维护与排障',
-                items: [
-                  { text: '检查更新与反馈', link: '/guide/update' },
-                  { text: '窗口恢复与崩溃自愈', link: '/guide/recovery' },
-                  { text: '常见问题', link: '/guide/faq' },
-                ],
-              },
-            ],
+              '/guide/': guideSidebarZh,
+              '/privacy': guideSidebarZh,
             '/dev/': [
               {
                 text: '概览',
@@ -142,7 +214,7 @@ export default defineConfig(async () => {
             text: '在 GitHub 上编辑此页',
           },
           footer: {
-            message: '基于 MIT 许可发布',
+              message: '基于 MIT 许可发布 · <a href="/privacy">隐私声明</a>',
             copyright:
               'Copyright © 2022-present <a href="https://www.ivan-hanloth.cn">IvanHanloth</a> All Rights Reserved.',
           },
@@ -178,37 +250,8 @@ export default defineConfig(async () => {
             },
           ],
           sidebar: {
-            '/en/guide/': [
-              {
-                text: 'Getting started',
-                items: [
-                  { text: 'Introduction', link: '/en/guide/' },
-                  { text: 'Installation & editions', link: '/en/guide/installation' },
-                  { text: 'Quick start', link: '/en/guide/getting-started' },
-                ],
-              },
-              {
-                text: 'Features',
-                items: [
-                  { text: 'Binding windows & processes', link: '/en/guide/binding' },
-                  { text: 'Hotkeys & mouse gestures', link: '/en/guide/hotkeys' },
-                  { text: 'Hiding options', link: '/en/guide/hiding' },
-                  { text: 'Process freezing', link: '/en/guide/freeze' },
-                  { text: 'Whitelist', link: '/en/guide/whitelist' },
-                  { text: 'Alerts', link: '/en/guide/notifications' },
-                  { text: 'General settings', link: '/en/guide/options' },
-                  { text: 'Start with Windows', link: '/en/guide/autostart' },
-                ],
-              },
-              {
-                text: 'Maintenance & troubleshooting',
-                items: [
-                  { text: 'Updates & feedback', link: '/en/guide/update' },
-                  { text: 'Window recovery & crash self-healing', link: '/en/guide/recovery' },
-                  { text: 'FAQ', link: '/en/guide/faq' },
-                ],
-              },
-            ],
+              '/en/guide/': guideSidebarEn,
+              '/en/privacy': guideSidebarEn,
             '/en/dev/': [
               {
                 text: 'Overview',
@@ -251,10 +294,13 @@ export default defineConfig(async () => {
             text: 'Edit this page on GitHub',
           },
           footer: {
-            message: 'Released under the MIT License',
+              message: 'Released under the MIT License · <a href="/en/privacy">Privacy Statement</a>',
             copyright:
               'Copyright © 2022-present <a href="https://www.ivan-hanloth.cn">IvanHanloth</a> All Rights Reserved.',
           },
+            // 与另两种语言取齐：默认只收 h2，隐私声明这类只有 h3 的页面大纲会是空的。
+            // 其余文案用 VitePress 的英文默认值，无须逐条覆盖。
+            outline: {level: [2, 3]},
         },
       },
 
@@ -278,37 +324,8 @@ export default defineConfig(async () => {
             },
           ],
           sidebar: {
-            '/zh-tw/guide/': [
-              {
-                text: '開始使用',
-                items: [
-                  { text: '簡介', link: '/zh-tw/guide/' },
-                  { text: '安裝與版本選擇', link: '/zh-tw/guide/installation' },
-                  { text: '快速上手', link: '/zh-tw/guide/getting-started' },
-                ],
-              },
-              {
-                text: '核心功能',
-                items: [
-                  { text: '綁定視窗與程序', link: '/zh-tw/guide/binding' },
-                  { text: '快速鍵與滑鼠手勢', link: '/zh-tw/guide/hotkeys' },
-                  { text: '隱藏設定', link: '/zh-tw/guide/hiding' },
-                  { text: '程序凍結', link: '/zh-tw/guide/freeze' },
-                  { text: '白名單', link: '/zh-tw/guide/whitelist' },
-                  { text: '提示設定', link: '/zh-tw/guide/notifications' },
-                  { text: '通用設定', link: '/zh-tw/guide/options' },
-                  { text: '開機自動啟動', link: '/zh-tw/guide/autostart' },
-                ],
-              },
-              {
-                text: '維護與排障',
-                items: [
-                  { text: '檢查更新與意見回饋', link: '/zh-tw/guide/update' },
-                  { text: '視窗復原與當機自癒', link: '/zh-tw/guide/recovery' },
-                  { text: '常見問題', link: '/zh-tw/guide/faq' },
-                ],
-              },
-            ],
+              '/zh-tw/guide/': guideSidebarTw,
+              '/zh-tw/privacy': guideSidebarTw,
             '/zh-tw/dev/': [
               {
                 text: '概覽',
@@ -351,7 +368,7 @@ export default defineConfig(async () => {
             text: '在 GitHub 上編輯此頁',
           },
           footer: {
-            message: '基於 MIT 授權條款發布',
+              message: '基於 MIT 授權條款發布 · <a href="/zh-tw/privacy">隱私權聲明</a>',
             copyright:
               'Copyright © 2022-present <a href="https://www.ivan-hanloth.cn">IvanHanloth</a> All Rights Reserved.',
           },

@@ -59,10 +59,24 @@ WizardStyle=modern
 CloseApplications=yes
 CloseApplicationsFilter=*.exe
 
+; InfoBeforeFile 为隐私声明页，正文由 scripts/gen-privacy.ps1 从 docs 下的 Markdown 生成，
+; 产物不入库；直接调 ISCC 而不先跑 package.ps1 时这三个文件不存在，编译会在此报错。
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
-Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
+Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"; InfoBeforeFile: "privacy\PRIVACY.chinesesimplified.txt"
+Name: "chinesetraditional"; MessagesFile: "compiler:Languages\ChineseTraditional.isl"; InfoBeforeFile: "privacy\PRIVACY.chinesetraditional.txt"
+Name: "english"; MessagesFile: "compiler:Default.isl"; InfoBeforeFile: "privacy\PRIVACY.english.txt"
+
+; 覆盖 Inno 内置的「信息」页文案，让它明说这一页是隐私声明。
+[Messages]
+chinesesimplified.WizardInfoBefore=隐私声明
+chinesesimplified.InfoBeforeLabel=请在继续安装前阅读 ZoneDeck 隐私声明。
+chinesesimplified.InfoBeforeClickLabel=阅读完毕后，请点击“下一步”继续安装。
+chinesetraditional.WizardInfoBefore=隱私權聲明
+chinesetraditional.InfoBeforeLabel=請在繼續安裝前閱讀 ZoneDeck 隱私權聲明。
+chinesetraditional.InfoBeforeClickLabel=閱讀完畢後，請按「下一步」繼續安裝。
+english.WizardInfoBefore=Privacy Statement
+english.InfoBeforeLabel=Please read the ZoneDeck Privacy Statement before continuing.
+english.InfoBeforeClickLabel=When you have finished reading, click Next to continue.
 
 [CustomMessages]
 chinesesimplified.KeepConfigPrompt=是否保留配置文件（config.json）？%n%n选择“是”将保留你的设置，重新安装后可继续使用；%n选择“否”将删除包括配置文件在内的全部数据。

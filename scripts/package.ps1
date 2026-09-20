@@ -104,6 +104,9 @@ else
 if ($Installer -or $InstallerOnly)
 {
     Write-Host "==> 生成 InnoSetup 安装包..." -ForegroundColor Cyan
+    # 安装向导的隐私声明页取纯文本，由文档站那三份 Markdown 现生成，避免两边各自漂移
+    Write-Host "    生成隐私声明纯文本..."
+    & (Join-Path $PSScriptRoot "gen-privacy.ps1")
     # 按需安装 Inno Setup 7（简繁中文语言包自 7.0 起随官方安装包分发），返回 ISCC.exe 路径
     $iscc = & (Join-Path $PSScriptRoot "install-inno.ps1") | Select-Object -Last 1
     if (-not $iscc) { throw "Inno Setup 环境准备失败" }

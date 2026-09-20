@@ -4,6 +4,7 @@
   import IconStar from "~icons/lucide/star";
   import IconHelp from "~icons/lucide/circle-help";
   import IconFlask from "~icons/lucide/flask-conical";
+  import IconFileText from "~icons/lucide/file-text";
   import SettingsGroup from "./fluent/SettingsGroup.svelte";
   import SettingsCard from "./fluent/SettingsCard.svelte";
   import ToggleSwitch from "./fluent/ToggleSwitch.svelte";
@@ -19,6 +20,7 @@
   } from "../lib/state.svelte.js";
   import { MIT_LICENSE } from "../lib/license.js";
   import { feedbackOptions, formatTime, openExternal, submitFeedback } from "../lib/verhub.js";
+  import {openPrivacy} from "../lib/links.js";
   import { t } from "../lib/i18n.svelte.js";
 
   const info = $derived(app.info);
@@ -236,6 +238,15 @@
   </div>
 </SettingsGroup>
 
+<SettingsGroup>
+    <div class="support">
+        <button class="support-link" onclick={openPrivacy} type="button">
+            <IconFileText height="16" width="16"/>
+            <span class="label">{t("options.privacyPolicy")}</span>
+        </button>
+    </div>
+</SettingsGroup>
+
 <SettingsGroup title={t("about.licenseCard")}>
   <div class="surface pad">
     <p class="hint">{t("about.licenseHint")}</p>
@@ -297,6 +308,31 @@
     color: var(--accent);
     font: inherit;
     padding: 0;
+  }
+
+  /* 同「隐藏设置 → 相关支持」的外链：左缘对齐分组标题，hover 只给文字加下划线 */
+  .support {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 2px 1px;
+  }
+
+  .support-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0;
+      color: var(--accent);
+  }
+
+  .support-link:hover .label {
+      text-decoration: underline;
+  }
+
+  .support-link:active {
+      color: var(--accent-pressed);
   }
   .link:hover {
     text-decoration: underline;

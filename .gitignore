@@ -18,6 +18,8 @@ node_modules/
 # 打包产物
 /dist/
 /package/
+# 安装向导的隐私声明纯文本，由 scripts/gen-privacy.ps1 从 docs 生成
+.github/inno-script/privacy/
 
 # Tauri / 前端
 # apps/config/dist/ 自前端工程化（Vite + Svelte）后是构建产物；源码在 apps/config/ui/

@@ -52,6 +52,26 @@ The program uses it to recognise an installed copy and switch to `%APPDATA%\Zone
 
 The installer runs with **normal privileges** by default (`%LocalAppData%\Programs\ZoneDeck`); on the wizard's first page the user can switch to "Install for all users" and land in `Program Files`. Either way the data goes to `%APPDATA%\ZoneDeck`, not the installation folder.
 
+### The privacy statement in the wizard
+
+After the licence page comes a privacy statement page (Inno's `InfoBeforeFile`, one per installer language). The single
+source of truth is the three Markdown files on the docs site:
+
+| Language            | Source                  | Generated plain text                                         |
+|---------------------|-------------------------|--------------------------------------------------------------|
+| Simplified Chinese  | `docs/privacy.md`       | `.github/inno-script/privacy/PRIVACY.chinesesimplified.txt`  |
+| Traditional Chinese | `docs/zh-tw/privacy.md` | `.github/inno-script/privacy/PRIVACY.chinesetraditional.txt` |
+| English             | `docs/en/privacy.md`    | `.github/inno-script/privacy/PRIVACY.english.txt`            |
+
+`scripts/gen-privacy.ps1` does the conversion (`package.ps1` calls it before compiling the installer) and its output is
+not committed. To change the privacy statement, edit those three Markdown files only — a hand-copied second version
+would drift from the website sooner or later.
+
+::: warning Calling ISCC directly will fail
+The plain-text files are not committed, so they do not exist if you skip `package.ps1` and run `ISCC` yourself. Run
+`powershell -File scripts/gen-privacy.ps1` first.
+:::
+
 ## Version management
 
 ::: info The single source of truth
