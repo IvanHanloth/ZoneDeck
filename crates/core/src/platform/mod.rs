@@ -38,6 +38,9 @@ pub trait WindowManager {
     fn restore_mode(&self, hwnd: i64) -> Restore;
     /// 按记录的方式恢复窗口；[`Restore::Skip`] 什么都不做。
     fn restore(&self, hwnd: i64, how: Restore);
+    /// 归属于 `owners` 的可见顶层附属窗口（浮动工具栏、对话框等），多级归属逐层展开，
+    /// 不含 `owners` 自身。`SW_HIDE` 宿主不会带走它们，得由调用方一并隐藏。
+    fn owned_windows(&self, owners: &[i64]) -> Vec<i64>;
     fn is_visible(&self, hwnd: i64) -> bool;
     fn foreground(&self) -> i64;
     /// 句柄当前是否仍指向一个存在的窗口（句柄值会被系统回收复用）。
