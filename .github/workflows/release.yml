@@ -173,7 +173,7 @@ jobs:
         run: ./scripts/package.ps1 -SkipFrontend
 
       - name: Sign portable binaries
-        uses: IvanHanloth/super-simply-sign@864372ec0168da77453047998b13a00d2be195a7 # 0.1.0
+        uses: IvanHanloth/super-simply-sign@0.1.1
         with:
           files: |
             dist/ZoneDeck/ZoneDeck.exe
@@ -190,7 +190,7 @@ jobs:
         run: ./scripts/package.ps1 -InstallerOnly
 
       - name: Sign installer
-        uses: IvanHanloth/super-simply-sign@864372ec0168da77453047998b13a00d2be195a7 # 0.1.0
+        uses: IvanHanloth/super-simply-sign@0.1.1
         with:
           files: dist/installer/ZoneDeck-*-Setup.exe
           description: ZoneDeck Installer
