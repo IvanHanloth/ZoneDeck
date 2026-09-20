@@ -140,6 +140,16 @@ fn is_listable_window(ex_style: u32, has_owner: bool) -> bool {
     !has_owner || ex_style & WS_EX_APPWINDOW.0 != 0
 }
 
+/// 还原窗口形态前是否要先 `SW_SHOW`。
+///
+/// `SW_RESTORE` / `SW_SHOWMAXIMIZED` 能把隐藏中的窗口一步显示出来，但 Office
+/// 应付不了这一步：从「隐藏 + 最小化」直接还原，Excel 会销毁承载功能区与状态栏的
+/// `MsoCommandBar` 且不再重建，事后怎么显示都回不来。先 `SW_SHOW` 让它可见，
+/// 再发形态命令即可。只改可见性的两个命令不受影响。
+fn needs_show_before_restore(how: Restore, visible: bool) -> bool {
+    !visible && matches!(how, Restore::Normal | Restore::Maximized)
+}
+
 unsafe extern "system" fn enum_proc(hwnd: HWND, lparam: LPARAM) -> BOOL {
     unsafe {
         let ex_style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
@@ -210,8 +220,6 @@ impl WindowManager for WindowsWindowManager {
     }
 
     fn restore(&self, hwnd: i64, how: Restore) {
-        // SW_SHOW 与 SW_SHOWMINNOACTIVE 只改可见性；SW_RESTORE 与 SW_SHOWMAXIMIZED
-        // 对隐藏中的窗口也会一并显示出来，无须先 SW_SHOW。
         let cmd = match how {
             Restore::Skip => return,
             Restore::Show => SW_SHOW,
@@ -220,7 +228,11 @@ impl WindowManager for WindowsWindowManager {
             Restore::Minimized => SW_SHOWMINNOACTIVE,
         };
         unsafe {
-            let _ = ShowWindow(hwnd_from(hwnd), cmd);
+            let hwnd = hwnd_from(hwnd);
+            if needs_show_before_restore(how, IsWindowVisible(hwnd).as_bool()) {
+                let _ = ShowWindow(hwnd, SW_SHOW);
+            }
+            let _ = ShowWindow(hwnd, cmd);
         }
     }
 
@@ -296,6 +308,29 @@ mod tests {
             is_listable_window(APP, true),
             "自称应用窗口的附属窗口仍列出"
         );
+    }
+
+    #[test]
+    fn hidden_windows_are_shown_before_their_shape_is_restored() {
+        assert!(
+            needs_show_before_restore(Restore::Normal, false),
+            "隐藏中的窗口不得一步 SW_RESTORE：Office 会丢掉功能区"
+        );
+        assert!(needs_show_before_restore(Restore::Maximized, false));
+        assert!(
+            !needs_show_before_restore(Restore::Normal, true),
+            "已经可见的窗口一步改形态即可"
+        );
+        assert!(!needs_show_before_restore(Restore::Maximized, true));
+        assert!(
+            !needs_show_before_restore(Restore::Show, false),
+            "只改可见性，本身就是 SW_SHOW"
+        );
+        assert!(
+            !needs_show_before_restore(Restore::Minimized, false),
+            "保持最小化，不改形态"
+        );
+        assert!(!needs_show_before_restore(Restore::Skip, false));
     }
 
     use windows::Win32::UI::WindowsAndMessaging::{
