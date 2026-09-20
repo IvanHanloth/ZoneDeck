@@ -1,0 +1,14 @@
+root = true
+
+# 只管 Markdown 的自动折行，其余文件类型交给各自的工具链（rustfmt / prettier）。
+#
+# 编辑器按行宽折行时不保护 ** 的完整性，会把它拆到两行：
+#     ……不发送你的击键内容或鼠标轨迹。
+#     **
+# CommonMark 规定强调的闭合标记前不能有空白，于是整段强调失效，网页上直接渲染出
+# 裸的 **。隐私声明是要交给应用商店审核的页面，这种破绽不能留，见
+# scripts/gen-privacy.ps1 的 Assert-MarkersIntact。
+[*.md]
+max_line_length = off
+ij_markdown_wrap_text_if_long = false
+ij_markdown_wrap_text_inside_blocks = false

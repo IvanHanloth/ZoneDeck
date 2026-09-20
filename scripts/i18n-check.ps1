@@ -1,4 +1,4 @@
-# ZoneDeck i18n 一致性检查
+﻿# ZoneDeck i18n 一致性检查
 #
 # 覆盖单元测试够不着的部分：测试只能校验 catalog 内部（键集 / 空值 / 占位符），
 # 校验不了"代码引用的键是否存在""文档三语是否配套"这类跨文件的事情。
@@ -6,10 +6,11 @@
 # 检查项：
 #   1. 文档三语页面集一致（docs/ 为简中，docs/en/、docs/zh-tw/ 必须同名同构）
 #   2. 文档站内链不跨语言（英文页链到 /guide/… 会把读者甩回中文页，VitePress 查不出来）
-#   3. 前端 t("键") 引用的键在 zh-CN.js 中存在（缺失时界面直接显示原始键名）
-#   4. 前端 catalog 无死键（删功能时漏删的残留文案）
-#   5. 核心 Msg 枚举变体全部登记进测试的 ALL_MSGS（漏登记会让该条文案跳过跨语言校验）
-#   6. 三份 catalog 的键集 / 空值 / 占位符 —— 交给既有的 vitest 用例，不重复实现
+#   3. Markdown 的 ** 没被编辑器折行拆开（拆开后网页上会渲染出裸的星号）
+#   4. 前端 t("键") 引用的键在 zh-CN.js 中存在（缺失时界面直接显示原始键名）
+#   5. 前端 catalog 无死键（删功能时漏删的残留文案）
+#   6. 核心 Msg 枚举变体全部登记进测试的 ALL_MSGS（漏登记会让该条文案跳过跨语言校验）
+#   7. 三份 catalog 的键集 / 空值 / 占位符 —— 交给既有的 vitest 用例，不重复实现
 #
 # 用法：
 #   pwsh -File scripts/i18n-check.ps1              # 全量检查
@@ -90,6 +91,17 @@ function Test-DocParity {
 
 # ---- 2. 站内链接不跨语言 ------------------------------------------------------
 # 英文 / 繁中页面必须链到自己语言的路径；简中页面反之不得链到 /en/、/zh-tw/。
+function Test-MarkdownMarkers {
+    # 规则与发版打包共用一份，见 scripts/check-md-markers.ps1
+    $files = Get-ChildItem $docs -Filter *.md -Recurse -File |
+        Where-Object { $_.FullName -notlike "*\.vitepress\*" } |
+        ForEach-Object { $_.FullName }
+    if (-not $files) { return }
+    foreach ($problem in @(& (Join-Path $PSScriptRoot "check-md-markers.ps1") -Path $files)) {
+        Add-Problem ($problem -replace [regex]::Escape($root + [IO.Path]::DirectorySeparatorChar), "")
+    }
+}
+
 function Test-DocLinks {
     $expect = @{
         "en"    = @{ Dir = "en"; Bad = '\]\(/(guide|dev|changelog)/'; Hint = "应加 /en/ 前缀" }
@@ -204,6 +216,7 @@ try {
     if (Test-ShouldCheck "docs/*") {
         Test-DocParity
         Test-DocLinks
+        Test-MarkdownMarkers
     }
     if (Test-ShouldCheck "apps/config/ui/*") {
         Test-CatalogUsage

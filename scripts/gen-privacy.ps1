@@ -29,23 +29,6 @@ $separators = @{
     "english" = ": "
 }
 
-# 编辑器的自动折行会把 ** 拆到两行，Markdown 据此当成字面星号渲染，网页上肉眼可见。
-# 纯文本这边能容忍，网页不能，所以在这里提前拦住而不是默默放过。
-function Assert-MarkersIntact([string[]]$lines, [string]$src)
-{
-    for ($i = 0; $i -lt $lines.Count; $i++) {
-        $t = $lines[$i].Trim()
-        if ($t -eq '**' -or $t -eq '*')
-        {
-            throw "$src 第 $( $i + 1 ) 行只剩强调标记：折行把 ** 拆开了，请把它接回上一行末尾"
-        }
-        if (($t -match '(?<!\*)\*$') -and ($t -notmatch '^[-*] '))
-        {
-            throw "$src 第 $( $i + 1 ) 行以单个 * 结尾：折行把 ** 拆开了，请与下一行合并"
-        }
-    }
-}
-
 # CJK 文字与全角标点；软换行合并后据此判断要不要留空格。
 $CJK = '\u3000-\u303F\u4E00-\u9FFF\u3400-\u4DBF\uFF00-\uFFEF'
 # 全角标点。它的两侧不留空格，Markdown 标记与软换行带进来的都去掉。
@@ -158,7 +141,8 @@ function Convert-Document([string]$markdown, [string]$separator, [string]$src)
     $headers = $null
     $inFrontMatter = $false
     $raw = $markdown -split "\r?\n"
-    Assert-MarkersIntact $raw $src
+    $broken = @(& (Join-Path $PSScriptRoot "check-md-markers.ps1") -Path $src)
+    if ($broken) { throw ($broken -join [Environment]::NewLine) }
     $lines = Join-SoftWraps $raw
 
     for ($i = 0; $i -lt $lines.Count; $i++) {
