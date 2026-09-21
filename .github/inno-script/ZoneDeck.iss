@@ -2,6 +2,7 @@
 ; 由 scripts/package.ps1 -Installer 或 CI 调用：
 ; MyAppVersion  展示用版本号，可含预发布后缀（3.1.0-rc.1）
 ; MyAppVersion4 文件资源用四段数字号，必须纯数字（3.1.0.0）
+; SignedUninstallerDir 可选，卸载程序签名文件所在目录（见 package.ps1 -PrepareUninstaller）
 ;
 ; 依赖 package.ps1 先组装好便携文件夹 dist\ZoneDeck，安装包的文件与许可协议都取自那里。
 ; 需要 Inno Setup 7+：简繁中文语言包自 7.0 起才随官方安装包分发（见 scripts/install-inno.ps1）。
@@ -52,6 +53,10 @@ OutputDir=..\..\dist\installer
 OutputBaseFilename=ZoneDeck-{#MyAppVersion}-Setup
 SetupIconFile=static\icon.ico
 UninstallDisplayIcon={app}\{#CoreExe}
+#ifdef SignedUninstallerDir
+SignedUninstaller=yes
+SignedUninstallerDir={#SignedUninstallerDir}
+#endif
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

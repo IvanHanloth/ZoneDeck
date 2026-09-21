@@ -172,22 +172,28 @@ jobs:
         shell: pwsh
         run: ./scripts/package.ps1 -SkipFrontend
 
-      - name: Sign portable binaries
+      # 卸载程序随安装包编译嵌入，须先生成 uninst-*.e32 与 exe 一起签名，再编译安装包。
+      # package.ps1 会调 install-inno.ps1 按需装 Inno Setup 7，
+      # 版本号则由它从 Cargo.toml 读取，这里不用再传。
+      - name: Prepare uninstaller for signing
+        shell: pwsh
+        run: ./scripts/package.ps1 -PrepareUninstaller
+
+      - name: Sign binaries
         uses: IvanHanloth/super-simply-sign@0.1.1
         with:
           files: |
             dist/ZoneDeck/ZoneDeck.exe
             dist/ZoneDeck/config.exe
+            dist/uninstaller/uninst-*.e32
           description: ZoneDeck
           url: https://github.com/IvanHanloth/ZoneDeck
           email: ${{ secrets.CERTUM_EMAIL }}
           otp-seed: ${{ secrets.CERTUM_OTP }}
 
-      # package.ps1 会调 install-inno.ps1 按需装 Inno Setup 7，
-      # 版本号则由它从 Cargo.toml 读取，这里不用再传。
       - name: Build installer
         shell: pwsh
-        run: ./scripts/package.ps1 -InstallerOnly
+        run: ./scripts/package.ps1 -InstallerOnly -SignedUninstaller
 
       - name: Sign installer
         uses: IvanHanloth/super-simply-sign@0.1.1

@@ -20,6 +20,10 @@ powershell -File scripts/package.ps1 -SkipFrontend
 
 # 只用现有 dist/ZoneDeck 重打安装包（发版流程签完名后用）
 powershell -File scripts/package.ps1 -InstallerOnly
+
+# 卸载程序签名（发版流程用）：先生成待签的 dist/uninstaller/uninst-*.e32，签完名再打安装包
+powershell -File scripts/package.ps1 -PrepareUninstaller
+powershell -File scripts/package.ps1 -InstallerOnly -SignedUninstaller
 ```
 
 `package.ps1` 的流程：编译前端（Vite + Svelte）→ 生产编译 Rust workspace（Tauri 构建脚本会把前端 `dist` 内嵌进 `zonedeck-config.exe`）→ 组装便携文件夹 → 可选生成安装包。
@@ -122,11 +126,16 @@ powershell -File scripts/version.ps1 show
 2. 以 OIDC 身份向 [octo-sts](https://octo-sts.dev) 换取本仓库 `contents:write` 的短期 token；
 3. 经 GraphQL `createCommitOnBranch` 把版本号变更提交到触发分支，并打上 `v<版本>` 附注 tag——API 创建的提交由 GitHub 服务端签名，带 **Verified** 徽章；
 4. 检出该 tag → 校验 tag 与代码版本一致 → 前端 / Rust 测试；
-5. `package.ps1 -SkipFrontend` 组装 `dist/ZoneDeck` → 给里面的两个 exe 加代码签名 → `package.ps1 -InstallerOnly` 把已签名的
-   exe 打进安装包 → 单独签安装包本身 → 把 `dist/ZoneDeck` 压成便携 zip；
+5. `package.ps1 -SkipFrontend` 组装 `dist/ZoneDeck` → `package.ps1 -PrepareUninstaller` 生成待签的卸载程序 → 给两个 exe 与
+   卸载程序加代码签名 → `package.ps1 -InstallerOnly -SignedUninstaller` 把它们打进安装包 → 单独签安装包本身 → 把
+   `dist/ZoneDeck` 压成便携 zip；
 6. 生成**构建来源证明**（Sigstore attestation）→ 生成发布说明（自动生成的更新日志，末尾附安全提示）→ 创建**草稿** Release 并上传 zip 与安装包。
 
 tag 已存在时跳过第 2、3 步，直接检出该 tag 重新构建——重跑 / 补发就是再次运行并填入同一版本号。
+
+::: tip 卸载程序为什么要单独签
+`unins000.exe` 是编译安装包时嵌进去、安装时才生成的，事后签 `Setup.exe` 签不到它。Inno 的外部签名流程是先编译出 `uninst-*.e32`（首次编译就此中止），签好名再编译一次，签名随安装包写进 `unins000.exe`。
+:::
 
 ::: info 凭据从哪来
 仓库不保存任何长期凭据。工作流用 GitHub Actions 的 OIDC 身份向 octo-sts 换取短期 token，放行条件由 `.github/chainguard/tag-release.sts.yaml` 声明（只允许 `main` / `dev` 上的运行），token 在 job 结束时自动吊销。Octo STS App 在分支保护的 bypass 名单中，因此版本号提交无需发版 PR。

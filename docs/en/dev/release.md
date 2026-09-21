@@ -20,6 +20,10 @@ powershell -File scripts/package.ps1 -SkipFrontend
 
 # Rebuild the installer from the existing dist/ZoneDeck (used after signing in the release flow)
 powershell -File scripts/package.ps1 -InstallerOnly
+
+# Uninstaller signing (release flow): produce dist/uninstaller/uninst-*.e32 to sign, then build the installer once it is signed
+powershell -File scripts/package.ps1 -PrepareUninstaller
+powershell -File scripts/package.ps1 -InstallerOnly -SignedUninstaller
 ```
 
 What `package.ps1` does: build the frontend (Vite + Svelte) → release-build the Rust workspace (the Tauri build script embeds the frontend `dist` into `zonedeck-config.exe`) → assemble the portable folder → optionally produce the installer.
@@ -127,12 +131,16 @@ the release content has been merged into `main`) — the `sign` environment hold
 2. Federates the workflow's OIDC identity through [octo-sts](https://octo-sts.dev) into a short-lived `contents:write` token for this repository;
 3. Commits the version change onto the triggering branch via GraphQL `createCommitOnBranch` and creates the `v<version>` annotated tag — commits created through the API are signed by GitHub server-side and carry the **Verified** badge;
 4. Checks that tag out → verifies the tag matches the code version → frontend / Rust tests;
-5. `package.ps1 -SkipFrontend` to assemble `dist/ZoneDeck` → code-sign both executables in it →
-   `package.ps1 -InstallerOnly` to pack the signed executables into the installer → sign the installer itself → zip
-   `dist/ZoneDeck` as the portable archive;
+5. `package.ps1 -SkipFrontend` to assemble `dist/ZoneDeck` → `package.ps1 -PrepareUninstaller` to produce the
+   uninstaller to be signed → code-sign both executables and the uninstaller → `package.ps1 -InstallerOnly -SignedUninstaller`
+   to pack them into the installer → sign the installer itself → zip `dist/ZoneDeck` as the portable archive;
 6. Generates **build provenance** (a Sigstore attestation) → composes the release notes (the auto-generated changelog with a security notice appended) → creates a **draft** Release and uploads the zip and the installer.
 
 If the tag already exists, steps 2 and 3 are skipped and that tag is checked out and rebuilt — rerunning / re-publishing is just running again with the same version.
+
+::: tip Why the uninstaller is signed separately
+`unins000.exe` is embedded when the installer is compiled and only written out at install time, so signing `Setup.exe` afterwards never reaches it. Inno's external-signing flow compiles once to produce `uninst-*.e32` (the first compile stops there), signs it, and compiles again; the signature then travels with the installer into `unins000.exe`.
+:::
 
 ::: info Where the credentials come from
 The repository stores no long-lived credentials. The workflow trades its GitHub Actions OIDC identity to octo-sts for a short-lived token; the conditions are declared in `.github/chainguard/tag-release.sts.yaml` (only runs on `main` / `dev` are allowed), and the token is revoked automatically when the job ends. The Octo STS App is on the branch protection bypass list, so the version commit needs no release PR.
