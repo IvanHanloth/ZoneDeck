@@ -1,4 +1,4 @@
-# 确保本机/CI 具备编译安装包所需的 Inno Setup 环境。
+﻿# 确保本机/CI 具备编译安装包所需的 Inno Setup 环境。
 #
 # 为什么需要这个脚本：
 #   ZoneDeck.iss 声明了简繁中文，而这两个语言包从 Inno Setup 7.0 起才随官方安装包分发
