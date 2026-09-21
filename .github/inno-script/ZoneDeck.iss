@@ -82,6 +82,9 @@ english.InfoBeforeClickLabel=When you have finished reading, click Next to conti
 chinesesimplified.KeepConfigPrompt=是否保留配置文件（config.json）？%n%n选择“是”将保留你的设置，重新安装后可继续使用；%n选择“否”将删除包括配置文件在内的全部数据。
 chinesetraditional.KeepConfigPrompt=是否保留設定檔（config.json）？%n%n選擇「是」將保留你的設定，重新安裝後可繼續使用；%n選擇「否」將刪除包括設定檔在內的全部資料。
 english.KeepConfigPrompt=Do you want to keep your settings file (config.json)?%n%nChoose "Yes" to keep your settings for a future reinstall;%nchoose "No" to delete all data, including the settings file.
+chinesesimplified.SettingsShortcut=设置
+chinesetraditional.SettingsShortcut=設定
+english.SettingsShortcut=Settings
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -94,6 +97,8 @@ Type: filesandordirs; Name: "{autoprograms}\{#LegacyAppName}"
 ; 便携版首次弹通知时会在开始菜单根目录自建一个同名快捷方式（见 crates/core/src/toast.rs）。
 ; 装过之后 {group} 下已有带同一 AppUserModelID 的那份，留着它只会让开始菜单出现两个入口。
 Type: files; Name: "{userprograms}\{#MyAppName}.lnk"
+; 删掉中文名的设置快捷方式，否则非简中安装会与本地化名称并存
+Type: files; Name: "{group}\{#MyAppName} 设置.lnk"; Languages: chinesetraditional english
 
 [UninstallDelete]
 ; 同上：卸载只会自动清掉 [Icons] 建的那些，便携版自建的这个得显式删。
@@ -112,7 +117,7 @@ Source: "{#InstalledMarker}"; DestDir: "{app}"; Flags: ignoreversion
 ; 快捷方式，通知平台才认领它。取值须与 crates/core/src/toast.rs 的 AUMID 逐字相同，
 ; 对不上时核心会认领这条快捷方式、把属性改成它认的值（见 ensure_registered）。
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; AppUserModelID: "{#AppUserModelID}"
-Name: "{group}\{#MyAppName} 设置"; Filename: "{app}\{#ConfigExe}"
+Name: "{group}\{#MyAppName} {cm:SettingsShortcut}"; Filename: "{app}\{#ConfigExe}"
 Name: "{group}\{cm:UninstallProgram,{#MyAppName}}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#CoreExe}"; AppUserModelID: "{#AppUserModelID}"; Tasks: desktopicon
 
