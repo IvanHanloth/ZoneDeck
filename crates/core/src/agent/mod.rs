@@ -28,9 +28,10 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, ChangeWindowMessageFilterEx, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW,
-    GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, KillTimer, MSG, MSGFLT_ALLOW, PostMessageW,
-    PostQuitMessage, RegisterClassW, SetTimer, SetWindowLongPtrW, TranslateMessage,
-    WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    EVENT_SYSTEM_FOREGROUND, GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, KillTimer, MSG,
+    MSGFLT_ALLOW, PostMessageW, PostQuitMessage, RegisterClassW, SetTimer, SetWindowLongPtrW,
+    TranslateMessage, WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_TIMER,
+    WNDCLASSW, WS_OVERLAPPED,
 };
 use windows::core::{PCWSTR, w};
 use zonedeck_common::ipc::{Command, Response};
@@ -45,7 +46,7 @@ use crate::hide::{
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
-use crate::input_hooks::InputHooks;
+use crate::input_hooks::{InputHooks, Rearm};
 use crate::keyboard_hook::{self, WM_KEY_TRIGGER};
 use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
@@ -82,8 +83,14 @@ const SUSPEND_GUARD_TIMER_ID: usize = 12;
 const TRAY_RETRY_TIMER_ID: usize = 13;
 /// 单击后等双击判定的定时器；到点即认定为单击。
 const TRAY_CLICK_TIMER_ID: usize = 14;
+/// 钩子重装定时器：把本进程的输入钩子周期性地顶回链首。
+const HOOK_REARM_TIMER_ID: usize = 15;
 const AUTO_HIDE_INTERVAL_MS: u32 = 5000;
 const TRAY_RETRY_INTERVAL_MS: u32 = 2000;
+/// 定时兜底的重装间隔。主要的重装由「处理完一个按键就请求一次」驱动（见
+/// `keyboard_hook::hook_proc`），这条定时器只负责两种情况：钩子被系统静默摘掉，
+/// 或者对手程序在我们收不到按键的空档里抢走了链首。200ms 足够快，又不至于频繁折腾。
+const HOOK_REARM_INTERVAL_MS: u32 = 200;
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 /// 退出时等待副作用线程排干队列（解冻 / 取消静音）的上限。
 const EFFECTS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -412,6 +419,51 @@ impl AgentState {
         self.set_keyboard_hook(false);
     }
 
+    /// 把输入钩子重新装到链首。前台每次换人、定时器每次到点都走这里。
+    ///
+    /// 低级钩子按安装顺序排队，最后装的最先收到按键；排在前面的钩子一吞键，后面的
+    /// 就什么都收不到。远程桌面、全屏游戏会在自己的窗口激活、甚至每收到一个按键之后
+    /// 把钩子重新装到链首，本进程只要慢一步就收不到键——这正是「全屏里打几个字，
+    /// 隐藏键就按不动」的来源。`reason` 为 None 时不写日志（定时器路径太频繁）。
+    /// 钩子线程本身没了（消息窗口被销毁）则重建一条。
+    fn rearm_input_hooks(&mut self, hwnd: HWND, reason: Option<&str>) {
+        let Some(hooks) = self.input_hooks.as_ref() else {
+            return;
+        };
+        match hooks.rearm() {
+            // 定时重装很频繁，只在有具体缘由时留痕。
+            Rearm::Done => {
+                if let Some(reason) = reason {
+                    logging::debug(&format!("输入钩子已重新装载（{reason}）"));
+                }
+            }
+            Rearm::Idle => {}
+            Rearm::Failed => log_warn!(
+                "输入钩子重装失败（{}），鼠标触发与「不传递」热键可能失灵",
+                reason.unwrap_or("定时重装")
+            ),
+            Rearm::Unavailable => {
+                log_warn!(
+                    "输入钩子线程已失效（{}），正在重建",
+                    reason.unwrap_or("定时重装")
+                );
+                self.rebuild_input_hooks(hwnd);
+            }
+        }
+    }
+
+    /// 钩子线程没了就重建：重新起线程、重装钩子，热键按当前配置重新装载。
+    fn rebuild_input_hooks(&mut self, hwnd: HWND) {
+        self.unregister_hotkeys(hwnd);
+        self.hotkeys_armed = false;
+        self.input_hooks = InputHooks::spawn(hwnd);
+        if self.input_hooks.is_none() {
+            log_error!("重建输入钩子线程失败，「不传递」热键与鼠标触发本次运行不可用");
+            return;
+        }
+        self.sync_monitoring(hwnd);
+    }
+
     /// 让热键与鼠标钩子对齐 `self.monitoring`。幂等：已是目标状态时什么都不做。
     fn sync_monitoring(&mut self, hwnd: HWND) {
         if self.monitoring && !self.hotkeys_armed {
@@ -694,8 +746,13 @@ impl AgentState {
     /// 处理窗口事件：销毁的窗口移出隐藏记录；被外部重新显示的窗口先尝试
     /// 升级压制（自我显示型悬浮窗），压不住才移出记录；标题变化同步进
     /// 隐藏记录与规则（仅内存）。
-    fn on_win_event(&mut self, event: u32, hwnd: i64) {
+    fn on_win_event(&mut self, agent: HWND, event: u32, hwnd: i64) {
         match event {
+            EVENT_SYSTEM_FOREGROUND => {
+                // 前台刚换人。抢着吞键的程序都在自己的窗口激活时装钩子，
+                // 这一下把我们的钩子顶回链首，热键才不会在远程窗口里失灵。
+                self.rearm_input_hooks(agent, Some("前台窗口切换"));
+            }
             EVENT_OBJECT_DESTROY => {
                 if self.controller.forget_window(hwnd) {
                     self.persist_recovery();
@@ -842,7 +899,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_APP_WINEVENT => {
-            state.on_win_event(wparam.0 as u32, lparam.0 as i64);
+            state.on_win_event(hwnd, wparam.0 as u32, lparam.0 as i64);
             LRESULT(0)
         }
         WM_APP_IPC => {
@@ -942,6 +999,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 }
                 // 双击判定窗口到点，此前那次抬起确实是单击。
                 TRAY_CLICK_TIMER_ID => tray_click::on_click_timer(state, hwnd),
+                // 定期把输入钩子顶回链首，压过远程桌面之类会反复抢装钩子的程序。
+                HOOK_REARM_TIMER_ID => state.rearm_input_hooks(hwnd, None),
                 AUTO_HIDE_TIMER_ID if state.config.setting.auto_hide_enabled => {
                     let idle_ms = idle::idle_millis().unwrap_or(0);
                     if idle::should_auto_hide(
@@ -1139,6 +1198,21 @@ pub fn run(mut options: AgentOptions) {
         log_error!(
             "输入钩子线程未能就绪（失败原因见前一条记录），本次运行鼠标按键触发、四角触发与「不传递」热键均不可用"
         );
+    }
+    // 钩子在链上的位置会被后来者顶掉，系统也会在回调超时后悄悄摘掉它，故定期重装。
+    // 当前没有装钩子时重装是空操作，因此只要有钩子线程就让这条定时器一直转着。
+    if input_hooks.is_some() {
+        unsafe {
+            let _ = SetTimer(
+                Some(hwnd),
+                HOOK_REARM_TIMER_ID,
+                HOOK_REARM_INTERVAL_MS,
+                None,
+            );
+        }
+        logging::debug(&format!(
+            "钩子重装定时器已启动（{HOOK_REARM_INTERVAL_MS}ms）"
+        ));
     }
 
     // 托盘图标随后由 sync_monitoring → refresh_runtime 按配置挂上。

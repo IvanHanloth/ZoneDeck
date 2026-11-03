@@ -33,6 +33,9 @@ mod bits {
 static TRACKED: AtomicU32 = AtomicU32::new(0);
 /// 键盘钩子是否在运行。false 时 [`current_modifiers`] 回退系统即时状态。
 static TRACKING: AtomicBool = AtomicBool::new(false);
+/// 是否已经用系统即时状态播种过。只播一次：钩子重装后必须沿用按事件跟踪的位集，
+/// 否则每次重装都会拿被别的程序干扰过的 `GetAsyncKeyState` 把按住的修饰键抹掉。
+static SEEDED: AtomicBool = AtomicBool::new(false);
 
 /// 虚拟键码对应的位；不是修饰键则为 `None`。
 fn bit_of(vk: u16) -> Option<u32> {
@@ -76,9 +79,14 @@ fn mask_of(tracked: u32) -> u32 {
     m
 }
 
+/// 某个虚拟键此刻是否按着（系统即时状态）。只用于装钩子时播种初值：别的程序吞键后
+/// 这里读到的会是「没按下」，所以运行期不能拿它做校准，见 [`begin_tracking`]。
+fn is_key_down(vk: u16) -> bool {
+    unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 }
+}
+
 /// 按系统即时状态取一份位集，用于播种与校准。
 fn snapshot_tracked() -> u32 {
-    let down = |vk: u16| unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 };
     let mut t = 0;
     for (vk, bit) in [
         (VK_LCONTROL.0, bits::LCTRL),
@@ -90,7 +98,7 @@ fn snapshot_tracked() -> u32 {
         (VK_LWIN.0, bits::LWIN),
         (VK_RWIN.0, bits::RWIN),
     ] {
-        if down(vk) {
+        if is_key_down(vk) {
             t |= bit;
         }
     }
@@ -121,23 +129,22 @@ pub fn note_key(vk: u16, down: bool) {
     }
 }
 
-/// 开始自跟踪，并按系统即时状态播种初值。
+/// 开始自跟踪。只有本进程第一次装钩子时按系统即时状态播种初值。
+///
+/// 钩子被重装时会先 [`end_tracking`] 再 `begin_tracking`，此时绝不能拿系统即时状态
+/// 覆盖已有位集：别的程序（远程桌面之类）若吞掉按键，`GetAsyncKeyState` 读到的永远是
+/// 「没按下」，照它播种会把正在按住的 Ctrl / Shift 抹掉，热键随即判定失败。
 pub fn begin_tracking() {
-    TRACKED.store(snapshot_tracked(), Relaxed);
     TRACKING.store(true, Relaxed);
+    if SEEDED.swap(true, Relaxed) {
+        return;
+    }
+    TRACKED.store(snapshot_tracked(), Relaxed);
 }
 
-/// 停止自跟踪，回退到系统即时状态。
+/// 停止自跟踪，回退到系统即时状态；**保留**已跟踪的位集，供下一次装配续用。
 pub fn end_tracking() {
     TRACKING.store(false, Relaxed);
-    TRACKED.store(0, Relaxed);
-}
-
-/// 重新按系统即时状态校准位集；自跟踪未开启时不做任何事。
-pub fn resync() {
-    if TRACKING.load(Relaxed) {
-        TRACKED.store(snapshot_tracked(), Relaxed);
-    }
 }
 
 #[cfg(test)]

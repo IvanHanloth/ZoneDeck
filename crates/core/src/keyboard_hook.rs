@@ -165,7 +165,6 @@ fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [HookHotkey]) -> Decisio
 /// 设置当前由钩子承载的热键集合（覆盖式，清空运行态）。
 /// 每项为 `(热键 id, 组合, 是否吞掉按键)`。
 pub fn set_hotkeys(list: &[(i32, ParsedHotkey, bool)]) {
-    modifiers::resync();
     if let Ok(mut hotkeys) = HOTKEYS.lock() {
         *hotkeys = list
             .iter()
@@ -186,33 +185,43 @@ fn post(id: i32) {
 }
 
 unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    let mut swallow = false;
     if ncode == 0 {
         let data = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         let msg = wparam.0 as u32;
-        // 修饰键状态按事件跟踪；注入的按键同样计入。
-        if matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN) {
+        let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
+        let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
+        // 注入的按键既不计入修饰键，也不参与判定与重装，避免反馈回路。
+        let injected = data.flags.0 & LLKHF_INJECTED.0 != 0;
+        // 修饰键状态只按事件跟踪。这里不能拿 GetAsyncKeyState 覆盖：别的程序（远程桌面
+        // 之类）吞掉按键后，系统状态压根不会更新，照它校准反而会把正在按住的修饰键抹掉，
+        // 热键于是永远判定不匹配。
+        if down {
             modifiers::note_key(data.vkCode as u16, true);
-        } else if matches!(msg, WM_KEYUP | WM_SYSKEYUP) {
+        } else if up {
             modifiers::note_key(data.vkCode as u16, false);
         }
-        // 注入的按键不参与热键判定，避免反馈回路。
-        if data.flags.0 & LLKHF_INJECTED.0 == 0 {
-            let pressed = current_modifiers();
-            let decision = HOTKEYS
-                .lock()
-                .map(|mut states| decide(msg, data.vkCode as u16, pressed, &mut states))
-                .unwrap_or(Decision::Pass);
-            match decision {
-                Decision::Pass => {}
-                Decision::Swallow => return LRESULT(1),
-                Decision::Fire { id, swallow } => {
-                    post(id);
-                    if swallow {
-                        return LRESULT(1);
+
+        if !injected && (down || up) {
+            if let Ok(mut states) = HOTKEYS.lock() {
+                match decide(msg, data.vkCode as u16, current_modifiers(), &mut states) {
+                    Decision::Pass => {}
+                    Decision::Swallow => swallow = true,
+                    Decision::Fire { id, swallow: also } => {
+                        post(id);
+                        swallow |= also;
                     }
                 }
             }
+
+            // 抢回链首：会吞键的程序通常在这次按键沿链传到它之后，把自己的钩子重新装到
+            // 最前面。这里只投一条消息，等回调返回、钩子线程处理它时才真正重装——正好
+            // 排在对手那次重装之后，于是下一次按键又能先到我们手里。
+            crate::input_hooks::InputHooks::request_rearm();
         }
+    }
+    if swallow {
+        return LRESULT(1);
     }
     unsafe { CallNextHookEx(None, ncode, wparam, lparam) }
 }
