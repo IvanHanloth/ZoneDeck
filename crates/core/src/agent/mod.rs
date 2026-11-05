@@ -11,6 +11,7 @@ mod tray_click;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::Relaxed};
 use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::Duration;
 
@@ -22,15 +23,21 @@ use commands::{find_config_exe, launch_settings};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::RemoteDesktop::{
+    NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification,
+};
+use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     HOT_KEY_MODIFIERS, RegisterHotKey, UnregisterHotKey,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CW_USEDEFAULT, ChangeWindowMessageFilterEx, CreateWindowExW, DefWindowProcW, DestroyWindow,
     DispatchMessageW, EVENT_OBJECT_DESTROY, EVENT_OBJECT_NAMECHANGE, EVENT_OBJECT_SHOW,
-    GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, KillTimer, MSG, MSGFLT_ALLOW, PostMessageW,
-    PostQuitMessage, RegisterClassW, SetTimer, SetWindowLongPtrW, TranslateMessage,
-    WINDOW_EX_STYLE, WM_APP, WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    EVENT_SYSTEM_FOREGROUND, GWLP_USERDATA, GetMessageW, GetWindowLongPtrW, KillTimer, MSG,
+    MSGFLT_ALLOW, PBT_APMRESUMEAUTOMATIC, PBT_APMRESUMESUSPEND, PostMessageW, PostQuitMessage,
+    RegisterClassW, SetTimer, SetWindowLongPtrW, TranslateMessage, WINDOW_EX_STYLE, WM_APP,
+    WM_COMMAND, WM_DESTROY, WM_HOTKEY, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE,
+    WNDCLASSW, WS_OVERLAPPED, WTS_SESSION_LOCK, WTS_SESSION_UNLOCK,
 };
 use windows::core::{PCWSTR, w};
 use zonedeck_common::ipc::{Command, Response};
@@ -45,8 +52,9 @@ use crate::hide::{
 };
 use crate::hotkey::{MOD_NOREPEAT, ParsedHotkey, is_disabled, parse_hotkey};
 use crate::i18n::{self, Msg};
-use crate::input_hooks::InputHooks;
+use crate::input_hooks::{InputHooks, Rearm};
 use crate::keyboard_hook::{self, WM_KEY_TRIGGER};
+use crate::modifiers;
 use crate::mouse_hook::{self, TRIGGER_CORNER, WM_MOUSE_TRIGGER};
 use crate::platform::win32::WindowsWindowManager;
 use crate::stats::{PowerStatsStore, STATS_FILE_NAME};
@@ -82,8 +90,32 @@ const SUSPEND_GUARD_TIMER_ID: usize = 12;
 const TRAY_RETRY_TIMER_ID: usize = 13;
 /// 单击后等双击判定的定时器；到点即认定为单击。
 const TRAY_CLICK_TIMER_ID: usize = 14;
+/// 钩子重装定时器：把输入钩子周期性地顶回链首。
+const HOOK_REARM_TIMER_ID: usize = 15;
 const AUTO_HIDE_INTERVAL_MS: u32 = 5000;
 const TRAY_RETRY_INTERVAL_MS: u32 = 2000;
+/// 定时兜底的重装间隔。按键驱动之外还要有它，才能压住「按自己节拍抢先装钩子」的程序：
+/// 对方抢走后最多这么久夺回，落在这段窗口里的按键可能被吞，代价是那一次不生效。
+const HOOK_REARM_INTERVAL_MS: u32 = 50;
+/// 看门狗检查周期（约 30 秒，定时器会被合并，以心跳里的真实秒数为准）。
+const HOOK_WATCH_TICKS: u32 = 600;
+/// 系统有输入、钩子却这么久没见到按键，就判定钩子失效并重建线程。
+const HOOK_SILENT_LIMIT_MS: u64 = 120_000;
+/// 两次重建之间的最小间隔，避免误判时反复重建。
+const HOOK_REBUILD_COOLDOWN_MS: u64 = 600_000;
+/// 系统空闲低于该值视为「用户正在操作」。
+const USER_ACTIVE_IDLE_MS: u32 = 5_000;
+
+static HOOK_WATCH_COUNTER: AtomicU32 = AtomicU32::new(0);
+static HOOK_WATCH_LAST_COUNT: AtomicU64 = AtomicU64::new(0);
+static HOOK_WATCH_LAST_MS: AtomicU64 = AtomicU64::new(0);
+static HOOK_WATCH_LAST_REBUILD: AtomicU64 = AtomicU64::new(0);
+/// 重装结果计数（ok / idle / 失败 / 无应答），心跳里报增量。
+static REARM_OK: AtomicU64 = AtomicU64::new(0);
+static REARM_IDLE: AtomicU64 = AtomicU64::new(0);
+static REARM_FAILED: AtomicU64 = AtomicU64::new(0);
+static REARM_UNAVAILABLE: AtomicU64 = AtomicU64::new(0);
+static REARM_LAST: [AtomicU64; 4] = [const { AtomicU64::new(0) }; 4];
 const IPC_REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 /// 退出时等待副作用线程排干队列（解冻 / 取消静音）的上限。
 const EFFECTS_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(10);
@@ -412,6 +444,112 @@ impl AgentState {
         self.set_keyboard_hook(false);
     }
 
+    /// 把输入钩子重新装到链首；`reason` 为 None 时不写日志（定时器路径太频繁）。
+    fn rearm_input_hooks(&mut self, hwnd: HWND, reason: Option<&str>) {
+        let Some(hooks) = self.input_hooks.as_ref() else {
+            return;
+        };
+        match hooks.rearm() {
+            Rearm::Done => {
+                REARM_OK.fetch_add(1, Relaxed);
+                if let Some(reason) = reason {
+                    logging::debug(&format!("输入钩子已重新装载（{reason}）"));
+                }
+            }
+            Rearm::Idle => {
+                REARM_IDLE.fetch_add(1, Relaxed);
+            }
+            Rearm::Failed => {
+                REARM_FAILED.fetch_add(1, Relaxed);
+                log_warn!(
+                    "输入钩子重装失败（{}），鼠标触发与「不传递」热键可能失灵",
+                    reason.unwrap_or("定时重装")
+                );
+            }
+            Rearm::Unavailable => {
+                REARM_UNAVAILABLE.fetch_add(1, Relaxed);
+                log_warn!(
+                    "输入钩子线程已失效（{}），正在重建",
+                    reason.unwrap_or("定时重装")
+                );
+                self.rebuild_input_hooks(hwnd);
+            }
+        }
+    }
+
+    /// 钩子线程没了就重建：重起线程、重装钩子，热键按当前配置重新装载。
+    fn rebuild_input_hooks(&mut self, hwnd: HWND) {
+        self.unregister_hotkeys(hwnd);
+        self.hotkeys_armed = false;
+        self.input_hooks = InputHooks::spawn(hwnd);
+        if self.input_hooks.is_none() {
+            log_error!("重建输入钩子线程失败，「不传递」热键与鼠标触发本次运行不可用");
+            return;
+        }
+        self.sync_monitoring(hwnd);
+    }
+
+    /// 看门狗：记心跳，钩子明显失效时重建线程（判据见函数体）。
+    fn hook_watchdog(&mut self, hwnd: HWND) {
+        let tick = HOOK_WATCH_COUNTER.fetch_add(1, Relaxed) + 1;
+        if !tick.is_multiple_of(HOOK_WATCH_TICKS) {
+            return;
+        }
+        let now = unsafe { GetTickCount64() };
+        let idle = idle::idle_millis().unwrap_or(u32::MAX);
+        let events = keyboard_hook::key_event_count();
+        let gained = events.saturating_sub(HOOK_WATCH_LAST_COUNT.swap(events, Relaxed));
+        let elapsed = now.saturating_sub(HOOK_WATCH_LAST_MS.swap(now, Relaxed)) / 1000;
+
+        let values = [
+            REARM_OK.load(Relaxed),
+            REARM_IDLE.load(Relaxed),
+            REARM_FAILED.load(Relaxed),
+            REARM_UNAVAILABLE.load(Relaxed),
+        ];
+        let mut deltas = [0u64; 4];
+        for (index, value) in values.iter().enumerate() {
+            deltas[index] = value.saturating_sub(REARM_LAST[index].swap(*value, Relaxed));
+        }
+        logging::debug(&format!(
+            "钩子心跳：近 {elapsed} 秒收到 {gained} 个按键事件，系统空闲 {idle}ms；重装 ok={} idle={} 失败={} 无应答={}",
+            deltas[0], deltas[1], deltas[2], deltas[3]
+        ));
+
+        let wants_hook = {
+            let h = &self.config.hotkey;
+            h.hide_hook
+                || h.close_hook
+                || h.hide_only_hook
+                || h.show_only_hook
+                || h.hide_foreground_hook
+        };
+        let missing = deltas[1] > 0 && self.hotkeys_armed && wants_hook;
+        let silent = idle < USER_ACTIVE_IDLE_MS
+            && keyboard_hook::millis_since_last_event() > HOOK_SILENT_LIMIT_MS;
+        if !(missing || silent) {
+            return;
+        }
+        if now.saturating_sub(HOOK_WATCH_LAST_REBUILD.load(Relaxed)) < HOOK_REBUILD_COOLDOWN_MS {
+            return;
+        }
+        HOOK_WATCH_LAST_REBUILD.store(now, Relaxed);
+        if missing {
+            log_warn!("热键应由键盘钩子承载，但重装时发现钩子不在，重建输入钩子线程");
+        } else {
+            log_warn!("系统有输入，键盘钩子却长时间收不到按键，重建输入钩子线程");
+        }
+        self.rebuild_input_hooks(hwnd);
+    }
+
+    /// 输入状态与钩子的确定性重置。只在已知断点调用：睡眠唤醒、会话锁定 / 解锁。
+    fn reset_input_state(&mut self, hwnd: HWND, reason: &str) {
+        logging::debug(&format!("{reason}：重置输入状态并重装钩子"));
+        keyboard_hook::reset_states();
+        modifiers::reset_tracking();
+        self.rearm_input_hooks(hwnd, Some(reason));
+    }
+
     /// 让热键与鼠标钩子对齐 `self.monitoring`。幂等：已是目标状态时什么都不做。
     fn sync_monitoring(&mut self, hwnd: HWND) {
         if self.monitoring && !self.hotkeys_armed {
@@ -644,6 +782,10 @@ impl AgentState {
         if !setting.freeze_after_hide && !setting.efficiency_after_hide {
             return (Vec::new(), Vec::new());
         }
+        // 没有目标就不取样：空闲自动隐藏会反复重试，别每次都做全进程快照。
+        if dormant.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
         let snapshot = crate::freeze::process_snapshot();
         let freeze = if setting.freeze_after_hide {
             self.scoped_pids(dormant.to_vec(), &setting.power_scope, &snapshot)
@@ -694,8 +836,12 @@ impl AgentState {
     /// 处理窗口事件：销毁的窗口移出隐藏记录；被外部重新显示的窗口先尝试
     /// 升级压制（自我显示型悬浮窗），压不住才移出记录；标题变化同步进
     /// 隐藏记录与规则（仅内存）。
-    fn on_win_event(&mut self, event: u32, hwnd: i64) {
+    fn on_win_event(&mut self, agent: HWND, event: u32, hwnd: i64) {
         match event {
+            EVENT_SYSTEM_FOREGROUND => {
+                // 抢着吞键的程序在窗口激活时装钩子，这里顺着前台切换把钩子顶回链首。
+                self.rearm_input_hooks(agent, Some("前台窗口切换"));
+            }
             EVENT_OBJECT_DESTROY => {
                 if self.controller.forget_window(hwnd) {
                     self.persist_recovery();
@@ -842,7 +988,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_APP_WINEVENT => {
-            state.on_win_event(wparam.0 as u32, lparam.0 as i64);
+            state.on_win_event(hwnd, wparam.0 as u32, lparam.0 as i64);
             LRESULT(0)
         }
         WM_APP_IPC => {
@@ -942,6 +1088,11 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 }
                 // 双击判定窗口到点，此前那次抬起确实是单击。
                 TRAY_CLICK_TIMER_ID => tray_click::on_click_timer(state, hwnd),
+                // 定期把钩子顶回链首，顺带跑一次看门狗。
+                HOOK_REARM_TIMER_ID => {
+                    state.rearm_input_hooks(hwnd, None);
+                    state.hook_watchdog(hwnd);
+                }
                 AUTO_HIDE_TIMER_ID if state.config.setting.auto_hide_enabled => {
                     let idle_ms = idle::idle_millis().unwrap_or(0);
                     if idle::should_auto_hide(
@@ -955,6 +1106,27 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 _ => {}
             }
             LRESULT(0)
+        }
+        // 锁定 / 解锁：安全桌面上钩子不被调用，修饰键的抬起事件会丢。
+        WM_WTSSESSION_CHANGE => {
+            let reason = match wparam.0 as u32 {
+                WTS_SESSION_LOCK => Some("会话锁定"),
+                WTS_SESSION_UNLOCK => Some("会话解锁"),
+                _ => None,
+            };
+            if let Some(reason) = reason {
+                state.reset_input_state(hwnd, reason);
+            }
+            LRESULT(0)
+        }
+        // 睡眠 / 休眠恢复：挂起期间的事件全部丢失，钩子也可能被摘掉。
+        WM_POWERBROADCAST => {
+            let event = wparam.0 as u32;
+            if event == PBT_APMRESUMEAUTOMATIC || event == PBT_APMRESUMESUSPEND {
+                state.reset_input_state(hwnd, "系统从睡眠/休眠恢复");
+            }
+            // 恢复类事件必须回 TRUE，否则系统认为程序没处理。
+            LRESULT(1)
         }
         WM_DESTROY => {
             unsafe {
@@ -1119,6 +1291,17 @@ pub fn run(mut options: AgentOptions) {
         }
     }
 
+    // 会话通知：解锁后立刻重置输入状态。注册失败只影响这一点，其它功能不受影响。
+    unsafe {
+        match WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) {
+            Ok(()) => logging::debug("已注册会话锁定/解锁通知"),
+            Err(e) => logging::debug(&format!(
+                "注册会话通知失败，解锁后不会立即重置输入状态: {}",
+                crate::util::win_err(&e)
+            )),
+        }
+    }
+
     let (ipc_tx, ipc_rx) = channel::<(Command, Sender<Response>)>();
 
     let exe_dir = std::env::current_exe()
@@ -1139,6 +1322,22 @@ pub fn run(mut options: AgentOptions) {
         log_error!(
             "输入钩子线程未能就绪（失败原因见前一条记录），本次运行鼠标按键触发、四角触发与「不传递」热键均不可用"
         );
+    }
+    // 定期重装：对手会把钩子顶掉，系统也会摘掉超时钩子；没装钩子时重装是空操作。
+    if input_hooks.is_some() {
+        unsafe {
+            let _ = SetTimer(
+                Some(hwnd),
+                HOOK_REARM_TIMER_ID,
+                HOOK_REARM_INTERVAL_MS,
+                None,
+            );
+        }
+        // 心跳的时间基准从定时器启动算起。
+        HOOK_WATCH_LAST_MS.store(unsafe { GetTickCount64() }, Relaxed);
+        logging::debug(&format!(
+            "钩子重装定时器已启动（{HOOK_REARM_INTERVAL_MS}ms）"
+        ));
     }
 
     // 托盘图标随后由 sync_monitoring → refresh_runtime 按配置挂上。

@@ -1,7 +1,9 @@
 //! 输入钩子专职线程：`WH_MOUSE_LL` 与 `WH_KEYBOARD_LL` 都挂在这条线程上。
 //!
-//! 低级钩子的回调由安装线程的消息泵派发，系统要等钩子链返回才继续投递事件，
-//! 故不与代理窗口共用线程。
+//! 回调由安装线程的消息泵派发，故不与代理窗口共用线程。
+//!
+//! 钩子在链上后装先调，前面的钩子吞键后后面的收不到。对手会按自己的节拍抢先装钩子，
+//! 所以提供 [`InputHooks::rearm`] 把本进程顶回链首；系统摘掉超时钩子也靠它救回。
 
 use std::sync::atomic::{AtomicIsize, Ordering::Relaxed};
 use std::sync::mpsc::channel;
@@ -27,11 +29,25 @@ use crate::mouse_hook::MouseHook;
 /// 返回值非 0 表示该钩子当前已装上。
 const WM_HOOK_SET: u32 = WM_APP + 7;
 
+/// 把已装上的钩子先卸后装，让本进程回到链首。
+/// 返回值：-1 = 本来就没钩子，1 = 已重装，2 = 重装失败，0 = 钩子线程没应答。
+const WM_HOOK_REARM: u32 = WM_APP + 8;
+
+const REARM_IDLE: isize = -1;
+const REARM_DONE: isize = 1;
+const REARM_FAILED: isize = 2;
+
 const HOOK_MOUSE: usize = 0;
 const HOOK_KEYBOARD: usize = 1;
 
+/// 多久没有键盘事件才认定「确实没按键」，从而可以清掉按键闩锁。长按会持续产生自动
+/// 重复事件，所以这个判断是可靠的；只用于闩锁，不碰修饰键。
+const SELF_HEAL_IDLE_MS: u64 = 3_000;
+
 /// 代理窗口句柄，钩子命中后把触发投递给它。
 static AGENT_HWND: AtomicIsize = AtomicIsize::new(0);
+/// 钩子线程的仅消息窗口，接收重装请求。
+static HOOK_HWND: AtomicIsize = AtomicIsize::new(0);
 
 /// 钩子句柄只在钩子线程上创建与销毁，存在该线程的 TLS 里。
 #[derive(Default)]
@@ -74,6 +90,7 @@ fn apply(kind: usize, want: bool) -> bool {
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     match msg {
         WM_HOOK_SET => LRESULT(apply(wparam.0, lparam.0 != 0) as isize),
+        WM_HOOK_REARM => LRESULT(rearm()),
         WM_DESTROY => {
             INSTALLED.with(|cell| *cell.borrow_mut() = Installed::default());
             unsafe { PostQuitMessage(0) };
@@ -81,6 +98,33 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
         }
         _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
+}
+
+/// 先卸后装已装上的钩子，重装即回到链首：对手抢到链首、系统摘掉超时钩子，都靠它救回。
+/// 顺带在彻底空闲时清一次按键闩锁。
+fn rearm() -> isize {
+    let agent = HWND(AGENT_HWND.load(Relaxed) as *mut std::ffi::c_void);
+    INSTALLED.with(|cell| {
+        let mut installed = cell.borrow_mut();
+        let had_mouse = installed.mouse.is_some();
+        let had_keyboard = installed.keyboard.is_some();
+        if !had_mouse && !had_keyboard {
+            return REARM_IDLE;
+        }
+        installed.mouse = None;
+        installed.keyboard = None;
+        if had_mouse {
+            installed.mouse = MouseHook::install(agent);
+        }
+        if had_keyboard {
+            installed.keyboard = KeyboardHook::install(agent);
+        }
+        if had_mouse != installed.mouse.is_some() || had_keyboard != installed.keyboard.is_some() {
+            return REARM_FAILED;
+        }
+        crate::keyboard_hook::expire_idle_states(SELF_HEAL_IDLE_MS);
+        REARM_DONE
+    })
 }
 
 /// 钩子线程自己的仅消息窗口，作为装卸请求的收口。
@@ -119,6 +163,19 @@ pub struct InputHooks {
     thread: Option<JoinHandle<()>>,
 }
 
+/// [`InputHooks::rearm`] 的结果。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Rearm {
+    /// 已重新装上，本进程回到钩子链首。
+    Done,
+    /// 本来就没有钩子，没什么可重装的。
+    Idle,
+    /// 以前装着，这次没装成；调用方可以退一步重建钩子线程。
+    Failed,
+    /// 钩子线程没应答（消息窗口已销毁），钩子肯定也不在了。
+    Unavailable,
+}
+
 impl InputHooks {
     /// 起线程并等它把仅消息窗口建好；窗口建不出来时返回 None。
     pub fn spawn(agent_hwnd: HWND) -> Option<InputHooks> {
@@ -148,6 +205,7 @@ impl InputHooks {
                     }
                     return;
                 }
+                HOOK_HWND.store(hwnd.0 as isize, Relaxed);
                 unsafe {
                     let mut msg: MSG = std::mem::zeroed();
                     loop {
@@ -180,6 +238,19 @@ impl InputHooks {
         }
     }
 
+    /// 从任意线程请求重装。只投消息不等待：在钩子回调里调用时，本次按键刚传给后装的
+    /// 钩子（对手往往在那一步抢回链首），等钩子线程处理这条消息时重装正好压在它后面。
+    pub fn request_rearm() {
+        let raw = HOOK_HWND.load(Relaxed);
+        if raw == 0 {
+            return;
+        }
+        unsafe {
+            let hwnd = HWND(raw as *mut std::ffi::c_void);
+            let _ = PostMessageW(Some(hwnd), WM_HOOK_REARM, WPARAM(0), LPARAM(0));
+        }
+    }
+
     /// 让鼠标钩子对齐 `on`，返回对齐后是否已装上。
     pub fn set_mouse(&self, on: bool) -> bool {
         self.set(HOOK_MOUSE, on)
@@ -188,6 +259,18 @@ impl InputHooks {
     /// 让键盘钩子对齐 `on`，返回对齐后是否已装上。
     pub fn set_keyboard(&self, on: bool) -> bool {
         self.set(HOOK_KEYBOARD, on)
+    }
+    /// 让已装上的钩子回到链首。
+    pub fn rearm(&self) -> Rearm {
+        unsafe {
+            let hwnd = HWND(self.hwnd as *mut std::ffi::c_void);
+            match SendMessageW(hwnd, WM_HOOK_REARM, None, None).0 {
+                REARM_IDLE => Rearm::Idle,
+                REARM_DONE => Rearm::Done,
+                REARM_FAILED => Rearm::Failed,
+                _ => Rearm::Unavailable,
+            }
+        }
     }
 
     /// 钩子线程从不阻塞、也从不回发消息给代理线程，故 `SendMessageW` 不会死锁。
@@ -217,6 +300,7 @@ impl Drop for InputHooks {
             logging::warn("输入钩子线程异常退出");
         }
         AGENT_HWND.store(0, Relaxed);
+        HOOK_HWND.store(0, Relaxed);
     }
 }
 
@@ -258,6 +342,26 @@ mod tests {
         assert!(hooks.set_keyboard(true), "卸掉鼠标钩子不应连累键盘钩子");
 
         assert!(!hooks.set_keyboard(false));
+    }
+
+    /// 重装是「先卸后装」：没装任何钩子时无事可做，装着时要原样装回去。
+    #[test]
+    fn rearming_puts_the_armed_hooks_back() {
+        let hooks = hooks();
+        assert_eq!(hooks.rearm(), Rearm::Idle, "没装钩子时无可重装");
+
+        assert!(hooks.set_keyboard(true));
+        assert_eq!(hooks.rearm(), Rearm::Done);
+        assert!(hooks.set_keyboard(true), "重装后键盘钩子应仍在");
+
+        assert!(hooks.set_mouse(true));
+        assert_eq!(hooks.rearm(), Rearm::Done);
+        assert!(hooks.set_mouse(true), "重装后鼠标钩子应仍在");
+        assert!(hooks.set_keyboard(true), "重装鼠标钩子不该弄丢键盘钩子");
+
+        let owner =
+            unsafe { GetWindowThreadProcessId(HWND(hooks.hwnd as *mut std::ffi::c_void), None) };
+        assert_ne!(owner, 0, "重装后钩子线程应仍然活着");
     }
 
     /// 析构须让线程退出。

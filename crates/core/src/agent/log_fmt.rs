@@ -1,12 +1,19 @@
 //! 隐藏 / 恢复结果与热键失败的日志文案格式化。
 
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
 use windows::Win32::Foundation::ERROR_HOTKEY_ALREADY_REGISTERED;
+use windows::Win32::System::SystemInformation::GetTickCount64;
 use zonedeck_common::Config;
 
 use crate::hide::{HidePlan, RuleOutcome, ShowOutcome};
 use crate::logging;
 
 use super::Trigger;
+
+/// 上次记录「没有目标窗口」的时刻；空闲自动隐藏每 5 秒重试，不节流会刷屏。
+static LAST_EMPTY_LOG_MS: AtomicU64 = AtomicU64::new(0);
+const EMPTY_LOG_INTERVAL_MS: u64 = 60_000;
 
 /// 日志中指代一条窗口规则的写法：序号 + 进程名，不含标题。
 pub(super) fn rule_label(index: usize, rule: &zonedeck_common::WindowRule) -> String {
@@ -40,7 +47,11 @@ pub(super) fn log_hide(
         }
     }
     if plan.fresh.is_empty() {
-        logging::debug(&format!("{trigger}触发隐藏：没有新的目标窗口"));
+        let now = unsafe { GetTickCount64() };
+        if now.saturating_sub(LAST_EMPTY_LOG_MS.load(Relaxed)) >= EMPTY_LOG_INTERVAL_MS {
+            LAST_EMPTY_LOG_MS.store(now, Relaxed);
+            logging::debug(&format!("{trigger}触发隐藏：没有新的目标窗口"));
+        }
         return;
     }
     logging::debug(&format!(
