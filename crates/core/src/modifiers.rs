@@ -1,8 +1,9 @@
 //! 修饰键状态。
 //!
-//! 键盘钩子运行期间按事件自行跟踪按下的修饰键，判定热键时读这份位集；
-//! 钩子只在存在「不传递」热键时才安装（见 [`crate::input_hooks`]），
-//! 未安装时回退 `GetAsyncKeyState`。
+//! 有键盘钩子时按事件跟踪按住的修饰键；没有钩子时回退 `GetAsyncKeyState`。
+//! 事件跟踪不能拿系统状态校准（被吞掉的按键不会更新系统状态），也不按时间清理——
+//! 按住修饰键停顿再按主键是常见操作。残位只由确定时机重置（唤醒、会话解锁）或
+//! 有证据的当场修正（见 [`clear_mask`]）处理。
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering::Relaxed};
 
@@ -33,6 +34,8 @@ mod bits {
 static TRACKED: AtomicU32 = AtomicU32::new(0);
 /// 键盘钩子是否在运行。false 时 [`current_modifiers`] 回退系统即时状态。
 static TRACKING: AtomicBool = AtomicBool::new(false);
+/// 只用系统状态播种过一次。重装钩子时若再播种，会把按住的修饰键抹掉。
+static SEEDED: AtomicBool = AtomicBool::new(false);
 
 /// 虚拟键码对应的位；不是修饰键则为 `None`。
 fn bit_of(vk: u16) -> Option<u32> {
@@ -56,7 +59,6 @@ fn bit_of(vk: u16) -> Option<u32> {
 pub fn is_modifier(vk: u16) -> bool {
     bit_of(vk).is_some()
 }
-
 /// 把具体键位集折算成 [`crate::hotkey`] 的修饰键掩码。
 fn mask_of(tracked: u32) -> u32 {
     let has = |group: u32| tracked & group != 0;
@@ -76,9 +78,13 @@ fn mask_of(tracked: u32) -> u32 {
     m
 }
 
-/// 按系统即时状态取一份位集，用于播种与校准。
+/// 某个虚拟键此刻是否按着。只用于播种：被吞键时这里读到的是「没按下」。
+fn is_key_down(vk: u16) -> bool {
+    unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 }
+}
+
+/// 系统状态对应的位集。
 fn snapshot_tracked() -> u32 {
-    let down = |vk: u16| unsafe { (GetAsyncKeyState(i32::from(vk)) as u16 & 0x8000) != 0 };
     let mut t = 0;
     for (vk, bit) in [
         (VK_LCONTROL.0, bits::LCTRL),
@@ -90,19 +96,18 @@ fn snapshot_tracked() -> u32 {
         (VK_LWIN.0, bits::LWIN),
         (VK_RWIN.0, bits::RWIN),
     ] {
-        if down(vk) {
+        if is_key_down(vk) {
             t |= bit;
         }
     }
     t
 }
 
-/// 当前按下的修饰键位掩码，取自系统即时状态。
 pub fn pressed_modifiers() -> u32 {
     mask_of(snapshot_tracked())
 }
 
-/// 判定热键时该用的修饰键掩码：键盘钩子在跑就用自跟踪位集，否则回退即时状态。
+/// 判定热键用的掩码：钩子在跑就用跟踪位集，否则回退系统状态。
 pub fn current_modifiers() -> u32 {
     if TRACKING.load(Relaxed) {
         mask_of(TRACKED.load(Relaxed))
@@ -111,7 +116,6 @@ pub fn current_modifiers() -> u32 {
     }
 }
 
-/// 钩子收到一条按键事件后更新位集；注入的按键同样计入。
 pub fn note_key(vk: u16, down: bool) {
     let Some(bit) = bit_of(vk) else { return };
     if down {
@@ -121,23 +125,51 @@ pub fn note_key(vk: u16, down: bool) {
     }
 }
 
-/// 开始自跟踪，并按系统即时状态播种初值。
-pub fn begin_tracking() {
-    TRACKED.store(snapshot_tracked(), Relaxed);
-    TRACKING.store(true, Relaxed);
+/// 丢掉 `extra` 覆盖到的位，返回清掉的位集；只在有证据时调用。
+pub fn clear_mask(extra: u32) -> u32 {
+    let mut tracked = TRACKED.load(Relaxed);
+    let before = tracked;
+    for (bit, group) in [
+        (bits::LCTRL, MOD_CONTROL),
+        (bits::RCTRL, MOD_CONTROL),
+        (bits::CTRL, MOD_CONTROL),
+        (bits::LALT, MOD_ALT),
+        (bits::RALT, MOD_ALT),
+        (bits::ALT, MOD_ALT),
+        (bits::LSHIFT, MOD_SHIFT),
+        (bits::RSHIFT, MOD_SHIFT),
+        (bits::SHIFT, MOD_SHIFT),
+        (bits::LWIN, MOD_WIN),
+        (bits::RWIN, MOD_WIN),
+    ] {
+        if extra & group != 0 {
+            tracked &= !bit;
+        }
+    }
+    if tracked != before {
+        TRACKED.store(tracked, Relaxed);
+    }
+    before & !tracked
 }
 
-/// 停止自跟踪，回退到系统即时状态。
+/// 开始自跟踪；只有第一次装钩子时播种，重装沿用已有位集。
+pub fn begin_tracking() {
+    TRACKING.store(true, Relaxed);
+    if SEEDED.swap(true, Relaxed) {
+        return;
+    }
+    TRACKED.store(snapshot_tracked(), Relaxed);
+}
+
+/// 停止自跟踪，保留位集。
 pub fn end_tracking() {
     TRACKING.store(false, Relaxed);
-    TRACKED.store(0, Relaxed);
 }
 
-/// 重新按系统即时状态校准位集；自跟踪未开启时不做任何事。
-pub fn resync() {
-    if TRACKING.load(Relaxed) {
-        TRACKED.store(snapshot_tracked(), Relaxed);
-    }
+/// 按系统状态重新播种，只在确定没人按键的时刻调用。
+pub fn reset_tracking() {
+    TRACKED.store(snapshot_tracked(), Relaxed);
+    SEEDED.store(true, Relaxed);
 }
 
 #[cfg(test)]

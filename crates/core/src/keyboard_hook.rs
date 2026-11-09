@@ -6,10 +6,11 @@
 //! 直接读取 Raw Input 的程序不经过本钩子。
 
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicIsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicIsize, AtomicU64, Ordering::Relaxed};
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, HHOOK, KBDLLHOOKSTRUCT, LLKHF_INJECTED, PostMessageW, SetWindowsHookExW,
     UnhookWindowsHookEx, WH_KEYBOARD_LL, WM_APP, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
@@ -23,7 +24,26 @@ use crate::modifiers::{self, current_modifiers, is_modifier};
 pub const WM_KEY_TRIGGER: u32 = WM_APP + 5;
 
 static HWND_RAW: AtomicIsize = AtomicIsize::new(0);
+/// 最近一次按键事件的时刻。
+static LAST_EVENT: AtomicU64 = AtomicU64::new(0);
+/// 累计按键事件数，供看门狗判断钩子是否还在派发。
+static KEY_EVENTS: AtomicU64 = AtomicU64::new(0);
+/// 失配日志节流。
+static MISMATCH_LOG_MS: AtomicU64 = AtomicU64::new(0);
 static HOTKEYS: Mutex<Vec<HookHotkey>> = Mutex::new(Vec::new());
+
+/// 距上一条按键事件多久；从未收到过时返回 `u64::MAX`。
+pub fn millis_since_last_event() -> u64 {
+    let last = LAST_EVENT.load(Relaxed);
+    if last == 0 {
+        return u64::MAX;
+    }
+    unsafe { GetTickCount64() }.saturating_sub(last)
+}
+
+pub fn key_event_count() -> u64 {
+    KEY_EVENTS.load(Relaxed)
+}
 
 /// 一条由钩子承载的热键与它的运行态。
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,13 +185,39 @@ fn decide(msg: u32, vk: u16, pressed: u32, states: &mut [HookHotkey]) -> Decisio
 /// 设置当前由钩子承载的热键集合（覆盖式，清空运行态）。
 /// 每项为 `(热键 id, 组合, 是否吞掉按键)`。
 pub fn set_hotkeys(list: &[(i32, ParsedHotkey, bool)]) {
-    modifiers::resync();
     if let Ok(mut hotkeys) = HOTKEYS.lock() {
         *hotkeys = list
             .iter()
             .map(|(id, hk, swallow)| HookHotkey::new(*id, hk, *swallow))
             .collect();
     }
+}
+
+fn clear_states(states: &mut [HookHotkey]) {
+    for st in states.iter_mut() {
+        st.held = 0;
+        st.eaten = 0;
+        st.fired = false;
+        st.armed = false;
+        st.poisoned = false;
+    }
+}
+
+/// 无条件清空运行态：睡眠恢复、会话解锁后此前的按住状态作废。
+pub fn reset_states() {
+    if let Ok(mut states) = HOTKEYS.lock() {
+        clear_states(&mut states);
+    }
+}
+
+/// 彻底空闲时清空运行态。长按会产生自动重复事件，这么久没事件说明没键按着，
+/// 残留的 `held` / `fired` 只能来自丢失的抬起事件。
+pub fn expire_idle_states(max_idle_ms: u64) {
+    let last = LAST_EVENT.load(Relaxed);
+    if last == 0 || unsafe { GetTickCount64() }.saturating_sub(last) <= max_idle_ms {
+        return;
+    }
+    reset_states();
 }
 
 fn post(id: i32) {
@@ -186,35 +232,101 @@ fn post(id: i32) {
 }
 
 unsafe extern "system" fn hook_proc(ncode: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    let mut swallow = false;
     if ncode == 0 {
         let data = unsafe { &*(lparam.0 as *const KBDLLHOOKSTRUCT) };
         let msg = wparam.0 as u32;
-        // 修饰键状态按事件跟踪；注入的按键同样计入。
-        if matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN) {
+        let down = matches!(msg, WM_KEYDOWN | WM_SYSKEYDOWN);
+        let up = matches!(msg, WM_KEYUP | WM_SYSKEYUP);
+        // 注入的按键既不计入修饰键，也不参与判定与重装，避免反馈回路。
+        let injected = data.flags.0 & LLKHF_INJECTED.0 != 0;
+        if down || up {
+            LAST_EVENT.store(unsafe { GetTickCount64() }, Relaxed);
+            KEY_EVENTS.fetch_add(1, Relaxed);
+        }
+        // 只按事件跟踪，不用 GetAsyncKeyState 校准：被吞掉的按键不会更新系统状态。
+        if down {
             modifiers::note_key(data.vkCode as u16, true);
-        } else if matches!(msg, WM_KEYUP | WM_SYSKEYUP) {
+        } else if up {
             modifiers::note_key(data.vkCode as u16, false);
         }
-        // 注入的按键不参与热键判定，避免反馈回路。
-        if data.flags.0 & LLKHF_INJECTED.0 == 0 {
-            let pressed = current_modifiers();
-            let decision = HOTKEYS
-                .lock()
-                .map(|mut states| decide(msg, data.vkCode as u16, pressed, &mut states))
-                .unwrap_or(Decision::Pass);
-            match decision {
-                Decision::Pass => {}
-                Decision::Swallow => return LRESULT(1),
-                Decision::Fire { id, swallow } => {
-                    post(id);
-                    if swallow {
-                        return LRESULT(1);
+
+        if !injected && (down || up) {
+            if let Ok(mut states) = HOTKEYS.lock() {
+                let pressed = current_modifiers();
+                // 主键按下时先做一次凭证据的修正：多出来的修饰键是残位就清掉。
+                let pressed = if down {
+                    heal_extra_modifiers(&states, data.vkCode as u16, pressed)
+                } else {
+                    pressed
+                };
+                match decide(msg, data.vkCode as u16, pressed, &mut states) {
+                    Decision::Pass => {
+                        if down {
+                            log_modifier_mismatch(&states, data.vkCode as u16, pressed);
+                        }
+                    }
+                    Decision::Swallow => swallow = true,
+                    Decision::Fire { id, swallow: also } => {
+                        post(id);
+                        swallow |= also;
                     }
                 }
             }
+
+            // 抢回链首：对手通常在这次按键沿链传到它之后才把自己重装到最前。这里只投
+            // 一条消息，等钩子线程处理时再重装，正好排在对手那次重装之后。
+            crate::input_hooks::InputHooks::request_rearm();
         }
     }
+    if swallow {
+        return LRESULT(1);
+    }
     unsafe { CallNextHookEx(None, ncode, wparam, lparam) }
+}
+
+/// 主键按下时清掉多出来的修饰键，返回修正后的掩码。掩码包含某条用该主键的热键要求的
+/// 全部修饰键、却又多出别的——多出来的只能是丢失抬起事件留下的残位。
+fn heal_extra_modifiers(states: &[HookHotkey], vk: u16, pressed: u32) -> u32 {
+    let expected = states
+        .iter()
+        .filter(|st| st.keys.contains(&vk))
+        .map(|st| st.modifiers)
+        .find(|m| *m != pressed && pressed & *m == *m);
+    let Some(expected) = expected else {
+        return pressed;
+    };
+    let extra = pressed & !expected;
+    if modifiers::clear_mask(extra) == 0 {
+        return pressed;
+    }
+    crate::logging::debug(&format!(
+        "修正修饰键残位 0x{extra:X}（期望 0x{expected:X}，实际 0x{pressed:X}）"
+    ));
+    current_modifiers()
+}
+
+/// 修正后仍对不上时记一条（每 2 秒最多一次）：缺的是必需修饰键，说明按下没到钩子。
+fn log_modifier_mismatch(states: &[HookHotkey], vk: u16, pressed: u32) {
+    let Some(expected) = states
+        .iter()
+        .find(|st| st.keys.contains(&vk) && st.modifiers != pressed)
+        .map(|st| st.modifiers)
+    else {
+        return;
+    };
+    // 一个修饰键都没按（比如单纯打字打到这个字母）不算异常，不记。
+    if pressed == 0 {
+        return;
+    }
+    let now = unsafe { GetTickCount64() };
+    let last = MISMATCH_LOG_MS.swap(now, Relaxed);
+    if now.saturating_sub(last) < 2_000 {
+        return;
+    }
+    crate::logging::debug(&format!(
+        "热键主键 0x{vk:02X} 的修饰键不匹配：期望 0x{expected:X}，实际 0x{pressed:X}（缺的修饰键没到钩子）"
+    ));
 }
 
 pub struct KeyboardHook {
@@ -231,6 +343,8 @@ impl KeyboardHook {
                 SetWindowsHookExW(WH_KEYBOARD_LL, Some(hook_proc), Some(hinstance.into()), 0)
                     .ok()?;
             modifiers::begin_tracking();
+            // 静默时长从装钩子算起，否则「还没见过按键」会被当成静默很久，启动时误重建。
+            LAST_EVENT.store(GetTickCount64(), Relaxed);
             Some(KeyboardHook { handle })
         }
     }
